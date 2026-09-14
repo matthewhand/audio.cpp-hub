@@ -5,6 +5,19 @@
 [audio.cpp](https://github.com/0xShug0/audio.cpp) 的 Web 管理面板：一个用 Java（Netty）写的轻量 HTTP 服务，负责拉起 / 停止 / 监控多个 `audiocpp_server` 模型实例子进程，并提供中文为主的 Web UI 进行 TTS / ASR / 音乐分离等音频任务。
 
 仓库地址：<https://github.com/IIIIIllllIIIIIlllll/audio.cpp-hub>
+本 Fork 地址：<https://github.com/matthewhand/audio.cpp-hub>
+
+> [!NOTE]
+> **本 Fork（matthewhand/audio.cpp-hub）增强特性说明**：
+> 本分支在官方上游版本基础上新增了以下特性：
+> 1. **Breeze TTS 流式推理（Streaming Mode）**：
+>    - 支持分块边生成边流式返回音频，大幅降低首包延迟（TTFT），支持 OpenAI 兼容流式接口与 WebUI 边下边播。
+> 2. **Docker & Docker Compose 部署与硬件适配**：
+>    - 完整的容器化支持（`Dockerfile` 与 `docker-compose.yml`）。
+>    - 支持 ROCm / HIP GPU 硬件直通与 `HSA_OVERRIDE_GFX_VERSION` 架构覆盖（如 AMD RX 6600 / Strix Halo APU 等显卡），支持 per-host 环境配置。
+> 3. **系统监控仪表盘与 WebUI 增强**：
+>    - 新增系统状态仪表盘（CPU 利用率、系统与 JVM 内存占用、各实例子进程指标）。
+>    - 事件日志多语言（i18n）支持与 PocketTTS 模型预设支持。
 
 ## 功能特性
 

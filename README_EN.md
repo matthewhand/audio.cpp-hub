@@ -4,7 +4,21 @@
 
 A web management panel for [audio.cpp](https://github.com/0xShug0/audio.cpp): a lightweight HTTP service written in Java (Netty) that starts / stops / monitors multiple `audiocpp_server` model-instance subprocesses, and provides a primarily-Chinese web UI for TTS / ASR / music-separation and other audio tasks.
 
-Repository: <https://github.com/IIIIIllllIIIIIlllll/audio.cpp-hub>
+Repository: <https://github.com/IIIIIllllIIIIIlllll/audio.cpp-hub>  
+Fork Repository: <https://github.com/matthewhand/audio.cpp-hub>
+
+> [!NOTE]
+> **About this Fork (matthewhand/audio.cpp-hub)**:
+> This fork includes several enhancements over upstream:
+> 1. **Breeze TTS Streaming Mode**:
+>    - Real-time chunk-based streaming audio synthesis, dramatically reducing Time-to-First-Token (TTFT) / latency.
+>    - OpenAI-compatible streaming for `POST /v1/audio/speech` and real-time audio playback in the Web UI.
+> 2. **Docker & Docker Compose Deployment with Hardware Overrides**:
+>    - Full containerized deployment via `Dockerfile` and `docker-compose.yml`.
+>    - Support for ROCm / HIP GPU passthrough and `HSA_OVERRIDE_GFX_VERSION` environment overrides (for AMD GPUs such as RX 6600 and Strix Halo APUs), plus per-host configuration overrides.
+> 3. **System Monitoring Dashboard & Web UI Enhancements**:
+>    - Integrated system stats dashboard (CPU utilization, host and JVM memory usage, per-instance process resource metrics, and internationalized event notifications).
+>    - Built-in support and configuration profile for PocketTTS.
 
 ## Features
 
