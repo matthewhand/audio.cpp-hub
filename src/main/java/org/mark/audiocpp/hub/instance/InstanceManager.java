@@ -92,9 +92,18 @@ public class InstanceManager {
                                Integer device, Integer requestedPort, Integer threads,
                                String executablePath, String executableName, String serverTask,
                                Map<String, String> env, String instanceName,
+                                Map<String, String> sessionOptions) throws IOException {
+        return start(modelId, modelId, weightsPath, backend, device, requestedPort, threads,
+                executablePath, executableName, serverTask, env, instanceName, "offline", sessionOptions);
+    }
+
+    public ModelInstance start(String modelId, String weightsPath, String backend,
+                               Integer device, Integer requestedPort, Integer threads,
+                               String executablePath, String executableName, String serverTask,
+                               Map<String, String> env, String instanceName, String mode,
                                Map<String, String> sessionOptions) throws IOException {
         return start(modelId, modelId, weightsPath, backend, device, requestedPort, threads,
-                executablePath, executableName, serverTask, env, instanceName, sessionOptions);
+                executablePath, executableName, serverTask, env, instanceName, mode, sessionOptions);
     }
 
     /**
@@ -108,6 +117,15 @@ public class InstanceManager {
                                String executablePath, String executableName, String serverTask,
                                Map<String, String> env, String instanceName,
                                Map<String, String> sessionOptions) throws IOException {
+        return start(modelId, engineFamily, weightsPath, backend, device, requestedPort, threads,
+                executablePath, executableName, serverTask, env, instanceName, "offline", sessionOptions);
+    }
+
+    public ModelInstance start(String modelId, String engineFamily, String weightsPath, String backend,
+                               Integer device, Integer requestedPort, Integer threads,
+                               String executablePath, String executableName, String serverTask,
+                               Map<String, String> env, String instanceName, String mode,
+                               Map<String, String> sessionOptions) throws IOException {
         if (instanceName == null || instanceName.isBlank()) {
             instanceName = modelId;
         }
@@ -119,7 +137,7 @@ public class InstanceManager {
         for (ModelInstance existing : instances.values()) {
             if (existing.getInstanceName().equals(instanceName)) {
                 throw new UserException("INSTANCE_NAME_DUPLICATE", Map.of("name", instanceName),
-                        "服务名已被实例 #" + existing.getId() + " 占用: " + instanceName);
+                    "服务名已被实例 #" + existing.getId() + " 占用: " + instanceName);
             }
         }
         String id = UUID.randomUUID().toString().substring(0, 8);
@@ -129,8 +147,9 @@ public class InstanceManager {
             Path dir = Path.of("run", id);
             Files.createDirectories(dir);
             Path serverJson = dir.resolve("server.json");
+            String effectiveMode = (mode != null && !mode.isBlank()) ? mode.trim() : "offline";
             ServerConfigWriter.write(serverJson, "127.0.0.1", port, backend, device, threads,
-                    instanceName, engineFamily, weightsPath, serverTask, sessionOptions);
+                    instanceName, engineFamily, weightsPath, serverTask, effectiveMode, sessionOptions);
 
             Path logFile = dir.resolve("server.log");
             ProcessBuilder pb = new ProcessBuilder(executablePath, "--config", serverJson.toAbsolutePath().toString());
@@ -155,11 +174,11 @@ public class InstanceManager {
             }
 
             ModelInstance instance = new ModelInstance(id, instanceName, modelId, weightsPath, port, backend, device,
-                    executableName, threads, sessionOptions, serverJson);
+                    executableName, threads, effectiveMode, sessionOptions, serverJson);
             instance.setProcess(process);
             instances.put(id, instance);
-            log.info("实例已启动: executable={}, name={}, modelId={}, backend={}, device={}, port={}, pid={}",
-                    executableName, instanceName, modelId, backend, device, port, process.pid());
+            log.info("实例已启动: executable={}, name={}, modelId={}, backend={}, device={}, port={}, mode={}, pid={}",
+                    executableName, instanceName, modelId, backend, device, port, effectiveMode, process.pid());
             events.add("info", "实例 #" + id + " 启动中（" + executableName + "，端口 " + port + "）");
 
             Thread waiter = new Thread(() -> awaitReady(instance), "instance-watch-" + id);
