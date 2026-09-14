@@ -1,0 +1,64 @@
+# compose.amd.yaml — AMD GPU (Vulkan via Mesa RADV) deployment.
+# Works on:
+#   - AMD Strix Halo APU (GFX1151)  — AUDIOCPP_DEVICE=1
+#   - AMD RX 6600 XT (Navi23)       — AUDIOCPP_DEVICE=0
+#   - AMD RX 580/590 (Ellesmere)    — AUDIOCPP_DEVICE=0
+#
+# Usage:
+#   docker compose -f compose.amd.yaml up -d --build
+#
+# Required host paths (edit the volumes section below):
+#   AUDIOCPP_SERVER  — audiocpp_server binary path on host
+#   AUDIOCPP_WEIGHTS — model .gguf path on host
+
+services:
+  audio-cpp-hub:
+    build:
+      context: .
+      dockerfile: Dockerfile.amd
+    image: audio-cpp-hub:amd
+    container_name: audio-cpp-hub-amd
+    restart: unless-stopped
+    # Note: init:true is intentionally omitted — the sysctl it sets
+    # (net.ipv4.ip_unprivileged_port_start) is blocked inside Proxmox LXC containers.
+    # start-hub.sh handles SIGTERM correctly via trap.
+    network_mode: "${NETWORK_MODE:-bridge}"
+    ports:
+      - "18080:18080"
+    environment:
+      # --- GPU backend & environment ---
+      AUDIOCPP_BACKEND: "vulkan"
+      AUDIOCPP_DEVICE: "${AUDIOCPP_DEVICE:-0}"
+      AUDIOCPP_THREADS: "${AUDIOCPP_THREADS:-4}"
+      LD_LIBRARY_PATH: "/audio.cpp/bin:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+      # --- Model ---
+      AUDIOCPP_MODEL_ID: "${AUDIOCPP_MODEL_ID:-breeze-tts}"
+      AUDIOCPP_SERVICE_NAME: "${AUDIOCPP_SERVICE_NAME:-breeze}"
+      AUDIOCPP_WEIGHTS: "${AUDIOCPP_WEIGHTS:-/audio.cpp/models/breeze-tts-2-q8_0.gguf}"
+      AUDIOCPP_VOICE_REF: "${AUDIOCPP_VOICE_REF:-}"
+      WARMUP_TEXT: "${WARMUP_TEXT:-This is a warm-up sentence for audio generation.}"
+      # Mesa RADV picks up /dev/dri; no NVIDIA env needed
+      MESA_VK_DEVICE_SELECT_FORCE_DEFAULT_DEVICE: "0"
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/kfd:/dev/kfd
+    group_add:
+      - "${GPU_GID_VIDEO:-44}"    # video group GID (host-specific; set in .env file)
+      - "${GPU_GID_RENDER:-993}"  # render group GID (host-specific; set in .env file)
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./run:/app/run
+      # audiocpp binary directory with server and ggml shared libraries (read-only mount from host)
+      - ${HOST_AUDIOCPP_BIN:-/audio.cpp/bin}:/audio.cpp/bin:ro
+      # model weights (read-only mount from host → container path matches AUDIOCPP_WEIGHTS)
+      - ${HOST_AUDIOCPP_WEIGHTS:-/audio.cpp/models/breeze-tts-2-q8_0.gguf}:${AUDIOCPP_WEIGHTS:-/audio.cpp/models/breeze-tts-2-q8_0.gguf}:ro
+      # optional voice directory mount
+      - ${HOST_AUDIOCPP_VOICES:-./data/voices}:/audio.cpp/voices:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:18080/v1/models"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+    stop_grace_period: 30s
