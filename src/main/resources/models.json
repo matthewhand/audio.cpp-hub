@@ -9,10 +9,23 @@
     "descriptionEn": "IndexTTS2 zero-shot TTS: clones the voice from a reference audio, supports emotion control via emotion reference audio / emotion vector / emotion text, outputs 22050Hz mono WAV.",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "required" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "required"
+    },
     "outputType": "audio",
-    "language": { "values": ["auto", "zh", "en"], "default": "auto" },
+    "language": {
+      "values": [
+        "auto",
+        "zh",
+        "en"
+      ],
+      "default": "auto"
+    },
     "task": "tts",
     "requiredFiles": [
       "config.yaml",
@@ -21,22 +34,114 @@
       "bigvgan/",
       "qwen0.6bemo4-merge/"
     ],
-    "backends": ["cpu", "cuda", "vulkan", "metal"],
+    "backends": [
+      "cpu",
+      "cuda",
+      "vulkan",
+      "metal"
+    ],
     "paramSchema": {
-      "emotionModes": ["none", "emotion_audio", "emotion_vector", "emotion_text"],
-      "emotionLabels": ["高兴", "愤怒", "悲伤", "恐惧", "反感", "低落", "惊讶", "自然"],
-      "emotionLabelsEn": ["Happy", "Angry", "Sad", "Fearful", "Disgusted", "Melancholic", "Surprised", "Calm"],
-      "text": { "type": "string", "required": true },
-      "voice_ref": { "type": "path", "required": true, "hint": "运行 hub 的机器上的本地 wav 路径", "hintEn": "Local wav path on the machine running the hub" },
-      "language": { "type": "enum", "values": ["auto", "zh", "en"], "default": "auto" },
-      "emotion_alpha": { "type": "number", "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05 },
-      "temperature": { "type": "number", "default": 0.8, "min": 0.1, "max": 2.0, "step": 0.05 },
-      "top_p": { "type": "number", "default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05 },
-      "top_k": { "type": "integer", "default": 30, "min": 0, "max": 100, "step": 1 },
-      "repetition_penalty": { "type": "number", "default": 10.0, "min": 1.0, "max": 20.0, "step": 0.5 },
-      "max_tokens": { "type": "integer", "default": 1500, "min": 50, "max": 8192, "step": 50 },
-      "interval_silence_ms": { "type": "integer", "default": 200, "min": 0, "max": 5000, "step": 50 },
-      "seed": { "type": "integer", "default": null, "min": 0, "max": 2147483647, "step": 1 }
+      "emotionModes": [
+        "none",
+        "emotion_audio",
+        "emotion_vector",
+        "emotion_text"
+      ],
+      "emotionLabels": [
+        "高兴",
+        "愤怒",
+        "悲伤",
+        "恐惧",
+        "反感",
+        "低落",
+        "惊讶",
+        "自然"
+      ],
+      "emotionLabelsEn": [
+        "Happy",
+        "Angry",
+        "Sad",
+        "Fearful",
+        "Disgusted",
+        "Melancholic",
+        "Surprised",
+        "Calm"
+      ],
+      "text": {
+        "type": "string",
+        "required": true
+      },
+      "voice_ref": {
+        "type": "path",
+        "required": true,
+        "hint": "运行 hub 的机器上的本地 wav 路径",
+        "hintEn": "Local wav path on the machine running the hub"
+      },
+      "language": {
+        "type": "enum",
+        "values": [
+          "auto",
+          "zh",
+          "en"
+        ],
+        "default": "auto"
+      },
+      "emotion_alpha": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.05
+      },
+      "temperature": {
+        "type": "number",
+        "default": 0.8,
+        "min": 0.1,
+        "max": 2.0,
+        "step": 0.05
+      },
+      "top_p": {
+        "type": "number",
+        "default": 0.8,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.05
+      },
+      "top_k": {
+        "type": "integer",
+        "default": 30,
+        "min": 0,
+        "max": 100,
+        "step": 1
+      },
+      "repetition_penalty": {
+        "type": "number",
+        "default": 10.0,
+        "min": 1.0,
+        "max": 20.0,
+        "step": 0.5
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 1500,
+        "min": 50,
+        "max": 8192,
+        "step": 50
+      },
+      "interval_silence_ms": {
+        "type": "integer",
+        "default": 200,
+        "min": 0,
+        "max": 5000,
+        "step": 50
+      },
+      "seed": {
+        "type": "integer",
+        "default": null,
+        "min": 0,
+        "max": 2147483647,
+        "step": 1
+      }
     }
   },
   {
@@ -49,8 +154,14 @@
     "descriptionEn": "IndexTTS2.5 multilingual zero-shot TTS (Chinese / English / Japanese / Spanish / Arabic): clones the voice from a reference audio with timbre-emotion decoupling, supports emotion control via emotion reference audio / emotion vector / emotion text and inline <text|pronunciation> pronunciation control, outputs 22050Hz mono WAV.",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "required" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "required"
+    },
     "outputType": "audio",
     "task": "tts",
     "requiredFiles": [
@@ -60,23 +171,128 @@
       "bigvgan/",
       "qwen0.6bemo4-merge/"
     ],
-    "backends": ["cpu", "cuda", "vulkan", "metal"],
+    "backends": [
+      "cpu",
+      "cuda",
+      "vulkan",
+      "metal"
+    ],
     "paramSchema": {
-      "emotionModes": ["none", "emotion_audio", "emotion_vector", "emotion_text"],
-      "emotionLabels": ["高兴", "愤怒", "悲伤", "恐惧", "反感", "低落", "惊讶", "自然"],
-      "emotionLabelsEn": ["Happy", "Angry", "Sad", "Fearful", "Disgusted", "Melancholic", "Surprised", "Calm"],
-      "text": { "type": "string", "required": true },
-      "voice_ref": { "type": "path", "required": true, "hint": "运行 hub 的机器上的本地 wav 路径", "hintEn": "Local wav path on the machine running the hub" },
-      "duration_factor": { "type": "number", "default": 1.0, "min": 0.5, "max": 2.0, "step": 0.05, "label": "语速系数 duration_factor", "labelEn": "Duration factor (speed)" },
-      "lang": { "type": "enum", "values": ["auto", "zh", "en", "ja", "es", "ar"], "default": "auto", "label": "文本语言 lang", "labelEn": "Text language (lang)" },
-      "emotion_alpha": { "type": "number", "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05 },
-      "temperature": { "type": "number", "default": 0.8, "min": 0.1, "max": 2.0, "step": 0.05 },
-      "top_p": { "type": "number", "default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05 },
-      "top_k": { "type": "integer", "default": 30, "min": 0, "max": 100, "step": 1 },
-      "repetition_penalty": { "type": "number", "default": 10.0, "min": 1.0, "max": 20.0, "step": 0.5 },
-      "max_tokens": { "type": "integer", "default": 1500, "min": 50, "max": 8192, "step": 50 },
-      "interval_silence_ms": { "type": "integer", "default": 200, "min": 0, "max": 5000, "step": 50 },
-      "seed": { "type": "integer", "default": null, "min": 0, "max": 2147483647, "step": 1 }
+      "emotionModes": [
+        "none",
+        "emotion_audio",
+        "emotion_vector",
+        "emotion_text"
+      ],
+      "emotionLabels": [
+        "高兴",
+        "愤怒",
+        "悲伤",
+        "恐惧",
+        "反感",
+        "低落",
+        "惊讶",
+        "自然"
+      ],
+      "emotionLabelsEn": [
+        "Happy",
+        "Angry",
+        "Sad",
+        "Fearful",
+        "Disgusted",
+        "Melancholic",
+        "Surprised",
+        "Calm"
+      ],
+      "text": {
+        "type": "string",
+        "required": true
+      },
+      "voice_ref": {
+        "type": "path",
+        "required": true,
+        "hint": "运行 hub 的机器上的本地 wav 路径",
+        "hintEn": "Local wav path on the machine running the hub"
+      },
+      "duration_factor": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.5,
+        "max": 2.0,
+        "step": 0.05,
+        "label": "语速系数 duration_factor",
+        "labelEn": "Duration factor (speed)"
+      },
+      "lang": {
+        "type": "enum",
+        "values": [
+          "auto",
+          "zh",
+          "en",
+          "ja",
+          "es",
+          "ar"
+        ],
+        "default": "auto",
+        "label": "文本语言 lang",
+        "labelEn": "Text language (lang)"
+      },
+      "emotion_alpha": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.05
+      },
+      "temperature": {
+        "type": "number",
+        "default": 0.8,
+        "min": 0.1,
+        "max": 2.0,
+        "step": 0.05
+      },
+      "top_p": {
+        "type": "number",
+        "default": 0.8,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.05
+      },
+      "top_k": {
+        "type": "integer",
+        "default": 30,
+        "min": 0,
+        "max": 100,
+        "step": 1
+      },
+      "repetition_penalty": {
+        "type": "number",
+        "default": 10.0,
+        "min": 1.0,
+        "max": 20.0,
+        "step": 0.5
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 1500,
+        "min": 50,
+        "max": 8192,
+        "step": 50
+      },
+      "interval_silence_ms": {
+        "type": "integer",
+        "default": 200,
+        "min": 0,
+        "max": 5000,
+        "step": 50
+      },
+      "seed": {
+        "type": "integer",
+        "default": null,
+        "min": 0,
+        "max": 2147483647,
+        "step": 1
+      }
     }
   },
   {
@@ -87,8 +303,14 @@
     "descriptionEn": "NVIDIA Citrinet English speech recognition, lightweight and fast.",
     "category": "asr",
     "serverTask": "asr",
-    "modes": ["offline"],
-    "inputs": { "text": "none", "audio": "required", "voiceRef": "none" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
     "outputType": "text",
     "paramSchema": {}
   },
@@ -102,12 +324,34 @@
     "descriptionEn": "Higgs Audio speech understanding model, supports multilingual transcription and streaming recognition.",
     "category": "asr",
     "serverTask": "asr",
-    "modes": ["offline", "streaming"],
-    "inputs": { "text": "none", "audio": "required", "voiceRef": "none" },
+    "modes": [
+      "offline",
+      "streaming"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
     "outputType": "text",
-    "language": { "values": ["auto", "en", "zh", "ja", "ko"], "default": "en" },
+    "language": {
+      "values": [
+        "auto",
+        "en",
+        "zh",
+        "ja",
+        "ko"
+      ],
+      "default": "en"
+    },
     "paramSchema": {
-      "max_new_tokens": { "type": "integer", "default": 1024, "min": 16, "max": 8192, "step": 16 }
+      "max_new_tokens": {
+        "type": "integer",
+        "default": 1024,
+        "min": 16,
+        "max": 8192,
+        "step": 16
+      }
     }
   },
   {
@@ -121,15 +365,50 @@
     "descriptionEn": "Danish speech recognition model (Hviske).",
     "category": "asr",
     "serverTask": "asr",
-    "modes": ["offline"],
-    "inputs": { "text": "none", "audio": "required", "voiceRef": "none" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
     "outputType": "text",
-    "language": { "values": ["da"], "default": "da" },
+    "language": {
+      "values": [
+        "da"
+      ],
+      "default": "da"
+    },
     "paramSchema": {
-      "temperature": { "type": "number", "default": 1.0, "min": 0.0, "max": 2.0, "step": 0.05 },
-      "top_p": { "type": "number", "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05 },
-      "top_k": { "type": "integer", "default": 50, "min": 0, "max": 200, "step": 1 },
-      "num_beams": { "type": "integer", "default": 1, "min": 1, "max": 8, "step": 1 }
+      "temperature": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.0,
+        "max": 2.0,
+        "step": 0.05
+      },
+      "top_p": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.05
+      },
+      "top_k": {
+        "type": "integer",
+        "default": 50,
+        "min": 0,
+        "max": 200,
+        "step": 1
+      },
+      "num_beams": {
+        "type": "integer",
+        "default": 1,
+        "min": 1,
+        "max": 8,
+        "step": 1
+      }
     }
   },
   {
@@ -142,12 +421,32 @@
     "descriptionEn": "NVIDIA Nemotron streaming speech recognition with language hints.",
     "category": "asr",
     "serverTask": "asr",
-    "modes": ["offline", "streaming"],
-    "inputs": { "text": "none", "audio": "required", "voiceRef": "none" },
+    "modes": [
+      "offline",
+      "streaming"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
     "outputType": "text",
-    "language": { "values": ["auto", "en-US", "da-DK"], "default": "auto" },
+    "language": {
+      "values": [
+        "auto",
+        "en-US",
+        "da-DK"
+      ],
+      "default": "auto"
+    },
     "paramSchema": {
-      "max_tokens": { "type": "integer", "default": 1024, "min": 16, "max": 8192, "step": 16 }
+      "max_tokens": {
+        "type": "integer",
+        "default": 1024,
+        "min": 16,
+        "max": 8192,
+        "step": 16
+      }
     }
   },
   {
@@ -160,12 +459,34 @@
     "descriptionEn": "Qwen3 speech recognition with automatic language detection and context text support.",
     "category": "asr",
     "serverTask": "asr",
-    "modes": ["offline"],
-    "inputs": { "text": "optional", "audio": "required", "voiceRef": "none" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "optional",
+      "audio": "required",
+      "voiceRef": "none"
+    },
     "outputType": "text",
-    "language": { "values": ["auto", "zh", "en", "ja", "ko", "yue"], "default": "auto" },
+    "language": {
+      "values": [
+        "auto",
+        "zh",
+        "en",
+        "ja",
+        "ko",
+        "yue"
+      ],
+      "default": "auto"
+    },
     "paramSchema": {
-      "max_new_tokens": { "type": "integer", "default": 512, "min": 16, "max": 4096, "step": 16 }
+      "max_new_tokens": {
+        "type": "integer",
+        "default": 512,
+        "min": 16,
+        "max": 4096,
+        "step": 16
+      }
     }
   },
   {
@@ -179,11 +500,23 @@
     "descriptionEn": "VibeVoice long-audio transcription with speaker diarization output.",
     "category": "asr",
     "serverTask": "asr",
-    "modes": ["offline"],
-    "inputs": { "text": "none", "audio": "required", "voiceRef": "none" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
     "outputType": "text",
     "paramSchema": {
-      "max_new_tokens": { "type": "integer", "default": 32768, "min": 1024, "max": 65536, "step": 1024 }
+      "max_new_tokens": {
+        "type": "integer",
+        "default": 32768,
+        "min": 1024,
+        "max": 65536,
+        "step": 1024
+      }
     }
   },
   {
@@ -197,10 +530,25 @@
     "descriptionEn": "Qwen3 forced alignment: generates word-level timestamps given exact text.",
     "category": "other",
     "serverTask": "align",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "required", "voiceRef": "none" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "required",
+      "voiceRef": "none"
+    },
     "outputType": "json",
-    "language": { "values": ["zh", "en", "ja", "ko", "yue"], "default": "zh" },
+    "language": {
+      "values": [
+        "zh",
+        "en",
+        "ja",
+        "ko",
+        "yue"
+      ],
+      "default": "zh"
+    },
     "paramSchema": {}
   },
   {
@@ -212,8 +560,14 @@
     "descriptionEn": "HTDemucs music source separation, outputs four stems: vocals / drums / bass / other.",
     "category": "sep",
     "serverTask": "sep",
-    "modes": ["offline"],
-    "inputs": { "text": "none", "audio": "required", "voiceRef": "none" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
     "outputType": "stems",
     "paramSchema": {}
   },
@@ -228,8 +582,14 @@
     "descriptionEn": "Mel-Band RoFormer music source separation with high-fidelity multi-stem output.",
     "category": "sep",
     "serverTask": "sep",
-    "modes": ["offline"],
-    "inputs": { "text": "none", "audio": "required", "voiceRef": "none" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
     "outputType": "stems",
     "paramSchema": {}
   },
@@ -244,8 +604,14 @@
     "descriptionEn": "MioCodec zero-shot voice conversion: preserves content while replacing the voice, outputs 44.1kHz.",
     "category": "other",
     "serverTask": "vc",
-    "modes": ["offline"],
-    "inputs": { "text": "none", "audio": "required", "voiceRef": "required" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "required"
+    },
     "outputType": "audio",
     "paramSchema": {}
   },
@@ -259,14 +625,44 @@
     "descriptionEn": "MioTTS speech synthesis, clones the voice from a reference audio, outputs 44.1kHz.",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "required" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "required"
+    },
     "outputType": "audio",
     "paramSchema": {
-      "max_tokens": { "type": "integer", "default": 700, "min": 50, "max": 4096, "step": 50 },
-      "temperature": { "type": "number", "default": 0.8, "min": 0.1, "max": 2.0, "step": 0.05 },
-      "top_k": { "type": "integer", "default": 50, "min": 0, "max": 200, "step": 1 },
-      "top_p": { "type": "number", "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05 }
+      "max_tokens": {
+        "type": "integer",
+        "default": 700,
+        "min": 50,
+        "max": 4096,
+        "step": 50
+      },
+      "temperature": {
+        "type": "number",
+        "default": 0.8,
+        "min": 0.1,
+        "max": 2.0,
+        "step": 0.05
+      },
+      "top_k": {
+        "type": "integer",
+        "default": 50,
+        "min": 0,
+        "max": 200,
+        "step": 1
+      },
+      "top_p": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.05
+      }
     }
   },
   {
@@ -280,13 +676,33 @@
     "descriptionEn": "Irodori Japanese speech synthesis, high-fidelity 48kHz output; v4 Small GGUF recommended (500M / 600M VoiceDesign v3 also supported).",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "optional" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "optional"
+    },
     "outputType": "audio",
-    "language": { "values": ["ja"], "default": "ja" },
+    "language": {
+      "values": [
+        "ja"
+      ],
+      "default": "ja"
+    },
     "paramSchema": {
-      "num_inference_steps": { "type": "integer", "default": 40, "min": 1, "max": 200, "step": 1 },
-      "caption": { "type": "string", "default": "" }
+      "num_inference_steps": {
+        "type": "integer",
+        "default": 40,
+        "min": 1,
+        "max": 200,
+        "step": 1
+      },
+      "caption": {
+        "type": "string",
+        "default": ""
+      }
     }
   },
   {
@@ -299,15 +715,48 @@
     "descriptionEn": "MOSS TTS local large-model speech synthesis with optional zero-shot cloning, outputs 48kHz.",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "optional" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "optional"
+    },
     "outputType": "audio",
     "paramSchema": {
-      "reference_text": { "type": "string", "default": "" },
-      "temperature": { "type": "number", "default": 1.7, "min": 0.1, "max": 3.0, "step": 0.05 },
-      "top_p": { "type": "number", "default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05 },
-      "top_k": { "type": "integer", "default": 25, "min": 0, "max": 200, "step": 1 },
-      "max_tokens": { "type": "integer", "default": 4096, "min": 50, "max": 8192, "step": 50 }
+      "reference_text": {
+        "type": "string",
+        "default": ""
+      },
+      "temperature": {
+        "type": "number",
+        "default": 1.7,
+        "min": 0.1,
+        "max": 3.0,
+        "step": 0.05
+      },
+      "top_p": {
+        "type": "number",
+        "default": 0.8,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.05
+      },
+      "top_k": {
+        "type": "integer",
+        "default": 25,
+        "min": 0,
+        "max": 200,
+        "step": 1
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 4096,
+        "min": 50,
+        "max": 8192,
+        "step": 50
+      }
     }
   },
   {
@@ -320,15 +769,48 @@
     "descriptionEn": "MOSS TTS Nano lightweight speech synthesis, outputs 48kHz.",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "optional" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "optional"
+    },
     "outputType": "audio",
     "paramSchema": {
-      "reference_text": { "type": "string", "default": "" },
-      "temperature": { "type": "number", "default": 1.7, "min": 0.1, "max": 3.0, "step": 0.05 },
-      "top_p": { "type": "number", "default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05 },
-      "top_k": { "type": "integer", "default": 25, "min": 0, "max": 200, "step": 1 },
-      "max_tokens": { "type": "integer", "default": 300, "min": 50, "max": 8192, "step": 50 }
+      "reference_text": {
+        "type": "string",
+        "default": ""
+      },
+      "temperature": {
+        "type": "number",
+        "default": 1.7,
+        "min": 0.1,
+        "max": 3.0,
+        "step": 0.05
+      },
+      "top_p": {
+        "type": "number",
+        "default": 0.8,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.05
+      },
+      "top_k": {
+        "type": "integer",
+        "default": 25,
+        "min": 0,
+        "max": 200,
+        "step": 1
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 300,
+        "min": 50,
+        "max": 8192,
+        "step": 50
+      }
     }
   },
   {
@@ -341,15 +823,45 @@
     "descriptionEn": "OmniVoice speech synthesis: voice cloning from a reference audio or instruction-based voice design, outputs 24kHz.",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "optional" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "optional"
+    },
     "outputType": "audio",
     "paramSchema": {
-      "reference_text": { "type": "string", "default": "" },
-      "instruct": { "type": "string", "default": "" },
-      "num_inference_steps": { "type": "integer", "default": 32, "min": 1, "max": 100, "step": 1 },
-      "guidance_scale": { "type": "number", "default": 2.0, "min": 0.0, "max": 20.0, "step": 0.1 },
-      "speed": { "type": "number", "default": 1.0, "min": 0.5, "max": 2.0, "step": 0.05 }
+      "reference_text": {
+        "type": "string",
+        "default": ""
+      },
+      "instruct": {
+        "type": "string",
+        "default": ""
+      },
+      "num_inference_steps": {
+        "type": "integer",
+        "default": 32,
+        "min": 1,
+        "max": 100,
+        "step": 1
+      },
+      "guidance_scale": {
+        "type": "number",
+        "default": 2.0,
+        "min": 0.0,
+        "max": 20.0,
+        "step": 0.1
+      },
+      "speed": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.5,
+        "max": 2.0,
+        "step": 0.05
+      }
     }
   },
   {
@@ -363,17 +875,62 @@
     "descriptionEn": "VibeVoice 1.5B long-form TTS with up to 4 speakers: one 'Speaker N:' line per speaker, each speaker can have its own reference voice (speaker voices block), speakers without a voice use the model default, outputs 24kHz.",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "none" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "none"
+    },
     "outputType": "audio",
     "paramSchema": {
-      "num_inference_steps": { "type": "integer", "default": 10, "min": 1, "max": 100, "step": 1 },
-      "guidance_scale": { "type": "number", "default": 1.3, "min": 0.0, "max": 5.0, "step": 0.1 },
-      "max_length_times": { "type": "number", "default": 2.0, "min": 0.1, "max": 10.0, "step": 0.1 },
-      "temperature": { "type": "number", "default": 1.0, "min": 0.05, "max": 2.0, "step": 0.05 },
-      "top_p": { "type": "number", "default": 1.0, "min": 0.05, "max": 1.0, "step": 0.01 },
-      "do_sample": { "type": "boolean", "default": false },
-      "seed": { "type": "integer", "default": null, "min": 0, "max": 2147483647, "step": 1 }
+      "num_inference_steps": {
+        "type": "integer",
+        "default": 10,
+        "min": 1,
+        "max": 100,
+        "step": 1
+      },
+      "guidance_scale": {
+        "type": "number",
+        "default": 1.3,
+        "min": 0.0,
+        "max": 5.0,
+        "step": 0.1
+      },
+      "max_length_times": {
+        "type": "number",
+        "default": 2.0,
+        "min": 0.1,
+        "max": 10.0,
+        "step": 0.1
+      },
+      "temperature": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.05,
+        "max": 2.0,
+        "step": 0.05
+      },
+      "top_p": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.05,
+        "max": 1.0,
+        "step": 0.01
+      },
+      "do_sample": {
+        "type": "boolean",
+        "default": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": null,
+        "min": 0,
+        "max": 2147483647,
+        "step": 1
+      }
     }
   },
   {
@@ -387,18 +944,78 @@
     "descriptionEn": "Qwen3 TTS Base: 3-second voice cloning from a reference audio plus reference text, outputs 24kHz.",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "required" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "required"
+    },
     "outputType": "audio",
-    "language": { "values": ["Auto", "chinese", "english", "japanese", "korean", "french", "german", "italian", "portuguese", "russian", "spanish"], "default": "Auto" },
+    "language": {
+      "values": [
+        "Auto",
+        "chinese",
+        "english",
+        "japanese",
+        "korean",
+        "french",
+        "german",
+        "italian",
+        "portuguese",
+        "russian",
+        "spanish"
+      ],
+      "default": "Auto"
+    },
     "paramSchema": {
-      "reference_text": { "type": "string", "default": "" },
-      "temperature": { "type": "number", "default": 0.9, "min": 0.1, "max": 2.0, "step": 0.05 },
-      "top_k": { "type": "integer", "default": 50, "min": 0, "max": 200, "step": 1 },
-      "top_p": { "type": "number", "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05 },
-      "repetition_penalty": { "type": "number", "default": 1.05, "min": 1.0, "max": 2.0, "step": 0.01 },
-      "text_chunk_size": { "type": "integer", "default": 8192, "min": 1, "max": 65536, "step": 1 },
-      "max_tokens": { "type": "integer", "default": 8192, "min": 1, "max": 65536, "step": 50 }
+      "reference_text": {
+        "type": "string",
+        "default": ""
+      },
+      "temperature": {
+        "type": "number",
+        "default": 0.9,
+        "min": 0.1,
+        "max": 2.0,
+        "step": 0.05
+      },
+      "top_k": {
+        "type": "integer",
+        "default": 50,
+        "min": 0,
+        "max": 200,
+        "step": 1
+      },
+      "top_p": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.05
+      },
+      "repetition_penalty": {
+        "type": "number",
+        "default": 1.05,
+        "min": 1.0,
+        "max": 2.0,
+        "step": 0.01
+      },
+      "text_chunk_size": {
+        "type": "integer",
+        "default": 8192,
+        "min": 1,
+        "max": 65536,
+        "step": 1
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 8192,
+        "min": 1,
+        "max": 65536,
+        "step": 50
+      }
     }
   },
   {
@@ -412,19 +1029,93 @@
     "descriptionEn": "Qwen3 TTS CustomVoice: built-in preset voices with optional instruction-based style tuning, outputs 24kHz.",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "none" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "none"
+    },
     "outputType": "audio",
-    "language": { "values": ["Auto", "chinese", "english", "japanese", "korean", "french", "german", "italian", "portuguese", "russian", "spanish"], "default": "Auto" },
+    "language": {
+      "values": [
+        "Auto",
+        "chinese",
+        "english",
+        "japanese",
+        "korean",
+        "french",
+        "german",
+        "italian",
+        "portuguese",
+        "russian",
+        "spanish"
+      ],
+      "default": "Auto"
+    },
     "paramSchema": {
-      "speaker": { "type": "enum", "values": ["Aiden", "Dylan", "Eric", "Ono_anna", "Ryan", "Serena", "Sohee", "Uncle_fu", "Vivian"], "default": "Vivian" },
-      "instruct": { "type": "string", "default": "" },
-      "temperature": { "type": "number", "default": 0.9, "min": 0.1, "max": 2.0, "step": 0.05 },
-      "top_k": { "type": "integer", "default": 50, "min": 0, "max": 200, "step": 1 },
-      "top_p": { "type": "number", "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05 },
-      "repetition_penalty": { "type": "number", "default": 1.05, "min": 1.0, "max": 2.0, "step": 0.01 },
-      "text_chunk_size": { "type": "integer", "default": 8192, "min": 1, "max": 65536, "step": 1 },
-      "max_tokens": { "type": "integer", "default": 8192, "min": 1, "max": 65536, "step": 50 }
+      "speaker": {
+        "type": "enum",
+        "values": [
+          "Aiden",
+          "Dylan",
+          "Eric",
+          "Ono_anna",
+          "Ryan",
+          "Serena",
+          "Sohee",
+          "Uncle_fu",
+          "Vivian"
+        ],
+        "default": "Vivian"
+      },
+      "instruct": {
+        "type": "string",
+        "default": ""
+      },
+      "temperature": {
+        "type": "number",
+        "default": 0.9,
+        "min": 0.1,
+        "max": 2.0,
+        "step": 0.05
+      },
+      "top_k": {
+        "type": "integer",
+        "default": 50,
+        "min": 0,
+        "max": 200,
+        "step": 1
+      },
+      "top_p": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.05
+      },
+      "repetition_penalty": {
+        "type": "number",
+        "default": 1.05,
+        "min": 1.0,
+        "max": 2.0,
+        "step": 0.01
+      },
+      "text_chunk_size": {
+        "type": "integer",
+        "default": 8192,
+        "min": 1,
+        "max": 65536,
+        "step": 1
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 8192,
+        "min": 1,
+        "max": 65536,
+        "step": 50
+      }
     }
   },
   {
@@ -438,20 +1129,93 @@
     "descriptionEn": "Qwen3 TTS VoiceDesign: designs a voice from a natural-language instruction, outputs 24kHz.",
     "category": "tts",
     "serverTask": "vdes",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "none" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "none"
+    },
     "outputType": "audio",
-    "language": { "values": ["Auto", "chinese", "english", "japanese", "korean", "french", "german", "italian", "portuguese", "russian", "spanish"], "default": "Auto" },
+    "language": {
+      "values": [
+        "Auto",
+        "chinese",
+        "english",
+        "japanese",
+        "korean",
+        "french",
+        "german",
+        "italian",
+        "portuguese",
+        "russian",
+        "spanish"
+      ],
+      "default": "Auto"
+    },
     "paramSchema": {
-      "instruct": { "type": "string", "default": "" },
-      "do_sample": { "type": "boolean", "default": true, "label": "随机采样 do_sample", "labelEn": "Do sample" },
-      "seed": { "type": "integer", "default": null, "min": 0, "max": 2147483647, "step": 1, "label": "随机种子 seed", "labelEn": "Random seed" },
-      "temperature": { "type": "number", "default": 0.9, "min": 0.1, "max": 2.0, "step": 0.05 },
-      "top_k": { "type": "integer", "default": 50, "min": 0, "max": 200, "step": 1 },
-      "top_p": { "type": "number", "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05 },
-      "repetition_penalty": { "type": "number", "default": 1.05, "min": 1.0, "max": 2.0, "step": 0.01 },
-      "text_chunk_size": { "type": "integer", "default": 8192, "min": 1, "max": 65536, "step": 1 },
-      "max_tokens": { "type": "integer", "default": 8192, "min": 1, "max": 65536, "step": 50 }
+      "instruct": {
+        "type": "string",
+        "default": ""
+      },
+      "do_sample": {
+        "type": "boolean",
+        "default": true,
+        "label": "随机采样 do_sample",
+        "labelEn": "Do sample"
+      },
+      "seed": {
+        "type": "integer",
+        "default": null,
+        "min": 0,
+        "max": 2147483647,
+        "step": 1,
+        "label": "随机种子 seed",
+        "labelEn": "Random seed"
+      },
+      "temperature": {
+        "type": "number",
+        "default": 0.9,
+        "min": 0.1,
+        "max": 2.0,
+        "step": 0.05
+      },
+      "top_k": {
+        "type": "integer",
+        "default": 50,
+        "min": 0,
+        "max": 200,
+        "step": 1
+      },
+      "top_p": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.05
+      },
+      "repetition_penalty": {
+        "type": "number",
+        "default": 1.05,
+        "min": 1.0,
+        "max": 2.0,
+        "step": 0.01
+      },
+      "text_chunk_size": {
+        "type": "integer",
+        "default": 8192,
+        "min": 1,
+        "max": 65536,
+        "step": 1
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 8192,
+        "min": 1,
+        "max": 65536,
+        "step": 50
+      }
     }
   },
   {
@@ -464,21 +1228,93 @@
     "descriptionEn": "BreezeTTS 2 bilingual speech synthesis: design a voice without reference audio, or clone one when reference audio is provided.",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline", "streaming"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "optional" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "optional"
+    },
     "outputType": "audio",
     "paramSchema": {
-      "instruction": { "type": "string", "default": "Speak clearly and naturally.", "label": "声音/表达指令 instruction", "labelEn": "Voice and delivery instruction", "placeholder": "描述目标音色与表达方式", "placeholderEn": "Describe the target voice and delivery" },
-      "reference_text": { "type": "string", "default": "", "label": "参考文本 reference_text（克隆时必填）", "labelEn": "Reference transcript (required for cloning)", "placeholder": "可选；选择参考音频后必须填写准确转写", "placeholderEn": "Optional; required when reference audio is selected" },
-      "text_chunk_size": { "type": "integer", "default": 600, "min": 1, "step": 1 },
-      "text_chunk_mode": { "type": "enum", "values": ["default", "tag_aware", "japanese", "endline"], "default": "default" },
-      "max_tokens": { "type": "integer", "default": 1500, "min": 1, "max": 65536, "step": 50 },
-      "guidance_scale": { "type": "number", "default": 1.0, "min": 0.0, "step": 0.1 },
-      "temperature": { "type": "number", "default": 0.9, "min": 0.0, "step": 0.05 },
-      "depth_temperature": { "type": "number", "default": 0.9, "min": 0.0, "step": 0.05 },
-      "top_k": { "type": "integer", "default": 50, "min": 0, "step": 1 },
-      "top_p": { "type": "number", "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01 },
-      "seed": { "type": "integer", "default": 0, "min": 0, "max": 2147483647, "step": 1 }
+      "instruction": {
+        "type": "string",
+        "default": "Speak clearly and naturally.",
+        "label": "声音/表达指令 instruction",
+        "labelEn": "Voice and delivery instruction",
+        "placeholder": "描述目标音色与表达方式",
+        "placeholderEn": "Describe the target voice and delivery"
+      },
+      "reference_text": {
+        "type": "string",
+        "default": "",
+        "label": "参考文本 reference_text（克隆时必填）",
+        "labelEn": "Reference transcript (required for cloning)",
+        "placeholder": "可选；选择参考音频后必须填写准确转写",
+        "placeholderEn": "Optional; required when reference audio is selected"
+      },
+      "text_chunk_size": {
+        "type": "integer",
+        "default": 600,
+        "min": 1,
+        "step": 1
+      },
+      "text_chunk_mode": {
+        "type": "enum",
+        "values": [
+          "default",
+          "tag_aware",
+          "japanese",
+          "endline"
+        ],
+        "default": "default"
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 1500,
+        "min": 1,
+        "max": 65536,
+        "step": 50
+      },
+      "guidance_scale": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.0,
+        "step": 0.1
+      },
+      "temperature": {
+        "type": "number",
+        "default": 0.9,
+        "min": 0.0,
+        "step": 0.05
+      },
+      "depth_temperature": {
+        "type": "number",
+        "default": 0.9,
+        "min": 0.0,
+        "step": 0.05
+      },
+      "top_k": {
+        "type": "integer",
+        "default": 50,
+        "min": 0,
+        "step": 1
+      },
+      "top_p": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.01
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "min": 0,
+        "max": 2147483647,
+        "step": 1
+      }
     }
   },
   {
@@ -492,14 +1328,41 @@
     "descriptionEn": "Stable Audio generates music / sound effects from English prompts, 44.1kHz stereo.",
     "category": "other",
     "serverTask": "gen",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "none" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "none"
+    },
     "outputType": "audio",
     "paramSchema": {
-      "duration_seconds": { "type": "integer", "default": 120, "min": 1, "max": 190, "step": 1 },
-      "num_inference_steps": { "type": "integer", "default": 8, "min": 1, "max": 100, "step": 1 },
-      "guidance_scale": { "type": "number", "default": 1.0, "min": 0.0, "max": 20.0, "step": 0.1 },
-      "negative_prompt": { "type": "string", "default": "" }
+      "duration_seconds": {
+        "type": "integer",
+        "default": 120,
+        "min": 1,
+        "max": 190,
+        "step": 1
+      },
+      "num_inference_steps": {
+        "type": "integer",
+        "default": 8,
+        "min": 1,
+        "max": 100,
+        "step": 1
+      },
+      "guidance_scale": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.0,
+        "max": 20.0,
+        "step": 0.1
+      },
+      "negative_prompt": {
+        "type": "string",
+        "default": ""
+      }
     }
   },
   {
@@ -512,14 +1375,56 @@
     "descriptionEn": "Supertonic multilingual speech synthesis with 10 built-in voices, outputs about 44.1kHz.",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "none" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "none"
+    },
     "outputType": "audio",
-    "language": { "values": ["en", "ko", "es", "pt", "fr"], "default": "en" },
+    "language": {
+      "values": [
+        "en",
+        "ko",
+        "es",
+        "pt",
+        "fr"
+      ],
+      "default": "en"
+    },
     "paramSchema": {
-      "voice_id": { "type": "enum", "values": ["M1", "M2", "M3", "M4", "M5", "F1", "F2", "F3", "F4", "F5"], "default": "M1" },
-      "num_inference_steps": { "type": "integer", "default": 8, "min": 1, "max": 100, "step": 1 },
-      "speaking_rate": { "type": "number", "default": 1.05, "min": 0.5, "max": 2.0, "step": 0.05 }
+      "voice_id": {
+        "type": "enum",
+        "values": [
+          "M1",
+          "M2",
+          "M3",
+          "M4",
+          "M5",
+          "F1",
+          "F2",
+          "F3",
+          "F4",
+          "F5"
+        ],
+        "default": "M1"
+      },
+      "num_inference_steps": {
+        "type": "integer",
+        "default": 8,
+        "min": 1,
+        "max": 100,
+        "step": 1
+      },
+      "speaking_rate": {
+        "type": "number",
+        "default": 1.05,
+        "min": 0.5,
+        "max": 2.0,
+        "step": 0.05
+      }
     }
   },
   {
@@ -533,11 +1438,33 @@
     "descriptionEn": "Vevo 2 multi-route speech / singing voice toolkit: TTS, voice conversion, singing voice synthesis and editing, outputs 24kHz.",
     "category": "other",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "optional", "audio": "optional", "voiceRef": "required" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "optional",
+      "audio": "optional",
+      "voiceRef": "required"
+    },
     "outputType": "audio",
     "paramSchema": {
-      "task_route": { "type": "enum", "values": ["zero_shot_tts", "text_to_singing", "svs", "style_preserved_vc", "style_converted_vc", "editing", "style_preserved_svc", "style_converted_svc", "singing_style_conversion", "humming_to_singing", "instrument_to_singing"], "default": "zero_shot_tts" }
+      "task_route": {
+        "type": "enum",
+        "values": [
+          "zero_shot_tts",
+          "text_to_singing",
+          "svs",
+          "style_preserved_vc",
+          "style_converted_vc",
+          "editing",
+          "style_preserved_svc",
+          "style_converted_svc",
+          "singing_style_conversion",
+          "humming_to_singing",
+          "instrument_to_singing"
+        ],
+        "default": "zero_shot_tts"
+      }
     }
   },
   {
@@ -550,16 +1477,52 @@
     "descriptionEn": "VoxCPM2 speech synthesis with optional reference-audio cloning.",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "optional" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "optional"
+    },
     "outputType": "audio",
     "paramSchema": {
-      "reference_text": { "type": "string", "default": "" },
-      "temperature": { "type": "number", "default": 1.0, "min": 0.1, "max": 2.0, "step": 0.05 },
-      "max_tokens": { "type": "integer", "default": 4096, "min": 50, "max": 8192, "step": 50 },
-      "num_inference_steps": { "type": "integer", "default": 10, "min": 1, "max": 100, "step": 1 },
-      "guidance_scale": { "type": "number", "default": 2.0, "min": 0.0, "max": 20.0, "step": 0.1 },
-      "retry_badcase": { "type": "boolean", "default": true }
+      "reference_text": {
+        "type": "string",
+        "default": ""
+      },
+      "temperature": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.1,
+        "max": 2.0,
+        "step": 0.05
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 4096,
+        "min": 50,
+        "max": 8192,
+        "step": 50
+      },
+      "num_inference_steps": {
+        "type": "integer",
+        "default": 10,
+        "min": 1,
+        "max": 100,
+        "step": 1
+      },
+      "guidance_scale": {
+        "type": "number",
+        "default": 2.0,
+        "min": 0.0,
+        "max": 20.0,
+        "step": 0.1
+      },
+      "retry_badcase": {
+        "type": "boolean",
+        "default": true
+      }
     }
   },
   {
@@ -572,17 +1535,227 @@
     "descriptionEn": "Pocket TTS lightweight speech synthesis: clones voice from reference audio, outputs 24000Hz mono WAV.",
     "category": "tts",
     "serverTask": "tts",
-    "modes": ["offline"],
-    "inputs": { "text": "required", "audio": "none", "voiceRef": "required" },
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "required"
+    },
     "outputType": "audio",
     "paramSchema": {
-      "text": { "type": "string", "required": true },
-      "voice_ref": { "type": "path", "required": true, "hint": "参考音频 wav 路径", "hintEn": "Reference wav path" },
-      "temperature": { "type": "number", "default": 0.8, "min": 0.0, "step": 0.05 },
-      "top_k": { "type": "integer", "default": 50, "min": 0, "step": 1 },
-      "top_p": { "type": "number", "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01 },
-      "seed": { "type": "integer", "default": 0, "min": 0, "max": 2147483647, "step": 1 }
+      "text": {
+        "type": "string",
+        "required": true
+      },
+      "voice_ref": {
+        "type": "path",
+        "required": true,
+        "hint": "参考音频 wav 路径",
+        "hintEn": "Reference wav path"
+      },
+      "temperature": {
+        "type": "number",
+        "default": 0.8,
+        "min": 0.0,
+        "step": 0.05
+      },
+      "top_k": {
+        "type": "integer",
+        "default": 50,
+        "min": 0,
+        "step": 1
+      },
+      "top_p": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.01
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "min": 0,
+        "max": 2147483647,
+        "step": 1
+      }
+    }
+  },
+  {
+    "id": "yue2",
+    "family": "yue2",
+    "ggufUrl": "https://huggingface.co/audio-cpp/Yue2-3B-GGUF",
+    "displayName": "YuE2 音乐生成",
+    "displayNameEn": "YuE2 Music Generation",
+    "description": "YuE2 歌词驱动的音乐生成：风格提示词 + 歌词整曲合成，支持内联 ABC 旋律条件（cot=melody / full）。单首歌耗时数分钟，生成请求内部串行。",
+    "descriptionEn": "YuE2 lyrics-driven music generation: full songs from a style prompt plus lyrics, with optional inline ABC melody conditioning (cot=melody / full). One song takes several minutes and requests are serialized internally.",
+    "category": "music",
+    "serverTask": "gen",
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "none"
+    },
+    "outputType": "audio",
+    "task": "gen",
+    "requiredFiles": [
+      "yue2-model-config.json",
+      "yue2-generation-config.json",
+      "yue2-qwen.tiktoken",
+      "yue2-vae-config.json"
+    ],
+    "paramSchema": {
+      "cfg_scale": {
+        "type": "number",
+        "default": null,
+        "min": 0,
+        "max": 20,
+        "step": 0.01,
+        "label": "CFG 强度 cfg_scale",
+        "labelEn": "CFG scale (cfg_scale)",
+        "placeholder": "留空按 cot 取默认（off 时 1.01，否则 1.0）",
+        "placeholderEn": "Leave empty for cot-dependent default (1.01 when off, else 1.0)"
+      },
+      "num_inference_steps": {
+        "type": "integer",
+        "default": 32,
+        "min": 1,
+        "max": 200,
+        "step": 1,
+        "label": "ODE 步数 num_inference_steps",
+        "labelEn": "ODE steps (num_inference_steps)"
+      },
+      "abc_temperature": {
+        "type": "number",
+        "default": 0.7,
+        "min": 0,
+        "max": 5,
+        "step": 0.05,
+        "label": "ABC 规划采样温度",
+        "labelEn": "ABC planner temperature"
+      },
+      "abc_top_p": {
+        "type": "number",
+        "default": 0.9,
+        "min": 0.01,
+        "max": 1,
+        "step": 0.01,
+        "label": "ABC top_p",
+        "labelEn": "ABC top_p"
+      },
+      "abc_top_k": {
+        "type": "integer",
+        "default": 30,
+        "min": 1,
+        "max": 500,
+        "step": 1,
+        "label": "ABC top_k",
+        "labelEn": "ABC top_k"
+      },
+      "abc_repetition_penalty": {
+        "type": "number",
+        "default": 1.005,
+        "min": 0.01,
+        "max": 5,
+        "step": 0.001,
+        "label": "ABC 重复惩罚",
+        "labelEn": "ABC repetition penalty"
+      },
+      "abc_penalty_window": {
+        "type": "integer",
+        "default": 100,
+        "min": 1,
+        "max": 4096,
+        "step": 1,
+        "label": "ABC 惩罚窗口",
+        "labelEn": "ABC penalty window"
+      },
+      "abc_min_tokens": {
+        "type": "integer",
+        "default": 32,
+        "min": 0,
+        "max": 4096,
+        "step": 1,
+        "label": "ABC 最少 token",
+        "labelEn": "ABC min tokens"
+      },
+      "abc_max_tokens": {
+        "type": "integer",
+        "default": 4096,
+        "min": 32,
+        "max": 16384,
+        "step": 1,
+        "label": "ABC 最多 token",
+        "labelEn": "ABC max tokens"
+      },
+      "semantic_temperature": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0,
+        "max": 5,
+        "step": 0.05,
+        "label": "语义 codec 采样温度",
+        "labelEn": "Semantic codec temperature"
+      },
+      "semantic_top_p": {
+        "type": "number",
+        "default": 0.95,
+        "min": 0.01,
+        "max": 1,
+        "step": 0.01,
+        "label": "语义 top_p",
+        "labelEn": "Semantic top_p"
+      },
+      "semantic_top_k": {
+        "type": "integer",
+        "default": 100,
+        "min": 1,
+        "max": 1000,
+        "step": 1,
+        "label": "语义 top_k",
+        "labelEn": "Semantic top_k"
+      },
+      "semantic_repetition_penalty": {
+        "type": "number",
+        "default": 1.2,
+        "min": 0.01,
+        "max": 5,
+        "step": 0.01,
+        "label": "语义重复惩罚",
+        "labelEn": "Semantic repetition penalty"
+      },
+      "semantic_penalty_window": {
+        "type": "integer",
+        "default": 50,
+        "min": 1,
+        "max": 4096,
+        "step": 1,
+        "label": "语义惩罚窗口",
+        "labelEn": "Semantic penalty window"
+      },
+      "semantic_min_tokens": {
+        "type": "integer",
+        "default": 200,
+        "min": 0,
+        "max": 9000,
+        "step": 10,
+        "label": "语义最少 token",
+        "labelEn": "Semantic min tokens"
+      },
+      "semantic_max_tokens": {
+        "type": "integer",
+        "default": 9000,
+        "min": 200,
+        "max": 32768,
+        "step": 10,
+        "label": "语义最多 token",
+        "labelEn": "Semantic max tokens"
+      }
     }
   }
 ]
-
