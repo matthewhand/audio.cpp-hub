@@ -26,7 +26,7 @@ RUN mkdir -p build/classes \
     && cp -r src/main/resources/* build/classes/ \
     && chmod 0755 /usr/local/bin/start-hub.sh /usr/local/bin/start-instance.sh
 
-ENV JAVA_TOOL_OPTIONS="-Xms128m -Xmx128m -XX:MaxDirectMemorySize=128m"
+ENV JAVA_TOOL_OPTIONS="-Xms128m -Xmx128m -XX:MaxDirectMemorySize=256m"
 
 EXPOSE 18080
 

@@ -1229,7 +1229,8 @@
     "category": "tts",
     "serverTask": "tts",
     "modes": [
-      "offline"
+      "offline",
+      "streaming"
     ],
     "inputs": {
       "text": "required",
