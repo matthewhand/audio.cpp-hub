@@ -2849,5 +2849,46 @@
         ]
       }
     ]
+  },
+  "magpie_tts": {
+    "displayName": "MagpieTTS Multilingual 357M",
+    "category": "tts",
+    "status": "supported",
+    "packages": [
+      {
+        "id": "magpie_tts_orig",
+        "displayName": "MagpieTTS Multilingual 357M Original-Dtype GGUF",
+        "format": "gguf",
+        "precision": "orig",
+        "default": false,
+        "repo": "audio-cpp/audio.cpp-gguf",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "MagpieTTS-Multilingual-357M-GGUF",
+        "files": [
+          {
+            "remote": "MagpieTTS-Multilingual-357M-GGUF/magpie-tts-multilingual-357m-orig.gguf",
+            "local": "magpie-tts-multilingual-357m-orig.gguf"
+          }
+        ]
+      },
+      {
+        "id": "magpie_tts_q8_0",
+        "displayName": "MagpieTTS Multilingual 357M Q8_0 GGUF",
+        "format": "gguf",
+        "precision": "q8_0",
+        "default": true,
+        "repo": "audio-cpp/audio.cpp-gguf",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "MagpieTTS-Multilingual-357M-GGUF",
+        "files": [
+          {
+            "remote": "MagpieTTS-Multilingual-357M-GGUF/magpie-tts-multilingual-357m-q8_0.gguf",
+            "local": "magpie-tts-multilingual-357m-q8_0.gguf"
+          }
+        ]
+      }
+    ]
   }
 }

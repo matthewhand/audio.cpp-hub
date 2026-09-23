@@ -1758,5 +1758,102 @@
         "labelEn": "Semantic max tokens"
       }
     }
+  },
+  {
+    "id": "magpie_tts",
+    "family": "magpie_tts",
+    "hfUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/MagpieTTS-Multilingual-357M-GGUF",
+    "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/MagpieTTS-Multilingual-357M-GGUF",
+    "displayName": "MagpieTTS Multilingual 357M",
+    "displayNameEn": "MagpieTTS Multilingual 357M",
+    "description": "NVIDIA MagpieTTS Multilingual 357M 多语言神经语音合成：通过烘焙的 speaker context 提示、decoder-only transformer 与自回归 local transformer 生成 NanoCodec 音频 token，再解码为波形音频，输出 22050Hz 单声道 WAV。",
+    "descriptionEn": "NVIDIA MagpieTTS Multilingual 357M neural text-to-speech: generates NanoCodec audio tokens from text using baked speaker context prompts, a decoder-only transformer, and an autoregressive local transformer, then decodes them to mono 22050Hz waveform audio.",
+    "category": "tts",
+    "serverTask": "tts",
+    "modes": ["offline"],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "none"
+    },
+    "outputType": "audio",
+    "language": {
+      "values": ["ar-AE", "ar-MSA", "ar-SA", "de", "en", "es", "fr", "hi", "it", "ko", "pt-BR", "vi", "zh"],
+      "default": "en"
+    },
+    "task": "tts",
+    "requiredFiles": [],
+    "backends": ["cpu", "cuda", "vulkan", "metal"],
+    "paramSchema": {
+      "language": {
+        "type": "enum",
+        "values": ["ar-AE", "ar-MSA", "ar-SA", "de", "en", "es", "fr", "hi", "it", "ko", "pt-BR", "vi", "zh"],
+        "default": "en",
+        "label": "语言",
+        "labelEn": "Language"
+      },
+      "voice_id": {
+        "type": "enum",
+        "values": ["Aria", "Jason", "John", "Leo", "Sofia"],
+        "default": "Aria",
+        "label": "音色 voice_id",
+        "labelEn": "Voice"
+      },
+      "temperature": {
+        "type": "number",
+        "default": 0.6,
+        "min": 0.0,
+        "step": 0.05,
+        "label": "采样温度",
+        "labelEn": "Temperature"
+      },
+      "top_k": {
+        "type": "integer",
+        "default": 80,
+        "min": 1,
+        "step": 1,
+        "label": "top_k",
+        "labelEn": "top_k"
+      },
+      "guidance_scale": {
+        "type": "number",
+        "default": 2.5,
+        "min": 0.0,
+        "step": 0.05,
+        "label": "引导系数",
+        "labelEn": "Guidance scale"
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 500,
+        "min": 1,
+        "step": 1,
+        "label": "每段最大帧数",
+        "labelEn": "Max frames per segment"
+      },
+      "text_chunk_size": {
+        "type": "integer",
+        "default": 300,
+        "min": 1,
+        "step": 1,
+        "label": "长文本分块大小",
+        "labelEn": "Long-form chunk size"
+      },
+      "text_chunk_mode": {
+        "type": "enum",
+        "values": ["default", "tag_aware", "japanese", "endline"],
+        "default": "default",
+        "label": "分块模式",
+        "labelEn": "Chunk mode"
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "min": 0,
+        "step": 1,
+        "label": "随机种子",
+        "labelEn": "Seed"
+      }
+    }
   }
 ]
