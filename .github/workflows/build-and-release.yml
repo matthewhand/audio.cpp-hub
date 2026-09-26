@@ -12,20 +12,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
       - name: 设置 Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.27'
+          go-version-file: go.mod
+          cache: true
 
       - name: 验证 Go 版本
         run: go version
+
+      - name: 校验依赖完整性
+        run: go mod verify
 
       - name: 获取构建元信息
         id: get_version
@@ -42,46 +47,94 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "构建版本: $VERSION"
 
-      - name: 编译 Windows 二进制
+      - name: 编译二进制
         run: |
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
+          set -euo pipefail
+          # Windows amd64：GUI 子系统，无控制台窗口
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath \
             -ldflags="-H windowsgui -s -w -X main.version=$VERSION" \
             -o audio.cpp-hub.exe .
-          ls -lh audio.cpp-hub.exe
+          # 其它平台/架构
+          build() {
+            CGO_ENABLED=0 GOOS="$1" GOARCH="$2" go build -trimpath \
+              -ldflags="-s -w -X main.version=$VERSION" -o "$3" .
+          }
+          build linux amd64 audio.cpp-hub-linux-amd64
+          build linux arm64 audio.cpp-hub-linux-arm64
+          build darwin arm64 audio.cpp-hub-darwin-arm64
+          ls -lh audio.cpp-hub*
 
-      - name: 编译 Linux 二进制
+      - name: 启动冒烟测试
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-            -ldflags="-s -w -X main.version=$VERSION" \
-            -o audio.cpp-hub .
-          ls -lh audio.cpp-hub
+          set -euo pipefail
+          SMOKE_DIR="$(mktemp -d)"
+          cp audio.cpp-hub-linux-amd64 "$SMOKE_DIR/audio.cpp-hub"
+          cp -r web "$SMOKE_DIR/web"
+          printf '%s\n' '{"httpPort":18080,"instancePortBase":18090}' > "$SMOKE_DIR/hub.config.json"
+          ( cd "$SMOKE_DIR" && exec ./audio.cpp-hub >server.log 2>&1 ) &
+          SMOKE_PID=$!
+          trap 'kill "$SMOKE_PID" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 30); do
+            CODE="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/models || true)"
+            if [ "$CODE" = "200" ]; then
+              echo "冒烟测试通过: GET /api/models -> 200"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "冒烟测试失败: GET /api/models 未返回 200"
+          cat "$SMOKE_DIR/server.log" || true
+          exit 1
 
       - name: 打包
         id: package
         run: |
+          set -euo pipefail
           mkdir -p dist
           make_zip() {
             local root_name="$1"
             local zip_name="$2"
-            mkdir -p "$root_name/audiocpp"
             zip -r -9 -X "dist/$zip_name" "$root_name"
           }
-          # Windows 包
-          WIN_ROOT="audio.cpp-hub-${VERSION}-windows"
+          # Windows amd64
+          WIN_ROOT="audio.cpp-hub-${VERSION}-windows-amd64"
           mkdir -p "$WIN_ROOT"
           cp audio.cpp-hub.exe "$WIN_ROOT/"
           cp -r web "$WIN_ROOT/web"
           cp README.md "$WIN_ROOT/"
-          make_zip "$WIN_ROOT" "audio.cpp-hub-${VERSION}-windows.zip"
-          # Linux 包
-          LINUX_ROOT="audio.cpp-hub-${VERSION}-linux"
-          mkdir -p "$LINUX_ROOT"
-          cp audio.cpp-hub "$LINUX_ROOT/"
-          cp -r web "$LINUX_ROOT/web"
-          cp README.md "$LINUX_ROOT/"
-          chmod +x "$LINUX_ROOT/audio.cpp-hub"
-          make_zip "$LINUX_ROOT" "audio.cpp-hub-${VERSION}-linux.zip"
+          make_zip "$WIN_ROOT" "audio.cpp-hub-${VERSION}-windows-amd64.zip"
+          # Linux amd64
+          LINUX_AMD64_ROOT="audio.cpp-hub-${VERSION}-linux-amd64"
+          mkdir -p "$LINUX_AMD64_ROOT"
+          cp audio.cpp-hub-linux-amd64 "$LINUX_AMD64_ROOT/audio.cpp-hub"
+          cp -r web "$LINUX_AMD64_ROOT/web"
+          cp README.md "$LINUX_AMD64_ROOT/"
+          chmod +x "$LINUX_AMD64_ROOT/audio.cpp-hub"
+          make_zip "$LINUX_AMD64_ROOT" "audio.cpp-hub-${VERSION}-linux-amd64.zip"
+          # Linux arm64
+          LINUX_ARM64_ROOT="audio.cpp-hub-${VERSION}-linux-arm64"
+          mkdir -p "$LINUX_ARM64_ROOT"
+          cp audio.cpp-hub-linux-arm64 "$LINUX_ARM64_ROOT/audio.cpp-hub"
+          cp -r web "$LINUX_ARM64_ROOT/web"
+          cp README.md "$LINUX_ARM64_ROOT/"
+          chmod +x "$LINUX_ARM64_ROOT/audio.cpp-hub"
+          make_zip "$LINUX_ARM64_ROOT" "audio.cpp-hub-${VERSION}-linux-arm64.zip"
+          # macOS arm64
+          DARWIN_ARM64_ROOT="audio.cpp-hub-${VERSION}-darwin-arm64"
+          mkdir -p "$DARWIN_ARM64_ROOT"
+          cp audio.cpp-hub-darwin-arm64 "$DARWIN_ARM64_ROOT/audio.cpp-hub"
+          cp -r web "$DARWIN_ARM64_ROOT/web"
+          cp README.md "$DARWIN_ARM64_ROOT/"
+          chmod +x "$DARWIN_ARM64_ROOT/audio.cpp-hub"
+          make_zip "$DARWIN_ARM64_ROOT" "audio.cpp-hub-${VERSION}-darwin-arm64.zip"
           ls -lh dist/
+
+      - name: 生成 SHA256SUMS
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum *.zip > SHA256SUMS
+          cat SHA256SUMS
 
       - name: 生成 Release Notes
         id: release_notes
@@ -99,6 +152,7 @@ jobs:
 
           LINUX_ZIPS=$(ls dist/*linux*.zip 2>/dev/null || true)
           WINDOWS_ZIPS=$(ls dist/*windows*.zip 2>/dev/null || true)
+          DARWIN_ZIPS=$(ls dist/*darwin*.zip 2>/dev/null || true)
           cat > release_notes.md << 'EOF'
           ## 🚀 Release Notes
 
@@ -133,7 +187,22 @@ jobs:
           else
             echo "- 无" >> release_notes.md
           fi
+          echo "" >> release_notes.md
+          echo "**macOS:**" >> release_notes.md
+          if [ -n "$DARWIN_ZIPS" ]; then
+            while IFS= read -r f; do
+              [ -n "$f" ] && echo "- \`$(basename "$f")\`" >> release_notes.md
+            done <<< "$DARWIN_ZIPS"
+          else
+            echo "- 无" >> release_notes.md
+          fi
           cat >> release_notes.md << 'EOF'
+
+          ### 🔐 校验和
+          下载后可用 `SHA256SUMS` 校验文件完整性：
+          ```bash
+          sha256sum -c SHA256SUMS
+          ```
 
           ### 📝 使用方法
 
@@ -145,6 +214,13 @@ jobs:
           **Linux:**
           ```bash
           unzip <你下载的 linux zip 包>
+          cd <解压后的目录>
+          ./audio.cpp-hub
+          ```
+
+          **macOS (Apple Silicon):**
+          ```bash
+          unzip <你下载的 darwin-arm64 zip 包>
           cd <解压后的目录>
           ./audio.cpp-hub
           ```
@@ -181,9 +257,11 @@ jobs:
 
       - name: 创建 Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          files: dist/*.zip
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS
           body_path: release_notes.md
           draft: false
           prerelease: false
@@ -191,10 +269,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 上传构建产物
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: audio.cpp-hub-${{ steps.get_version.outputs.version }}
           path: |
             dist/*.zip
+            dist/SHA256SUMS
             release_notes.md
           retention-days: 30
