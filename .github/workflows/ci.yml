@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: 格式 / 静态检查 / 测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: 设置 Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: 显示 Go 版本
+        run: go version
+
+      - name: 校验依赖完整性
+        run: go mod verify
+
+      - name: 检查 gofmt 格式
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "以下文件未通过 gofmt，请运行 gofmt -w："
+            echo "$unformatted"
+            exit 1
+          fi
+          echo "gofmt 检查通过"
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test（含竞态检测）
+        run: go test -race ./...

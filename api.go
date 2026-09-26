@@ -835,10 +835,11 @@ func (h *Hub) handleModelPackages(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDownloadCreate 创建下载任务，两种形式：
-// 1) {"modelId","packageId"?,"token"?,"overwrite"?,"endpoint"?,"source"?} — 按清单生成文件列表
-//    （packageId 缺省取 default 包；source 缺省/"hf" 用 hfEndpoint 或 body endpoint 覆盖，
-//    "modelscope" 时改用 modelscope.cn 镜像，repo 映射 HereIsMark/<名字>、revision 固定 master）；
-// 2) {"targetDir","files":[{"url","path"},...],"token"?,"overwrite"?} — 显式文件列表。
+//  1. {"modelId","packageId"?,"token"?,"overwrite"?,"endpoint"?,"source"?} — 按清单生成文件列表
+//     （packageId 缺省取 default 包；source 缺省/"hf" 用 hfEndpoint 或 body endpoint 覆盖，
+//     "modelscope" 时改用 modelscope.cn 镜像，repo 映射 HereIsMark/<名字>、revision 固定 master）；
+//  2. {"targetDir","files":[{"url","path"},...],"token"?,"overwrite"?} — 显式文件列表。
+//
 // 权重落盘 models/<targetDir>/，创建后自动开始，返回任务详情（含分段与进度）。
 func (h *Hub) handleDownloadCreate(w http.ResponseWriter, r *http.Request) {
 	body := readBodyMap(w, r)

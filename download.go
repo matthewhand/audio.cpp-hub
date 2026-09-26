@@ -90,12 +90,12 @@ type DownloadTask struct {
 	Files     []*dlFileEntry `json:"files"`
 
 	// ---- 以下为运行态字段，不落盘（原子访问）----
-	pauseRequested  int32 `json:"-"` // 请求暂停（含进程退出），worker 在块边界响应
-	cancelRequested int32 `json:"-"` // 请求取消（delete）
-	runGeneration   int32 `json:"-"` // 运行代次：resume/删除时递增，旧 worker 据此自杀
-	lastPersistAt   int64 `json:"-"`
-	speedBps        int64 `json:"-"`
-	speedSampleAt   int64 `json:"-"`
+	pauseRequested   int32 `json:"-"` // 请求暂停（含进程退出），worker 在块边界响应
+	cancelRequested  int32 `json:"-"` // 请求取消（delete）
+	runGeneration    int32 `json:"-"` // 运行代次：resume/删除时递增，旧 worker 据此自杀
+	lastPersistAt    int64 `json:"-"`
+	speedBps         int64 `json:"-"`
+	speedSampleAt    int64 `json:"-"`
 	speedSampleBytes int64 `json:"-"`
 	// 本轮运行的 context：暂停/取消/失败时 cancel，进行中的 HTTP 读立即中断
 	runCtx context.Context    `json:"-"`
