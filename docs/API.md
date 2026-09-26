@@ -2,7 +2,7 @@
 
 audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README.md`](../README.md) 配置章节）。所有接口**无鉴权**，仅适用于本机 / 局域网，详见 [`SECURITY.md`](../SECURITY.md)。
 
-本文以 `api.go` 中注册的路由为准（共 51 条 `mux.HandleFunc`）。响应约定：
+本文以 `api.go` 中注册的路由为准（`registerRoutes` 的 `apiRoute` 表共 49 条；另有 `/v1/*` 代理与 `web/` 静态服务）。响应约定：
 
 - 绝大多数 `GET` / 增删改接口直接返回对象或数组（JSON）
 - 部分删除 / 更新接口返回包装体 `{"ok": true, "data": {...}}`

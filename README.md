@@ -37,7 +37,7 @@
 - **TTS 操作历史**：按模型隔离保存合成记录与结果音频（不自动淘汰，仅手动删除），历史面板可回听、分组、行内展开四要素
 - **音色库（参考音频）**：全局资源，`data/voices/` 下集中管理，名称唯一，支持改名 / 改参考文本 / 试听
 - **OpenAI 兼容代理**：`GET /v1/models` 聚合全部就绪实例；`POST|PUT /v1/*`（如 `/v1/audio/speech`）按请求体顶层 `model` 路由到同名实例，大 base64 全程流式落盘转发（兼容边界见下文「OpenAI 接口兼容性」）
-- **内置权重下载器**：`POST /api/downloads` 多线程 Range 分段下载 HuggingFace（或 modelscope 镜像）权重，支持断点续传、暂停 / 恢复、进度与速率统计
+- **内置权重下载器**：`POST /api/downloads` 多线程 Range 分段下载 HuggingFace（或 modelscope 镜像）权重，支持断点续传、暂停 / 恢复、进度与速率统计；可下载包以 `model-packages.json` 为准，手动下载来源参考见 [`model_download_urls.md`](model_download_urls.md)
 - **设备探测**：启动弹窗可运行 `audiocpp_server --list-devices`，把可用设备渲染成下拉选单
 - **Windows 友好**：系统托盘、开机自启、无控制台窗口启动子进程
 
@@ -46,6 +46,7 @@
 ### 前置条件
 
 - 从源码构建：**Go 1.27+**（`go.mod` 声明 `go 1.27`；CI 使用 Go 1.27）
+- 支持的系统：发布包提供 **Windows（amd64）、Linux（amd64 / arm64）、macOS（arm64）**；hub 是静态单二进制，系统托盘仅在 Windows 生效
 - 运行 `audiocpp_server` 二进制：发布包**不包含**它，请从 [audio.cpp Releases](https://github.com/0xShug0/audio.cpp/releases/latest) 下载对应平台 / GPU 版本，放入任意目录（如 `audiocpp/`），启动后在 Web UI 中登记为可执行文件
 - 硬件：按所下载的 `audiocpp_server` 构建而定。仓库随附的 `executables.json` 样例是 **Windows + AMD ROCm** 配置（`--list-devices` 可查看实际可用后端）；CPU 亦可运行小模型，但速度取决于模型与线程数
 - 磁盘：模型权重体积从数百 MB 到数十 GB 不等，请预留充足空间（下载前 hub 会做磁盘空间预检）
@@ -151,6 +152,31 @@ hub 的 `/v1/*` 接口是对各 `audiocpp_server` 实例的**透明代理**：hu
 | `GET /api/executables/<id>/devices` | 运行 `--list-devices` 探测设备 |
 | `/api/fs/*` | 服务器本地文件浏览（用于选择权重路径） |
 | `GET /v1/models`、`POST|PUT /v1/*` | OpenAI 兼容代理 |
+
+## 故障排查 / FAQ
+
+**hub 启动即退出，提示端口被占用**
+hub 启动时会先 `net.Listen` 绑定端口，失败即打印 `监听 :8080 失败: ...` 并退出（`main.go`）。改 `hub.config.json` 的 `httpPort`，或停掉占用该端口的进程后重启。实例端口从 `instancePortBase` 起自动寻找空闲端口；若在启动表单里显式指定端口，端口被占用会返回 `INSTANCE_PORT_IN_USE`，指定 hub 自身端口会返回 `INSTANCE_PORT_RESERVED`。
+
+**实例一直 `STARTING`，最后超时失败**
+hub 每秒轮询实例的 `GET /health`，最长 **120s**（`instance.go` 的 `healthTimeoutSeconds`）。超时或子进程提前退出时，hub 会把日志末尾约 10 行写入事件日志（`GET /api/events`，或 UI 事件面板），然后**删除** `run/<id>/` 运行目录。运行中的实例日志在 `run/<instanceId>/server.log`。常见原因：权重路径不对、显存 / 内存不足、后端或设备选错、`audiocpp_server` 与模型不匹配；可用 `GET /api/executables/<id>/devices`（或启动弹窗的设备下拉）确认设备。
+
+**下载 HuggingFace gated 模型报授权错误**
+`PocketTTS`、`Stable Audio 3` 等 gated 仓库需要 HF token：创建下载任务时在 `POST /api/downloads` body 里传 `"token"`，否则返回 `DOWNLOAD_AUTH`（上游 HTTP 401/403）。token 会明文存入 `data/downloads/<id>/task.json`（目录 `0700` / 文件 `0600`），API 输出会自动剔除。
+
+**`/v1/audio/transcriptions`（multipart）返回 400**
+hub 的 `/v1/*` 代理只能从 **JSON** body 顶层的 `"model"` 字段做路由；`multipart/form-data` 无法解析出 `model`，会返回 `400 {"error":{"message":"Missing required parameter: model",...}}`。请改用 JSON body，或走 Web UI 的 ASR 流程 / `POST /api/tasks`。详见上文「OpenAI 接口兼容性」。
+
+**从 ModelScope 下载报 `REMOTE_NOT_FOUND`**
+`source:"modelscope"` 只会映射到 `HereIsMark/<repo名>`，当前仅 `audio.cpp-gguf` 一个仓库被镜像；其它包会 404（`REMOTE_NOT_FOUND`）。请改用默认 HuggingFace 源，或通过 `hfEndpoint` 指向可用镜像。
+
+**`/v1/*` 请求返回 413**
+请求体超过 `proxyMaxBodyBytes`（默认 1 GiB，见 `hub.config.json`）时无法落盘，返回 413。可在配置里调大；该限制只针对 `/v1/*` 代理请求体，不影响 `/api/*`（上限 64MB）。
+
+**日志在哪里找**
+- hub 自身：控制台输出；Windows 无控制台（`-H windowsgui`）模式另写 `logs/hub.log`
+- 模型实例：运行中为 `run/<instanceId>/server.log`；启动失败后目录被清理，末尾日志保留在事件日志（`/api/events`）
+- 下载任务：状态与进度在 `data/downloads/<id>/task.json`；推理任务在 `data/tasks/<id>.task.json`
 
 ## 目录说明
 
