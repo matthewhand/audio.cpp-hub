@@ -612,7 +612,7 @@ func (m *HistoryManager) writeGroupsLocked(modelID string, groups []map[string]a
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(historyDir(modelID), historyGroupsFile), data, 0644); err != nil {
+	if err := writeFileAtomic(filepath.Join(historyDir(modelID), historyGroupsFile), data); err != nil {
 		return &UserError{Code: "GROUP_SAVE_FAILED", Params: map[string]any{},
 			Msg: "分组保存失败: " + err.Error()}
 	}

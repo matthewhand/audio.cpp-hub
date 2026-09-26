@@ -104,6 +104,12 @@ func (m *TaskManager) replay() {
 			log.Printf("跳过损坏的任务状态文件: %s", name)
 			continue
 		}
+		// 回放前重新校验（data/ 可能被本地篡改）：ID 必须与文件名一致且可作路径片段，
+		// modelId 必须可作目录片段，防止篡改的 task.json 用 ID 做路径穿越。
+		if name != t.ID+taskSuffix || !safeID(t.ID) || !safeKey(t.ModelID) {
+			log.Printf("跳过非法任务状态文件: %s", name)
+			continue
+		}
 		if t.Status == "" || t.active() {
 			t.Status = "CANCELLED"
 		}

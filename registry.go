@@ -30,6 +30,41 @@ type ExecutableRegistry struct {
 	file string
 }
 
+// execEnvMask 环境变量值在 API 输出中的掩码占位；Update 收到掩码值时保留原值。
+const execEnvMask = "********"
+
+// redacted 返回条目副本，环境变量值以掩码替换，避免经 API 泄露 HF_TOKEN 等密钥。
+func (e Executable) redacted() Executable {
+	if len(e.Env) == 0 {
+		return e
+	}
+	env := make(map[string]string, len(e.Env))
+	for k := range e.Env {
+		env[k] = execEnvMask
+	}
+	e.Env = env
+	return e
+}
+
+// unmaskEnv 合并更新时的环境变量：值为掩码的键保留 existing 中的原值（前端提交的
+// 掩码占位不应把真实密钥覆盖掉）；新增键或真实值照常采用。
+func unmaskEnv(incoming, existing map[string]string) map[string]string {
+	if len(incoming) == 0 {
+		return incoming
+	}
+	out := make(map[string]string, len(incoming))
+	for k, v := range incoming {
+		if v == execEnvMask {
+			if old, ok := existing[k]; ok {
+				out[k] = old
+			}
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
 func NewExecutableRegistry(file string) *ExecutableRegistry {
 	return &ExecutableRegistry{file: file}
 }
@@ -158,7 +193,7 @@ func (r *ExecutableRegistry) Update(id, name, path, note string, env map[string]
 			Name:      strings.TrimSpace(name),
 			Path:      strings.TrimSpace(path),
 			Note:      strings.TrimSpace(note),
-			Env:       env,
+			Env:       unmaskEnv(env, list[i].Env),
 			CreatedAt: list[i].CreatedAt,
 		}
 		if err := validateExec(&updated); err != nil {

@@ -23,7 +23,7 @@ var uploadDir = filepath.Join("data", "uploads")
 // 避免每个 handler 各写一条正则导致放行范围漂移：
 //
 //	safeID  —— 短不透明 ID 的文件名片段（任务 id、上传件 id、音色 vid）。
-//	           约定为 8 位随机 hex / UUID-8，故只放行 [a-zA-Z0-9-]，长度 1..32。
+//	           约定为 32 位随机 hex（newID 16 字节），故只放行 [a-zA-Z0-9-]，长度 1..32。
 //	safeKey —— 历史索引键（modelId / taskId / groupId）。modelID 取自 models.json，
 //	           允许下划线，故放宽到 [a-zA-Z0-9_-]，长度 1..64。
 //

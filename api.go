@@ -359,7 +359,12 @@ func (h *Hub) handleEvents(w http.ResponseWriter, r *http.Request) {
 // ---------- 可执行文件 ----------
 
 func (h *Hub) handleExecList(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, h.execs.List())
+	list := h.execs.List()
+	out := make([]Executable, len(list))
+	for i := range list {
+		out[i] = list[i].redacted()
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // handleExecAdd 添加：{"name","path","note"?,"env"?}
@@ -375,7 +380,7 @@ func (h *Hub) handleExecAdd(w http.ResponseWriter, r *http.Request) {
 		errFromErr(w, http.StatusBadRequest, "EXEC_ADD_FAILED", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, entry)
+	writeJSON(w, http.StatusOK, entry.redacted())
 }
 
 func (h *Hub) handleExecUpdate(w http.ResponseWriter, r *http.Request) {
@@ -395,7 +400,7 @@ func (h *Hub) handleExecUpdate(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, http.StatusNotFound, "EXEC_NOT_FOUND", map[string]any{"id": id}, "可执行文件不存在: "+id)
 		return
 	}
-	writeJSON(w, http.StatusOK, entry)
+	writeJSON(w, http.StatusOK, entry.redacted())
 }
 
 func (h *Hub) handleExecDelete(w http.ResponseWriter, r *http.Request) {
