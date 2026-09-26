@@ -1,5 +1,10 @@
 # Model Download URLs
 
+> **文档定位（重要）**：本文件是 **audio.cpp 上游模型权重的来源参考**，供手动下载时查阅，并非 hub 的功能清单。
+> hub 内置了权重下载器：模型的可下载包以根目录 `model-packages.json`（`go:embed` 内嵌，共 48 个模型族，覆盖 `models.json` 28 个模型之外的更多模型）为准，
+> 查询接口 `GET /api/models/{modelId}/packages`，创建下载任务 `POST /api/downloads`（ModelScope 镜像可用 `"source":"modelscope"`）。
+> 推荐优先使用 UI 的「下载权重」弹窗 / 下载管理面板，而不是手动下载。
+
 所有模型下载地址汇总，主要来源于 HuggingFace，少量来自 NVIDIA NGC 和 Facebook。
 
 ---
@@ -9,7 +14,7 @@
 ### audio-cpp/audio.cpp-gguf
 https://huggingface.co/audio-cpp/audio.cpp-gguf
 
-包含以下 25 个模型的 GGUF 版本（路径为仓库内目录）：
+包含以下模型的 GGUF 版本（路径为仓库内目录）：
 
 | 模型 | 仓库路径 |
 |------|----------|
@@ -209,12 +214,25 @@ https://huggingface.co/phuocnguyen90/VieNeu-TTS-v3-Turbo-GGUF
 
 ---
 
-## 来源定义位置
+## 在 hub 中下载
 
-所有下载地址在项目中的定义位置：
+上表所列仓库已在 hub 的 `model-packages.json` 中转换为可下载包，无需手动拼接 URL：
 
-- **model_specs_v1/`*.json`** — 各模型的 `package_defaults.download` 和 `packages[].download` 字段
-- **tools/model_manager.py** — `CATALOG` 元组中的 `ModelPackage` / `SnapshotSource` / `ConverterSource` 定义
-- **webui/configs/models_catalog.json** — WebUI 界面的模型列表，`download_id` 映射到 model_manager 的 package ID
+```bash
+# 1) 查看某模型有哪些下载包
+curl http://127.0.0.1:8080/api/models/index_tts2/packages
 
-认证方式：通过环境变量 `HF_TOKEN` 或 `HUGGING_FACE_HUB_TOKEN`，或 `~/.cache/huggingface/token` 文件。
+# 2) 创建下载任务（packageId 缺省取 default 包，创建即开始）
+curl -X POST http://127.0.0.1:8080/api/downloads \
+  -H 'Content-Type: application/json' \
+  -d '{"modelId":"index_tts2"}'
+
+# 3) 通过 ModelScope 镜像下载（目前仅 audio.cpp-gguf 仓库可用）
+curl -X POST http://127.0.0.1:8080/api/downloads \
+  -H 'Content-Type: application/json' \
+  -d '{"modelId":"index_tts2","source":"modelscope"}'
+```
+
+gated 仓库（如 `PocketTTS`、`Stable Audio 3`）需在创建任务时传 `"token"`（HuggingFace token）。下载进度、暂停 / 续传、删除见 `docs/API.md` 的「权重下载」章节。
+
+认证：手动下载 gated 仓库时，可通过环境变量 `HF_TOKEN` / `HUGGING_FACE_HUB_TOKEN`，或 `~/.cache/huggingface/token` 文件配置令牌。

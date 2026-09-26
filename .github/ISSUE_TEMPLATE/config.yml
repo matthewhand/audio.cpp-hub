@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞（私密上报）
+    url: https://github.com/matthewhand/audio.cpp-hub/security/advisories/new
+    about: 请勿公开披露安全漏洞，使用 GitHub Security Advisories 私下报告。
+  - name: 使用问题 / 讨论
+    url: https://github.com/matthewhand/audio.cpp-hub/discussions
+    about: 使用、配置与模型兼容性问题请先在 Discussions 讨论。
