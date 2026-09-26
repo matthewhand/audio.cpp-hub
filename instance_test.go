@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // 读取 >64MiB 日志的尾部时，分配量应被限制在 logTailBytes 量级，而不是整个文件。
@@ -132,7 +133,7 @@ func TestReservePortValidation(t *testing.T) {
 		}
 	}
 
-	registered := &Instance{ID: "aaa", Name: "aaa", Port: 45055, exited: make(chan int, 1)}
+	registered := &Instance{ID: "aaa", Name: "aaa", Port: 45055, done: make(chan struct{})}
 	if err := m.reserve(registered); err != nil {
 		t.Fatalf("reserve: %v", err)
 	}
@@ -160,10 +161,10 @@ func TestReserveNameAtomic(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			inst := &Instance{
-				ID:     fmt.Sprintf("id%02d", i),
-				Name:   "same-name",
-				Port:   46000 + i,
-				exited: make(chan int, 1),
+				ID:   fmt.Sprintf("id%02d", i),
+				Name: "same-name",
+				Port: 46000 + i,
+				done: make(chan struct{}),
 			}
 			codes[i] = instErrCode(m.reserve(inst))
 		}(i)
@@ -183,6 +184,70 @@ func TestReserveNameAtomic(t *testing.T) {
 	}
 	if success != 1 || dup != n-1 {
 		t.Fatalf("期望 1 成功 / %d 重复，实际 %d / %d", n-1, success, dup)
+	}
+}
+
+// signalExit 关闭 done 后，所有等待者都能观察到退出（广播而非单值争抢），且退出码稳定、重复调用幂等。
+func TestSignalExitBroadcastsToAllObservers(t *testing.T) {
+	inst := &Instance{ID: "exitb", Name: "exitb", done: make(chan struct{})}
+
+	const observers = 4
+	var wg sync.WaitGroup
+	seen := make([]bool, observers)
+	for i := 0; i < observers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			select {
+			case <-inst.done:
+				seen[i] = true
+			case <-time.After(2 * time.Second):
+			}
+		}(i)
+	}
+	// 留出时间让所有观察者进入 select 等待，再广播退出。
+	time.Sleep(50 * time.Millisecond)
+	inst.signalExit(7)
+	wg.Wait()
+
+	for i, ok := range seen {
+		if !ok {
+			t.Fatalf("观察者 %d 未收到退出广播", i)
+		}
+	}
+	if got := inst.exitStatus(); got != 7 {
+		t.Fatalf("退出码应为 7，实际 %d", got)
+	}
+	// 幂等：重复广播不 panic，且保留首个退出码。
+	inst.signalExit(9)
+	if got := inst.exitStatus(); got != 7 {
+		t.Fatalf("重复广播不应改写退出码，实际 %d", got)
+	}
+}
+
+// 进程退出后 awaitReady 应立即返回并移除实例，而不是等到 120s 健康轮询超时。
+func TestAwaitReadyReturnsOnExitBroadcast(t *testing.T) {
+	m := NewInstanceManager(45000, 8080)
+	inst := &Instance{ID: "rdytest", Name: "rdytest", Port: 45001, Status: "STARTING", done: make(chan struct{})}
+	if err := m.reserve(inst); err != nil {
+		t.Fatalf("reserve: %v", err)
+	}
+
+	finished := make(chan struct{})
+	go func() {
+		m.awaitReady(inst)
+		close(finished)
+	}()
+	time.Sleep(50 * time.Millisecond)
+	inst.signalExit(3)
+
+	select {
+	case <-finished:
+	case <-time.After(3 * time.Second):
+		t.Fatal("awaitReady 未在进程退出广播后及时返回")
+	}
+	if m.Get(inst.ID) != nil {
+		t.Fatal("异常退出的实例应被移除")
 	}
 }
 
