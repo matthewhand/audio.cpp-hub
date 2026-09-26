@@ -35,8 +35,31 @@ type Instance struct {
 	Status         string // STARTING / READY
 	CreatedAt      string
 
-	cmd    *exec.Cmd
-	exited chan int // 进程退出后收到 exit code
+	cmd      *exec.Cmd
+	done     chan struct{} // 进程退出后关闭，向所有观察者广播终止
+	exitMu   sync.Mutex    // 保护 exitCode，使退出广播幂等
+	exitCode int           // 进程退出码，仅在 done 关闭后有意义
+}
+
+// signalExit 记录退出码并关闭 done，向所有等待者广播进程已退出。
+// 幂等：重复调用（如 Stop 与后台 wait 竞争）不会重复关闭 channel。
+func (inst *Instance) signalExit(code int) {
+	inst.exitMu.Lock()
+	defer inst.exitMu.Unlock()
+	select {
+	case <-inst.done:
+		return
+	default:
+	}
+	inst.exitCode = code
+	close(inst.done)
+}
+
+// exitStatus 返回进程退出码；仅在 done 关闭后调用才有稳定语义。
+func (inst *Instance) exitStatus() int {
+	inst.exitMu.Lock()
+	defer inst.exitMu.Unlock()
+	return inst.exitCode
 }
 
 // Event 事件日志条目（GET /api/events）。
@@ -192,7 +215,7 @@ func (m *InstanceManager) Start(p StartParams) (*Instance, error) {
 		SessionOptions: p.SessionOptions,
 		Status:         "STARTING",
 		CreatedAt:      time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
-		exited:         make(chan int, 1),
+		done:           make(chan struct{}),
 	}
 	// 原子预占：单临界区内校验服务名唯一并登记占位实例。
 	if err := m.reserve(inst); err != nil {
@@ -249,7 +272,7 @@ func (m *InstanceManager) Start(p StartParams) (*Instance, error) {
 		cmd.Process.Kill()
 		code := waitExitCode(cmd)
 		logFile.Close()
-		inst.exited <- code
+		inst.signalExit(code)
 		return nil, newUserError("INSTANCE_STOPPED", "实例在启动完成前已被停止")
 	}
 	committed = true
@@ -257,7 +280,7 @@ func (m *InstanceManager) Start(p StartParams) (*Instance, error) {
 	go func() {
 		code := waitExitCode(cmd)
 		logFile.Close()
-		inst.exited <- code
+		inst.signalExit(code)
 	}()
 
 	log.Printf("[%s] 实例已启动: executable=%s, name=%s, modelId=%s, backend=%s, port=%d, pid=%d",
@@ -308,7 +331,7 @@ func (m *InstanceManager) Stop(id string) bool {
 	if cmd != nil && cmd.Process != nil {
 		cmd.Process.Kill()
 		select {
-		case <-inst.exited:
+		case <-inst.done: // 进程退出广播，无需争抢单值
 		case <-time.After(5 * time.Second):
 		}
 	}
@@ -385,7 +408,14 @@ func (m *InstanceManager) awaitReady(inst *Instance) {
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", inst.Port)
 	for time.Now().Before(deadline) {
 		select {
-		case code := <-inst.exited:
+		case <-inst.done:
+			// 进程已退出。若实例已被 Stop/stopAll 主动移除，则是用户请求的停止：
+			// 静默返回（Stop 已负责清理），避免把正常停止误报成异常退出并重复清理。
+			if m.Get(inst.ID) == nil {
+				log.Printf("[%s] 实例在就绪前已停止", inst.ID)
+				return
+			}
+			code := inst.exitStatus()
 			reason := fmt.Sprintf("实例 #%s 进程提前退出 (exit=%d)，日志尾部: %s", inst.ID, code, readLogTail(inst.ID))
 			log.Printf("[%s] 实例进程提前退出: exit=%d", inst.ID, code)
 			m.addEvent("error", reason)
