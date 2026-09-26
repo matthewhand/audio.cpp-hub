@@ -207,9 +207,17 @@ func snapshotRefAudios(dir, taskID string, request map[string]any, rec map[strin
 	refs := map[string]any{}
 	var total int64
 	for _, src := range sources {
+		if !historyRefSourceAllowed(src.path) {
+			log.Printf("参考音频来源不在受管目录内，跳过快照: %s", src.path)
+			continue
+		}
 		st, err := os.Stat(src.path)
 		if err != nil || !st.Mode().IsRegular() || st.Size() > historyMaxRefBytes {
 			log.Printf("参考音频不存在或超过 50MB，跳过快照: %s", src.path)
+			continue
+		}
+		if _, err := parseWAVFile(src.path); err != nil {
+			log.Printf("参考音频不是标准 WAV，跳过快照: %s (%v)", src.path, err)
 			continue
 		}
 		if err := copyFile(src.path, filepath.Join(dir, taskID+"."+src.name+".wav")); err != nil {
@@ -223,6 +231,52 @@ func snapshotRefAudios(dir, taskID string, request map[string]any, rec map[strin
 		rec["refs"] = refs
 		rec["refBytes"] = total
 	}
+}
+
+// historyRefAllowedRoots 参考音频快照允许的源目录（相对工作目录）：data/uploads 与 data/voices
+// 由 hub 管理且内容经 WAV 校验。其它路径一律拒绝，避免把任意本地文件复制进历史后被 HTTP 读回。
+var historyRefAllowedRoots = []string{uploadDir, filepath.Join("data", "voices")}
+
+// historyRefSourceAllowed 判断源路径是否位于受管目录内：解析为绝对路径后按目录前缀比较
+// （拒绝 ../ 逃逸与绝对路径拼接），符号链接由后续 parseWAVFile 兜底。
+func historyRefSourceAllowed(path string) bool {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	abs = filepath.Clean(abs)
+	for _, root := range historyRefAllowedRoots {
+		rootAbs, err := filepath.Abs(root)
+		if err != nil {
+			continue
+		}
+		rootAbs = filepath.Clean(rootAbs)
+		rel, err := filepath.Rel(rootAbs, abs)
+		if err != nil {
+			continue
+		}
+		if rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
+			return true
+		}
+	}
+	return false
+}
+
+// cloneJSONMap 深拷贝记录，绝不把存储中的 map 暴露给调用方，避免调用方在锁外读取时
+// 与 SetRecordGroup/DeleteGroup 的锁内写产生 map 读写竞态。
+func cloneJSONMap(rec map[string]any) map[string]any {
+	if rec == nil {
+		return nil
+	}
+	data, err := json.Marshal(rec)
+	if err != nil {
+		return nil
+	}
+	var out map[string]any
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil
+	}
+	return out
 }
 
 // deleteHistoryTaskFiles 删除任务的全部伴随文件：结果 wav + 快照 + 残留临时文件（前缀 taskId + "."）。
@@ -243,8 +297,8 @@ func deleteHistoryTaskFiles(modelID, taskID string) {
 // List 简要列表（新→旧）：taskId/time/instanceName/ok/text(截断)/error/result{durationSec,size}/groupId。
 func (m *HistoryManager) List(modelID string) []map[string]any {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	records := m.index[modelID]
-	m.mu.Unlock()
 	out := []map[string]any{}
 	for i := len(records) - 1; i >= 0; i-- {
 		rec := records[i]
@@ -280,7 +334,7 @@ func (m *HistoryManager) List(modelID string) []map[string]any {
 func (m *HistoryManager) Get(modelID, taskID string) map[string]any {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.findLocked(modelID, taskID)
+	return cloneJSONMap(m.findLocked(modelID, taskID))
 }
 
 func (m *HistoryManager) findLocked(modelID, taskID string) map[string]any {
@@ -314,6 +368,12 @@ func (m *HistoryManager) AudioPath(modelID, taskID string) string {
 func (m *HistoryManager) RefAudioPath(modelID, taskID, name string) string {
 	if !historySafeKey.MatchString(modelID) || !historySafeKey.MatchString(taskID) ||
 		!historyRefName.MatchString(name) {
+		return ""
+	}
+	m.mu.Lock()
+	found := m.findLocked(modelID, taskID) != nil
+	m.mu.Unlock()
+	if !found {
 		return ""
 	}
 	p := filepath.Join(historyDir(modelID), taskID+"."+name+".wav")
