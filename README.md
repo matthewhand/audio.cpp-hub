@@ -9,6 +9,26 @@
 - **原生单二进制**：编译产物不依赖任何运行环境（Go 静态编译，发布包内含 Windows / Linux 可执行文件）
 - **hub 自身很轻量**：不加载模型权重，模型由独立的 `audiocpp_server` 子进程承载
 
+## 演示
+
+以下 GIF 均从运行中的 Web UI 实拍（Playwright 录屏 + ffmpeg 压制），非设计稿。
+
+**总览：模型列表与就绪实例** — 左侧是可启动的模型清单与实例卡片（此处 BreezeTTS 实例状态为 READY），选中模型后右侧进入对应工作台。
+
+![hub-overview](docs/assets/hub-overview.gif)
+
+**语音合成（TTS）** — 在表单输入文本、一键合成，结果音频直接在页面播放 / 下载（异步队列，可连续排队）。
+
+![hub-tts](docs/assets/hub-tts.gif)
+
+**操作历史** — 页头 🕘 打开操作历史，行内展开记录详情，参考音频与结果音频可回听。
+
+![hub-history](docs/assets/hub-history.gif)
+
+**下载管理** — 页头 ⬇️ 打开下载管理，查看权重下载进度，可暂停 / 续传 / 一键填入启动表单。
+
+![hub-downloads](docs/assets/hub-downloads.gif)
+
 ## 功能特性
 
 - **多实例管理**：为每个模型实例生成 `server.json` 并以子进程拉起 `audiocpp_server`，自动分配端口（绑定 127.0.0.1）、轮询健康状态（最多 120s）、查看日志、一键停止
@@ -152,10 +172,6 @@ data/                   # 运行时：uploads、voices、profiles.json、history
 models/                 # 运行时：下载的模型权重（modelsDir）
 logs/                   # 运行时：Windows GUI 模式下的 logs/hub.log
 ```
-
-## 截图
-
-> 待补充：欢迎通过 PR 添加模型列表、TTS 表单、操作历史、下载管理面板的截图 / 录屏（建议放入 `docs/images/` 后在此嵌入）。
 
 ## 安全说明
 

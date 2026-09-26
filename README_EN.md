@@ -9,6 +9,26 @@ Repository: <https://github.com/matthewhand/audio.cpp-hub>
 - **Native single binary**: the build has no runtime dependencies (static Go build; release packages ship Windows / Linux executables)
 - **The hub itself is lightweight**: it does not load model weights — models run in separate `audiocpp_server` subprocesses
 
+## Demo
+
+These GIFs are captured from the running web UI (Playwright recording + ffmpeg encoding), not mockups.
+
+**Overview: model list and a ready instance** — the left rail lists launchable models and instance cards (the BreezeTTS instance is READY here); selecting a model opens its workspace on the right.
+
+![hub-overview](docs/assets/hub-overview.gif)
+
+**Text-to-speech (TTS)** — type text, synthesise with one click, and play / download the result right on the page (async queue, so you can keep submitting).
+
+![hub-tts](docs/assets/hub-tts.gif)
+
+**Operation history** — open it from the 🕘 button in the header; expand a record inline and replay the reference / result audio.
+
+![hub-history](docs/assets/hub-history.gif)
+
+**Download manager** — open it from the ⬇️ button in the header to watch weight-download progress and pause / resume / fill the path into the launch form.
+
+![hub-downloads](docs/assets/hub-downloads.gif)
+
 ## Features
 
 - **Multi-instance management**: writes a `server.json` per instance and launches `audiocpp_server` as a subprocess — automatic port allocation (bound to 127.0.0.1), health polling (up to 120s), log viewing, one-click stop
@@ -152,10 +172,6 @@ data/                   # Runtime: uploads, voices, profiles.json, history, down
 models/                 # Runtime: downloaded model weights (modelsDir)
 logs/                   # Runtime: logs/hub.log in Windows GUI mode
 ```
-
-## Screenshots
-
-> To be added: contributions of screenshots / recordings for the model list, TTS form, history and download manager panels are welcome (put them in `docs/images/` and embed them here).
 
 ## Security Notice
 
