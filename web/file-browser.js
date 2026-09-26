@@ -260,9 +260,11 @@ window.FileBrowser = (() => {
       const size = e.dir ? "" : formatSize(e.size);
       row.innerHTML = `<span class="fb-icon">${icon}</span>
         <span class="fb-name"></span>
-        <span class="fb-size">${size}</span>
-        <span class="fb-mtime">${e.mtime || ""}</span>`;
+        <span class="fb-size"></span>
+        <span class="fb-mtime"></span>`;
       row.querySelector(".fb-name").textContent = e.name;
+      row.querySelector(".fb-size").textContent = size;
+      row.querySelector(".fb-mtime").textContent = e.mtime || "";
       row.title = e.path;
       row.onclick = () => onRowClick(e);
       row.ondblclick = () => onRowDblClick(e);

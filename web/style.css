@@ -1458,3 +1458,8 @@ footer { padding: 4px 24px 18px; }
 .dl-package-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .dl-package-name { font-size: 13px; font-weight: 600; }
 .dl-package-meta { font-size: 12px; color: var(--text-dim); word-break: break-all; }
+/* 列表加载失败提示 + 重试按钮 */
+.load-error { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.load-error button { flex: none; }
+/* 弹窗容器仅作程序化焦点落点，不显示轮廓（首个可聚焦控件会接管焦点） */
+.modal[tabindex="-1"]:focus, .history-panel-card[tabindex="-1"]:focus { outline: none; }

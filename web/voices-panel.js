@@ -8,6 +8,7 @@ let voices = [];
 
 window.openVoicesPanel = function () {
   $("voices-panel").classList.remove("hidden");
+  if (window.focusDialog) window.focusDialog($("voices-panel"));
   if (!addPicker) {
     addPicker = new AudioPicker($("voice-add-picker"), "voices.addAudio");
     // 管理面板里添加音色时，"音色库"页签无意义（从库选库），隐藏
@@ -19,6 +20,7 @@ window.openVoicesPanel = function () {
 
 function closeVoicesPanel() {
   $("voices-panel").classList.add("hidden");
+  if (window.restoreDialogFocus) window.restoreDialogFocus();
 }
 window.closeVoicesPanel = closeVoicesPanel;
 
@@ -32,7 +34,9 @@ $("voices-panel").addEventListener("mousedown", (e) => {
 async function loadVoices() {
   try {
     const res = await fetch("/api/voices");
-    voices = await res.json();
+    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    const data = await res.json();
+    voices = Array.isArray(data) ? data : [];
   } catch (e) {
     voices = [];
   }

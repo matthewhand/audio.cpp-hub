@@ -87,6 +87,10 @@ window.AudioPicker = class AudioPicker {
     this.$ = (sel) => this.root.querySelector(sel);
     this.canvas = this.$(".wave");
     this.ctx2d = this.canvas.getContext("2d");
+    // 波形与音量滑块的读屏标签
+    this.canvas.setAttribute("role", "img");
+    this.canvas.setAttribute("aria-label", t("picker.waveform"));
+    this.$(".volume").setAttribute("aria-label", t("picker.volume"));
     this.audioEl = this.$(".player-el");
     this.recorder = null;
     this.recChunks = [];
@@ -121,6 +125,8 @@ window.AudioPicker = class AudioPicker {
     this.$(".path-probe").textContent = t("picker.probe");
     this.$(".play-btn").textContent = this.audioEl.paused ? t("picker.play") : t("picker.pause");
     this.$(".vol-label").textContent = t("picker.volume");
+    this.$(".volume").setAttribute("aria-label", t("picker.volume"));
+    this.canvas.setAttribute("aria-label", t("picker.waveform"));
     this.$(".trim-apply").textContent = t("picker.trimApply");
     this.$(".trim-clear").textContent = t("picker.trimClear");
     this.$(".trim-info").textContent = this.selection
@@ -466,7 +472,9 @@ window.AudioPicker = class AudioPicker {
     const select = this.$(".voice-select");
     try {
       const res = await fetch("/api/voices");
-      this.voices = await res.json();
+      if (!res.ok) throw new Error(I18N.errText(await res.text()));
+      const data = await res.json();
+      this.voices = Array.isArray(data) ? data : [];
     } catch (e) {
       this.voices = [];
     }
