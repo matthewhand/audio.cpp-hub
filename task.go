@@ -501,9 +501,21 @@ func (m *TaskManager) runTTS(ctx context.Context, t *Task) error {
 		m.history.RecordTTS(t.inst, t.request, t.ID, nil, summarize(err.Error()))
 		return err
 	}
-	wav := filepath.Join(dir, t.ID+".wav")
-	var result map[string]any
-	var errMsg string
+	result, errMsg := finalizeTTS(m.history, t.inst, t.request, t.ID, tmp)
+	if errMsg != "" {
+		return fmt.Errorf("%s", errMsg)
+	}
+	m.mu.Lock()
+	t.Result = result
+	m.mu.Unlock()
+	return nil
+}
+
+// finalizeTTS 提取临时响应中的音频、解析 WAV 头、构造结果并写入 TTS 历史。
+// 同步（handleRun）与异步（runTTS）两条链路共用同一实现；errMsg 非空表示最终态为失败。
+// wav 与 tmp 同目录，result["file"] 用 taskID 命名，保证历史音频 URL 可寻址。
+func finalizeTTS(history *HistoryManager, inst *Instance, request map[string]any, taskID, tmp string) (result map[string]any, errMsg string) {
+	wav := filepath.Join(filepath.Dir(tmp), taskID+".wav")
 	found, err := extractAudio(tmp, wav)
 	if err != nil {
 		errMsg = "结果音频提取失败: " + summarize(err.Error())
@@ -514,27 +526,20 @@ func (m *TaskManager) runTTS(ctx context.Context, t *Task) error {
 		errMsg = "结果音频提取失败: " + summarize(perr.Error())
 		os.Remove(wav)
 	} else {
-		st, _ := os.Stat(wav)
 		var size int64
-		if st != nil {
+		if st, serr := os.Stat(wav); serr == nil {
 			size = st.Size()
 		}
 		result = map[string]any{
-			"file":        t.ID + ".wav",
+			"file":        taskID + ".wav",
 			"size":        size,
 			"durationSec": round3(info.durationSec),
 			"sampleRate":  info.sampleRate,
 			"channels":    info.channels,
 		}
 	}
-	m.history.RecordTTS(t.inst, t.request, t.ID, result, errMsg)
-	if errMsg != "" {
-		return fmt.Errorf("%s", errMsg)
-	}
-	m.mu.Lock()
-	t.Result = result
-	m.mu.Unlock()
-	return nil
+	history.RecordTTS(inst, request, taskID, result, errMsg)
+	return result, errMsg
 }
 
 // forwardToFile 把 {"model":<服务名>,"request":{...}} POST 到实例 /v1/tasks/run，

@@ -541,32 +541,8 @@ func (h *Hub) handleRun(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, http.StatusBadGateway, "FORWARD_FAILED", nil, summarize(err.Error()))
 		return
 	}
-	var result map[string]any
-	var errMsg string
-	wav := filepath.Join(dir, taskID+".wav")
-	found, err := extractAudio(tmp, wav)
-	if err != nil {
-		errMsg = "结果音频提取失败: " + summarize(err.Error())
-		os.Remove(wav)
-	} else if !found {
-		errMsg = "响应中未找到音频数据"
-	} else if info, perr := parseWAVFile(wav); perr != nil {
-		errMsg = "结果音频提取失败: " + summarize(perr.Error())
-		os.Remove(wav)
-	} else {
-		var size int64
-		if st, err := os.Stat(wav); err == nil {
-			size = st.Size()
-		}
-		result = map[string]any{
-			"file":        taskID + ".wav",
-			"size":        size,
-			"durationSec": round3(info.durationSec),
-			"sampleRate":  info.sampleRate,
-			"channels":    info.channels,
-		}
-	}
-	h.history.RecordTTS(inst, request, taskID, result, errMsg)
+	// TTS 历史由 finalizeTTS 统一记录（含音频提取失败详情）
+	finalizeTTS(h.history, inst, request, taskID, tmp)
 	// 响应 JSON 原样回写前端（写完删临时文件）
 	f, err := os.Open(tmp)
 	if err != nil {
