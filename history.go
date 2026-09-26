@@ -20,8 +20,6 @@ type HistoryManager struct {
 	index map[string][]map[string]any // modelId → 记录（旧→新）
 }
 
-var historySafeKey = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
-
 // historyRefName 参考音频快照名：ref（voice_ref）/ emo（情感参考 audio）/ spk0..spk99（voice_samples 逐项）
 var historyRefName = regexp.MustCompile(`^(ref|emo|spk\d{1,2})$`)
 
@@ -50,7 +48,7 @@ func (m *HistoryManager) replay() {
 		return
 	}
 	for _, d := range dirs {
-		if !d.IsDir() || !historySafeKey.MatchString(d.Name()) {
+		if !d.IsDir() || !safeKey(d.Name()) {
 			continue
 		}
 		modelID := d.Name()
@@ -91,7 +89,7 @@ func (m *HistoryManager) replay() {
 func (m *HistoryManager) RecordTTS(inst *Instance, request map[string]any, taskID string,
 	result map[string]any, errMsg string) {
 	modelID := inst.ModelID
-	if !historySafeKey.MatchString(modelID) || !historySafeKey.MatchString(taskID) {
+	if !safeKey(modelID) || !safeKey(taskID) {
 		log.Printf("历史记录的 modelId/taskId 非法，跳过: %s/%s", modelID, taskID)
 		return
 	}
@@ -348,7 +346,7 @@ func (m *HistoryManager) findLocked(modelID, taskID string) map[string]any {
 
 // AudioPath 结果音频路径；key 非法、记录或文件不存在返回空串。
 func (m *HistoryManager) AudioPath(modelID, taskID string) string {
-	if !historySafeKey.MatchString(modelID) || !historySafeKey.MatchString(taskID) {
+	if !safeKey(modelID) || !safeKey(taskID) {
 		return ""
 	}
 	m.mu.Lock()
@@ -366,7 +364,7 @@ func (m *HistoryManager) AudioPath(modelID, taskID string) string {
 
 // RefAudioPath 参考音频快照文件路径（<taskId>.<name>.wav）；key/name 非法或文件不存在返回空串。
 func (m *HistoryManager) RefAudioPath(modelID, taskID, name string) string {
-	if !historySafeKey.MatchString(modelID) || !historySafeKey.MatchString(taskID) ||
+	if !safeKey(modelID) || !safeKey(taskID) ||
 		!historyRefName.MatchString(name) {
 		return ""
 	}
@@ -387,7 +385,7 @@ func (m *HistoryManager) RefAudioPath(modelID, taskID, name string) string {
 func (m *HistoryManager) Delete(modelID, taskID string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !historySafeKey.MatchString(taskID) {
+	if !safeKey(taskID) {
 		return false
 	}
 	records := m.index[modelID]
@@ -408,7 +406,7 @@ func (m *HistoryManager) Clear(modelID string) {
 	defer m.mu.Unlock()
 	records := m.index[modelID]
 	delete(m.index, modelID)
-	if !historySafeKey.MatchString(modelID) {
+	if !safeKey(modelID) {
 		return
 	}
 	for _, rec := range records {
@@ -443,7 +441,7 @@ func (m *HistoryManager) rewriteLocked(modelID string) {
 func (m *HistoryManager) ListGroups(modelID string) []map[string]any {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !historySafeKey.MatchString(modelID) {
+	if !safeKey(modelID) {
 		return []map[string]any{}
 	}
 	return m.readGroupsLocked(modelID)
@@ -455,7 +453,7 @@ func (m *HistoryManager) CreateGroup(modelID, name string) (map[string]any, erro
 	if err != nil {
 		return nil, err
 	}
-	if !historySafeKey.MatchString(modelID) {
+	if !safeKey(modelID) {
 		return nil, &UserError{Code: "MODEL_ID_INVALID",
 			Params: map[string]any{"modelId": modelID}, Msg: "模型 ID 非法: " + modelID}
 	}
@@ -486,7 +484,7 @@ func (m *HistoryManager) RenameGroup(modelID, groupID, name string) (bool, error
 	if err != nil {
 		return false, err
 	}
-	if !historySafeKey.MatchString(modelID) || !historySafeKey.MatchString(groupID) {
+	if !safeKey(modelID) || !safeKey(groupID) {
 		return false, nil
 	}
 	m.mu.Lock()
@@ -512,7 +510,7 @@ func (m *HistoryManager) RenameGroup(modelID, groupID, name string) (bool, error
 
 // DeleteGroup 删除分组：先把该模型所有记录的 groupId 字段移除（回未分组），再删分组条目。
 func (m *HistoryManager) DeleteGroup(modelID, groupID string) bool {
-	if !historySafeKey.MatchString(modelID) || !historySafeKey.MatchString(groupID) {
+	if !safeKey(modelID) || !safeKey(groupID) {
 		return false
 	}
 	m.mu.Lock()
@@ -546,7 +544,7 @@ func (m *HistoryManager) DeleteGroup(modelID, groupID string) bool {
 // SetRecordGroup 设置记录所属分组：groupId 为空表示移回未分组；非空时校验组存在。
 // 记录不存在返回 (false, nil)。
 func (m *HistoryManager) SetRecordGroup(modelID, taskID, groupID string) (bool, error) {
-	if !historySafeKey.MatchString(modelID) || !historySafeKey.MatchString(taskID) {
+	if !safeKey(modelID) || !safeKey(taskID) {
 		return false, nil
 	}
 	m.mu.Lock()
@@ -558,7 +556,7 @@ func (m *HistoryManager) SetRecordGroup(modelID, taskID, groupID string) (bool, 
 	if groupID == "" {
 		delete(rec, "groupId")
 	} else {
-		if !historySafeKey.MatchString(groupID) || !m.groupExistsLocked(modelID, groupID) {
+		if !safeKey(groupID) || !m.groupExistsLocked(modelID, groupID) {
 			return false, &UserError{Code: "GROUP_NOT_FOUND",
 				Params: map[string]any{"groupId": groupID}, Msg: "分组不存在: " + groupID}
 		}
