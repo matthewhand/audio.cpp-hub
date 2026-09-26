@@ -43,7 +43,7 @@ COPY --from=builder /out/audio.cpp-hub /usr/local/bin/audio.cpp-hub
 
 # web/ 由 http.FileServer(http.Dir("web")) 从磁盘读取；hub.config.json / executables.json 同理。
 COPY web ./web
-COPY hub.config.json ./hub.config.json
+COPY docker/hub.config.json ./hub.config.json
 COPY docker/executables.json ./executables.json
 
 COPY docker/start-hub.sh /usr/local/bin/start-hub.sh

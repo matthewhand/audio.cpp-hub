@@ -37,7 +37,7 @@ COPY --from=builder /out/audio.cpp-hub /usr/local/bin/audio.cpp-hub
 # hub 从磁盘读取的资源：web/ 静态页面、hub.config.json、executables.json。
 # models.json / model-packages.json 已在二进制内 go:embed，无需复制。
 COPY web ./web
-COPY hub.config.json ./hub.config.json
+COPY docker/hub.config.json ./hub.config.json
 COPY docker/executables.json ./executables.json
 
 # 容器入口脚本
