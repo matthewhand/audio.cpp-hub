@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/matthewhand/audio.cpp-hub/internal/wav"
 )
 
 // Task 一个异步推理任务（POST /api/tasks 创建）。
@@ -519,29 +521,29 @@ func (m *TaskManager) runTTS(ctx context.Context, t *Task) error {
 
 // finalizeTTS 提取临时响应中的音频、解析 WAV 头、构造结果并写入 TTS 历史。
 // 同步（handleRun）与异步（runTTS）两条链路共用同一实现；errMsg 非空表示最终态为失败。
-// wav 与 tmp 同目录，result["file"] 用 taskID 命名，保证历史音频 URL 可寻址。
+// wavPath 与 tmp 同目录，result["file"] 用 taskID 命名，保证历史音频 URL 可寻址。
 func finalizeTTS(history *HistoryManager, inst *Instance, request map[string]any, taskID, tmp string) (result map[string]any, errMsg string) {
-	wav := filepath.Join(filepath.Dir(tmp), taskID+".wav")
-	found, err := extractAudio(tmp, wav)
+	wavPath := filepath.Join(filepath.Dir(tmp), taskID+".wav")
+	found, err := extractAudio(tmp, wavPath)
 	if err != nil {
 		errMsg = "结果音频提取失败: " + summarize(err.Error())
-		os.Remove(wav)
+		os.Remove(wavPath)
 	} else if !found {
 		errMsg = "响应中未找到音频数据"
-	} else if info, perr := parseWAVFile(wav); perr != nil {
+	} else if info, perr := wav.ParseFile(wavPath); perr != nil {
 		errMsg = "结果音频提取失败: " + summarize(perr.Error())
-		os.Remove(wav)
+		os.Remove(wavPath)
 	} else {
 		var size int64
-		if st, serr := os.Stat(wav); serr == nil {
+		if st, serr := os.Stat(wavPath); serr == nil {
 			size = st.Size()
 		}
 		result = map[string]any{
 			"file":        taskID + ".wav",
 			"size":        size,
-			"durationSec": round3(info.durationSec),
-			"sampleRate":  info.sampleRate,
-			"channels":    info.channels,
+			"durationSec": round3(info.DurationSec),
+			"sampleRate":  info.SampleRate,
+			"channels":    info.Channels,
 		}
 	}
 	history.RecordTTS(inst, request, taskID, result, errMsg)

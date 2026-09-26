@@ -5,6 +5,14 @@ import (
 	"testing"
 )
 
+// userErrCode 提取 *UserError 的错误码，非 UserError 返回空串。
+func userErrCode(err error) string {
+	if ue, ok := err.(*UserError); ok {
+		return ue.Code
+	}
+	return ""
+}
+
 func TestValidateDlFilePath(t *testing.T) {
 	cases := []struct {
 		name    string

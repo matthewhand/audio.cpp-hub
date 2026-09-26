@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/matthewhand/audio.cpp-hub/internal/wav"
 )
 
 // HistoryManager TTS 操作历史：按 modelId 隔离到 data/history/<modelId>/
@@ -214,7 +216,7 @@ func snapshotRefAudios(dir, taskID string, request map[string]any, rec map[strin
 			log.Printf("参考音频不存在或超过 50MB，跳过快照: %s", src.path)
 			continue
 		}
-		if _, err := parseWAVFile(src.path); err != nil {
+		if _, err := wav.ParseFile(src.path); err != nil {
 			log.Printf("参考音频不是标准 WAV，跳过快照: %s (%v)", src.path, err)
 			continue
 		}
@@ -236,7 +238,7 @@ func snapshotRefAudios(dir, taskID string, request map[string]any, rec map[strin
 var historyRefAllowedRoots = []string{uploadDir, filepath.Join("data", "voices")}
 
 // historyRefSourceAllowed 判断源路径是否位于受管目录内：解析为绝对路径后按目录前缀比较
-// （拒绝 ../ 逃逸与绝对路径拼接），符号链接由后续 parseWAVFile 兜底。
+// （拒绝 ../ 逃逸与绝对路径拼接），符号链接由后续 wav.ParseFile 兜底。
 func historyRefSourceAllowed(path string) bool {
 	abs, err := filepath.Abs(path)
 	if err != nil {

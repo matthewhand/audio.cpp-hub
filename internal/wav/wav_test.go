@@ -1,4 +1,4 @@
-package main
+package wav
 
 import (
 	"bytes"
@@ -52,16 +52,16 @@ func wavDataChunk(n int) []byte {
 	return wavChunk("data", uint32(n), make([]byte, n), false)
 }
 
-func userErrCode(err error) string {
-	if ue, ok := err.(*UserError); ok {
-		return ue.Code
+func errCode(err error) string {
+	if e, ok := err.(*Error); ok {
+		return e.Code
 	}
 	return ""
 }
 
 // ------------------------------------------------------------------ tests
 
-func TestParseWAVReader(t *testing.T) {
+func TestParseReader(t *testing.T) {
 	clamped := wavWrap(append(wavFmtChunk(1, 1, 44100, 16),
 		wavChunk("data", 1000000, make([]byte, 100), false)...))
 
@@ -150,29 +150,29 @@ func TestParseWAVReader(t *testing.T) {
 			if size == 0 {
 				size = int64(len(tc.data))
 			}
-			info, err := parseWAVReader(bytes.NewReader(tc.data), size)
-			gotCode := userErrCode(err)
+			info, err := ParseReader(bytes.NewReader(tc.data), size)
+			gotCode := errCode(err)
 			if gotCode != tc.wantErrCode {
 				t.Fatalf("error code = %q (err=%v), want %q", gotCode, err, tc.wantErrCode)
 			}
 			if tc.wantErrCode != "" {
 				if tc.checkFormat {
-					ue, ok := err.(*UserError)
+					e, ok := err.(*Error)
 					if !ok {
-						t.Fatalf("error type = %T, want *UserError", err)
+						t.Fatalf("error type = %T, want *Error", err)
 					}
-					if got := ue.Params["format"]; got != tc.wantFormat {
+					if got := e.Params["format"]; got != tc.wantFormat {
 						t.Fatalf("error format param = %v, want %d", got, tc.wantFormat)
 					}
 				}
 				return
 			}
-			if info.channels != tc.wantChannels || info.sampleRate != tc.wantRate || info.bitsPerSample != tc.wantBits {
+			if info.Channels != tc.wantChannels || info.SampleRate != tc.wantRate || info.BitsPerSample != tc.wantBits {
 				t.Fatalf("info = %+v, want channels=%d rate=%d bits=%d",
 					info, tc.wantChannels, tc.wantRate, tc.wantBits)
 			}
-			if diff := info.durationSec - tc.wantDuration; diff < -tc.durTol || diff > tc.durTol {
-				t.Fatalf("duration = %v, want %v (±%v)", info.durationSec, tc.wantDuration, tc.durTol)
+			if diff := info.DurationSec - tc.wantDuration; diff < -tc.durTol || diff > tc.durTol {
+				t.Fatalf("duration = %v, want %v (±%v)", info.DurationSec, tc.wantDuration, tc.durTol)
 			}
 		})
 	}
