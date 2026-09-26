@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -55,14 +56,23 @@ func (r *ExecutableRegistry) write(list []Executable) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(r.file, data, 0644)
+	if dir := filepath.Dir(r.file); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+	return writeFileAtomic(r.file, data)
 }
 
 // List 全部条目，附带实时探测的 exists。
 func (r *ExecutableRegistry) List() []Executable {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	list, _ := r.read()
+	list, err := r.read()
+	if err != nil {
+		log.Printf("读取可执行文件登记表失败（不覆盖原文件）: %s: %v", r.file, err)
+		return []Executable{}
+	}
 	if list == nil {
 		list = []Executable{}
 	}
@@ -76,7 +86,11 @@ func (r *ExecutableRegistry) List() []Executable {
 func (r *ExecutableRegistry) FindByID(id string) *Executable {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	list, _ := r.read()
+	list, err := r.read()
+	if err != nil {
+		log.Printf("读取可执行文件登记表失败: %s: %v", r.file, err)
+		return nil
+	}
 	for i := range list {
 		if list[i].ID == id {
 			return &list[i]
@@ -89,7 +103,11 @@ func (r *ExecutableRegistry) FindByID(id string) *Executable {
 func (r *ExecutableRegistry) First() *Executable {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	list, _ := r.read()
+	list, err := r.read()
+	if err != nil {
+		log.Printf("读取可执行文件登记表失败: %s: %v", r.file, err)
+		return nil
+	}
 	if len(list) == 0 {
 		return nil
 	}
@@ -111,7 +129,10 @@ func (r *ExecutableRegistry) Add(name, path, note string, env map[string]string)
 	if err := validateExec(&entry); err != nil {
 		return nil, err
 	}
-	list, _ := r.read()
+	list, err := r.read()
+	if err != nil {
+		return nil, err
+	}
 	list = append(list, entry)
 	if err := r.write(list); err != nil {
 		return nil, err
@@ -124,7 +145,10 @@ func (r *ExecutableRegistry) Add(name, path, note string, env map[string]string)
 func (r *ExecutableRegistry) Update(id, name, path, note string, env map[string]string) (*Executable, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	list, _ := r.read()
+	list, err := r.read()
+	if err != nil {
+		return nil, err
+	}
 	for i := range list {
 		if list[i].ID != id {
 			continue
@@ -153,11 +177,19 @@ func (r *ExecutableRegistry) Update(id, name, path, note string, env map[string]
 func (r *ExecutableRegistry) Delete(id string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	list, _ := r.read()
+	list, err := r.read()
+	if err != nil {
+		// 索引损坏时拒绝写入，避免用空列表覆盖导致既有条目丢失。
+		log.Printf("读取可执行文件登记表失败，拒绝删除: %s: %v", r.file, err)
+		return false
+	}
 	for i := range list {
 		if list[i].ID == id {
 			list = append(list[:i], list[i+1:]...)
-			r.write(list)
+			if err := r.write(list); err != nil {
+				log.Printf("可执行文件登记表写入失败: %s: %v", r.file, err)
+				return false
+			}
 			return true
 		}
 	}
@@ -228,16 +260,16 @@ func NewProfileRegistry(file string) *ProfileRegistry {
 	return &ProfileRegistry{file: file}
 }
 
-func (r *ProfileRegistry) read() []map[string]any {
+func (r *ProfileRegistry) read() ([]map[string]any, error) {
 	data, err := os.ReadFile(r.file)
 	if err != nil || len(strings.TrimSpace(string(data))) == 0 {
-		return nil
+		return nil, nil
 	}
 	var list []map[string]any
 	if err := json.Unmarshal(data, &list); err != nil {
-		return nil
+		return nil, err
 	}
-	return list
+	return list, nil
 }
 
 func (r *ProfileRegistry) write(list []map[string]any) error {
@@ -248,14 +280,18 @@ func (r *ProfileRegistry) write(list []map[string]any) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(r.file, data, 0644)
+	return writeFileAtomic(r.file, data)
 }
 
 // List 全部条目，附带 weightsExists（前端据此判断权重是否仍有效）。
 func (r *ProfileRegistry) List() []map[string]any {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	list := r.read()
+	list, err := r.read()
+	if err != nil {
+		log.Printf("读取配置档案失败（不覆盖原文件）: %s: %v", r.file, err)
+		return []map[string]any{}
+	}
 	if list == nil {
 		list = []map[string]any{}
 	}
@@ -282,7 +318,11 @@ func (r *ProfileRegistry) Save(id string, body map[string]any) (map[string]any, 
 		}
 	}
 	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
-	list := r.read()
+	list, err := r.read()
+	if err != nil {
+		// 索引损坏时拒绝写入，避免用空列表覆盖导致既有配置丢失。
+		return nil, err
+	}
 	if id == "" {
 		fields["id"] = newID()
 		fields["createdAt"] = now
@@ -311,11 +351,18 @@ func (r *ProfileRegistry) Save(id string, body map[string]any) (map[string]any, 
 func (r *ProfileRegistry) Delete(id string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	list := r.read()
+	list, err := r.read()
+	if err != nil {
+		log.Printf("读取配置档案失败，拒绝删除: %s: %v", r.file, err)
+		return false
+	}
 	for i, p := range list {
 		if optString(p, "id") == id {
 			list = append(list[:i], list[i+1:]...)
-			r.write(list)
+			if err := r.write(list); err != nil {
+				log.Printf("配置档案写入失败: %s: %v", r.file, err)
+				return false
+			}
 			return true
 		}
 	}

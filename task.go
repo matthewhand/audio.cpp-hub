@@ -44,27 +44,36 @@ type Task struct {
 func (t *Task) active() bool { return t.Status == "QUEUED" || t.Status == "RUNNING" }
 
 const (
-	taskStateDir   = "data/tasks"
-	taskSuffix     = ".task.json"
-	resultSuffix   = ".result.json"
-	finishedKeep   = 100
-	previewMaxSize = 8 << 20
+	taskStateDir     = "data/tasks"
+	taskSuffix       = ".task.json"
+	resultSuffix     = ".result.json"
+	finishedKeep     = 100
+	previewMaxSize   = 8 << 20
+	taskQueueSize    = 100
+	queueIdleTimeout = 30 * time.Second
 )
 
 // TaskManager 提交 → 同实例串行排队执行 → 前端轮询结果。与 ApiHandler 共享同一个 HistoryManager。
 type TaskManager struct {
 	mu        sync.Mutex
 	tasks     map[string]*Task
-	queues    map[string]chan *Task
+	queues    map[string]*taskQueue
 	cancels   map[string]context.CancelFunc // RUNNING 任务的中断函数
 	history   *HistoryManager
 	forwarder *http.Client
 }
 
+// taskQueue 每实例一个串行队列：任务由单个 worker goroutine 顺序执行。
+// 队列空闲超过 queueIdleTimeout 后 worker 自行退出并移除，实例反复启停不会泄漏 goroutine。
+type taskQueue struct {
+	ch      chan *Task
+	running bool
+}
+
 func NewTaskManager(history *HistoryManager) *TaskManager {
 	m := &TaskManager{
 		tasks:     map[string]*Task{},
-		queues:    map[string]chan *Task{},
+		queues:    map[string]*taskQueue{},
 		cancels:   map[string]context.CancelFunc{},
 		history:   history,
 		forwarder: &http.Client{}, // 无超时：生成任务时长不可预估
@@ -123,6 +132,7 @@ func (m *TaskManager) replay() {
 }
 
 // Submit 创建任务并入队。调用方负责实例存在/READY 校验。
+// 入队为非阻塞：队列已满时任务直接标记 FAILED（错误码 TASK_QUEUE_FULL），不阻塞 HTTP handler。
 func (m *TaskManager) Submit(inst *Instance, request map[string]any, requestRaw json.RawMessage) *Task {
 	t := &Task{
 		ID:           newID(),
@@ -142,27 +152,114 @@ func (m *TaskManager) Submit(inst *Instance, request map[string]any, requestRaw 
 	}
 	m.mu.Lock()
 	m.tasks[t.ID] = t
-	queue := m.queueForLocked(inst.ID)
 	m.mu.Unlock()
+	// 先落盘 QUEUED，避免 worker 抢先执行后又被旧状态覆盖。
 	m.persist(t)
-	queue <- t
+	m.mu.Lock()
+	queued := m.enqueueLocked(inst.ID, t)
+	m.mu.Unlock()
+	if !queued {
+		m.mu.Lock()
+		if t.Status == "QUEUED" {
+			t.Status = "FAILED"
+			t.Error = "TASK_QUEUE_FULL: 实例任务队列已满（上限 100）"
+			now := time.Now().UnixMilli()
+			t.FinishedAt = &now
+		}
+		m.mu.Unlock()
+		m.persist(t)
+		m.evictFinished()
+		log.Printf("任务入队失败（队列已满）: %s (实例 %s)", t.ID, inst.Name)
+		return t
+	}
 	log.Printf("任务已入队: %s (实例 %s, category %s)", t.ID, inst.Name, t.Category)
 	return t
 }
 
-// queueForLocked 每实例一个串行队列（与引擎 busy 锁语义一致）。
-func (m *TaskManager) queueForLocked(instanceID string) chan *Task {
-	if q, ok := m.queues[instanceID]; ok {
-		return q
+// enqueueLocked 在锁内取得/新建每实例串行队列并入队；队列满返回 false（不阻塞）。
+func (m *TaskManager) enqueueLocked(instanceID string, t *Task) bool {
+	q, ok := m.queues[instanceID]
+	if !ok {
+		q = &taskQueue{ch: make(chan *Task, taskQueueSize)}
+		m.queues[instanceID] = q
 	}
-	q := make(chan *Task, 100)
-	m.queues[instanceID] = q
-	go func() {
-		for t := range q {
+	if !q.running {
+		q.running = true
+		go m.runQueue(instanceID, q)
+	}
+	select {
+	case q.ch <- t:
+		return true
+	default:
+		return false
+	}
+}
+
+// runQueue 串行执行实例队列；空闲超时后自行退出并移除队列（自回收，无需外部显式停止）。
+func (m *TaskManager) runQueue(instanceID string, q *taskQueue) {
+	idle := time.NewTimer(queueIdleTimeout)
+	defer idle.Stop()
+	for {
+		select {
+		case t, ok := <-q.ch:
+			if !ok { // StopQueue 关闭了队列
+				m.forgetQueue(instanceID, q)
+				return
+			}
+			if !idle.Stop() {
+				select {
+				case <-idle.C:
+				default:
+				}
+			}
 			m.execute(t)
+			idle.Reset(queueIdleTimeout)
+		case <-idle.C:
+			m.mu.Lock()
+			cur, ok := m.queues[instanceID]
+			if ok && cur == q && len(q.ch) == 0 {
+				q.running = false
+				delete(m.queues, instanceID)
+				m.mu.Unlock()
+				return
+			}
+			m.mu.Unlock()
+			idle.Reset(queueIdleTimeout)
 		}
-	}()
-	return q
+	}
+}
+
+// forgetQueue 锁内解绑 worker 退出的队列。
+func (m *TaskManager) forgetQueue(instanceID string, q *taskQueue) {
+	m.mu.Lock()
+	if cur, ok := m.queues[instanceID]; ok && cur == q {
+		q.running = false
+		delete(m.queues, instanceID)
+	}
+	m.mu.Unlock()
+}
+
+// StopQueue 关闭并移除实例队列（供实例停止时调用；未被调用也会由空闲回收兜底）。
+// 该实例尚未执行的 QUEUED 任务标记为 CANCELLED，保证不遗留悬挂记录。
+func (m *TaskManager) StopQueue(instanceID string) {
+	m.mu.Lock()
+	if q, ok := m.queues[instanceID]; ok {
+		delete(m.queues, instanceID)
+		close(q.ch) // 触发 runQueue 退出（收到 !ok）
+	}
+	var pending []*Task
+	for _, t := range m.tasks {
+		if t.InstanceID == instanceID && t.Status == "QUEUED" {
+			t.Status = "CANCELLED"
+			now := time.Now().UnixMilli()
+			t.FinishedAt = &now
+			pending = append(pending, t)
+		}
+	}
+	m.mu.Unlock()
+	for _, t := range pending {
+		m.persist(t)
+	}
 }
 
 // Cancel QUEUED/RUNNING → CANCELLED（RUNNING 中断 hub 侧等待）；已结束 → 删除记录。
@@ -194,33 +291,39 @@ func (m *TaskManager) Cancel(id string) bool {
 }
 
 // List 活跃在前（组内创建时间倒序）；activeOnly 只留 QUEUED/RUNNING，modelID 非空时过滤。
+// 过滤/位置/快照均在锁内完成，锁外只对快照排序与序列化。
 func (m *TaskManager) List(activeOnly bool, modelID string) []map[string]any {
-	m.mu.Lock()
-	all := make([]*Task, 0, len(m.tasks))
-	for _, t := range m.tasks {
-		all = append(all, t)
+	type item struct {
+		snap Task
+		pos  int
 	}
-	m.mu.Unlock()
-	sort.SliceStable(all, func(i, j int) bool { return all[i].CreatedAt > all[j].CreatedAt })
-	sort.SliceStable(all, func(i, j int) bool {
-		ai, aj := 1, 1
-		if all[i].active() {
-			ai = 0
-		}
-		if all[j].active() {
-			aj = 0
-		}
-		return ai < aj
-	})
-	out := []map[string]any{}
-	for _, t := range all {
+	var items []item
+	m.mu.Lock()
+	for _, t := range m.tasks {
 		if activeOnly && !t.active() {
 			continue
 		}
 		if modelID != "" && modelID != t.ModelID {
 			continue
 		}
-		out = append(out, m.outputJSON(t))
+		snap := snapshotTaskLocked(t)
+		items = append(items, item{snap: snap, pos: m.positionLocked(&snap)})
+	}
+	m.mu.Unlock()
+	sort.SliceStable(items, func(i, j int) bool { return items[i].snap.CreatedAt > items[j].snap.CreatedAt })
+	sort.SliceStable(items, func(i, j int) bool {
+		ai, aj := 1, 1
+		if items[i].snap.active() {
+			ai = 0
+		}
+		if items[j].snap.active() {
+			aj = 0
+		}
+		return ai < aj
+	})
+	out := []map[string]any{}
+	for _, it := range items {
+		out = append(out, outputJSON(&it.snap, it.pos))
 	}
 	return out
 }
@@ -242,11 +345,14 @@ func (m *TaskManager) ActiveCountFor(instanceID string) int {
 func (m *TaskManager) Get(id string) map[string]any {
 	m.mu.Lock()
 	t := m.tasks[id]
-	m.mu.Unlock()
 	if t == nil {
+		m.mu.Unlock()
 		return nil
 	}
-	return m.outputJSON(t)
+	snap := snapshotTaskLocked(t)
+	pos := m.positionLocked(&snap)
+	m.mu.Unlock()
+	return outputJSON(&snap, pos)
 }
 
 // ResultPath 非 TTS 已完成任务的结果文件路径，其余返回空串。
@@ -260,22 +366,64 @@ func (m *TaskManager) ResultPath(id string) string {
 	return t.resultPath
 }
 
-// outputJSON 序列化任务并附加队列位置（position 不落盘）。
-func (m *TaskManager) outputJSON(t *Task) map[string]any {
+// outputJSON 序列化任务快照并附加队列位置（position 不落盘）。
+func outputJSON(t *Task, position int) map[string]any {
 	data, _ := json.Marshal(t)
 	var out map[string]any
 	json.Unmarshal(data, &out)
-	out["position"] = m.position(t)
+	out["position"] = position
 	return out
 }
 
-// position 同实例排在该任务前面的 QUEUED 任务数；非 QUEUED 恒为 0。
-func (m *TaskManager) position(task *Task) int {
+// snapshotTaskLocked 在持锁状态下复制任务快照（Result 深拷贝、指针字段复制值），
+// 之后锁外序列化不再触碰执行中被修改的字段。
+func snapshotTaskLocked(t *Task) Task {
+	cp := *t
+	if t.Result != nil {
+		if r, ok := deepCopyJSON(t.Result).(map[string]any); ok {
+			cp.Result = r
+		}
+	}
+	if t.Text != nil {
+		v := *t.Text
+		cp.Text = &v
+	}
+	if t.StartedAt != nil {
+		v := *t.StartedAt
+		cp.StartedAt = &v
+	}
+	if t.FinishedAt != nil {
+		v := *t.FinishedAt
+		cp.FinishedAt = &v
+	}
+	return cp
+}
+
+// deepCopyJSON 深拷贝 JSON 容器（map/slice），标量原样返回。
+func deepCopyJSON(v any) any {
+	switch x := v.(type) {
+	case map[string]any:
+		cp := make(map[string]any, len(x))
+		for k, val := range x {
+			cp[k] = deepCopyJSON(val)
+		}
+		return cp
+	case []any:
+		cp := make([]any, len(x))
+		for i, val := range x {
+			cp[i] = deepCopyJSON(val)
+		}
+		return cp
+	default:
+		return v
+	}
+}
+
+// positionLocked 同实例排在该任务前面的 QUEUED 任务数；非 QUEUED 恒为 0。调用方须持锁。
+func (m *TaskManager) positionLocked(task *Task) int {
 	if task.Status != "QUEUED" {
 		return 0
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	n := 0
 	for _, o := range m.tasks {
 		if o.Status == "QUEUED" && o.InstanceID == task.InstanceID && o.CreatedAt < task.CreatedAt {
@@ -306,10 +454,14 @@ func (m *TaskManager) execute(t *Task) {
 		out := filepath.Join(taskStateDir, t.ID+resultSuffix)
 		err = m.forwardToFile(ctx, t.inst, t.requestRaw, out)
 		if err == nil {
+			preview := resultTextPreview(out)
+			// 字段写入须持锁：快照/序列化可能并发读取。
+			m.mu.Lock()
 			t.resultPath = out
 			if t.Text == nil {
-				t.Text = resultTextPreview(out)
+				t.Text = preview
 			}
+			m.mu.Unlock()
 		}
 	}
 
@@ -320,9 +472,7 @@ func (m *TaskManager) execute(t *Task) {
 		if t.Status == "RUNNING" { // 已被 Cancel 标记的保持 CANCELLED
 			t.Status = "FAILED"
 			t.Error = summarize(err.Error())
-			if t.Category == "tts" {
-				m.history.RecordTTS(t.inst, t.request, t.ID, nil, t.Error)
-			}
+			// TTS 历史由 runTTS 统一记录（含音频提取失败详情），此处不再重复记录。
 		}
 	} else if t.Status == "RUNNING" {
 		t.Status = "DONE"
@@ -381,7 +531,9 @@ func (m *TaskManager) runTTS(ctx context.Context, t *Task) error {
 	if errMsg != "" {
 		return fmt.Errorf("%s", errMsg)
 	}
+	m.mu.Lock()
 	t.Result = result
+	m.mu.Unlock()
 	return nil
 }
 
@@ -506,11 +658,12 @@ func (m *TaskManager) evictFinished() {
 	}
 }
 
-// persist 任务状态原子落盘，失败只记日志。
+// persist 任务状态原子落盘：持 manager 锁覆盖 marshal+write+rename，
+// 保证同一任务（甚至所有任务）的落盘串行化，并发 Cancel/完成不会写出交错/截断状态。
 func (m *TaskManager) persist(t *Task) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	data, err := json.Marshal(t)
-	m.mu.Unlock()
 	if err != nil {
 		return
 	}
