@@ -4,6 +4,11 @@
 /ssl/
 /models/
 /releases/
+/dist/
+/build/
 /audio.cpp-hub
 /audio.cpp-hub.exe
 /legacy/
+hub.config.json
+executables.json
+release_notes.md
