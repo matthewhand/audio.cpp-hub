@@ -4,7 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -66,11 +68,34 @@ func errFromErr(w http.ResponseWriter, status int, fallbackCode string, err erro
 }
 
 // readBodyMap 读取请求体并解析为 JSON 对象；失败时已写响应，返回 nil。
+// 仅接受 Content-Type: application/json（防 CSRF 简单请求）；请求体超上限返回
+// 413 BODY_TOO_LARGE，语法错误/尾随数据/非对象返回 400 INVALID_JSON。
 func readBodyMap(w http.ResponseWriter, r *http.Request) map[string]any {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		errJSON(w, http.StatusUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", nil,
+			"请求 Content-Type 必须为 application/json")
+		return nil
+	}
 	var body map[string]any
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err := dec.Decode(&body); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			errJSON(w, http.StatusRequestEntityTooLarge, "BODY_TOO_LARGE", nil, "请求体超过上限")
+			return nil
+		}
 		errJSON(w, http.StatusBadRequest, "INVALID_JSON", nil, "请求体不是合法 JSON")
+		return nil
+	}
+	// 拒绝首个 JSON 值之后的尾随数据
+	if dec.More() {
+		errJSON(w, http.StatusBadRequest, "INVALID_JSON", nil, "请求体不是合法 JSON")
+		return nil
+	}
+	// 顶层必须是对象（null 解码后为 nil map）
+	if body == nil {
+		errJSON(w, http.StatusBadRequest, "INVALID_JSON", nil, "请求体必须是 JSON 对象")
 		return nil
 	}
 	return body

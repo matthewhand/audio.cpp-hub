@@ -5,7 +5,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -14,6 +16,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 )
 
 // version 构建版本，CI 用 -ldflags "-X main.version=<tag>" 注入。
@@ -105,15 +108,32 @@ func main() {
 	mux := http.NewServeMux()
 	hub.registerRoutes(mux)
 
-	// 退出前停止全部实例子进程并暂停下载任务（进度落盘，下次启动自动续传）
+	// 显式 http.Server：设 ReadHeaderTimeout/IdleTimeout 防慢头攻击；
+	// 不设 WriteTimeout——TTS/SSE 流式响应时长不可预估，写超时会切断长流。
+	srv := &http.Server{
+		Handler:           csrfProtect(mux),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	// 收到退出信号：先优雅关闭 HTTP（排空在途请求），再停实例、暂停下载
+	shutdownDone := make(chan struct{})
 	go func() {
 		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 		<-ch
-		log.Printf("收到退出信号，停止全部实例…")
+		log.Printf("收到退出信号，开始优雅关闭…")
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("HTTP 未能及时排空，强制关闭: %v", err)
+			srv.Close()
+		}
+		cancel()
+		log.Printf("停止全部实例…")
 		hub.instances.stopAll()
 		hub.downloads.Shutdown()
-		os.Exit(0)
+		close(shutdownDone)
+		os.Exit(0) // 保底：Windows 托盘模式下也能退出
 	}()
 
 	// 先绑定端口再进托盘：端口占用等启动失败能立即暴露
@@ -124,6 +144,11 @@ func main() {
 	}
 	log.Printf("audio.cpp-hub %s 监听 http://localhost:%d", version, cfg.HttpPort)
 	runPlatform(hub, fmt.Sprintf("http://127.0.0.1:%d", cfg.HttpPort), func() error {
-		return http.Serve(ln, mux)
+		err := srv.Serve(ln)
+		if errors.Is(err, http.ErrServerClosed) {
+			<-shutdownDone // 等清理与排空完成再退出主流程
+			return nil
+		}
+		return err
 	})
 }
