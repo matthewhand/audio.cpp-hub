@@ -1,0 +1,57 @@
+# Dockerfile.amd — Go 版 audio.cpp-hub 的 AMD GPU 镜像（Vulkan / Mesa RADV）。
+#
+# 运行基础镜像用 Ubuntu 24.04 (Noble)：AMD GFX1100+ (RDNA3 / Strix Halo) 需要
+# Noble 自带的新版 Mesa RADV；老卡（Navi23 / RX 6600 XT）同样可用。
+#
+# 多阶段构建：golang 构建静态二进制 → Ubuntu Noble 运行镜像 + Mesa RADV。
+# 宿主需把 /dev/dri、/dev/kfd 透传进容器（见 compose.amd.yaml）。
+FROM golang:1.27 AS builder
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+        -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
+        -o /out/audio.cpp-hub .
+
+
+FROM ubuntu:24.04 AS runtime
+
+# 运行期依赖：
+#   ca-certificates/curl      HTTPS 下载与健康检查
+#   python3                   start-instance.sh 解析实例 JSON
+#   libvulkan1                Vulkan 载入器
+#   mesa-vulkan-drivers       Mesa RADV（AMD 开源 Vulkan 驱动）
+#   vulkan-tools              vulkaninfo，便于排查设备
+#   libgomp1                  OpenMP 运行库（audiocpp_server 依赖）
+#   libglvnd0/libglx0/libx11*/libxext6/libxcb1  Vulkan/GLVND 所需的 X11 运行库
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+         ca-certificates curl python3 \
+         libvulkan1 mesa-vulkan-drivers vulkan-tools libgomp1 \
+         libglvnd0 libglx0 libx11-6 libx11-xcb1 libxext6 libxcb1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /out/audio.cpp-hub /usr/local/bin/audio.cpp-hub
+
+# web/ 由 http.FileServer(http.Dir("web")) 从磁盘读取；hub.config.json / executables.json 同理。
+COPY web ./web
+COPY hub.config.json ./hub.config.json
+COPY docker/executables.json ./executables.json
+
+COPY docker/start-hub.sh /usr/local/bin/start-hub.sh
+COPY docker/start-instance.sh /usr/local/bin/start-instance.sh
+RUN chmod 0755 /usr/local/bin/audio.cpp-hub \
+             /usr/local/bin/start-hub.sh \
+             /usr/local/bin/start-instance.sh
+
+EXPOSE 18080
+
+ENTRYPOINT ["/usr/local/bin/start-hub.sh"]

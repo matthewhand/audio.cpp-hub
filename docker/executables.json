@@ -1,0 +1,9 @@
+[
+  {
+    "id": "vulkan",
+    "name": "vulkan",
+    "path": "/audio.cpp/bin/audiocpp_server",
+    "note": "容器内挂载的 audiocpp_server；实际 backend 由启动请求的 AUDIOCPP_BACKEND 决定",
+    "createdAt": "2026-09-11T00:00:00Z"
+  }
+]

@@ -1,0 +1,27 @@
+# 构建上下文裁剪（镜像只依赖 Go 源码、web/、hub.config.json、docker/ 与嵌入资源）
+.git
+.github
+.worktrees
+.serena
+.settings
+legacy
+data
+logs
+run
+models
+ssl
+releases
+*.gguf
+*.wav
+audio.cpp-hub
+audio.cpp-hub.exe
+compose*.yaml
+compose*.yml
+DOCKER.md
+README.md
+README_EN.md
+AGENTS.md
+HANDOFF.md
+LOAD_REPORT.md
+REVIEW_FOR_GROK.md
+*.service
