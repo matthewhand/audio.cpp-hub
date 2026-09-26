@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/matthewhand/audio.cpp-hub/internal/wav"
 )
 
 // VoiceLibrary 音色库：data/voices/<vid>.wav + data/voices/index.json 登记
@@ -107,10 +109,10 @@ func (v *VoiceLibrary) Save(name, text, uploadID, sourcePath string) (map[string
 		return nil, err
 	}
 	// 解析副本获取音频信息
-	info, err := parseWAVFile(target)
+	info, err := wav.ParseFile(target)
 	if err != nil {
 		os.Remove(target)
-		return nil, err
+		return nil, toUserError(err)
 	}
 	st, _ := os.Stat(target)
 	var size int64
@@ -123,10 +125,10 @@ func (v *VoiceLibrary) Save(name, text, uploadID, sourcePath string) (map[string
 		"name":          strings.TrimSpace(name),
 		"createdAt":     time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
 		"path":          abs,
-		"durationSec":   round3(info.durationSec),
-		"sampleRate":    info.sampleRate,
-		"channels":      info.channels,
-		"bitsPerSample": info.bitsPerSample,
+		"durationSec":   round3(info.DurationSec),
+		"sampleRate":    info.SampleRate,
+		"channels":      info.Channels,
+		"bitsPerSample": info.BitsPerSample,
 		"sizeBytes":     size,
 	}
 	if text != "" {

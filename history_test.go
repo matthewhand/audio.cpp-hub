@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// minimalWAV 返回一个可通过 parseWAVReader 校验的最小 PCM WAV（8kHz/16bit 单声道）。
+// minimalWAV 返回一个可通过 wav.ParseReader 校验的最小 PCM WAV（8kHz/16bit 单声道）。
 func minimalWAV() []byte {
 	data := []byte{1, 2, 3, 4}
 	buf := make([]byte, 0, 44+len(data))
