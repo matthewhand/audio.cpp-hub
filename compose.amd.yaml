@@ -1,0 +1,66 @@
+# compose.amd.yaml — AMD GPU（Vulkan via Mesa RADV）部署，Go 版 audio.cpp-hub。
+#
+# 适用：
+#   - AMD Strix Halo APU (GFX1151)   — AUDIOCPP_DEVICE=1
+#   - AMD RX 6600 XT (Navi23)        — AUDIOCPP_DEVICE=0
+#   - AMD RX 580/590 (Ellesmere)     — AUDIOCPP_DEVICE=0
+#
+# 用法：
+#   docker compose -f compose.amd.yaml up -d --build
+#
+# 需在 .env 或 shell 中提供（默认值见下）的宿主路径：
+#   HOST_AUDIOCPP_BIN      audiocpp_server 所在目录（含 ggml 共享库）
+#   HOST_AUDIOCPP_WEIGHTS  模型 .gguf 路径
+#   HOST_AUDIOCPP_VOICES   可选的参考音频目录
+
+services:
+  audio-cpp-hub:
+    build:
+      context: .
+      dockerfile: Dockerfile.amd
+    image: audio-cpp-hub:amd
+    container_name: audio-cpp-hub-amd
+    restart: unless-stopped
+    # 有意不启用 init:true —— 它设置的 sysctl
+    # (net.ipv4.ip_unprivileged_port_start) 在 Proxmox LXC 内会被拒绝。
+    # start-hub.sh 已用 trap 正确处理 SIGTERM。
+    network_mode: "${NETWORK_MODE:-bridge}"
+    ports:
+      - "18080:18080"
+    environment:
+      # --- GPU 后端与环境 ---
+      AUDIOCPP_BACKEND: "${AUDIOCPP_BACKEND:-vulkan}"
+      AUDIOCPP_DEVICE: "${AUDIOCPP_DEVICE:-${DEVICE:-0}}"
+      AUDIOCPP_THREADS: "${AUDIOCPP_THREADS:-4}"
+      LD_LIBRARY_PATH: "/audio.cpp/bin:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+      # --- 模型（通用名 MODEL_ID/SERVICE_NAME/WEIGHTS/VOICE_REF 亦可）---
+      AUDIOCPP_MODEL_ID: "${AUDIOCPP_MODEL_ID:-${MODEL_ID:-breeze-tts}}"
+      AUDIOCPP_SERVICE_NAME: "${AUDIOCPP_SERVICE_NAME:-${SERVICE_NAME:-breeze}}"
+      AUDIOCPP_WEIGHTS: "${AUDIOCPP_WEIGHTS:-${WEIGHTS:-/audio.cpp/models/breeze-tts-2-q8_0.gguf}}"
+      AUDIOCPP_VOICE_REF: "${AUDIOCPP_VOICE_REF:-${VOICE_REF:-}}"
+      WARMUP_TEXT: "${WARMUP_TEXT:-This is a warm-up sentence for audio generation.}"
+      # Mesa RADV 读取 /dev/dri；无需 NVIDIA 相关变量
+      MESA_VK_DEVICE_SELECT_FORCE_DEFAULT_DEVICE: "0"
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/kfd:/dev/kfd
+    group_add:
+      - "${GPU_GID_VIDEO:-44}"    # video 组 GID（host 相关，写进 .env）
+      - "${GPU_GID_RENDER:-993}"  # render 组 GID（host 相关，写进 .env）
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./run:/app/run
+      # audiocpp_server 及其 ggml 共享库（宿主只读挂载）
+      - ${HOST_AUDIOCPP_BIN:-/audio.cpp/bin}:/audio.cpp/bin:ro
+      # 模型权重（只读；容器内路径需与 AUDIOCPP_WEIGHTS 一致）
+      - ${HOST_AUDIOCPP_WEIGHTS:-/audio.cpp/models/breeze-tts-2-q8_0.gguf}:${AUDIOCPP_WEIGHTS:-${WEIGHTS:-/audio.cpp/models/breeze-tts-2-q8_0.gguf}}:ro
+      # 可选参考音频目录
+      - ${HOST_AUDIOCPP_VOICES:-./data/voices}:/audio.cpp/voices:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:18080/v1/models"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+    stop_grace_period: 30s

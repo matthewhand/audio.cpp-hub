@@ -1,0 +1,43 @@
+# compose.yaml — Go 版 audio.cpp-hub 通用部署（CPU / 通用 Vulkan）。
+# AMD GPU 请使用 compose.amd.yaml（内置 Mesa RADV）。
+#
+# 用法：
+#   docker compose up -d --build
+#
+# 环境变量与 AMD 版一致；GPU 相关变量留空即为 CPU 推理。
+services:
+  audio-cpp-hub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: audio-cpp-hub:local
+    container_name: audio-cpp-hub
+    restart: unless-stopped
+    init: true
+    ports:
+      - "18080:18080"
+    environment:
+      AUDIOCPP_BACKEND: "${AUDIOCPP_BACKEND:-cpu}"
+      AUDIOCPP_DEVICE: "${AUDIOCPP_DEVICE:-${DEVICE:-0}}"
+      AUDIOCPP_THREADS: "${AUDIOCPP_THREADS:-4}"
+      LD_LIBRARY_PATH: "/audio.cpp/bin:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+      AUDIOCPP_MODEL_ID: "${AUDIOCPP_MODEL_ID:-${MODEL_ID:-breeze-tts}}"
+      AUDIOCPP_SERVICE_NAME: "${AUDIOCPP_SERVICE_NAME:-${SERVICE_NAME:-breeze}}"
+      AUDIOCPP_WEIGHTS: "${AUDIOCPP_WEIGHTS:-${WEIGHTS:-}}"
+      AUDIOCPP_VOICE_REF: "${AUDIOCPP_VOICE_REF:-${VOICE_REF:-}}"
+      WARMUP_TEXT: "${WARMUP_TEXT:-This is a warm-up sentence for audio generation.}"
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./run:/app/run
+      - ${HOST_AUDIOCPP_BIN:-/audio.cpp/bin}:/audio.cpp/bin:ro
+      - ${HOST_AUDIOCPP_VOICES:-./data/voices}:/audio.cpp/voices:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:18080/v1/models"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    stop_grace_period: 30s
