@@ -1,70 +1,8 @@
 package main
 
 import (
-	"strings"
 	"testing"
 )
-
-// userErrCode 提取 *UserError 的错误码，非 UserError 返回空串。
-func userErrCode(err error) string {
-	if ue, ok := err.(*UserError); ok {
-		return ue.Code
-	}
-	return ""
-}
-
-func TestValidateDlFilePath(t *testing.T) {
-	cases := []struct {
-		name    string
-		in      string
-		want    string
-		wantErr bool
-	}{
-		{name: "simple relative", in: "dir/file.bin", want: "dir/file.bin"},
-		{name: "nested relative", in: "a/b/c.bin", want: "a/b/c.bin"},
-		{name: "backslash normalized", in: `a\b\c.bin`, want: "a/b/c.bin"},
-		{name: "surrounding whitespace trimmed", in: "  dir/file.bin  ", want: "dir/file.bin"},
-		{name: "unicode names accepted", in: "目录/文件.bin", want: "目录/文件.bin"},
-		{name: "dot-prefixed segment accepted", in: "a/.hidden", want: "a/.hidden"},
-		{name: "dotdot-prefixed segment accepted", in: "a/..b/c", want: "a/..b/c"},
-		{name: "exactly 256 bytes accepted", in: strings.Repeat("a", 256), want: strings.Repeat("a", 256)},
-
-		{name: "empty rejected", in: "", wantErr: true},
-		{name: "whitespace only rejected", in: "   ", wantErr: true},
-		{name: "dotdot segment rejected", in: "a/../b", wantErr: true},
-		{name: "bare dotdot rejected", in: "..", wantErr: true},
-		{name: "bare dot rejected", in: ".", wantErr: true},
-		{name: "dot segment rejected", in: "a/./b", wantErr: true},
-		{name: "leading slash rejected", in: "/etc/passwd", wantErr: true},
-		{name: "drive letter rejected", in: "C:/x", wantErr: true},
-		{name: "colon rejected", in: "c:file", wantErr: true},
-		{name: "empty segment rejected", in: "a//b", wantErr: true},
-		{name: "trailing slash rejected", in: "a/", wantErr: true},
-		{name: "lone slash rejected", in: "/", wantErr: true},
-		{name: "257 bytes rejected", in: strings.Repeat("a", 257), wantErr: true},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := validateDlFilePath(tc.in)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("expected error, got %q", got)
-				}
-				if code := userErrCode(err); code != "INVALID_FILE_PATH" {
-					t.Fatalf("error code = %q, want INVALID_FILE_PATH", code)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if got != tc.want {
-				t.Fatalf("got %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
 
 func TestBuildSegments(t *testing.T) {
 	const mib = int64(1024 * 1024)

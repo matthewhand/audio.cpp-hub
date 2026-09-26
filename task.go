@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/matthewhand/audio.cpp-hub/internal/idvalidate"
 	"github.com/matthewhand/audio.cpp-hub/internal/wav"
 )
 
@@ -49,9 +50,7 @@ const (
 	taskStateDir     = "data/tasks"
 	taskSuffix       = ".task.json"
 	resultSuffix     = ".result.json"
-	finishedKeep     = 100
 	previewMaxSize   = 8 << 20
-	taskQueueSize    = 100
 	queueIdleTimeout = 30 * time.Second
 )
 
@@ -108,7 +107,7 @@ func (m *TaskManager) replay() {
 		}
 		// 回放前重新校验（data/ 可能被本地篡改）：ID 必须与文件名一致且可作路径片段，
 		// modelId 必须可作目录片段，防止篡改的 task.json 用 ID 做路径穿越。
-		if name != t.ID+taskSuffix || !safeID(t.ID) || !safeKey(t.ModelID) {
+		if name != t.ID+taskSuffix || !idvalidate.SafeID(t.ID) || !idvalidate.SafeKey(t.ModelID) {
 			log.Printf("跳过非法任务状态文件: %s", name)
 			continue
 		}
@@ -155,7 +154,7 @@ func (m *TaskManager) Submit(inst *Instance, request map[string]any, requestRaw 
 		requestRaw:   requestRaw,
 	}
 	if s, ok := request["text"].(string); ok {
-		preview := truncateRunes(s, 100)
+		preview := truncateRunes(s, taskTextPreviewMax)
 		t.Text = &preview
 	}
 	m.mu.Lock()
@@ -170,7 +169,7 @@ func (m *TaskManager) Submit(inst *Instance, request map[string]any, requestRaw 
 		m.mu.Lock()
 		if t.Status == "QUEUED" {
 			t.Status = "FAILED"
-			t.Error = "TASK_QUEUE_FULL: 实例任务队列已满（上限 100）"
+			t.Error = fmt.Sprintf("TASK_QUEUE_FULL: 实例任务队列已满（上限 %d）", taskQueueSize)
 			now := time.Now().UnixMilli()
 			t.FinishedAt = &now
 		}
@@ -577,7 +576,7 @@ func (m *TaskManager) forwardToFile(ctx context.Context, inst *Instance, request
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
 		return fmt.Errorf("audiocpp_server 返回 %d: %s", resp.StatusCode, summarize(string(errBody)))
 	}
 	out, err := os.Create(target)
@@ -644,7 +643,7 @@ func resultTextPreview(resultPath string) *string {
 		return nil
 	}
 	if s, ok := obj["text"].(string); ok {
-		preview := truncateRunes(s, 100)
+		preview := truncateRunes(s, taskTextPreviewMax)
 		return &preview
 	}
 	return nil
