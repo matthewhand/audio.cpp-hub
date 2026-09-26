@@ -56,6 +56,16 @@ function safeHttpUrl(url) {
   const s = typeof url === "string" ? url.trim() : "";
   return /^https?:\/\//i.test(s) ? s : "";
 }
+/* 只给「首次出现」的列表行加进入动画：记录已展示过的行键，
+   2s 轮询重建/复用行时不再重播，避免整列表反复闪动 */
+const enteredRows = new Set();
+function markRowEnter(node, key) {
+  if (!enteredRows.has(key)) {
+    enteredRows.add(key);
+    node.classList.add("row-enter");
+  }
+  return node;
+}
 /* 列表加载失败的可见提示 + 重试按钮（替代空白列表） */
 function renderListError(container, message, retry) {
   if (!container) return;
@@ -1400,6 +1410,7 @@ function renderDownloadList() {
       if (!res.ok) showToast("error", I18N.errText(await res.text()));
       refreshDownloads();
     };
+    markRowEnter(row, "d:" + d.id);
     list.appendChild(row);
   }
 }
@@ -1540,9 +1551,16 @@ function showToast(level, message) {
   const node = el(`<div class="toast ${level === "error" ? "error" : "info"}">
     <span class="toast-text"></span><button class="toast-close">×</button></div>`);
   node.querySelector(".toast-text").textContent = message;
-  node.querySelector(".toast-close").onclick = () => node.remove();
+  node.querySelector(".toast-close").onclick = () => dismissToast(node);
   root.appendChild(node);
-  setTimeout(() => node.remove(), 8000);
+  setTimeout(() => dismissToast(node), 8000);
+}
+/* 先播放滑出动画再移除节点；reduced-motion 下动画被压缩，由 timeout 兜底 */
+function dismissToast(node) {
+  if (!node.isConnected || node.classList.contains("leaving")) return;
+  node.classList.add("leaving");
+  node.addEventListener("animationend", () => node.remove(), { once: true });
+  setTimeout(() => node.remove(), 400);
 }
 
 /* ---------- 异步任务（提交 → 排队 → 轮询） ----------
@@ -2412,7 +2430,7 @@ function makeTaskRow(task) {
     if (task.error) err.title = task.error;
     row.appendChild(err);
   }
-  return row;
+  return markRowEnter(row, "t:" + task.id);
 }
 
 /* 侧栏「详情」：拉取任务完整结果文本并在行内展开/收起（预览只截断 100 字，完整内容只能从这里看） */
@@ -2820,7 +2838,7 @@ function makeHistoryRow(item) {
   if (historyDetails.has(item.taskId)) {
     row.appendChild(buildHistoryDetail(item, historyDetails.get(item.taskId)));
   }
-  return row;
+  return markRowEnter(row, "h:" + selectedModelId + ":" + item.taskId);
 }
 
 async function deleteHistoryItem(taskId) {
