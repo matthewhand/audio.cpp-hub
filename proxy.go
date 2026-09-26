@@ -43,14 +43,40 @@ func (e *v1ProxyError) Error() string { return e.msg }
 var errV1InvalidJSON = &v1ProxyError{http.StatusBadRequest, "Request body is not a valid JSON object"}
 
 // v1UpstreamClient 上游实例通信：不设整体超时（TTS 可能跑很久），
-// 中断靠请求 context（客户端断开时 r.Context() 取消）。
+// 中断靠请求 context（客户端断开时 r.Context() 取消）；仅限制等待响应头的时间。
 var v1UpstreamClient = &http.Client{
 	Transport: &http.Transport{
-		DialContext:         (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
-		MaxIdleConns:        32,
-		MaxIdleConnsPerHost: 8,
-		IdleConnTimeout:     90 * time.Second,
+		DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+		MaxIdleConns:          32,
+		MaxIdleConnsPerHost:   8,
+		IdleConnTimeout:       90 * time.Second,
+		ResponseHeaderTimeout: 60 * time.Second,
 	},
+}
+
+// hopByHopHeaders 逐跳头，按 RFC 7230 不跨代理转发。
+var hopByHopHeaders = map[string]bool{
+	"Connection":          true,
+	"Proxy-Connection":    true,
+	"Keep-Alive":          true,
+	"Proxy-Authenticate":  true,
+	"Proxy-Authorization": true,
+	"Te":                  true,
+	"Trailer":             true,
+	"Transfer-Encoding":   true,
+	"Upgrade":             true,
+}
+
+// copyNonHopHeaders 复制非逐跳头；Content-Length 由转发层按实际 body 重算，不复制。
+func copyNonHopHeaders(dst, src http.Header) {
+	for k, vs := range src {
+		if hopByHopHeaders[http.CanonicalHeaderKey(k)] {
+			continue
+		}
+		for _, v := range vs {
+			dst.Add(k, v)
+		}
+	}
 }
 
 // cleanupV1ProxyCache 启动时清扫 run/proxy-cache/*.req 残留（main 启动时调一次）。
@@ -73,6 +99,15 @@ func cleanupV1ProxyCache() {
 
 // handleV1Proxy /v1/* 统一入口：GET /v1/models 本地聚合，POST/PUT 转发到实例。
 func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
+	// 宽松 CORS：浏览器 OpenAI 客户端需要预检与读取响应（本服务本地无凭据）
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, OpenAI-*")
+		w.Header().Set("Access-Control-Max-Age", "86400")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if r.URL.Path == "/v1/models" && r.Method == http.MethodGet {
 		h.handleV1Models(w, r)
 		return
@@ -90,13 +125,13 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 		v1Error(w, http.StatusInternalServerError, "Proxy cache unavailable")
 		return
 	}
-	tmp := filepath.Join(v1CacheDir, newID()+".req")
-	f, err := os.Create(tmp)
+	f, err := os.CreateTemp(v1CacheDir, "req-*.req")
 	if err != nil {
 		log.Printf("创建代理缓存文件失败: %v", err)
 		v1Error(w, http.StatusInternalServerError, "Proxy cache unavailable")
 		return
 	}
+	tmp := f.Name()
 	n, copyErr := io.Copy(f, io.LimitReader(r.Body, maxBody+1))
 	if cerr := f.Close(); cerr != nil && copyErr == nil {
 		copyErr = cerr
@@ -186,11 +221,12 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 		return
 	}
 	req.ContentLength = bodyLen
-	contentType := r.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/json"
+	// 转发非逐跳请求头（Authorization/Accept/OpenAI-* 等）；Content-Length 由 body 重算
+	copyNonHopHeaders(req.Header, r.Header)
+	req.Header.Del("Content-Length")
+	if req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set("Content-Type", contentType)
 	resp, err := v1UpstreamClient.Do(req)
 	body.Close() // 请求体已完整发出（或失败），缓存文件使命结束
 	if err != nil {
@@ -202,11 +238,12 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 	}
 	defer resp.Body.Close()
 
-	ct := resp.Header.Get("Content-Type")
-	if ct == "" {
-		ct = "application/json"
+	// 回写非逐跳响应头（X-Request-Id/Retry-After/限流头等），Content-Length 按实际值设置
+	copyNonHopHeaders(w.Header(), resp.Header)
+	w.Header().Del("Content-Length")
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
 	}
-	w.Header().Set("Content-Type", ct)
 	if resp.ContentLength >= 0 {
 		w.Header().Set("Content-Length", strconv.FormatInt(resp.ContentLength, 10))
 	}

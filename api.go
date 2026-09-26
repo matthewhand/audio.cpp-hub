@@ -4,72 +4,234 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
 var safeTaskID = regexp.MustCompile(`^[a-zA-Z0-9-]{1,32}$`)
 
+// apiRoute 一条 /api/* 路由：HTTP 方法 + 路径模板 + handler。
+type apiRoute struct {
+	method  string
+	pattern string
+	handler http.HandlerFunc
+}
+
 // registerRoutes 注册全部 API 路由与静态文件服务。
-// 未匹配的 /api/* 走 JSON 404，其余 GET 交给 web/ 静态文件。
+// 未匹配的 /api/* 走 JSON 404；已知路径上的错误方法返回 405 + Allow。
+//
+// /api/* 成功响应形状（历史遗留，逐端点不同，暂不统一信封）：
+//   - 列表/详情类直接返回 JSON 数组或对象（GET /api/instances、GET /api/tasks…）；
+//   - 变更类返回 {"ok":true,"data":...}（okJSON）或裸对象（POST /api/instances…）。
+//
+// 错误响应统一为 {"ok":false,"code","params","error"}。
 func (h *Hub) registerRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/models", h.handleModels)
-	mux.HandleFunc("GET /api/models/{modelId}/packages", h.handleModelPackages)
-	mux.HandleFunc("GET /api/instances", h.handleInstanceList)
-	mux.HandleFunc("POST /api/instances", h.handleInstanceStart)
-	mux.HandleFunc("DELETE /api/instances/{id}", h.handleInstanceStop)
-	mux.HandleFunc("GET /api/events", h.handleEvents)
-	mux.HandleFunc("GET /api/executables", h.handleExecList)
-	mux.HandleFunc("POST /api/executables", h.handleExecAdd)
-	mux.HandleFunc("PUT /api/executables/{id}", h.handleExecUpdate)
-	mux.HandleFunc("DELETE /api/executables/{id}", h.handleExecDelete)
-	mux.HandleFunc("GET /api/executables/{id}/devices", h.handleExecDevices)
-	mux.HandleFunc("GET /api/profiles", h.handleProfileList)
-	mux.HandleFunc("POST /api/profiles", h.handleProfileAdd)
-	mux.HandleFunc("PUT /api/profiles/{id}", h.handleProfileUpdate)
-	mux.HandleFunc("DELETE /api/profiles/{id}", h.handleProfileDelete)
-	mux.HandleFunc("POST /api/run/{id}", h.handleRun)
-	mux.HandleFunc("POST /api/tasks", h.handleTaskCreate)
-	mux.HandleFunc("GET /api/tasks", h.handleTaskList)
-	mux.HandleFunc("GET /api/tasks/{id}", h.handleTaskGet)
-	mux.HandleFunc("GET /api/tasks/{id}/result", h.handleTaskResult)
-	mux.HandleFunc("DELETE /api/tasks/{id}", h.handleTaskDelete)
-	mux.HandleFunc("GET /api/history/{modelId}", h.handleHistoryList)
-	mux.HandleFunc("DELETE /api/history/{modelId}", h.handleHistoryClear)
-	mux.HandleFunc("GET /api/history/{modelId}/{taskId}", h.handleHistoryGet)
-	mux.HandleFunc("DELETE /api/history/{modelId}/{taskId}", h.handleHistoryDelete)
-	mux.HandleFunc("GET /api/history/{modelId}/{taskId}/audio", h.handleHistoryAudio)
-	mux.HandleFunc("GET /api/history/{modelId}/{taskId}/audio/{name}", h.handleHistoryRefAudio)
-	// PUT/DELETE 的四段路径合用一个通配模式再分发（groups/{gid} 与 {taskId}/group 在 mux 里互相冲突）
-	mux.HandleFunc("PUT /api/history/{modelId}/{seg3}/{seg4}", h.handleHistoryPut4)
-	mux.HandleFunc("DELETE /api/history/{modelId}/{seg3}/{seg4}", h.handleHistoryDelete4)
-	mux.HandleFunc("GET /api/history/{modelId}/groups", h.handleHistoryGroupList)
-	mux.HandleFunc("POST /api/history/{modelId}/groups", h.handleHistoryGroupCreate)
-	mux.HandleFunc("POST /api/audio/upload", h.handleAudioUpload)
-	mux.HandleFunc("POST /api/audio/info", h.handleAudioInfo)
-	mux.HandleFunc("GET /api/audio/file", h.handleAudioFile)
-	mux.HandleFunc("GET /api/voices", h.handleVoiceList)
-	mux.HandleFunc("POST /api/voices", h.handleVoiceSave)
-	mux.HandleFunc("PUT /api/voices/{vid}", h.handleVoiceUpdate)
-	mux.HandleFunc("DELETE /api/voices/{vid}", h.handleVoiceDelete)
-	mux.HandleFunc("GET /api/voices/{vid}/audio", h.handleVoiceAudio)
-	mux.HandleFunc("GET /api/fs/roots", h.handleFsRoots)
-	mux.HandleFunc("GET /api/fs/list", h.handleFsList)
-	mux.HandleFunc("GET /api/fs/stat", h.handleFsStat)
-	mux.HandleFunc("POST /api/fs/mkdir", h.handleFsMkdir)
-	mux.HandleFunc("GET /api/downloads", h.handleDownloadList)
-	mux.HandleFunc("POST /api/downloads", h.handleDownloadCreate)
-	mux.HandleFunc("GET /api/downloads/{id}", h.handleDownloadGet)
-	mux.HandleFunc("DELETE /api/downloads/{id}", h.handleDownloadDelete)
-	mux.HandleFunc("POST /api/downloads/{id}/pause", h.handleDownloadPause)
-	mux.HandleFunc("POST /api/downloads/{id}/resume", h.handleDownloadResume)
+	routes := []apiRoute{
+		{"GET", "/api/models", h.handleModels},
+		{"GET", "/api/models/{modelId}/packages", h.handleModelPackages},
+		{"GET", "/api/instances", h.handleInstanceList},
+		{"POST", "/api/instances", h.handleInstanceStart},
+		{"DELETE", "/api/instances/{id}", h.handleInstanceStop},
+		{"GET", "/api/events", h.handleEvents},
+		{"GET", "/api/executables", h.handleExecList},
+		{"POST", "/api/executables", h.handleExecAdd},
+		{"PUT", "/api/executables/{id}", h.handleExecUpdate},
+		{"DELETE", "/api/executables/{id}", h.handleExecDelete},
+		{"GET", "/api/executables/{id}/devices", h.handleExecDevices},
+		{"GET", "/api/profiles", h.handleProfileList},
+		{"POST", "/api/profiles", h.handleProfileAdd},
+		{"PUT", "/api/profiles/{id}", h.handleProfileUpdate},
+		{"DELETE", "/api/profiles/{id}", h.handleProfileDelete},
+		{"POST", "/api/run/{id}", h.handleRun},
+		{"POST", "/api/tasks", h.handleTaskCreate},
+		{"GET", "/api/tasks", h.handleTaskList},
+		{"GET", "/api/tasks/{id}", h.handleTaskGet},
+		{"GET", "/api/tasks/{id}/result", h.handleTaskResult},
+		{"DELETE", "/api/tasks/{id}", h.handleTaskDelete},
+		{"GET", "/api/history/{modelId}", h.handleHistoryList},
+		{"DELETE", "/api/history/{modelId}", h.handleHistoryClear},
+		{"GET", "/api/history/{modelId}/{taskId}", h.handleHistoryGet},
+		{"DELETE", "/api/history/{modelId}/{taskId}", h.handleHistoryDelete},
+		{"GET", "/api/history/{modelId}/{taskId}/audio", h.handleHistoryAudio},
+		{"GET", "/api/history/{modelId}/{taskId}/audio/{name}", h.handleHistoryRefAudio},
+		// PUT/DELETE 的四段路径合用一个通配模式再分发（groups/{gid} 与 {taskId}/group 在 mux 里互相冲突）
+		{"PUT", "/api/history/{modelId}/{seg3}/{seg4}", h.handleHistoryPut4},
+		{"DELETE", "/api/history/{modelId}/{seg3}/{seg4}", h.handleHistoryDelete4},
+		{"GET", "/api/history/{modelId}/groups", h.handleHistoryGroupList},
+		{"POST", "/api/history/{modelId}/groups", h.handleHistoryGroupCreate},
+		{"POST", "/api/audio/upload", h.handleAudioUpload},
+		{"POST", "/api/audio/info", h.handleAudioInfo},
+		{"GET", "/api/audio/file", h.handleAudioFile},
+		{"GET", "/api/voices", h.handleVoiceList},
+		{"POST", "/api/voices", h.handleVoiceSave},
+		{"PUT", "/api/voices/{vid}", h.handleVoiceUpdate},
+		{"DELETE", "/api/voices/{vid}", h.handleVoiceDelete},
+		{"GET", "/api/voices/{vid}/audio", h.handleVoiceAudio},
+		{"GET", "/api/fs/roots", h.handleFsRoots},
+		{"GET", "/api/fs/list", h.handleFsList},
+		{"GET", "/api/fs/stat", h.handleFsStat},
+		{"POST", "/api/fs/mkdir", h.handleFsMkdir},
+		{"GET", "/api/downloads", h.handleDownloadList},
+		{"POST", "/api/downloads", h.handleDownloadCreate},
+		{"GET", "/api/downloads/{id}", h.handleDownloadGet},
+		{"DELETE", "/api/downloads/{id}", h.handleDownloadDelete},
+		{"POST", "/api/downloads/{id}/pause", h.handleDownloadPause},
+		{"POST", "/api/downloads/{id}/resume", h.handleDownloadResume},
+	}
+	methodsByPattern := map[string][]string{}
+	for _, rt := range routes {
+		mux.HandleFunc(rt.method+" "+rt.pattern, rt.handler)
+		methodsByPattern[rt.pattern] = append(methodsByPattern[rt.pattern], rt.method)
+	}
+	// 已知路径的模板表：catch-all 用它把「路径存在但方法不对」判成 405 + Allow
+	infos := make([]apiRouteInfo, 0, len(methodsByPattern))
+	for pattern, methods := range methodsByPattern {
+		segs := strings.Split(strings.TrimPrefix(pattern, "/"), "/")
+		literals := 0
+		for _, s := range segs {
+			if !strings.HasPrefix(s, "{") {
+				literals++
+			}
+		}
+		infos = append(infos, apiRouteInfo{segments: segs, methods: methods, literals: literals})
+	}
+	// 更具体的模板（字面段更多）优先匹配
+	sort.Slice(infos, func(i, j int) bool { return infos[i].literals > infos[j].literals })
+
 	mux.HandleFunc("/v1/", h.handleV1Proxy)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		reqSegs := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		for _, info := range infos {
+			if matchRouteTemplate(info.segments, reqSegs) {
+				allowed := strings.Join(info.methods, ", ")
+				w.Header().Set("Allow", allowed)
+				errJSON(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED",
+					map[string]any{"method": r.Method, "allow": allowed}, "method not allowed: "+r.Method)
+				return
+			}
+		}
 		errJSON(w, http.StatusNotFound, "UNKNOWN_API", map[string]any{"path": r.URL.Path}, "unknown api: "+r.URL.Path)
 	})
-	mux.Handle("/", http.FileServer(http.Dir("web")))
+	mux.Handle("/", staticHandler())
+}
+
+// apiRouteInfo 路径模板与允许的方法，供 catch-all 判断 405。
+type apiRouteInfo struct {
+	segments []string
+	methods  []string
+	literals int
+}
+
+// matchRouteTemplate 逐段匹配路径模板，{name} 段匹配任意非空段。
+func matchRouteTemplate(template, req []string) bool {
+	if len(template) != len(req) {
+		return false
+	}
+	for i, seg := range template {
+		if strings.HasPrefix(seg, "{") && strings.HasSuffix(seg, "}") {
+			if req[i] == "" {
+				return false
+			}
+			continue
+		}
+		if seg != req[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// staticHandler 提供 web/ 下静态文件：目录请求只回 index.html（禁用目录列表），
+// index 不缓存，其余资源缓存 1 小时（web/ 无构建步骤，文件名不带 hash）。
+func staticHandler() http.Handler {
+	root := http.Dir("web")
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		p := path.Clean("/" + r.URL.Path)
+		f, err := root.Open(p)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		st, err := f.Stat()
+		if err != nil {
+			f.Close()
+			http.NotFound(w, r)
+			return
+		}
+		if st.IsDir() {
+			f.Close()
+			// 目录只回 index.html，没有则 404，绝不输出目录列表
+			p = path.Join(p, "index.html")
+			f, err = root.Open(p)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			if st, err = f.Stat(); err != nil || st.IsDir() {
+				f.Close()
+				http.NotFound(w, r)
+				return
+			}
+		}
+		defer f.Close()
+		if path.Base(p) == "index.html" {
+			w.Header().Set("Cache-Control", "no-cache")
+		} else {
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+		}
+		http.ServeContent(w, r, path.Base(p), st.ModTime(), f)
+	})
+}
+
+// csrfProtect 拒绝跨站发起的 /api/* 变更请求：校验 Origin 与 Sec-Fetch-Site。
+// 两个头都缺失（curl/服务端客户端）视为同源放行；前端同源请求照常。
+func csrfProtect(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isMutatingMethod(r.Method) && strings.HasPrefix(r.URL.Path, "/api/") && !isSameSiteRequest(r) {
+			errJSON(w, http.StatusForbidden, "CROSS_SITE_FORBIDDEN", nil, "拒绝跨站请求")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isMutatingMethod(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	}
+	return false
+}
+
+// isSameSiteRequest 判断请求是否同源：Sec-Fetch-Site 不得为 cross-site；
+// Origin 存在时必须与 Host 同源（"null" 视为跨站）。
+func isSameSiteRequest(r *http.Request) bool {
+	if sfs := r.Header.Get("Sec-Fetch-Site"); sfs != "" &&
+		sfs != "same-origin" && sfs != "same-site" && sfs != "none" {
+		return false
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	if origin == "null" {
+		return false
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return strings.EqualFold(u.Host, r.Host)
 }
 
 // ---------- 模型清单 ----------
@@ -779,7 +941,11 @@ func (h *Hub) handleHistorySetGroup(w http.ResponseWriter, r *http.Request, mode
 }
 
 func (h *Hub) handleHistoryGroupList(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, h.history.ListGroups(r.PathValue("modelId")))
+	modelID := r.PathValue("modelId")
+	if !h.historyKeysOK(w, modelID, "") {
+		return
+	}
+	writeJSON(w, http.StatusOK, h.history.ListGroups(modelID))
 }
 
 func (h *Hub) handleHistoryGroupCreate(w http.ResponseWriter, r *http.Request) {
