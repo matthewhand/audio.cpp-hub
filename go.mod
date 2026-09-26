@@ -1,4 +1,4 @@
-module github.com/IIIIIllllIIIIIlllll/audio.cpp-hub
+module github.com/matthewhand/audio.cpp-hub
 
 go 1.27
 

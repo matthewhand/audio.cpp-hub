@@ -1,0 +1,9 @@
+{
+  "httpPort": 8080,
+  "instancePortBase": 18090,
+  "modelsDir": "models",
+  "hfEndpoint": "https://huggingface.co",
+  "downloadThreads": 8,
+  "downloadSegmentsPerFile": 4,
+  "proxyMaxBodyBytes": 1073741824
+}

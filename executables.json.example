@@ -1,0 +1,10 @@
+[
+  {
+    "id": "example1",
+    "name": "audiocpp_server",
+    "path": "/path/to/audiocpp_server",
+    "note": "示例：替换为你的 audiocpp_server 可执行文件路径，然后把本文件另存为 executables.json（删除本示例条目）",
+    "env": {},
+    "createdAt": "2026-01-01T00:00:00Z"
+  }
+]
