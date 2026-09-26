@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -34,6 +35,9 @@ const (
 	dlMaxRetry         = 6                // 分段失败重试次数，退避 1s 翻倍封顶 15s
 	dlPersistInterval  = time.Second
 	dlShutdownWaitSecs = 6
+	dlMaxFilesPerTask  = 512 // 单任务文件数上限，防止探测/分段资源被撑爆
+	dlProbeWorkers     = 8   // 探测阶段的并发 worker 上限
+	dlMaxRedirects     = 10  // 单次请求跟随重定向上限
 )
 
 // 任务状态（字符串与 Java 版枚举一致，task.json 可直接互读）。
@@ -74,8 +78,9 @@ type dlFileRequest struct {
 	Path string
 }
 
-// DownloadTask 下载任务数据模型，Gson 兼容的 JSON 直接落盘 task.json
-// （token 明文存储，与 hub.config.json 存密钥库密码同一级别；API 输出会剔除 token）。
+// DownloadTask 下载任务数据模型，JSON 直接落盘 task.json。
+// token 选择持久化（而非仅内存）以支持重启后 gated 仓库自动续传，但落盘文件权限
+// 收敛为 0600、目录 0700，避免 world-readable 泄漏；API 输出始终剔除 token。
 type DownloadTask struct {
 	ID        string         `json:"id"`
 	TargetDir string         `json:"targetDir"`
@@ -90,12 +95,12 @@ type DownloadTask struct {
 	Files     []*dlFileEntry `json:"files"`
 
 	// ---- 以下为运行态字段，不落盘（原子访问）----
-	pauseRequested  int32 `json:"-"` // 请求暂停（含进程退出），worker 在块边界响应
-	cancelRequested int32 `json:"-"` // 请求取消（delete）
-	runGeneration   int32 `json:"-"` // 运行代次：resume/删除时递增，旧 worker 据此自杀
-	lastPersistAt   int64 `json:"-"`
-	speedBps        int64 `json:"-"`
-	speedSampleAt   int64 `json:"-"`
+	pauseRequested   int32 `json:"-"` // 请求暂停（含进程退出），worker 在块边界响应
+	cancelRequested  int32 `json:"-"` // 请求取消（delete）
+	runGeneration    int32 `json:"-"` // 运行代次：resume/删除时递增，旧 worker 据此自杀
+	lastPersistAt    int64 `json:"-"`
+	speedBps         int64 `json:"-"`
+	speedSampleAt    int64 `json:"-"`
 	speedSampleBytes int64 `json:"-"`
 	// 本轮运行的 context：暂停/取消/失败时 cancel，进行中的 HTTP 读立即中断
 	runCtx context.Context    `json:"-"`
@@ -132,6 +137,21 @@ func (t *DownloadTask) completedFiles() int {
 		}
 	}
 	return n
+}
+
+// fileCompleted 读取文件完成标志：与写入方共用 m.mu 同步，避免数据竞争。
+func (m *DownloadManager) fileCompleted(f *dlFileEntry) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return f.Completed
+}
+
+// markFileCompleted 在锁内标记文件完成并落盘。
+func (m *DownloadManager) markFileCompleted(t *DownloadTask, f *dlFileEntry) {
+	m.mu.Lock()
+	f.Completed = true
+	m.persistLocked(t)
+	m.mu.Unlock()
 }
 
 // ------------------------------------------------------------------ 校验
@@ -177,6 +197,59 @@ func validateDlURL(raw string) (string, error) {
 	return raw, nil
 }
 
+// dlAllowedDownloadHosts 内置允许的下载源主机：UI 固定选项（HF 官方/国内镜像）与 modelscope。
+// 管理员配置的 hfEndpoint 会额外并入（可为本地/私有镜像）。
+var dlAllowedDownloadHosts = map[string]struct{}{
+	"huggingface.co":    {},
+	"hf-mirror.com":     {},
+	"modelscope.cn":     {},
+	"www.modelscope.cn": {},
+}
+
+// dlURLHost 提取 URL 主机名（小写、不含端口与用户信息）；无法解析返回空串。
+func dlURLHost(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Hostname())
+}
+
+// dlDisallowedIP 判定 IP 是否属于禁止访问的保留网段：回环、私有、链路本地、
+// 组播、未指定、云元数据 / CGNAT / 基准测试网段。SSRF 防护核心，纯函数便于单测。
+func dlDisallowedIP(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() || ip.IsInterfaceLocalMulticast() ||
+		ip.IsMulticast() || ip.IsUnspecified() {
+		return true
+	}
+	if ip4 := ip.To4(); ip4 != nil {
+		// 169.254.0.0/16（含 169.254.169.254 云元数据）已被 IsLinkLocalUnicast 覆盖，这里兜底
+		if ip4[0] == 169 && ip4[1] == 254 {
+			return true
+		}
+		if ip4[0] == 100 && ip4[1]&0xc0 == 64 { // 100.64.0.0/10 CGNAT
+			return true
+		}
+		if ip4[0] == 198 && (ip4[1] == 18 || ip4[1] == 19) { // 198.18.0.0/15 基准测试
+			return true
+		}
+		if ip4[0] == 192 && ip4[1] == 0 && ip4[2] == 0 { // 192.0.0.0/24 IETF 协议分配
+			return true
+		}
+	}
+	return false
+}
+
+// dlSSRFError 构造统一的 SSRF 拒绝错误。
+func dlSSRFError(raw string) *UserError {
+	return &UserError{Code: "DOWNLOAD_SSRF_BLOCKED",
+		Params: map[string]any{"url": raw}, Msg: "下载地址指向内网/保留地址，已拒绝: " + raw}
+}
+
 // dlHTTPError HTTP 状态码到用户错误的映射：401/403→授权，404→远端不存在，其它→访问失败。
 func dlHTTPError(code int, path string) *UserError {
 	switch {
@@ -200,8 +273,10 @@ type DownloadManager struct {
 	stateDir        string
 	segmentsPerFile int
 	httpClient      *http.Client
-	sem             chan struct{} // 全局分段并发限制（downloadThreads）
-	shutdownFlag    int32         // 原子
+	sem             chan struct{}       // 全局分段并发限制（downloadThreads）
+	shutdownFlag    int32               // 原子
+	trustedHosts    map[string]struct{} // 管理员配置的下载源主机（信任，跳过 SSRF IP 限制）
+	allowHosts      map[string]struct{} // hub 派生 URL 允许的下载源主机
 
 	mu    sync.Mutex
 	tasks map[string]*DownloadTask
@@ -223,33 +298,144 @@ func NewDownloadManager(cfg HubConfig) *DownloadManager {
 	if segments < 1 {
 		segments = 1
 	}
+	// 只信任管理员显式配置的 hfEndpoint（可能是本地/私有镜像，需跳过 IP 限制）；
+	// 内置公共下载源只加入允许列表，仍走 SSRF IP 校验。
+	trusted := map[string]struct{}{}
+	if h := dlURLHost(cfg.HfEndpoint); h != "" {
+		trusted[h] = struct{}{}
+	}
+	allowed := map[string]struct{}{}
+	for h := range dlAllowedDownloadHosts {
+		allowed[h] = struct{}{}
+	}
+	if h := dlURLHost(modelscopeEndpoint); h != "" {
+		allowed[h] = struct{}{}
+	}
+	for h := range trusted {
+		allowed[h] = struct{}{}
+	}
+	dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+	// 连接时按解析出的真实 IP 做 SSRF 校验：覆盖重定向与 DNS rebinding（TOCTOU）。
+	// 已配置的下载源主机视为管理员信任，直接按主机名拨号（支持本地镜像）。
+	dialContext := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := trusted[strings.ToLower(host)]; ok {
+			return dialer.DialContext(ctx, network, addr)
+		}
+		ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+		if err != nil {
+			return nil, err
+		}
+		var lastErr error
+		for _, ia := range ips {
+			if dlDisallowedIP(ia.IP) {
+				continue
+			}
+			conn, derr := dialer.DialContext(ctx, network, net.JoinHostPort(ia.IP.String(), port))
+			if derr == nil {
+				return conn, nil
+			}
+			lastErr = derr
+		}
+		if lastErr != nil {
+			return nil, lastErr
+		}
+		return nil, fmt.Errorf("禁止连接内网地址: %s", host)
+	}
 	m := &DownloadManager{
 		modelsDir:       modelsDir,
 		stateDir:        filepath.Join("data", "downloads"),
 		segmentsPerFile: segments,
 		sem:             make(chan struct{}, threads),
+		trustedHosts:    trusted,
+		allowHosts:      allowed,
 		tasks:           map[string]*DownloadTask{},
-		httpClient: &http.Client{
-			// 跟随重定向（modelscope 会 302 到 CDN）；不设整体超时（大文件下载数小时正常），
-			// 中断靠 request context
-			Transport: &http.Transport{
-				DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
-				MaxIdleConns:          64,
-				MaxIdleConnsPerHost:   32,
-				IdleConnTimeout:       90 * time.Second,
-				TLSHandshakeTimeout:   30 * time.Second,
-				ResponseHeaderTimeout: 0,
-			},
+	}
+	m.httpClient = &http.Client{
+		// 跟随重定向（modelscope 会 302 到 CDN）；不设整体超时（大文件下载数小时正常），
+		// 中断靠 request context
+		Transport: &http.Transport{
+			DialContext:           dialContext,
+			MaxIdleConns:          64,
+			MaxIdleConnsPerHost:   32,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   30 * time.Second,
+			ResponseHeaderTimeout: 0,
+		},
+		// 重定向安全：限制跳转次数、跨主机丢弃 Authorization、逐跳 SSRF 复检
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= dlMaxRedirects {
+				return fmt.Errorf("重定向次数过多（上限 %d）", dlMaxRedirects)
+			}
+			if prev := via[len(via)-1]; !strings.EqualFold(req.URL.Hostname(), prev.URL.Hostname()) {
+				req.Header.Del("Authorization")
+			}
+			if _, err := m.guardDlURL(req.URL.String()); err != nil {
+				return err
+			}
+			return nil
 		},
 	}
 	if err := os.MkdirAll(m.modelsDir, 0755); err != nil {
 		log.Printf("模型目录创建失败: %v", err)
 	}
-	if err := os.MkdirAll(m.stateDir, 0755); err != nil {
+	if err := os.MkdirAll(m.stateDir, 0700); err != nil {
 		log.Printf("下载状态目录创建失败: %v", err)
 	}
 	m.loadAll()
 	return m
+}
+
+// isTrustedHost 判断主机是否属于管理员配置的下载源（hfEndpoint）。
+func (m *DownloadManager) isTrustedHost(host string) bool {
+	if host == "" {
+		return false
+	}
+	_, ok := m.trustedHosts[strings.ToLower(host)]
+	return ok
+}
+
+// isAllowedHost 判断主机是否属于 hub 派生 URL 允许的下载源（内置 + hfEndpoint + modelscope）。
+func (m *DownloadManager) isAllowedHost(host string) bool {
+	if host == "" {
+		return false
+	}
+	_, ok := m.allowHosts[strings.ToLower(host)]
+	return ok
+}
+
+// guardDlURL 校验下载地址：仅 http/https，且目标主机不得指向内网/回环/链路本地/
+// 云元数据等保留地址。管理员配置的下载源主机属显式信任，跳过 IP 限制（支持本地镜像）。
+func (m *DownloadManager) guardDlURL(raw string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return "", &UserError{Code: "INVALID_URL",
+			Params: map[string]any{"url": raw}, Msg: "非法下载地址: " + raw}
+	}
+	host := u.Hostname()
+	if m.isTrustedHost(host) {
+		return raw, nil
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if dlDisallowedIP(ip) {
+			return "", dlSSRFError(raw)
+		}
+		return raw, nil
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil || len(ips) == 0 {
+		return "", &UserError{Code: "DOWNLOAD_HOST_UNRESOLVED",
+			Params: map[string]any{"url": raw}, Msg: "无法解析下载地址主机: " + raw}
+	}
+	for _, ip := range ips {
+		if dlDisallowedIP(ip) {
+			return "", dlSSRFError(raw)
+		}
+	}
+	return raw, nil
 }
 
 // ------------------------------------------------------------------ 任务生命周期
@@ -264,6 +450,11 @@ func (m *DownloadManager) Create(targetDir string, files []dlFileRequest, token 
 	if len(files) == 0 {
 		return nil, &UserError{Code: "FILES_REQUIRED", Params: map[string]any{}, Msg: "files 不能为空"}
 	}
+	if len(files) > dlMaxFilesPerTask {
+		return nil, &UserError{Code: "TOO_MANY_FILES",
+			Params: map[string]any{"count": len(files), "max": dlMaxFilesPerTask},
+			Msg:    fmt.Sprintf("文件数量超出上限（最多 %d 个）", dlMaxFilesPerTask)}
+	}
 	m.mu.Lock()
 	for _, t := range m.order {
 		if t.TargetDir == targetDir && dlActive(t.Status) {
@@ -276,11 +467,19 @@ func (m *DownloadManager) Create(targetDir string, files []dlFileRequest, token 
 	m.mu.Unlock()
 
 	seen := map[string]bool{}
+	// hub 派生 = 来自清单/配置（modelID 或 source 非空）；其 URL 主机必须落在允许列表内。
+	// 显式 files 任务只受 SSRF 限制，可下载任意公网地址。
+	hubDerived := modelID != "" || source != ""
 	entries := make([]*dlFileEntry, 0, len(files))
 	for _, fr := range files {
-		u, err := validateDlURL(fr.URL)
+		u, err := m.guardDlURL(fr.URL)
 		if err != nil {
 			return nil, err
+		}
+		if hubDerived && !m.isAllowedHost(dlURLHost(u)) {
+			return nil, &UserError{Code: "DOWNLOAD_HOST_NOT_ALLOWED",
+				Params: map[string]any{"url": u},
+				Msg:    "下载源不在允许列表内（仅限 hfEndpoint / modelscope / 内置镜像）: " + u}
 		}
 		p, err := validateDlFilePath(fr.Path)
 		if err != nil {
@@ -566,7 +765,7 @@ func (m *DownloadManager) runTaskInner(t *DownloadTask, gen int32, ctx context.C
 		if err := m.checkFlags(t, gen); err != nil {
 			return err
 		}
-		if f.Completed {
+		if m.fileCompleted(f) {
 			continue
 		}
 		if err := m.downloadFile(t, f, gen, ctx); err != nil {
@@ -580,7 +779,7 @@ func (m *DownloadManager) runTaskInner(t *DownloadTask, gen int32, ctx context.C
 // persisted done 一定对应已写入字节；clamp 只损失未落盘的少量进度。
 func (m *DownloadManager) reconcile(t *DownloadTask) {
 	for _, f := range t.Files {
-		if f.Completed || len(f.Segments) == 0 {
+		if m.fileCompleted(f) || len(f.Segments) == 0 {
 			continue
 		}
 		var partSize int64
@@ -613,14 +812,11 @@ func (m *DownloadManager) downloadFile(t *DownloadTask, f *dlFileEntry, gen int3
 		}
 	}
 	part := final + ".part"
-	if f.Size > 0 {
+	if f.Size > 0 && !m.fileCompleted(f) {
 		if st, err := os.Stat(final); err == nil && st.Mode().IsRegular() && st.Size() == f.Size {
 			// 上次在改名后、落盘前崩溃：直接判定完成
-			f.Completed = true
 			os.Remove(part)
-			m.mu.Lock()
-			m.persistLocked(t)
-			m.mu.Unlock()
+			m.markFileCompleted(t, f)
 			return nil
 		}
 	}
@@ -677,10 +873,7 @@ func (m *DownloadManager) downloadFile(t *DownloadTask, f *dlFileEntry, gen int3
 	if err := movePartFile(part, final); err != nil {
 		return err
 	}
-	f.Completed = true
-	m.mu.Lock()
-	m.persistLocked(t)
-	m.mu.Unlock()
+	m.markFileCompleted(t, f)
 	return nil
 }
 
@@ -802,10 +995,7 @@ func (m *DownloadManager) streamFile(t *DownloadTask, f *dlFileEntry, part, fina
 	if err := movePartFile(part, final); err != nil {
 		return err
 	}
-	f.Completed = true
-	m.mu.Lock()
-	m.persistLocked(t)
-	m.mu.Unlock()
+	m.markFileCompleted(t, f)
 	return nil
 }
 
@@ -864,12 +1054,15 @@ func (m *DownloadManager) fetchStream(t *DownloadTask, f *dlFileEntry, seg *dlSe
 func (m *DownloadManager) probe(entries []*dlFileEntry, token string) error {
 	var wg sync.WaitGroup
 	errs := make([]error, len(entries))
+	sem := make(chan struct{}, dlProbeWorkers) // 限制并发探测，避免每文件一 goroutine 无界膨胀
 	for i := range entries {
 		wg.Add(1)
-		go func() {
+		go func(i int) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			errs[i] = m.probeOne(entries[i], token)
-		}()
+		}(i)
 	}
 	wg.Wait()
 	for _, err := range errs {
@@ -1047,23 +1240,84 @@ func (m *DownloadManager) maybePersist(t *DownloadTask) {
 	m.mu.Unlock()
 }
 
-// persistLocked 原子写 task.json（tmp + rename）；调用方需持有 m.mu。
+// persistLocked 原子写 task.json（tmp + rename，0600：含 token，不可 world-readable）；
+// 调用方需持有 m.mu。
 func (m *DownloadManager) persistLocked(t *DownloadTask) {
 	t.UpdatedAt = time.Now().UnixMilli()
 	atomic.StoreInt64(&t.lastPersistAt, t.UpdatedAt)
 	dir := filepath.Join(m.stateDir, t.ID)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		log.Printf("下载进度落盘失败 %s: %v", t.ID, err)
 		return
 	}
-	data, err := json.Marshal(t)
+	// 序列化锁定快照（Done 原子读 + Completed 锁内读），不对并发写的活结构体直接反射
+	data, err := json.Marshal(m.snapshotLocked(t))
 	if err != nil {
 		log.Printf("下载进度序列化失败 %s: %v", t.ID, err)
 		return
 	}
-	if err := writeFileAtomic(filepath.Join(dir, "task.json"), data); err != nil {
+	if err := writeFileAtomicMode(filepath.Join(dir, "task.json"), data, 0600); err != nil {
 		log.Printf("下载进度落盘失败 %s: %v", t.ID, err)
 	}
+}
+
+// dlTaskDisk 落盘/展示用的任务快照：只含可持久化字段，不含运行态原子字段，
+// 因此可安全 json.Marshal，不会与被 worker 并发写的活结构体产生数据竞争。
+type dlTaskDisk struct {
+	ID        string         `json:"id"`
+	TargetDir string         `json:"targetDir"`
+	ModelID   string         `json:"modelId,omitempty"`
+	PackageID string         `json:"packageId,omitempty"`
+	Source    string         `json:"source,omitempty"`
+	Status    string         `json:"status"`
+	Error     string         `json:"error,omitempty"`
+	Token     string         `json:"token,omitempty"`
+	CreatedAt int64          `json:"createdAt"`
+	UpdatedAt int64          `json:"updatedAt"`
+	Files     []*dlFileEntry `json:"files"`
+}
+
+// snapshotLocked 复制任务用于序列化：分段 Done 用 atomic.LoadInt64 取值，Completed
+// 在锁内读取，且不复制运行态原子字段（避免 atomic-vs-plain 数据竞争）。
+// 调用方需持有 m.mu。
+func (m *DownloadManager) snapshotLocked(t *DownloadTask) *dlTaskDisk {
+	files := make([]*dlFileEntry, len(t.Files))
+	for i, f := range t.Files {
+		fc := *f
+		fc.Segments = make([]dlSegment, len(f.Segments))
+		for j := range f.Segments {
+			src := &f.Segments[j]
+			// 只按原子读 Done；Start/End 在 buildSegments 后不再变更，可安全直读
+			fc.Segments[j] = dlSegment{Start: src.Start, End: src.End, Done: atomic.LoadInt64(&src.Done)}
+		}
+		files[i] = &fc
+	}
+	return &dlTaskDisk{
+		ID:        t.ID,
+		TargetDir: t.TargetDir,
+		ModelID:   t.ModelID,
+		PackageID: t.PackageID,
+		Source:    t.Source,
+		Status:    t.Status,
+		Error:     t.Error,
+		Token:     t.Token,
+		CreatedAt: t.CreatedAt,
+		UpdatedAt: t.UpdatedAt,
+		Files:     files,
+	}
+}
+
+// writeFileAtomicMode 同 writeFileAtomic，但显式指定权限（task.json 含 token，用 0600）。
+func writeFileAtomicMode(path string, data []byte, perm os.FileMode) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, perm); err != nil {
+		return err
+	}
+	// 历史 tmp 可能是更宽松的权限，显式收敛
+	if err := os.Chmod(tmp, perm); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // sampleSpeed 速率采样：每次查询时按时间窗增量估算 bytes/s；非 RUNNING 归零。
@@ -1106,7 +1360,7 @@ func (m *DownloadManager) detailLocked(t *DownloadTask) map[string]any {
 		"status":          t.Status,
 		"createdAt":       t.CreatedAt,
 		"updatedAt":       t.UpdatedAt,
-		"files":           t.Files,
+		"files":           m.snapshotLocked(t).Files,
 		"fileCount":       len(t.Files),
 		"completedFiles":  t.completedFiles(),
 		"totalBytes":      t.totalBytes(),
@@ -1162,6 +1416,8 @@ func (m *DownloadManager) loadAll() {
 		if err != nil {
 			continue
 		}
+		// 收敛历史文件的宽松权限（旧版本以 0644 落盘，含 token）
+		_ = os.Chmod(taskFile, 0600)
 		var t DownloadTask
 		if err := json.Unmarshal(data, &t); err != nil || t.ID == "" || t.TargetDir == "" {
 			log.Printf("下载任务状态损坏，忽略 %s", taskFile)
