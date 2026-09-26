@@ -37,7 +37,7 @@ These GIFs are captured from the running web UI (Playwright recording + ffmpeg e
 - **TTS operation history**: per-model synthesis records and result audio (no automatic eviction; delete manually), replayable from the history panel, with grouping and inline detail
 - **Voice library (reference audio)**: a global resource under `data/voices/` with unique names, rename / reference-text editing / preview
 - **OpenAI-compatible proxy**: `GET /v1/models` aggregates all ready instances; `POST|PUT /v1/*` (e.g. `/v1/audio/speech`) routes by the top-level `model` in the body, streaming large base64 through disk the whole way (see OpenAI API Compatibility below for the boundary)
-- **Built-in weight downloader**: `POST /api/downloads` performs multi-threaded ranged downloads from HuggingFace (or a modelscope mirror), with resume, pause/resume, and progress/speed stats
+- **Built-in weight downloader**: `POST /api/downloads` performs multi-threaded ranged downloads from HuggingFace (or a modelscope mirror), with resume, pause/resume, and progress/speed stats; the authoritative package list is `model-packages.json`, and [`model_download_urls.md`](model_download_urls.md) is a reference for manual sources (Chinese)
 - **Device probing**: the start dialog can run `audiocpp_server --list-devices` and render available devices as a dropdown
 - **Windows-friendly**: system tray, auto-start, and subprocesses launched without a console window
 
@@ -46,6 +46,7 @@ These GIFs are captured from the running web UI (Playwright recording + ffmpeg e
 ### Prerequisites
 
 - Building from source: **Go 1.27+** (`go.mod` declares `go 1.27`; CI uses Go 1.27)
+- Supported systems: release packages ship **Windows (amd64), Linux (amd64 / arm64) and macOS (arm64)**; the hub is a static single binary, and the system tray only works on Windows
 - A runnable `audiocpp_server` binary: release packages **do not include** it. Download the build for your platform / GPU from [audio.cpp Releases](https://github.com/0xShug0/audio.cpp/releases/latest), place it anywhere (e.g. `audiocpp/`), and register it as an executable in the web UI
 - Hardware: depends on the `audiocpp_server` build you download. The bundled `executables.json` sample is a **Windows + AMD ROCm** setup (run `--list-devices` to see the actual backends); small models also run on CPU, with speed depending on the model and thread count
 - Disk: model weights range from a few hundred MB to tens of GB, so leave ample free space (the hub runs a disk-space pre-check before downloading)
@@ -151,6 +152,31 @@ The full endpoint list (method / path / body / response / error codes) is in [`d
 | `GET /api/executables/<id>/devices` | Run `--list-devices` to probe devices |
 | `/api/fs/*` | Server-local filesystem browsing (for picking weight paths) |
 | `GET /v1/models`, `POST|PUT /v1/*` | OpenAI-compatible proxy |
+
+## Troubleshooting / FAQ
+
+**The hub exits immediately, saying the port is in use**
+At startup the hub binds the port with `net.Listen`; on failure it logs `监听 :8080 失败: ...` and exits (`main.go`). Change `httpPort` in `hub.config.json`, or stop the process holding the port and restart. Instance ports are auto-allocated from `instancePortBase`; if you specify a port explicitly in the launch form, an occupied port returns `INSTANCE_PORT_IN_USE`, and the hub's own port returns `INSTANCE_PORT_RESERVED`.
+
+**An instance stays `STARTING` and finally times out**
+The hub polls the instance's `GET /health` once per second for up to **120s** (`healthTimeoutSeconds` in `instance.go`). On timeout or early subprocess exit, it writes the last ~10 log lines into the event log (`GET /api/events`, or the UI event panel) and then **deletes** `run/<id>/`. A running instance's log is `run/<instanceId>/server.log`. Common causes: wrong weight path, insufficient VRAM/RAM, wrong backend or device, or a mismatched `audiocpp_server`/model; use `GET /api/executables/<id>/devices` (or the device dropdown in the launch dialog) to confirm devices.
+
+**Downloading a gated HuggingFace model fails with an auth error**
+Gated repos such as `PocketTTS` and `Stable Audio 3` need an HF token: pass `"token"` in the `POST /api/downloads` body, otherwise you get `DOWNLOAD_AUTH` (upstream HTTP 401/403). The token is stored in plaintext in `data/downloads/<id>/task.json` (directory `0700`, file `0600`), and the API strips it from all output.
+
+**`/v1/audio/transcriptions` (multipart) returns 400**
+The hub's `/v1/*` proxy can only route on the top-level `"model"` field of a **JSON** body; `multipart/form-data` cannot be parsed for `model` and returns `400 {"error":{"message":"Missing required parameter: model",...}}`. Use a JSON body, the web UI's ASR flow, or `POST /api/tasks`. See "OpenAI API Compatibility" above.
+
+**Downloading from ModelScope returns `REMOTE_NOT_FOUND`**
+`source:"modelscope"` only maps to `HereIsMark/<repo-name>`, and only the `audio.cpp-gguf` repo is mirrored there today; other packages 404 (`REMOTE_NOT_FOUND`). Use the default HuggingFace source, or point `hfEndpoint` at a reachable mirror.
+
+**A `/v1/*` request returns 413**
+When the body exceeds `proxyMaxBodyBytes` (default 1 GiB, in `hub.config.json`) it cannot be spooled to disk and returns 413. Raise it in the config if needed; this limit applies only to `/v1/*` proxy bodies, not `/api/*` (capped at 64MB).
+
+**Where are the logs?**
+- The hub itself: console output; in Windows GUI mode (`-H windowsgui`) it also writes `logs/hub.log`
+- Model instances: `run/<instanceId>/server.log` while running; after a failed launch the directory is cleaned up and the tail is kept in the event log (`/api/events`)
+- Downloads: state and progress in `data/downloads/<id>/task.json`; inference tasks in `data/tasks/<id>.task.json`
 
 ## Directory Layout
 
