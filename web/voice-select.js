@@ -73,7 +73,9 @@ window.VoiceSelect = class VoiceSelect {
     const oldVoices = this.voices;
     try {
       const res = await fetch("/api/voices");
-      this.voices = await res.json();
+      if (!res.ok) throw new Error(I18N.errText(await res.text()));
+      const data = await res.json();
+      this.voices = Array.isArray(data) ? data : [];
     } catch (e) {
       this.voices = [];
     }

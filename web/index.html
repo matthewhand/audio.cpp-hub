@@ -2,10 +2,12 @@
 <html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="UTF-8">
+  <!-- 前端无内联脚本/样式，CSP 只需 'self'；media-src 放行 base64/blob 音频。
+       注意：meta CSP 是兜底，正式防线应在服务端响应头下发（见 PR 说明的后续项）。 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob: data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>audio.cpp-hub</title>
-  <script>document.documentElement.dataset.theme = localStorage.getItem("hub-theme") || "light";
-  document.documentElement.lang = (localStorage.getItem("hub-lang") || (navigator.language||"zh")).toLowerCase().startsWith("zh") ? "zh-CN" : "en";</script>
+  <script src="/boot.js"></script>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -89,16 +91,16 @@
             </div>
             <div id="emotion-alpha-row" class="hidden">
               <label><span data-i18n="emotion.alphaLabel">情感强度 emotion_alpha：</span><span id="emotion-alpha-val">1.00</span>
-                <input id="tts-emotion-alpha" type="range" min="0" max="1" step="0.05" value="1">
+                <input id="tts-emotion-alpha" type="range" min="0" max="1" step="0.05" value="1" data-i18n-aria-label="emotion.alphaLabel">
               </label>
             </div>
           </div>
 
           <details id="tts-advanced"><summary data-i18n="common.advanced">高级参数</summary><div class="grid" id="tts-advanced-grid"></div></details>
           <button id="tts-submit" class="btn" data-i18n="tts.submit">合成</button>
-          <div id="tts-msg" class="msg"></div>
-          <div id="tts-stats" class="task-stats"></div>
-          <div id="tts-result" class="hidden">
+          <div id="tts-msg" class="msg" role="status" aria-live="polite"></div>
+          <div id="tts-stats" class="task-stats" aria-live="polite"></div>
+          <div id="tts-result" class="hidden" aria-live="polite">
             <audio id="tts-player" controls preload="auto"></audio>
             <a id="tts-download" class="btn-ghost" download="tts.wav" data-i18n="tts.download">下载 wav</a>
           </div>
@@ -112,9 +114,9 @@
           <div id="asr-text-row"></div>
           <details id="asr-advanced" class="hidden"><summary data-i18n="common.advanced">高级参数</summary><div class="grid" id="asr-advanced-grid"></div></details>
           <button id="asr-submit" class="btn" data-i18n="asr.submit">识别</button>
-          <div id="asr-msg" class="msg"></div>
-          <div id="asr-stats" class="task-stats"></div>
-          <div id="asr-result" class="hidden">
+          <div id="asr-msg" class="msg" role="status" aria-live="polite"></div>
+          <div id="asr-stats" class="task-stats" aria-live="polite"></div>
+          <div id="asr-result" class="hidden" aria-live="polite">
             <div class="asr-text-card">
               <div id="asr-text"></div>
               <button id="asr-copy" class="btn-ghost" data-i18n="asr.copy">复制</button>
@@ -129,9 +131,9 @@
           <div class="hint" data-i18n="sep.hint">输入 44.1kHz 音乐效果最佳。</div>
           <div id="sep-audio-picker"></div>
           <button id="sep-submit" class="btn" data-i18n="sep.submit">分离</button>
-          <div id="sep-msg" class="msg"></div>
-          <div id="sep-stats" class="task-stats"></div>
-          <div id="sep-result"></div>
+          <div id="sep-msg" class="msg" role="status" aria-live="polite"></div>
+          <div id="sep-stats" class="task-stats" aria-live="polite"></div>
+          <div id="sep-result" aria-live="polite"></div>
         </div>
 
         <!-- YuE2 音乐生成面板 -->
@@ -148,9 +150,9 @@
           <div class="hint" data-i18n="music.abcHint">需要外部旋律条件时填写内联 ABC；cot=off 时不能携带 ABC。</div>
           <details id="music-advanced"><summary data-i18n="common.advanced">高级参数</summary><div class="grid" id="music-advanced-grid"></div></details>
           <button id="music-submit" class="btn" data-i18n="music.submit">生成音乐</button>
-          <div id="music-msg" class="msg"></div>
-          <div id="music-stats" class="task-stats"></div>
-          <div id="music-result"></div>
+          <div id="music-msg" class="msg" role="status" aria-live="polite"></div>
+          <div id="music-stats" class="task-stats" aria-live="polite"></div>
+          <div id="music-result" aria-live="polite"></div>
         </div>
 
         <!-- OTHER 面板 -->
@@ -163,25 +165,25 @@
           <div id="other-fields"></div>
           <label><span data-i18n="other.extraLabel">额外参数（JSON，合并进请求）</span><textarea id="other-extra" rows="3" placeholder='{"seed": 42}'></textarea></label>
           <button id="other-submit" class="btn" data-i18n="other.submit">运行</button>
-          <div id="other-msg" class="msg"></div>
-          <div id="other-stats" class="task-stats"></div>
-          <div id="other-result"></div>
+          <div id="other-msg" class="msg" role="status" aria-live="polite"></div>
+          <div id="other-stats" class="task-stats" aria-live="polite"></div>
+          <div id="other-result" aria-live="polite"></div>
         </div>
       </div>
     </section>
   </main>
 
   <!-- 操作历史全屏面板：页头 🕘 按钮弹出（按 modelId 记录，仅 TTS 有落盘历史） -->
-  <div id="history-panel" class="modal-overlay hidden">
+  <div id="history-panel" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="history-panel-title">
     <div class="history-panel-card">
       <div class="history-header">
-        <span class="history-title" data-i18n="history.title">操作历史</span>
+        <span class="history-title" id="history-panel-title" data-i18n="history.title">操作历史</span>
         <div class="history-actions">
           <button id="history-privacy" type="button" class="btn-ghost">隐私</button>
           <button id="history-group-new" type="button" class="btn-ghost" data-i18n="history.groupNew">新建分组</button>
           <button id="history-refresh" type="button" class="btn-ghost" data-i18n="history.refresh">刷新</button>
           <button id="history-clear" type="button" class="stop-btn" data-i18n="history.clear">清空</button>
-          <button id="history-close" type="button" class="theme-btn" data-i18n-title="history.closeTitle" title="关闭">×</button>
+          <button id="history-close" type="button" class="theme-btn" data-i18n-title="history.closeTitle" data-i18n-aria-label="history.closeTitle" title="关闭">×</button>
         </div>
       </div>
       <div id="history-list"></div>
@@ -189,12 +191,12 @@
   </div>
 
   <!-- 音色库管理面板：页头 🎙 打开。音色 = 全局资源（名称唯一 + 文本内容 + 音频文件） -->
-  <div id="voices-panel" class="modal-overlay hidden">
+  <div id="voices-panel" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="voices-panel-title">
     <div class="history-panel-card">
       <div class="history-header">
-        <span class="history-title" data-i18n="voices.title">音色库</span>
+        <span class="history-title" id="voices-panel-title" data-i18n="voices.title">音色库</span>
         <div class="history-actions">
-          <button id="voices-close" type="button" class="theme-btn" data-i18n-title="history.closeTitle" title="关闭">×</button>
+          <button id="voices-close" type="button" class="theme-btn" data-i18n-title="history.closeTitle" data-i18n-aria-label="history.closeTitle" title="关闭">×</button>
         </div>
       </div>
       <div class="voices-body">
@@ -216,16 +218,16 @@
   </div>
 
   <footer class="hint" data-i18n="footer.hint">提示：音频可上传 / 录制 / 从音色库选择，也可填写运行 hub 的机器上的本机路径。</footer>
-  <div id="toast-root"></div>
+  <div id="toast-root" role="status" aria-live="polite"></div>
   <!-- 移动端抽屉遮罩：点击收起左侧模型/实例菜单 -->
   <div id="drawer-overlay" class="drawer-overlay hidden"></div>
 
   <!-- 启动模型 modal -->
-  <div id="launch-modal" class="modal-overlay hidden">
+  <div id="launch-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="launch-modal-title">
     <div class="modal">
       <div class="modal-header">
-        <span class="modal-title"><span data-i18n="launch.title">启动模型</span> — <span id="quick-launch-model"></span></span>
-        <button id="launch-modal-close" class="modal-close">×</button>
+        <span class="modal-title" id="launch-modal-title"><span data-i18n="launch.title">启动模型</span> — <span id="quick-launch-model"></span></span>
+        <button id="launch-modal-close" class="modal-close" data-i18n-aria-label="history.closeTitle">×</button>
       </div>
       <div class="grid">
         <label class="span-all"><span data-i18n="launch.profile">启动配置</span>
@@ -271,33 +273,33 @@
   </div>
 
   <!-- 实例详情 modal：展示运行中实例的启动配置 -->
-  <div id="instance-detail-modal" class="modal-overlay hidden">
+  <div id="instance-detail-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="instance-detail-modal-title">
     <div class="modal">
       <div class="modal-header">
-        <span class="modal-title" data-i18n="instance.detailTitle">实例详情</span>
-        <button id="instance-detail-close" class="modal-close">×</button>
+        <span class="modal-title" id="instance-detail-modal-title" data-i18n="instance.detailTitle">实例详情</span>
+        <button id="instance-detail-close" class="modal-close" data-i18n-aria-label="history.closeTitle">×</button>
       </div>
       <div id="instance-detail-body" class="kv-list"></div>
     </div>
   </div>
 
   <!-- 下载管理 modal：任务列表 + 进度 + 暂停/续传/删除 -->
-  <div id="downloads-modal" class="modal-overlay hidden">
+  <div id="downloads-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="downloads-modal-title">
     <div class="modal settings-modal">
       <div class="modal-header">
-        <span class="modal-title" data-i18n="dl.managerTitle">下载管理</span>
-        <button id="downloads-modal-close" class="modal-close">×</button>
+        <span class="modal-title" id="downloads-modal-title" data-i18n="dl.managerTitle">下载管理</span>
+        <button id="downloads-modal-close" class="modal-close" data-i18n-aria-label="history.closeTitle">×</button>
       </div>
       <div id="dl-list" class="dl-list"></div>
     </div>
   </div>
 
   <!-- 模型下载 modal：下载包选择 + token + 覆盖选项 -->
-  <div id="model-dl-modal" class="modal-overlay hidden">
+  <div id="model-dl-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="model-dl-modal-title">
     <div class="modal">
       <div class="modal-header">
-        <span class="modal-title"><span data-i18n="dl.title">下载权重</span> — <span id="mdl-dl-model"></span></span>
-        <button id="model-dl-modal-close" class="modal-close">×</button>
+        <span class="modal-title" id="model-dl-modal-title"><span data-i18n="dl.title">下载权重</span> — <span id="mdl-dl-model"></span></span>
+        <button id="model-dl-modal-close" class="modal-close" data-i18n-aria-label="history.closeTitle">×</button>
       </div>
       <div id="mdl-package-list" class="dl-packages"></div>
       <label><span data-i18n="dl.endpointLabel">下载源</span><select id="mdl-endpoint">
@@ -323,11 +325,11 @@
   </div>
 
   <!-- 设置 modal：左侧功能菜单 + 右侧内容面板 -->
-  <div id="settings-modal" class="modal-overlay hidden">
+  <div id="settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
     <div class="modal settings-modal">
       <div class="modal-header">
-        <span class="modal-title" data-i18n="settings.title">设置</span>
-        <button id="settings-modal-close" class="modal-close">×</button>
+        <span class="modal-title" id="settings-modal-title" data-i18n="settings.title">设置</span>
+        <button id="settings-modal-close" class="modal-close" data-i18n-aria-label="history.closeTitle">×</button>
       </div>
       <div class="settings-body">
         <nav class="settings-nav">

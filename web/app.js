@@ -45,6 +45,28 @@ const el = (html) => {
   t.innerHTML = html.trim();
   return t.content.firstChild;
 };
+/* 服务端/用户可控字符串插入 HTML（文本或属性）前统一转义，防存储型 XSS */
+function esc(v) {
+  return String(v == null ? "" : v)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+/* 仅放行 http(s) 链接，其余返回空串（用于 href 等 URL 属性） */
+function safeHttpUrl(url) {
+  const s = typeof url === "string" ? url.trim() : "";
+  return /^https?:\/\//i.test(s) ? s : "";
+}
+/* 列表加载失败的可见提示 + 重试按钮（替代空白列表） */
+function renderListError(container, message, retry) {
+  if (!container) return;
+  container.innerHTML = "";
+  const box = el(`<div class="hint load-error"><span></span><button type="button" class="btn-ghost"></button></div>`);
+  box.querySelector("span").textContent = message;
+  const btn = box.querySelector("button");
+  btn.textContent = t("common.retry");
+  btn.onclick = retry;
+  container.appendChild(box);
+}
 const selectedModel = () => models.find(m => m.id === selectedModelId);
 
 /* ---------- 主题切换 ---------- */
@@ -100,10 +122,12 @@ $("drawer-overlay").onclick = closeDrawer;
 /* ---------- 历史全屏面板：页头 🕘 打开；遮罩点击 / × / Esc 关闭 ---------- */
 $("history-btn").onclick = () => {
   $("history-panel").classList.remove("hidden");
+  focusDialog($("history-panel"));
   loadHistory();
 };
 function closeHistoryPanel() {
   $("history-panel").classList.add("hidden");
+  restoreDialogFocus();
 }
 $("history-close").onclick = closeHistoryPanel;
 $("history-panel").addEventListener("mousedown", (e) => {
@@ -137,8 +161,16 @@ applyHistoryPrivacy();
 
 /* ---------- 模型列表（按 category 分组） ---------- */
 async function loadModels() {
-  const res = await fetch("/api/models");
-  models = await res.json();
+  try {
+    const res = await fetch("/api/models");
+    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    const data = await res.json();
+    if (!Array.isArray(data)) throw new Error(t("common.loadFailed"));
+    models = data;
+  } catch (e) {
+    renderListError($("model-list"), t("common.loadFailed") + t("common.colon") + e.message, loadModels);
+    return;
+  }
   if (models.length && !selectedModelId) {
     // 刷新后恢复上次选中的模型（否则回到第一个模型，其历史/实例视图会让用户误以为数据丢失）
     const saved = localStorage.getItem("hub-model");
@@ -179,12 +211,12 @@ function openHfMenu(anchor, m) {
     hfMenuEl.addEventListener("click", (e) => { if (e.target.closest("a")) closeHfMenu(); });
   }
   const items = [
-    { label: t("model.hfMenu.hf"), url: m.hfUrl },
-    { label: t("model.hfMenu.mirror"), url: hfMirrorOf(m.hfUrl) },
-    { label: t("model.hfMenu.gguf"), url: m.ggufUrl },
-    { label: t("model.hfMenu.ggufMirror"), url: hfMirrorOf(m.ggufUrl) },
+    { label: t("model.hfMenu.hf"), url: safeHttpUrl(m.hfUrl) },
+    { label: t("model.hfMenu.mirror"), url: safeHttpUrl(hfMirrorOf(m.hfUrl)) },
+    { label: t("model.hfMenu.gguf"), url: safeHttpUrl(m.ggufUrl) },
+    { label: t("model.hfMenu.ggufMirror"), url: safeHttpUrl(hfMirrorOf(m.ggufUrl)) },
   ].filter(x => x.url);
-  hfMenuEl.innerHTML = items.map(x => `<a href="${x.url}" target="_blank" rel="noopener">${x.label}<span class="hf-menu-ext">↗</span></a>`).join("");
+  hfMenuEl.innerHTML = items.map(x => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}<span class="hf-menu-ext">↗</span></a>`).join("");
   closeHfMenu();
   hfMenuAnchor = anchor;
   anchor.classList.add("open");
@@ -226,9 +258,9 @@ function renderModelList() {
       const usable = modelConfigured(m);
       const card = document.createElement("div");
       card.className = "card" + (m.id === selectedModelId ? " selected" : "") + (usable ? "" : " unconfigured");
-      card.innerHTML = `<div class="card-title">${I18N.pick(m, "displayName")}${usable ? "" : ` <span class="badge unconfigured">${t("model.unconfigured")}</span>`}<button class="dl-link" title="${t("dl.cardBtn")}">⬇</button>${m.hfUrl ? `<button class="hf-link" title="${t("model.hfRepo")}">HF ▾</button>` : ""}</div>
-        <div class="card-family">${m.family} <span class="cat-badge cat-${cat}">${categoryName(cat)}</span></div>
-        <div class="card-desc">${I18N.pick(m, "description")}</div>`;
+      card.innerHTML = `<div class="card-title">${esc(I18N.pick(m, "displayName"))}${usable ? "" : ` <span class="badge unconfigured">${esc(t("model.unconfigured"))}</span>`}<button class="dl-link" title="${esc(t("dl.cardBtn"))}">⬇</button>${m.hfUrl ? `<button class="hf-link" title="${esc(t("model.hfRepo"))}">HF ▾</button>` : ""}</div>
+        <div class="card-family">${esc(m.family)} <span class="cat-badge cat-${cat}">${esc(categoryName(cat))}</span></div>
+        <div class="card-desc">${esc(I18N.pick(m, "description"))}</div>`;
       if (!usable) card.title = t("model.unconfiguredTip");
       card.querySelector(".dl-link").onclick = (e) => { e.stopPropagation(); openModelDlModal(m); };
       const hfBtn = card.querySelector(".hf-link");
@@ -263,10 +295,12 @@ function openSettingsModal(section) {
   activateSettingsSection(settingsSection);
   syncGeneralPane();
   settingsModal.classList.remove("hidden");
+  focusDialog(settingsModal);
   loadExecutables();
 }
 function closeSettingsModal() {
   settingsModal.classList.add("hidden");
+  restoreDialogFocus();
 }
 function activateSettingsSection(section) {
   settingsSection = section;
@@ -414,12 +448,14 @@ const launchModal = $("launch-modal");
 function openLaunchModal() {
   $("launch-msg").textContent = "";
   launchModal.classList.remove("hidden");
+  focusDialog(launchModal);
   loadProfiles();
   // 打开弹窗即自动探测当前程序的设备（命中缓存则直接渲染）
   probeDevices($("launch-exec").value);
 }
 function closeLaunchModal() {
   launchModal.classList.add("hidden");
+  restoreDialogFocus();
 }
 $("launch-open-btn").onclick = openLaunchModal;
 $("launch-modal-close").onclick = closeLaunchModal;
@@ -466,14 +502,67 @@ $("exec-browse-btn").onclick = async () => {
   }
 };
 
+/* ---------- 弹窗可访问性：焦点管理 / Esc 只关最上层 ---------- */
+/* 可见弹窗按 DOM 顺序（≈ 堆叠顺序），最后一个即最上层 */
+const OVERLAY_IDS = ["instance-detail-modal", "launch-modal", "downloads-modal",
+  "model-dl-modal", "settings-modal", "history-panel", "voices-panel"];
+const FOCUSABLE_SEL = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+let dialogReturnFocus = null;
+
+function visibleOverlays() {
+  return OVERLAY_IDS.map(id => $(id)).filter(el => el && !el.classList.contains("hidden"));
+}
+function topmostOverlay() {
+  const open = visibleOverlays();
+  return open.length ? open[open.length - 1] : null;
+}
+/* 打开弹窗：记录触发元素并把焦点移入弹窗 */
+function focusDialog(overlay) {
+  if (!overlay) return;
+  dialogReturnFocus = document.activeElement;
+  const card = overlay.querySelector(".modal, .history-panel-card") || overlay;
+  if (!card.hasAttribute("tabindex")) card.setAttribute("tabindex", "-1");
+  const first = overlay.querySelector(FOCUSABLE_SEL);
+  (first || card).focus();
+}
+/* 关闭弹窗：焦点还原到打开它的元素 */
+function restoreDialogFocus() {
+  if (dialogReturnFocus && typeof dialogReturnFocus.focus === "function") dialogReturnFocus.focus();
+  dialogReturnFocus = null;
+}
+function closeTopmostOverlay() {
+  const overlay = topmostOverlay();
+  if (!overlay) return;
+  if (overlay.id === "history-panel") closeHistoryPanel();
+  else if (overlay.id === "voices-panel") { if (window.closeVoicesPanel) window.closeVoicesPanel(); }
+  else if (overlay.id === "settings-modal") closeSettingsModal();
+  else if (overlay.id === "launch-modal") closeLaunchModal();
+  else if (overlay.id === "downloads-modal") closeDownloadsModal();
+  else if (overlay.id === "model-dl-modal") closeModelDlModal();
+  else if (overlay.id === "instance-detail-modal") closeInstanceDetail();
+  else overlay.classList.add("hidden");
+}
+
+/* Tab 焦点锁定在当前最上层弹窗内，防止键盘用户 Tab 到遮罩后的页面 */
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    closeSettingsModal();
-    closeLaunchModal();
-    closeDownloadsModal();
-    closeModelDlModal();
-    closeDrawer();
-  }
+  if (e.key !== "Tab") return;
+  const overlay = topmostOverlay();
+  if (!overlay) return;
+  const items = [...overlay.querySelectorAll(FOCUSABLE_SEL)].filter(el => el.offsetParent !== null);
+  if (!items.length) { e.preventDefault(); return; }
+  const first = items[0], last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+
+/* Esc：只关最上层弹窗；焦点在可编辑字段时不关闭，避免误丢表单输入 */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const overlay = topmostOverlay();
+  if (!overlay) { closeDrawer(); return; }
+  const ae = document.activeElement;
+  if (ae && overlay.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+  closeTopmostOverlay();
 });
 
 async function loadExecutables() {
@@ -481,8 +570,13 @@ async function loadExecutables() {
   for (const k of Object.keys(deviceCache)) delete deviceCache[k];
   try {
     const res = await fetch("/api/executables");
-    executables = await res.json();
+    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    const data = await res.json();
+    executables = Array.isArray(data) ? data : [];
   } catch (e) {
+    executables = [];
+    renderListError($("exec-list"), t("common.loadFailed") + t("common.colon") + e.message, loadExecutables);
+    updateLaunchExec();
     return;
   }
   renderExecList();
@@ -502,15 +596,15 @@ function renderExecList() {
     const row = document.createElement("div");
     row.className = "exec-row" + (ex.exists ? "" : " missing");
     let html = `<div class="exec-info">
-      <div class="exec-name">${ex.name}${ex.exists ? "" : ` <span class="badge error">${t("exec.missing")}</span>`}</div>
-      <div class="exec-path">${ex.path}</div>`;
+      <div class="exec-name">${esc(ex.name)}${ex.exists ? "" : ` <span class="badge error">${esc(t("exec.missing"))}</span>`}</div>
+      <div class="exec-path">${esc(ex.path)}</div>`;
     if (ex.note) {
-      html += `<div class="exec-note">${ex.note}</div>`;
+      html += `<div class="exec-note">${esc(ex.note)}</div>`;
     }
     if (ex.env && Object.keys(ex.env).length) {
-      html += `<div class="exec-env-line">${t("exec.envSummary", { keys: Object.keys(ex.env).join(", ") })}</div>`;
+      html += `<div class="exec-env-line">${esc(t("exec.envSummary", { keys: Object.keys(ex.env).join(", ") }))}</div>`;
     }
-    html += `</div><button class="stop-btn exec-edit">${t("exec.edit")}</button><button class="stop-btn exec-del">${t("exec.delete")}</button>`;
+    html += `</div><button class="stop-btn exec-edit">${esc(t("exec.edit"))}</button><button class="stop-btn exec-del">${esc(t("exec.delete"))}</button>`;
     row.innerHTML = html;
     row.querySelector(".exec-edit").onclick = () => startEditExec(ex);
     row.querySelector(".exec-del").onclick = async () => {
@@ -784,8 +878,11 @@ $("launch-threads").addEventListener("input", (e) => {
 async function loadProfiles() {
   try {
     const res = await fetch("/api/profiles");
-    profiles = await res.json();
+    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    const data = await res.json();
+    profiles = Array.isArray(data) ? data : [];
   } catch (e) {
+    profiles = [];
     return;
   }
   renderLaunchProfiles();
@@ -1009,12 +1106,18 @@ $("launch-btn").onclick = async () => {
 
 /* ---------- 实例列表 + 状态条（每 2s 轮询） ---------- */
 async function refreshInstances() {
+  let data;
   try {
     const res = await fetch("/api/instances");
-    instances = await res.json();
+    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    data = await res.json();
+    if (!Array.isArray(data)) throw new Error(t("common.loadFailed"));
   } catch (e) {
+    // 轮询中的瞬时失败保留上次列表，仅在从未加载成功时显示错误/重试
+    if (instances.length === 0) renderListError($("instance-list"), t("common.loadFailed") + t("common.colon") + e.message, refreshInstances);
     return;
   }
+  instances = data;
   renderInstanceList();
   updateInstanceBar();
 }
@@ -1037,13 +1140,13 @@ function renderInstanceList() {
     card.className = "card" + (inst.id === activeInstanceId ? " selected" : "");
     // 有活跃任务（QUEUED/RUNNING）时追加转圈“工作中”徽标，随 2s 轮询自动出现/消失
     const workingBadge = (inst.taskCount || 0) > 0
-      ? ` <span class="badge working">${inst.taskCount > 1 ? t("instance.workingCount", { n: inst.taskCount }) : t("instance.working")}</span>`
+      ? ` <span class="badge working">${esc(inst.taskCount > 1 ? t("instance.workingCount", { n: inst.taskCount }) : t("instance.working"))}</span>`
       : "";
-    let html = `<div class="card-title">${inst.instanceName || inst.modelId} <span class="badge ${statusClass}">${statusText(inst.status)}</span>${workingBadge}</div>
-      <div class="card-family">${modelName} ｜ #${inst.id}</div>
-      <div class="card-desc">${inst.backend}${inst.device != null ? ":" + inst.device : ""} ｜ ${t("instance.port")} ${inst.port}${inst.executableName ? " ｜ " + inst.executableName : ""}</div>`;
+    let html = `<div class="card-title">${esc(inst.instanceName || inst.modelId)} <span class="badge ${statusClass}">${esc(statusText(inst.status))}</span>${workingBadge}</div>
+      <div class="card-family">${esc(modelName)} ｜ #${esc(inst.id)}</div>
+      <div class="card-desc">${esc(inst.backend)}${inst.device != null ? ":" + esc(inst.device) : ""} ｜ ${esc(t("instance.port"))} ${esc(inst.port)}${inst.executableName ? " ｜ " + esc(inst.executableName) : ""}</div>`;
     if (inst.status === "ERROR" && inst.errorMessage) {
-      html += `<div class="error-text">${inst.errorMessage}</div>`;
+      html += `<div class="error-text">${esc(inst.errorMessage)}</div>`;
     }
     if (inst.status !== "STOPPED") {
       html += `<div class="card-actions"><button class="btn-ghost detail-btn">${t("instance.detail")}</button><button class="stop-btn">${t("instance.stop")}</button></div>`;
@@ -1122,10 +1225,12 @@ function openInstanceDetail(inst) {
   detailInstanceId = inst.id;
   renderInstanceDetail(inst);
   instanceDetailModal.classList.remove("hidden");
+  focusDialog(instanceDetailModal);
 }
 function closeInstanceDetail() {
   detailInstanceId = null;
   instanceDetailModal.classList.add("hidden");
+  restoreDialogFocus();
 }
 function renderInstanceDetail(inst) {
   const body = $("instance-detail-body");
@@ -1201,12 +1306,16 @@ function fmtBytes(n) {
 const DL_STATUS_CLASS = { RUNNING: "starting", PENDING: "starting", PAUSED: "stopped", DONE: "ready", FAILED: "error" };
 
 async function refreshDownloads() {
+  let data;
   try {
     const res = await fetch("/api/downloads");
-    downloads = await res.json();
+    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    data = await res.json();
+    if (!Array.isArray(data)) throw new Error(t("common.loadFailed"));
   } catch (e) {
     return;
   }
+  downloads = data;
   updateDlBadge();
   if (!$("downloads-modal").classList.contains("hidden")) renderDownloadList();
 }
@@ -1222,9 +1331,11 @@ function updateDlBadge() {
 function openDownloadsModal() {
   renderDownloadList();
   $("downloads-modal").classList.remove("hidden");
+  focusDialog($("downloads-modal"));
 }
 function closeDownloadsModal() {
   $("downloads-modal").classList.add("hidden");
+  restoreDialogFocus();
 }
 $("downloads-btn").onclick = openDownloadsModal;
 $("downloads-modal-close").onclick = closeDownloadsModal;
@@ -1240,17 +1351,20 @@ function renderDownloadList() {
   for (const d of downloads) {
     const model = d.modelId ? models.find(m => m.id === d.modelId) : null;
     const title = model ? I18N.pick(model, "displayName") : d.targetDir;
-    const pct = d.percent;
+    // 百分比来自服务端，做数值化 + 钳制后再拼进 style，杜绝属性注入
+    const pct = Number(d.percent);
+    const pctOk = Number.isFinite(pct);
+    const pctShown = pctOk ? Math.max(0, Math.min(100, pct)) : 100;
     const row = document.createElement("div");
     row.className = "dl-row";
     let html = `<div class="dl-row-head">
-      <span class="dl-row-title">${title} <span class="dl-row-dir">models/${d.targetDir}</span></span>
-      <span class="badge ${DL_STATUS_CLASS[d.status] || "stopped"}">${t("dl.status." + d.status)}</span>
+      <span class="dl-row-title">${esc(title)} <span class="dl-row-dir">models/${esc(d.targetDir)}</span></span>
+      <span class="badge ${DL_STATUS_CLASS[d.status] || "stopped"}">${esc(t("dl.status." + d.status))}</span>
     </div>
-    <div class="dl-progress"><div class="dl-progress-fill${pct < 0 ? " indeterminate" : ""}" style="width:${pct < 0 ? 100 : pct}%"></div></div>
-    <div class="dl-row-meta">${fmtBytes(d.downloadedBytes)} / ${fmtBytes(d.totalBytes)}${pct >= 0 ? ` ｜ ${pct}%` : ""}${d.status === "RUNNING" && d.speedBps > 0 ? ` ｜ ${fmtBytes(d.speedBps)}/s` : ""} ｜ ${t("dl.fileProgress", { done: d.completedFiles, n: d.fileCount })}</div>`;
+    <div class="dl-progress"><div class="dl-progress-fill${!pctOk || pct < 0 ? " indeterminate" : ""}" style="width:${pctShown}%"></div></div>
+    <div class="dl-row-meta">${esc(fmtBytes(d.downloadedBytes))} / ${esc(fmtBytes(d.totalBytes))}${pctOk && pct >= 0 ? ` ｜ ${pctShown}%` : ""}${d.status === "RUNNING" && d.speedBps > 0 ? ` ｜ ${esc(fmtBytes(d.speedBps))}/s` : ""} ｜ ${esc(t("dl.fileProgress", { done: d.completedFiles, n: d.fileCount }))}</div>`;
     if (d.status === "FAILED" && d.error) {
-      html += `<div class="error-text">${d.error}</div>`;
+      html += `<div class="error-text">${esc(d.error)}</div>`;
     }
     html += `<div class="card-actions">`;
     if (d.status === "RUNNING" || d.status === "PENDING") {
@@ -1298,10 +1412,12 @@ function openModelDlModal(m) {
   $("mdl-msg").textContent = "";
   $("mdl-package-list").innerHTML = `<div class="hint">${t("dl.loading")}</div>`;
   $("model-dl-modal").classList.remove("hidden");
+  focusDialog($("model-dl-modal"));
   loadMdlPackages(m);
 }
 function closeModelDlModal() {
   $("model-dl-modal").classList.add("hidden");
+  restoreDialogFocus();
 }
 $("model-dl-modal-close").onclick = closeModelDlModal;
 $("model-dl-modal").onclick = (e) => { if (e.target === $("model-dl-modal")) closeModelDlModal(); };
@@ -1314,7 +1430,10 @@ async function loadMdlPackages(m) {
     mdlPackages = JSON.parse(text);
     renderMdlPackages();
   } catch (e) {
-    $("mdl-package-list").innerHTML = `<div class="hint">${t("dl.loadFailed")}${t("common.colon")}${e.message}</div>`;
+    const box = el(`<div class="hint"></div>`);
+    box.textContent = t("dl.loadFailed") + t("common.colon") + e.message;
+    $("mdl-package-list").innerHTML = "";
+    $("mdl-package-list").appendChild(box);
   }
 }
 
@@ -1328,10 +1447,10 @@ function renderMdlPackages() {
   }
   pkgs.forEach((p, i) => {
     const row = el(`<label class="dl-package-row">
-      <input type="radio" name="mdl-package" value="${p.id}"${p.default || (!pkgs.some(x => x.default) && i === 0) ? " checked" : ""}>
+      <input type="radio" name="mdl-package" value="${esc(p.id)}"${p.default || (!pkgs.some(x => x.default) && i === 0) ? " checked" : ""}>
       <span class="dl-package-text">
         <span class="dl-package-name"></span>
-        <span class="dl-package-meta">${[p.format, p.precision].filter(Boolean).join(" ｜ ")} → models/${p.targetDir} ｜ ${t("dl.fileCount", { n: p.files.length })}</span>
+        <span class="dl-package-meta">${esc([p.format, p.precision].filter(Boolean).join(" ｜ "))} → models/${esc(p.targetDir)} ｜ ${esc(t("dl.fileCount", { n: (p.files || []).length }))}</span>
       </span>
     </label>`);
     const name = row.querySelector(".dl-package-name");
@@ -1392,10 +1511,15 @@ async function refreshEvents() {
   let events;
   try {
     const res = await fetch("/api/events");
-    events = await res.json();
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    events = Array.isArray(data) ? data : [];
   } catch (e) {
     return;
   }
+  // 事件窗口由服务端限制为最近 20 条：seenEvents 同步收缩，避免长期运行无界增长
+  const valid = new Set(events.map(ev => ev.time + "|" + ev.message));
+  for (const k of seenEvents) if (!valid.has(k)) seenEvents.delete(k);
   const fresh = [];
   for (const ev of events) {
     const key = ev.time + "|" + ev.message;
@@ -1477,6 +1601,7 @@ function trackTask(task) {
   if (activePolls.has(task.id)) return;
   if (task.status !== "QUEUED" && task.status !== "RUNNING") return;
   const iv = setInterval(async () => {
+    if (document.hidden) return; // 标签页隐藏时暂停任务轮询
     let cur;
     try {
       cur = await fetchTask(task.id);
@@ -1643,7 +1768,7 @@ function buildLanguageRow(container, m, prefix) {
   sel.value = m.language.default || m.language.values[0];
   container.appendChild(label);
   if (locked) {
-    container.appendChild(el(`<div class="hint">${t("common.langLocked", { lang: sel.value })}</div>`));
+    container.appendChild(el(`<div class="hint">${esc(t("common.langLocked", { lang: sel.value }))}</div>`));
   }
   return sel;
 }
@@ -1658,14 +1783,14 @@ function paramInput(key, p, prefix) {
   // 标签默认用参数键名；paramSchema 可带 label/labelEn 双语显示名（I18N.pick 按语言选用）
   const labelText = I18N.pick(p, "label") || key;
   if (p.type === "boolean") {
-    return el(`<label class="checkbox-label"><input type="checkbox" id="${prefix}-${key}" ${p.default ? "checked" : ""}> ${labelText}</label>`);
+    return el(`<label class="checkbox-label"><input type="checkbox" id="${esc(prefix)}-${esc(key)}" ${p.default ? "checked" : ""}> ${esc(labelText)}</label>`);
   }
   if (p.type === "string") {
     const ph = I18N.pick(p, "placeholder");
-    return el(`<label>${labelText}<input type="text" id="${prefix}-${key}" value="${p.default ?? ""}"${ph ? ` placeholder="${ph}"` : ""}></label>`);
+    return el(`<label>${esc(labelText)}<input type="text" id="${esc(prefix)}-${esc(key)}" value="${esc(p.default ?? "")}"${ph ? ` placeholder="${esc(ph)}"` : ""}></label>`);
   }
   if (p.type === "enum") {
-    const label = el(`<label>${labelText}<select id="${prefix}-${key}"></select></label>`);
+    const label = el(`<label>${esc(labelText)}<select id="${esc(prefix)}-${esc(key)}"></select></label>`);
     const sel = label.querySelector("select");
     for (const v of p.values) {
       const opt = document.createElement("option");
@@ -1677,10 +1802,10 @@ function paramInput(key, p, prefix) {
     return label;
   }
   const step = p.step ?? (p.type === "integer" ? 1 : 0.05);
-  const min = p.min != null ? `min="${p.min}"` : "";
-  const max = p.max != null ? `max="${p.max}"` : "";
+  const min = p.min != null ? `min="${esc(p.min)}"` : "";
+  const max = p.max != null ? `max="${esc(p.max)}"` : "";
   const val = p.default != null ? p.default : "";
-  return el(`<label>${labelText}<input type="number" id="${prefix}-${key}" value="${val}" ${min} ${max} step="${step}"></label>`);
+  return el(`<label>${esc(labelText)}<input type="number" id="${esc(prefix)}-${esc(key)}" value="${esc(val)}" ${min} ${max} step="${esc(step)}"></label>`);
 }
 
 function renderAdvancedGrid(container, m, prefix) {
@@ -2081,8 +2206,8 @@ function buildEmotionSliders() {
   t("emotion.labels").forEach((label, i) => {
     const row = document.createElement("div");
     row.className = "slider-row";
-    row.innerHTML = `<span class="slider-label">${label}</span>
-      <input type="range" min="0" max="1" step="0.05" value="0" data-idx="${i}">
+    row.innerHTML = `<span class="slider-label">${esc(label)}</span>
+      <input type="range" min="0" max="1" step="0.05" value="0" data-idx="${i}" aria-label="${esc(label)}">
       <span class="slider-val" id="emotion-val-${i}">0.00</span>`;
     container.appendChild(row);
   });
@@ -2152,7 +2277,9 @@ async function loadHistory() {
     sidebarGroups = [];
     const list = $("history-list");
     list.innerHTML = "";
-    list.appendChild(el(`<div class="hint history-empty">${t("history.listFailed") + t("common.colon") + e.message}</div>`));
+    const hint = el(`<div class="hint history-empty"></div>`);
+    hint.textContent = t("history.listFailed") + t("common.colon") + e.message;
+    list.appendChild(hint);
     return;
   }
   // 同上：响应晚到时当前模型可能已不是 modelId，过期数据不得渲染
@@ -2484,7 +2611,8 @@ function toggleGroupMenu(anchor, item) {
 document.addEventListener("mousedown", (e) => {
   if (groupMenuAnchor && !e.target.closest("#group-menu") && !e.target.closest(".group-move-btn")) closeGroupMenu();
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeGroupMenu(); closeHistoryPanel(); if (window.closeVoicesPanel) window.closeVoicesPanel(); } });
+/* Esc 关闭分组菜单；弹窗本身的关闭统一由顶层 Escape 处理器负责（只关最上层） */
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeGroupMenu(); });
 document.addEventListener("scroll", closeGroupMenu, true);
 window.addEventListener("resize", closeGroupMenu);
 
@@ -2934,6 +3062,8 @@ function renderSepPanel(m) {
 /* SEP 结果渲染（任务完成后由 renderTaskResult 调用） */
 function renderSepResult(json) {
   const result = $("sep-result");
+  // 重渲染前先回收上一轮的 objectURL，避免重复行与内存泄漏
+  clearResult(result);
   if (json.named_audio_outputs && json.named_audio_outputs.length > 0) {
     for (const track of json.named_audio_outputs) {
       result.appendChild(makeTrackRow(track.id, track.audio));
@@ -3140,6 +3270,8 @@ $("other-submit").onclick = async () => {
 /* OTHER 结果渲染（任务完成后由 renderTaskResult 调用） */
 function renderOtherResult(json) {
   const out = $("other-result");
+  // 同上：先清空并回收 objectURL，避免「载入」重复追加
+  clearResult(out);
   if (json.named_audio_outputs && json.named_audio_outputs.length > 0) {
     for (const track of json.named_audio_outputs) {
       out.appendChild(makeTrackRow(track.id, track.audio));
@@ -3187,8 +3319,23 @@ loadProfiles();
 refreshInstances();
 refreshEvents();
 refreshDownloads();
-setInterval(() => {
+
+/* 全局轮询：标签页隐藏时停止，重新可见时立即刷新并恢复，省电省流量 */
+let pollTimer = null;
+function runPoll() {
   refreshInstances();
   refreshEvents();
   refreshDownloads();
-}, 2000);
+}
+function startPolling() {
+  if (!pollTimer) pollTimer = setInterval(runPoll, 2000);
+}
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+startPolling();
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { stopPolling(); return; }
+  runPoll();
+  startPolling();
+});

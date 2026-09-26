@@ -106,6 +106,8 @@ window.I18N = (() => {
     "common.elapsedSec": "{s} 秒",
     "common.doneElapsed": "{verb}完成，耗时 {t}",
     "common.failedElapsed": "{verb}失败（耗时 {t}）：{msg}",
+    "common.loadFailed": "加载失败",
+    "common.retry": "重试",
     /* ---------- TTS 面板 ---------- */
     "tts.title": "语音合成",
     "tts.textLabel": "合成文本",
@@ -419,6 +421,7 @@ window.I18N = (() => {
     "picker.play": "播放",
     "picker.pause": "暂停",
     "picker.volume": "音量",
+    "picker.waveform": "音频波形，可拖选裁剪区间",
     "picker.trimApply": "应用裁剪",
     "picker.trimClear": "清除选区",
     "picker.trimHint": "在波形上拖动可选择裁剪区间",
@@ -528,7 +531,38 @@ window.I18N = (() => {
     "err.DOWNLOAD_NOT_FOUND": "下载任务不存在: {id}",
     "err.DOWNLOAD_STATE": "任务当前状态不允许该操作: {status}",
     "err.DOWNLOAD_EXISTS": "该目录已有进行中的下载任务: {targetDir}",
-    "err.PACKAGE_UNKNOWN": "下载包不存在: {packageId}"
+    "err.PACKAGE_UNKNOWN": "下载包不存在: {packageId}",
+    /* ---------- 补齐：任务 / 历史 / 分组 / 文件 / 音色 / 可执行 / 下载 ---------- */
+    "err.VOICE_NAME_EXISTS": "音色名称已存在（名称需唯一）",
+    "err.OPTIONS_NOT_OBJECT": "高级参数必须为 {键: 值} 对象",
+    "err.OPTIONS_INVALID": "高级参数的键不能为空、值必须为标量",
+    "err.GROUP_NAME_REQUIRED": "分组名称不能为空",
+    "err.GROUP_NAME_TOO_LONG": "分组名称不能超过 {max} 字",
+    "err.GROUP_EXISTS": "分组已存在: {name}",
+    "err.GROUP_NOT_FOUND": "分组不存在: {groupId}",
+    "err.GROUP_CREATE_FAILED": "创建分组失败",
+    "err.GROUP_RENAME_FAILED": "重命名分组失败",
+    "err.GROUP_SET_FAILED": "移动记录分组失败",
+    "err.GROUP_SAVE_FAILED": "分组保存失败",
+    "err.MODEL_ID_INVALID": "模型 ID 非法: {modelId}",
+    "err.TASK_NOT_FOUND": "任务不存在: {id}",
+    "err.RESULT_NOT_FOUND": "任务结果不存在: {id}",
+    "err.RESULT_IO": "读取任务结果失败",
+    "err.HISTORY_NOT_FOUND": "历史记录不存在",
+    "err.HISTORY_IO": "历史目录不可用",
+    "err.FS_LIST_FAILED": "读取目录失败",
+    "err.FS_MKDIR_FAILED": "创建文件夹失败",
+    "err.UPLOAD_FAILED": "上传失败",
+    "err.VOICE_SAVE_FAILED": "保存音色失败",
+    "err.VOICE_UPDATE_FAILED": "更新音色失败",
+    "err.EXEC_ADD_FAILED": "添加可执行文件失败",
+    "err.EXEC_UPDATE_FAILED": "更新可执行文件失败",
+    "err.DEVICE_LIST_FAILED": "设备探测失败",
+    "err.DOWNLOAD_FAILED": "下载失败: {msg}",
+    "err.FORWARD_FAILED": "转发请求失败",
+    "err.WEIGHTS_NOT_FOUND": "权重路径不存在: {path}",
+    "err.INSTANCE_REQUIRED": "缺少 instanceId",
+    "err.PROBE_FAILED": "音频探测失败"
   };
 
   const en = {
@@ -631,6 +665,8 @@ window.I18N = (() => {
     "common.elapsedSec": "{s}s",
     "common.doneElapsed": "{verb} completed in {t}",
     "common.failedElapsed": "{verb} failed (after {t}): {msg}",
+    "common.loadFailed": "Failed to load",
+    "common.retry": "Retry",
     /* ---------- TTS panel ---------- */
     "tts.title": "Text to Speech",
     "tts.textLabel": "Text to synthesize",
@@ -944,6 +980,7 @@ window.I18N = (() => {
     "picker.play": "Play",
     "picker.pause": "Pause",
     "picker.volume": "Volume",
+    "picker.waveform": "Audio waveform; drag to select a trim range",
     "picker.trimApply": "Apply trim",
     "picker.trimClear": "Clear selection",
     "picker.trimHint": "Drag on the waveform to select a trim range",
@@ -1053,7 +1090,38 @@ window.I18N = (() => {
     "err.DOWNLOAD_NOT_FOUND": "Download task not found: {id}",
     "err.DOWNLOAD_STATE": "Operation not allowed in current task state: {status}",
     "err.DOWNLOAD_EXISTS": "An active download task already exists for this directory: {targetDir}",
-    "err.PACKAGE_UNKNOWN": "Download package not found: {packageId}"
+    "err.PACKAGE_UNKNOWN": "Download package not found: {packageId}",
+    /* ---------- added: tasks / history / groups / files / voices / executables / downloads ---------- */
+    "err.VOICE_NAME_EXISTS": "A voice with this name already exists (names must be unique)",
+    "err.OPTIONS_NOT_OBJECT": "Advanced options must be a {key: value} object",
+    "err.OPTIONS_INVALID": "Advanced option keys must not be empty and values must be scalars",
+    "err.GROUP_NAME_REQUIRED": "Group name must not be empty",
+    "err.GROUP_NAME_TOO_LONG": "Group name must not exceed {max} characters",
+    "err.GROUP_EXISTS": "Group already exists: {name}",
+    "err.GROUP_NOT_FOUND": "Group not found: {groupId}",
+    "err.GROUP_CREATE_FAILED": "Failed to create group",
+    "err.GROUP_RENAME_FAILED": "Failed to rename group",
+    "err.GROUP_SET_FAILED": "Failed to move record to group",
+    "err.GROUP_SAVE_FAILED": "Failed to save groups",
+    "err.MODEL_ID_INVALID": "Invalid model ID: {modelId}",
+    "err.TASK_NOT_FOUND": "Task not found: {id}",
+    "err.RESULT_NOT_FOUND": "Task result not found: {id}",
+    "err.RESULT_IO": "Failed to read task result",
+    "err.HISTORY_NOT_FOUND": "History record not found",
+    "err.HISTORY_IO": "History directory is unavailable",
+    "err.FS_LIST_FAILED": "Failed to read directory",
+    "err.FS_MKDIR_FAILED": "Failed to create folder",
+    "err.UPLOAD_FAILED": "Upload failed",
+    "err.VOICE_SAVE_FAILED": "Failed to save voice",
+    "err.VOICE_UPDATE_FAILED": "Failed to update voice",
+    "err.EXEC_ADD_FAILED": "Failed to add executable",
+    "err.EXEC_UPDATE_FAILED": "Failed to update executable",
+    "err.DEVICE_LIST_FAILED": "Device detection failed",
+    "err.DOWNLOAD_FAILED": "Download failed: {msg}",
+    "err.FORWARD_FAILED": "Failed to forward request",
+    "err.WEIGHTS_NOT_FOUND": "Weights path not found: {path}",
+    "err.INSTANCE_REQUIRED": "instanceId is required",
+    "err.PROBE_FAILED": "Audio probe failed"
   };
 
   const dicts = { zh, en };
@@ -1088,6 +1156,7 @@ window.I18N = (() => {
     scope.querySelectorAll("[data-i18n]").forEach(n => { n.textContent = t(n.dataset.i18n); });
     scope.querySelectorAll("[data-i18n-placeholder]").forEach(n => { n.placeholder = t(n.dataset.i18nPlaceholder); });
     scope.querySelectorAll("[data-i18n-title]").forEach(n => { n.title = t(n.dataset.i18nTitle); });
+    scope.querySelectorAll("[data-i18n-aria-label]").forEach(n => { n.setAttribute("aria-label", t(n.dataset.i18nAriaLabel)); });
   }
 
   function onChange(cb) {
