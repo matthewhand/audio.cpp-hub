@@ -8,12 +8,11 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 )
 
-var safeTaskID = regexp.MustCompile(`^[a-zA-Z0-9-]{1,32}$`)
+// ID/路径校验统一走 audio.go 的 safeID / safeKey（见该处允许表说明）。
 
 // apiRoute 一条 /api/* 路由：HTTP 方法 + 路径模板 + handler。
 type apiRoute struct {
@@ -602,7 +601,7 @@ func (h *Hub) handleTaskList(w http.ResponseWriter, r *http.Request) {
 
 func (h *Hub) handleTaskGet(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if !safeTaskID.MatchString(id) {
+	if !safeID(id) {
 		errJSON(w, http.StatusNotFound, "TASK_NOT_FOUND", map[string]any{"id": id}, "任务不存在: "+id)
 		return
 	}
@@ -617,7 +616,7 @@ func (h *Hub) handleTaskGet(w http.ResponseWriter, r *http.Request) {
 // handleTaskResult 非 TTS 结果文件流式回写（TTS 结果走 /api/history/.../audio）。
 func (h *Hub) handleTaskResult(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if !safeTaskID.MatchString(id) {
+	if !safeID(id) {
 		errJSON(w, http.StatusNotFound, "TASK_NOT_FOUND", map[string]any{"id": id}, "任务不存在: "+id)
 		return
 	}
@@ -639,6 +638,10 @@ func (h *Hub) handleTaskResult(w http.ResponseWriter, r *http.Request) {
 
 func (h *Hub) handleTaskDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	if !safeID(id) {
+		errJSON(w, http.StatusNotFound, "TASK_NOT_FOUND", map[string]any{"id": id}, "任务不存在: "+id)
+		return
+	}
 	if h.tasks.Cancel(id) {
 		okJSON(w, map[string]any{"id": id})
 	} else {
@@ -649,7 +652,7 @@ func (h *Hub) handleTaskDelete(w http.ResponseWriter, r *http.Request) {
 // ---------- TTS 操作历史 ----------
 
 func (h *Hub) historyKeysOK(w http.ResponseWriter, modelID, taskID string) bool {
-	if !historySafeKey.MatchString(modelID) || (taskID != "" && !historySafeKey.MatchString(taskID)) {
+	if !safeKey(modelID) || (taskID != "" && !safeKey(taskID)) {
 		errJSON(w, http.StatusNotFound, "HISTORY_NOT_FOUND", nil, "历史记录不存在")
 		return false
 	}

@@ -155,6 +155,9 @@ func (m *DownloadManager) markFileCompleted(t *DownloadTask, f *dlFileEntry) {
 }
 
 // ------------------------------------------------------------------ 校验
+//
+// 下载路径校验属于同一套 ID/路径允许表方案中的“路径”分支（见 audio.go 顶部说明）：
+// 目标目录名允许点号，文件相对路径逐段拒绝 .. / 绝对路径 / 盘符，不复用 safeID。
 
 var dlTargetDirRe = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,64}$`)
 

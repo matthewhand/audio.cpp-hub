@@ -17,7 +17,28 @@ const maxUploadBytes = 50 * 1024 * 1024
 
 var uploadDir = filepath.Join("data", "uploads")
 
-var uploadSafeID = regexp.MustCompile(`^[a-zA-Z0-9-]{1,32}$`)
+// ------------------------------------------------------------------ ID 允许表
+//
+// 所有会被拼进文件系统路径的外部/半可信标识符，统一经下面两个 helper 校验，
+// 避免每个 handler 各写一条正则导致放行范围漂移：
+//
+//	safeID  —— 短不透明 ID 的文件名片段（任务 id、上传件 id、音色 vid）。
+//	           约定为 8 位随机 hex / UUID-8，故只放行 [a-zA-Z0-9-]，长度 1..32。
+//	safeKey —— 历史索引键（modelId / taskId / groupId）。modelID 取自 models.json，
+//	           允许下划线，故放宽到 [a-zA-Z0-9_-]，长度 1..64。
+//
+// 下载目标目录名与文件相对路径不是 ID，分别走 download.go 的
+// validateDlTargetDir（另允许点号）与 validateDlFilePath（逐段拒绝 .. / 绝对路径）。
+var (
+	safeIDRe  = regexp.MustCompile(`^[a-zA-Z0-9-]{1,32}$`)
+	safeKeyRe = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+)
+
+// safeID 校验短 ID 是否可安全用作文件名/目录名片段（[a-zA-Z0-9-]，1..32 位）。
+func safeID(id string) bool { return safeIDRe.MatchString(id) }
+
+// safeKey 校验历史索引键是否可安全用作目录/文件名片段（[a-zA-Z0-9_-]，1..64 位）。
+func safeKey(s string) bool { return safeKeyRe.MatchString(s) }
 
 // wavFullInfo WAV 头解析结果。
 type wavFullInfo struct {
@@ -64,7 +85,7 @@ func probeWAV(pathStr string) (map[string]any, error) {
 
 // uploadPath 定位上传文件；id 不合法或文件不存在返回空串（防路径穿越）。
 func uploadPath(id string) string {
-	if !uploadSafeID.MatchString(id) {
+	if !safeID(id) {
 		return ""
 	}
 	path := filepath.Join(uploadDir, id+".wav")
