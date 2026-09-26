@@ -43,7 +43,7 @@ func (v *VoiceLibrary) writeIndex(list []map[string]any) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(v.indexFile, data, 0644)
+	return writeFileAtomic(v.indexFile, data)
 }
 
 // List 全部音色。

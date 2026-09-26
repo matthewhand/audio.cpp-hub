@@ -601,9 +601,9 @@ func (m *DownloadManager) Resume(id string) error {
 // Delete 取消并移除任务；purge=true 时删除残留的 .part（不动已完成改名的权重文件）。
 func (m *DownloadManager) Delete(id string, purge bool) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	t, err := m.requireTaskLocked(id)
 	if err != nil {
+		m.mu.Unlock()
 		return err
 	}
 	atomic.StoreInt32(&t.cancelRequested, 1)
@@ -618,12 +618,20 @@ func (m *DownloadManager) Delete(id string, purge bool) error {
 			break
 		}
 	}
+	// 在锁内只收集待删路径；带重试与 sleep 的实际磁盘删除移到锁外，
+	// 避免 deleteWithRetry 的退避等待阻塞 List/Get。
+	var parts []string
 	if purge && t.Status != dlStatusDone {
 		for _, f := range t.Files {
-			m.deleteWithRetry(m.finalPath(t.TargetDir, f.Path) + ".part")
+			parts = append(parts, m.finalPath(t.TargetDir, f.Path)+".part")
 		}
 	}
 	dir := filepath.Join(m.stateDir, id)
+	m.mu.Unlock()
+
+	for _, p := range parts {
+		m.deleteWithRetry(p)
+	}
 	m.deleteWithRetry(filepath.Join(dir, "task.json"))
 	m.deleteWithRetry(filepath.Join(dir, "task.json.tmp"))
 	m.deleteWithRetry(dir)
@@ -1424,6 +1432,32 @@ func (m *DownloadManager) loadAll() {
 		var t DownloadTask
 		if err := json.Unmarshal(data, &t); err != nil || t.ID == "" || t.TargetDir == "" {
 			log.Printf("下载任务状态损坏，忽略 %s", taskFile)
+			continue
+		}
+		// 回放持久化状态前重新校验（data/ 可能被本地篡改）：ID 必须与目录名一致且可安全
+		// 用作路径片段，targetDir/每个文件相对路径必须通过下载路径校验，否则拒绝恢复，
+		// 避免越权写删 models/ 之外的文件。
+		if t.ID != d.Name() || !safeID(t.ID) {
+			log.Printf("下载任务 ID 非法，忽略 %s", taskFile)
+			continue
+		}
+		if clean, err := validateDlTargetDir(t.TargetDir); err != nil || clean != t.TargetDir {
+			log.Printf("下载任务目标目录非法，忽略 %s", taskFile)
+			continue
+		}
+		badPath := false
+		for _, f := range t.Files {
+			if f == nil {
+				badPath = true
+				break
+			}
+			if clean, err := validateDlFilePath(f.Path); err != nil || clean != f.Path {
+				badPath = true
+				break
+			}
+		}
+		if badPath {
+			log.Printf("下载任务文件路径非法，忽略 %s", taskFile)
 			continue
 		}
 		t.speedSampleBytes = -1

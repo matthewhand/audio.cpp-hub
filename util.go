@@ -101,10 +101,14 @@ func readBodyMap(w http.ResponseWriter, r *http.Request) map[string]any {
 	return body
 }
 
-// newID 与 Java 版一致：UUID 前 8 位（这里用随机 4 字节 hex）。
+// newID 生成 16 字节（128 位）加密随机 hex ID，作为任务/历史/下载/音色等文件名片段，
+// 熵足够高、实际不会碰撞（不再沿用 Java 版 4 字节 UUID-8 前缀）。
 func newID() string {
-	b := make([]byte, 4)
-	rand.Read(b)
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand 失败意味着系统熵源不可用：继续运行会生成可预测 ID，直接终止。
+		panic("生成随机 ID 失败: " + err.Error())
+	}
 	return hex.EncodeToString(b)
 }
 
