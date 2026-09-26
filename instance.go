@@ -73,16 +73,13 @@ var instanceNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`
 
 const healthTimeoutSeconds = 120
 
-// logTailBytes readLogTail 从日志末尾读取的最大字节数。
-const logTailBytes = 64 << 10
-
 // InstanceManager 子进程生命周期、端口分配、健康轮询、run/<id> 清理。
 type InstanceManager struct {
 	mu       sync.Mutex
 	portBase int
 	hubPort  int // hub 自身监听端口，实例不得占用
 	items    map[string]*Instance
-	events   []Event // 新到旧，保留 20 条
+	events   []Event // 新到旧，保留 instanceEventCap 条
 
 	// startMu 串行化 Start，使“校验服务名 + 预占端口 + 登记占位实例”成为原子操作。
 	startMu sync.Mutex
@@ -172,8 +169,8 @@ func (m *InstanceManager) addEvent(level, message string) {
 		Level:   level,
 		Message: message,
 	}}, m.events...)
-	if len(m.events) > 20 {
-		m.events = m.events[:20]
+	if len(m.events) > instanceEventCap {
+		m.events = m.events[:instanceEventCap]
 	}
 }
 
@@ -451,7 +448,7 @@ func (m *InstanceManager) awaitReady(inst *Instance) {
 	cleanupRunDir(inst.ID)
 }
 
-// readLogTail 读实例日志末尾 10 行，用于错误诊断。
+// readLogTail 读实例日志末尾 logTailLines 行，用于错误诊断。
 // 只从文件末尾读取至多 logTailBytes 字节，避免日志无界增长时把整个文件读进内存。
 func readLogTail(id string) string {
 	f, err := os.Open(filepath.Join("run", id, "server.log"))
@@ -483,8 +480,8 @@ func readLogTail(id string) string {
 		}
 	}
 	lines := strings.Split(strings.TrimRight(string(data), "\r\n"), "\n")
-	if len(lines) > 10 {
-		lines = lines[len(lines)-10:]
+	if len(lines) > logTailLines {
+		lines = lines[len(lines)-logTailLines:]
 	}
 	return summarize(strings.Join(lines, " | "))
 }

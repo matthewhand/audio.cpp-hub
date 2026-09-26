@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/matthewhand/audio.cpp-hub/internal/idvalidate"
 	"github.com/matthewhand/audio.cpp-hub/internal/wav"
 )
 
@@ -50,7 +51,7 @@ func (m *HistoryManager) replay() {
 		return
 	}
 	for _, d := range dirs {
-		if !d.IsDir() || !safeKey(d.Name()) {
+		if !d.IsDir() || !idvalidate.SafeKey(d.Name()) {
 			continue
 		}
 		modelID := d.Name()
@@ -91,7 +92,7 @@ func (m *HistoryManager) replay() {
 func (m *HistoryManager) RecordTTS(inst *Instance, request map[string]any, taskID string,
 	result map[string]any, errMsg string) {
 	modelID := inst.ModelID
-	if !safeKey(modelID) || !safeKey(taskID) {
+	if !idvalidate.SafeKey(modelID) || !idvalidate.SafeKey(taskID) {
 		log.Printf("历史记录的 modelId/taskId 非法，跳过: %s/%s", modelID, taskID)
 		return
 	}
@@ -348,7 +349,7 @@ func (m *HistoryManager) findLocked(modelID, taskID string) map[string]any {
 
 // AudioPath 结果音频路径；key 非法、记录或文件不存在返回空串。
 func (m *HistoryManager) AudioPath(modelID, taskID string) string {
-	if !safeKey(modelID) || !safeKey(taskID) {
+	if !idvalidate.SafeKey(modelID) || !idvalidate.SafeKey(taskID) {
 		return ""
 	}
 	m.mu.Lock()
@@ -366,7 +367,7 @@ func (m *HistoryManager) AudioPath(modelID, taskID string) string {
 
 // RefAudioPath 参考音频快照文件路径（<taskId>.<name>.wav）；key/name 非法或文件不存在返回空串。
 func (m *HistoryManager) RefAudioPath(modelID, taskID, name string) string {
-	if !safeKey(modelID) || !safeKey(taskID) ||
+	if !idvalidate.SafeKey(modelID) || !idvalidate.SafeKey(taskID) ||
 		!historyRefName.MatchString(name) {
 		return ""
 	}
@@ -387,7 +388,7 @@ func (m *HistoryManager) RefAudioPath(modelID, taskID, name string) string {
 func (m *HistoryManager) Delete(modelID, taskID string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !safeKey(taskID) {
+	if !idvalidate.SafeKey(taskID) {
 		return false
 	}
 	records := m.index[modelID]
@@ -408,7 +409,7 @@ func (m *HistoryManager) Clear(modelID string) {
 	defer m.mu.Unlock()
 	records := m.index[modelID]
 	delete(m.index, modelID)
-	if !safeKey(modelID) {
+	if !idvalidate.SafeKey(modelID) {
 		return
 	}
 	for _, rec := range records {
@@ -443,7 +444,7 @@ func (m *HistoryManager) rewriteLocked(modelID string) {
 func (m *HistoryManager) ListGroups(modelID string) []map[string]any {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !safeKey(modelID) {
+	if !idvalidate.SafeKey(modelID) {
 		return []map[string]any{}
 	}
 	return m.readGroupsLocked(modelID)
@@ -455,7 +456,7 @@ func (m *HistoryManager) CreateGroup(modelID, name string) (map[string]any, erro
 	if err != nil {
 		return nil, err
 	}
-	if !safeKey(modelID) {
+	if !idvalidate.SafeKey(modelID) {
 		return nil, &UserError{Code: "MODEL_ID_INVALID",
 			Params: map[string]any{"modelId": modelID}, Msg: "模型 ID 非法: " + modelID}
 	}
@@ -486,7 +487,7 @@ func (m *HistoryManager) RenameGroup(modelID, groupID, name string) (bool, error
 	if err != nil {
 		return false, err
 	}
-	if !safeKey(modelID) || !safeKey(groupID) {
+	if !idvalidate.SafeKey(modelID) || !idvalidate.SafeKey(groupID) {
 		return false, nil
 	}
 	m.mu.Lock()
@@ -512,7 +513,7 @@ func (m *HistoryManager) RenameGroup(modelID, groupID, name string) (bool, error
 
 // DeleteGroup 删除分组：先把该模型所有记录的 groupId 字段移除（回未分组），再删分组条目。
 func (m *HistoryManager) DeleteGroup(modelID, groupID string) bool {
-	if !safeKey(modelID) || !safeKey(groupID) {
+	if !idvalidate.SafeKey(modelID) || !idvalidate.SafeKey(groupID) {
 		return false
 	}
 	m.mu.Lock()
@@ -546,7 +547,7 @@ func (m *HistoryManager) DeleteGroup(modelID, groupID string) bool {
 // SetRecordGroup 设置记录所属分组：groupId 为空表示移回未分组；非空时校验组存在。
 // 记录不存在返回 (false, nil)。
 func (m *HistoryManager) SetRecordGroup(modelID, taskID, groupID string) (bool, error) {
-	if !safeKey(modelID) || !safeKey(taskID) {
+	if !idvalidate.SafeKey(modelID) || !idvalidate.SafeKey(taskID) {
 		return false, nil
 	}
 	m.mu.Lock()
@@ -558,7 +559,7 @@ func (m *HistoryManager) SetRecordGroup(modelID, taskID, groupID string) (bool, 
 	if groupID == "" {
 		delete(rec, "groupId")
 	} else {
-		if !safeKey(groupID) || !m.groupExistsLocked(modelID, groupID) {
+		if !idvalidate.SafeKey(groupID) || !m.groupExistsLocked(modelID, groupID) {
 			return false, &UserError{Code: "GROUP_NOT_FOUND",
 				Params: map[string]any{"groupId": groupID}, Msg: "分组不存在: " + groupID}
 		}

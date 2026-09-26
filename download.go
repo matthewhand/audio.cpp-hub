@@ -12,12 +12,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/matthewhand/audio.cpp-hub/internal/idvalidate"
 )
 
 // 下载管理器：多线程分段下载 + 断点续传 + 进度统计（移植自 Java 版 DownloadManager）。
@@ -31,8 +32,7 @@ import (
 
 const (
 	dlChunkSize        = 64 * 1024
-	dlSegmentMin       = 32 * 1024 * 1024 // 单分段最小字节数：小于该值不分段
-	dlMaxRetry         = 6                // 分段失败重试次数，退避 1s 翻倍封顶 15s
+	dlMaxRetry         = 6 // 分段失败重试次数，退避 1s 翻倍封顶 15s
 	dlPersistInterval  = time.Second
 	dlShutdownWaitSecs = 6
 	dlMaxFilesPerTask  = 512 // 单任务文件数上限，防止探测/分段资源被撑爆
@@ -155,41 +155,7 @@ func (m *DownloadManager) markFileCompleted(t *DownloadTask, f *dlFileEntry) {
 }
 
 // ------------------------------------------------------------------ 校验
-//
-// 下载路径校验属于同一套 ID/路径允许表方案中的“路径”分支（见 audio.go 顶部说明）：
-// 目标目录名允许点号，文件相对路径逐段拒绝 .. / 绝对路径 / 盘符，不复用 safeID。
-
-var dlTargetDirRe = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,64}$`)
-
-// validateDlTargetDir 校验目标目录名；纯 "."/".." 这类无字母数字的名字一并拒绝。
-func validateDlTargetDir(targetDir string) (string, error) {
-	ok := dlTargetDirRe.MatchString(targetDir) &&
-		strings.ContainsAny(targetDir, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-	if !ok {
-		return "", &UserError{Code: "INVALID_TARGET_DIR",
-			Params: map[string]any{"targetDir": targetDir}, Msg: "非法目标目录名: " + targetDir}
-	}
-	return targetDir, nil
-}
-
-// validateDlFilePath 校验并规范化文件相对路径：防路径穿越，统一为 / 分隔。
-func validateDlFilePath(raw string) (string, error) {
-	p := strings.ReplaceAll(strings.TrimSpace(raw), "\\", "/")
-	ok := p != "" && len(p) <= 256 && !strings.HasPrefix(p, "/") && !strings.Contains(p, ":")
-	if ok {
-		for _, seg := range strings.Split(p, "/") {
-			if seg == "" || seg == "." || seg == ".." {
-				ok = false
-				break
-			}
-		}
-	}
-	if !ok {
-		return "", &UserError{Code: "INVALID_FILE_PATH",
-			Params: map[string]any{"path": raw}, Msg: "非法文件路径: " + raw}
-	}
-	return p, nil
-}
+// 下载路径校验统一走 internal/idvalidate 的 TargetDir / FilePath（见该包允许表说明）。
 
 // validateDlURL 校验下载地址（仅 http/https）。
 func validateDlURL(raw string) (string, error) {
@@ -447,8 +413,8 @@ func (m *DownloadManager) guardDlURL(raw string) (string, error) {
 // 落盘 → 启动。用户可预期错误返回 *UserError。modelID/packageID/source 仅作来源记录（可空）。
 func (m *DownloadManager) Create(targetDir string, files []dlFileRequest, token string,
 	overwrite bool, modelID, packageID, source string) (map[string]any, error) {
-	if _, err := validateDlTargetDir(targetDir); err != nil {
-		return nil, err
+	if _, err := idvalidate.TargetDir(targetDir); err != nil {
+		return nil, toUserError(err)
 	}
 	if len(files) == 0 {
 		return nil, &UserError{Code: "FILES_REQUIRED", Params: map[string]any{}, Msg: "files 不能为空"}
@@ -484,9 +450,9 @@ func (m *DownloadManager) Create(targetDir string, files []dlFileRequest, token 
 				Params: map[string]any{"url": u},
 				Msg:    "下载源不在允许列表内（仅限 hfEndpoint / modelscope / 内置镜像）: " + u}
 		}
-		p, err := validateDlFilePath(fr.Path)
+		p, err := idvalidate.FilePath(fr.Path)
 		if err != nil {
-			return nil, err
+			return nil, toUserError(err)
 		}
 		if seen[p] {
 			return nil, &UserError{Code: "DUPLICATE_FILE",
@@ -1437,11 +1403,11 @@ func (m *DownloadManager) loadAll() {
 		// 回放持久化状态前重新校验（data/ 可能被本地篡改）：ID 必须与目录名一致且可安全
 		// 用作路径片段，targetDir/每个文件相对路径必须通过下载路径校验，否则拒绝恢复，
 		// 避免越权写删 models/ 之外的文件。
-		if t.ID != d.Name() || !safeID(t.ID) {
+		if t.ID != d.Name() || !idvalidate.SafeID(t.ID) {
 			log.Printf("下载任务 ID 非法，忽略 %s", taskFile)
 			continue
 		}
-		if clean, err := validateDlTargetDir(t.TargetDir); err != nil || clean != t.TargetDir {
+		if clean, err := idvalidate.TargetDir(t.TargetDir); err != nil || clean != t.TargetDir {
 			log.Printf("下载任务目标目录非法，忽略 %s", taskFile)
 			continue
 		}
@@ -1451,7 +1417,7 @@ func (m *DownloadManager) loadAll() {
 				badPath = true
 				break
 			}
-			if clean, err := validateDlFilePath(f.Path); err != nil || clean != f.Path {
+			if clean, err := idvalidate.FilePath(f.Path); err != nil || clean != f.Path {
 				badPath = true
 				break
 			}

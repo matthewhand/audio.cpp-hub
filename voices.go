@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/matthewhand/audio.cpp-hub/internal/idvalidate"
 	"github.com/matthewhand/audio.cpp-hub/internal/wav"
 )
 
@@ -146,7 +147,7 @@ func (v *VoiceLibrary) Save(name, text, uploadID, sourcePath string) (map[string
 func (v *VoiceLibrary) Update(vid string, name, text *string) (bool, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if !safeID(vid) {
+	if !idvalidate.SafeID(vid) {
 		return false, nil
 	}
 	if name != nil && strings.TrimSpace(*name) == "" {
@@ -186,7 +187,7 @@ func (v *VoiceLibrary) Update(vid string, name, text *string) (bool, error) {
 func (v *VoiceLibrary) Delete(vid string) bool {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if !safeID(vid) {
+	if !idvalidate.SafeID(vid) {
 		return false
 	}
 	index := v.readIndex()
@@ -205,7 +206,7 @@ func (v *VoiceLibrary) Delete(vid string) bool {
 func (v *VoiceLibrary) AudioPath(vid string) string {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if !safeID(vid) {
+	if !idvalidate.SafeID(vid) {
 		return ""
 	}
 	for _, e := range v.readIndex() {
