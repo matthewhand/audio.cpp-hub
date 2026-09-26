@@ -89,7 +89,7 @@ func main() {
 	cleanupV1ProxyCache()
 	hub := &Hub{
 		cfg:       cfg,
-		instances: NewInstanceManager(cfg.InstancePortBase),
+		instances: NewInstanceManager(cfg.InstancePortBase, cfg.HttpPort),
 		execs:     NewExecutableRegistry("executables.json"),
 		profiles:  NewProfileRegistry("data/profiles.json"),
 		history:   NewHistoryManager(),
