@@ -127,7 +127,7 @@ func TestReservePortValidation(t *testing.T) {
 	for _, tc := range cases {
 		port := tc.port
 		_, err := m.reservePort(&port)
-		if code := userErrCode(err); code != tc.code {
+		if code := instErrCode(err); code != tc.code {
 			t.Fatalf("端口 %d: 期望 %s，实际 %q (%v)", tc.port, tc.code, code, err)
 		}
 	}
@@ -137,7 +137,7 @@ func TestReservePortValidation(t *testing.T) {
 		t.Fatalf("reserve: %v", err)
 	}
 	port := 45055
-	if _, err := m.reservePort(&port); userErrCode(err) != "INSTANCE_PORT_IN_USE" {
+	if _, err := m.reservePort(&port); instErrCode(err) != "INSTANCE_PORT_IN_USE" {
 		t.Fatalf("已登记端口应判定占用，实际: %v", err)
 	}
 	auto, err := m.reservePort(nil)
@@ -165,7 +165,7 @@ func TestReserveNameAtomic(t *testing.T) {
 				Port:   46000 + i,
 				exited: make(chan int, 1),
 			}
-			codes[i] = userErrCode(m.reserve(inst))
+			codes[i] = instErrCode(m.reserve(inst))
 		}(i)
 	}
 	wg.Wait()
@@ -186,7 +186,7 @@ func TestReserveNameAtomic(t *testing.T) {
 	}
 }
 
-func userErrCode(err error) string {
+func instErrCode(err error) string {
 	if err == nil {
 		return ""
 	}
