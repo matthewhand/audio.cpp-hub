@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>seq-auth — 请求鉴权路径（无鉴权）</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">SEQUENCE · 安全模型</p>
+    <h1>请求鉴权路径 —— 无鉴权，设计如此</h1>
+    <p class="subtitle">不存在 token / session / 权限层：任意 LAN 客户端请求被直接接受并映射为可信操作。图为请求路径与明确的 [无鉴权] 决策，以及仅在代码层生效的补偿控制。</p>
+  </header>
+
+  <figure class="diagram">
+    <!-- a11y: <title> is the FIRST child of <svg>; IDs are prefixed with the file slug -->
+    <svg role="img" aria-labelledby="seq-auth-title seq-auth-desc" viewBox="0 0 1160 800">
+      <title id="seq-auth-title">请求鉴权路径序列图（无鉴权）</title>
+      <desc id="seq-auth-desc">LAN 客户端发出的任意 /api/* 请求由 Hub 直接接受并映射到受保护资源；alt 片段第一区为 [无鉴权 —— 设计如此] 直接返回 200，第二区为 [前置反向代理 + HTTPS] 时鉴权在代理层完成、Hub 行为不变。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+
+      <rect class="bg" width="1160" height="800"/>
+
+      <!-- lifelines -->
+      <line class="lifeline" x1="260" y1="152" x2="260" y2="640"/>
+      <line class="lifeline" x1="580" y1="152" x2="580" y2="640"/>
+      <line class="lifeline" x1="900" y1="152" x2="900" y2="640"/>
+
+      <!-- activation bars -->
+      <rect class="act" x="576" y="196" width="8" height="280"/>
+      <rect class="act" x="576" y="564" width="8" height="48"/>
+      <rect class="act" x="896" y="316" width="8" height="120"/>
+
+      <!-- alt fragment frame -->
+      <rect class="frame" x="248" y="352" width="664" height="268" rx="4"/>
+      <rect class="mask" x="248" y="352" width="40" height="16" rx="2"/>
+      <rect class="tag" x="248" y="352" width="40" height="16" rx="2"/>
+      <text class="alabel" x="268" y="364" text-anchor="middle">ALT</text>
+      <text class="alabel" x="260" y="384">[无鉴权 —— 设计如此]</text>
+      <text class="alabel" x="260" y="530">[else / 前置反向代理 + HTTPS]</text>
+
+      <!-- region divider -->
+      <line class="divider" x1="256" y1="504" x2="904" y2="504" stroke-dasharray="4,3"/>
+
+      <!-- arrows -->
+      <line class="data" x1="260" y1="200" x2="580" y2="200" marker-end="url(#arrow)"/>
+      <path class="data" d="M 580,240 H 644 Q 652,240 652,248 V 260 Q 652,268 644,268 H 580" marker-end="url(#arrow)"/>
+      <line class="data" x1="580" y1="320" x2="900" y2="320" marker-end="url(#arrow)"/>
+      <line class="data dash" x1="900" y1="428" x2="580" y2="428" marker-end="url(#arrow)"/>
+      <line class="data dash accent" x1="580" y1="468" x2="260" y2="468" marker-end="url(#arrow-accent)"/>
+      <line class="data" x1="260" y1="568" x2="580" y2="568" marker-end="url(#arrow)"/>
+      <line class="data dash" x1="580" y1="604" x2="260" y2="604" marker-end="url(#arrow)"/>
+
+      <!-- labels + masks -->
+      <rect class="mask" x="368" y="180" width="104" height="12" rx="2"/>
+      <text class="alabel" x="420" y="189" text-anchor="middle">任意 /api/* 写请求</text>
+      <rect class="mask" x="668" y="244" width="168" height="12" rx="2"/>
+      <text class="alabel" x="676" y="253">csrfProtect · Content-Type 校验</text>
+      <rect class="mask" x="668" y="300" width="144" height="12" rx="2"/>
+      <text class="alabel" x="740" y="309" text-anchor="middle">信任调用方 → 直接执行</text>
+      <rect class="mask" x="668" y="408" width="72" height="12" rx="2"/>
+      <text class="alabel" x="740" y="417" text-anchor="middle">执行结果</text>
+      <rect class="mask" x="352" y="448" width="128" height="12" rx="2"/>
+      <text class="alabel" x="420" y="457" text-anchor="middle">200 OK · 无凭证</text>
+      <rect class="mask" x="344" y="548" width="152" height="12" rx="2"/>
+      <text class="alabel" x="420" y="557" text-anchor="middle">鉴权在代理层（Hub 不感知）</text>
+      <rect class="mask" x="352" y="584" width="128" height="12" rx="2"/>
+      <text class="alabel" x="420" y="593" text-anchor="middle">Hub 行为不变</text>
+
+      <!-- actors -->
+      <rect class="mask" x="140" y="56" width="240" height="96" rx="6"/>
+      <rect class="n input" x="140" y="56" width="240" height="96" rx="6"/>
+      <rect class="tag" x="148" y="64" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="172" y="73" text-anchor="middle">CLIENT</text>
+      <text class="name" x="260" y="108" text-anchor="middle">LAN 客户端</text>
+      <text class="sub" x="260" y="128" text-anchor="middle">浏览器 / curl · 同网段</text>
+
+      <rect class="mask" x="460" y="56" width="240" height="96" rx="6"/>
+      <rect class="n" x="460" y="56" width="240" height="96" rx="6"/>
+      <rect class="tag" x="468" y="64" width="40" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="488" y="73" text-anchor="middle">SERVER</text>
+      <text class="name" x="580" y="108" text-anchor="middle">Hub（无鉴权）</text>
+      <text class="sub" x="580" y="128" text-anchor="middle">net/http · :18080</text>
+
+      <rect class="mask" x="780" y="56" width="240" height="96" rx="6"/>
+      <rect class="n focal" x="780" y="56" width="240" height="96" rx="6"/>
+      <rect class="tag" x="788" y="64" width="44" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="810" y="73" text-anchor="middle">TARGET</text>
+      <text class="name" x="900" y="108" text-anchor="middle">受保护资源</text>
+      <text class="sub" x="900" y="128" text-anchor="middle">fs / 实例 / 任务 · 无门禁</text>
+
+      <!-- annotations -->
+      <rect class="mask" x="40" y="652" width="896" height="14" rx="2"/>
+      <text class="alabel" x="48" y="663">补偿控制 · 子进程 host=127.0.0.1 · idvalidate 路径校验 · CSRF/Origin · Content-Type: application/json</text>
+      <rect class="mask" x="40" y="672" width="784" height="14" rx="2"/>
+      <text class="alabel" x="48" y="683">SECURITY.md · 无鉴权 / 无 TLS / 默认绑定所有网卡 —— 切勿把端口暴露到公网</text>
+
+      <!-- legend strip -->
+      <line class="divider" x1="40" y1="724" x2="1120" y2="724"/>
+      <text class="eyebrow-svg" x="40" y="744">LEGEND</text>
+      <rect class="n focal" x="200" y="734" width="16" height="12" rx="2"/>
+      <text class="sub" x="224" y="744">focal</text>
+      <rect class="n" x="340" y="734" width="16" height="12" rx="2"/>
+      <text class="sub" x="364" y="744">component</text>
+      <rect class="n input" x="520" y="734" width="16" height="12" rx="2"/>
+      <text class="sub" x="544" y="744">client</text>
+      <path class="data dash" d="M 680,740 H 712" marker-end="url(#arrow)"/>
+      <text class="sub" x="720" y="744">return</text>
+      <path class="data accent" d="M 850,740 H 882" marker-end="url(#arrow-accent)"/>
+      <text class="sub" x="890" y="744">headline</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">FINDING</p>
+      <h3><span class="dot ink"></span>没有认证 / 授权</h3>
+      <p>代码中不存在凭证解析、会话或权限判定；<code>csrfProtect</code> 只做同源校验，两请求头都缺失（curl）即放行。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">COMPENSATING</p>
+      <h3><span class="dot muted"></span>代码层补偿控制</h3>
+      <ul>
+        <li>实例子进程绑定 <code>host=127.0.0.1</code></li>
+        <li><code>idvalidate</code> 校验 ID / 路径穿越</li>
+        <li>CSRF（Origin / Sec-Fetch-Site）+ <code>Content-Type: application/json</code></li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE</p>
+      <h3><span class="dot soft"></span>依据</h3>
+      <ul><li>api.go · util.go · fs.go</li><li>instance.go</li><li>SECURITY.md · README.md</li></ul>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · diagram-design monochrome skin · edit the SVG above, keep 4px grid</footer>
+</main>
+</body>
+</html>

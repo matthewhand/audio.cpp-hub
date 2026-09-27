@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>实例与任务状态机 · audio.cpp-hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.err{background:var(--err)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .n.ok{stroke:var(--ok)}
+  .n.warn{stroke:var(--warn)}
+  .n.err{stroke:var(--err)}
+  .name.ok{fill:var(--ok)} .name.warn{fill:var(--warn)} .name.err{fill:var(--err)} .name.soft{fill:var(--soft)}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+  .dot-start{fill:var(--ink)}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">STATE MACHINES · instance.go / task.go</p>
+    <h1>实例与任务状态机</h1>
+    <p class="subtitle">hub 只编排外部 <code>audiocpp_server</code> 子进程：实例从 <code>STARTING</code> 经 1s 一次的健康轮询进入 <code>READY</code>，120s 未就绪即 <code>FAILED</code>；任务按实例串行排队，<code>RUNNING</code> 阶段取消只中断 hub 侧等待。</p>
+  </header>
+
+  <figure class="diagram">
+    <!-- a11y: <title> is the FIRST child of <svg>; IDs are prefixed with the file slug -->
+    <svg role="img" aria-labelledby="state-machines-title state-machines-desc" viewBox="0 0 1160 720">
+      <title id="state-machines-title">audio.cpp-hub 实例与任务状态机</title>
+      <desc id="state-machines-desc">两个状态机。实例：STARTING 经健康检查到 READY，READY 可被停止进入 STOPPED，或 120 秒超时进入 FAILED。任务：QUEUED 到 RUNNING，再分别以 DONE、FAILED、CANCELLED 结束；取消 RUNNING 只中断 hub 侧等待，引擎仍会跑完。依据 instance.go 与 task.go。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+
+      <rect class="bg" width="1160" height="720"/>
+
+      <!-- zones first (bg → zones → arrows → labels → nodes) -->
+      <rect class="zone" x="40" y="56" width="1080" height="240" rx="8"/>
+      <rect class="zone-mask" x="52" y="48" width="148" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="126" y="57" text-anchor="middle">INSTANCE · instance.go</text>
+      <rect class="zone" x="40" y="336" width="1080" height="240" rx="8"/>
+      <rect class="zone-mask" x="52" y="328" width="112" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="108" y="337" text-anchor="middle">TASK · task.go</text>
+
+      <!-- instance machine: entry dot + transitions (before boxes) -->
+      <circle class="dot-start" cx="80" cy="144" r="6"/>
+      <path class="data" d="M 88,144 H 132" marker-end="url(#arrow)"/>
+      <path class="data" d="M 300,144 H 412" marker-end="url(#arrow)"/>
+      <rect class="mask" x="334" y="126" width="64" height="12" rx="2"/>
+      <text class="alabel" x="366" y="135" text-anchor="middle">healthy</text>
+      <path class="data" d="M 580,144 H 692" marker-end="url(#arrow)"/>
+      <rect class="mask" x="592" y="126" width="88" height="12" rx="2"/>
+      <text class="alabel" x="636" y="135" text-anchor="middle">DELETE / stop</text>
+      <path class="data" d="M 220,172 V 224" marker-end="url(#arrow)"/>
+      <rect class="mask" x="228" y="190" width="76" height="12" rx="2"/>
+      <text class="alabel" x="234" y="199">120s timeout</text>
+
+      <!-- task machine: entry dot + transitions -->
+      <circle class="dot-start" cx="80" cy="420" r="6"/>
+      <path class="data" d="M 88,420 H 132" marker-end="url(#arrow)"/>
+      <path class="data" d="M 300,420 H 412" marker-end="url(#arrow)"/>
+      <rect class="mask" x="328" y="402" width="64" height="12" rx="2"/>
+      <text class="alabel" x="360" y="411" text-anchor="middle">schedule</text>
+      <path class="data accent" d="M 580,420 H 692" marker-end="url(#arrow-accent)"/>
+      <rect class="mask" x="592" y="402" width="88" height="12" rx="2"/>
+      <text class="alabel" x="636" y="411" text-anchor="middle">spool result</text>
+      <path class="data" d="M 500,448 V 484" marker-end="url(#arrow)"/>
+      <rect class="mask" x="508" y="458" width="48" height="12" rx="2"/>
+      <text class="alabel" x="514" y="467">cancel</text>
+      <path class="data" d="M 560,448 V 460 Q 560,468 568,468 H 772 Q 780,468 780,476 V 484" marker-end="url(#arrow)"/>
+      <rect class="mask" x="640" y="450" width="48" height="12" rx="2"/>
+      <text class="alabel" x="664" y="459" text-anchor="middle">error</text>
+      <path class="data" d="M 220,448 V 512 Q 220,520 228,520 H 412" marker-end="url(#arrow)"/>
+      <rect class="mask" x="270" y="502" width="100" height="12" rx="2"/>
+      <text class="alabel" x="320" y="511" text-anchor="middle">cancel queued</text>
+
+      <!-- instance nodes: mask → styled rect → name → sublabel -->
+      <rect class="mask" x="140" y="116" width="160" height="56" rx="8"/>
+      <rect class="n warn" x="140" y="116" width="160" height="56" rx="8"/>
+      <text class="name warn" x="220" y="140" text-anchor="middle">启动中</text>
+      <text class="sub" x="220" y="158" text-anchor="middle">STARTING</text>
+
+      <rect class="mask" x="420" y="116" width="160" height="56" rx="8"/>
+      <rect class="n focal" x="420" y="116" width="160" height="56" rx="8"/>
+      <text class="name" x="500" y="140" text-anchor="middle">就绪</text>
+      <text class="sub" x="500" y="158" text-anchor="middle">READY · /health OK</text>
+
+      <rect class="mask" x="700" y="116" width="160" height="56" rx="8"/>
+      <rect class="n ok" x="700" y="116" width="160" height="56" rx="8"/>
+      <text class="name ok" x="780" y="140" text-anchor="middle">已停止</text>
+      <text class="sub" x="780" y="158" text-anchor="middle">STOPPED</text>
+
+      <rect class="mask" x="140" y="232" width="160" height="56" rx="8"/>
+      <rect class="n err" x="140" y="232" width="160" height="56" rx="8"/>
+      <text class="name err" x="220" y="256" text-anchor="middle">启动失败</text>
+      <text class="sub" x="220" y="274" text-anchor="middle">FAILED · log tail</text>
+
+      <!-- task nodes -->
+      <rect class="mask" x="140" y="392" width="160" height="56" rx="8"/>
+      <rect class="n warn" x="140" y="392" width="160" height="56" rx="8"/>
+      <text class="name warn" x="220" y="416" text-anchor="middle">排队中</text>
+      <text class="sub" x="220" y="434" text-anchor="middle">QUEUED</text>
+
+      <rect class="mask" x="420" y="392" width="160" height="56" rx="8"/>
+      <rect class="n focal" x="420" y="392" width="160" height="56" rx="8"/>
+      <text class="name" x="500" y="416" text-anchor="middle">执行中</text>
+      <text class="sub" x="500" y="434" text-anchor="middle">RUNNING · serial</text>
+
+      <rect class="mask" x="700" y="392" width="160" height="56" rx="8"/>
+      <rect class="n ok" x="700" y="392" width="160" height="56" rx="8"/>
+      <text class="name ok" x="780" y="416" text-anchor="middle">已完成</text>
+      <text class="sub" x="780" y="434" text-anchor="middle">DONE</text>
+
+      <rect class="mask" x="420" y="492" width="160" height="56" rx="8"/>
+      <rect class="n warn" x="420" y="492" width="160" height="56" rx="8"/>
+      <text class="name warn" x="500" y="516" text-anchor="middle">已取消</text>
+      <text class="sub" x="500" y="534" text-anchor="middle">CANCELLED</text>
+
+      <rect class="mask" x="700" y="492" width="160" height="56" rx="8"/>
+      <rect class="n err" x="700" y="492" width="160" height="56" rx="8"/>
+      <text class="name err" x="780" y="516" text-anchor="middle">失败</text>
+      <text class="sub" x="780" y="534" text-anchor="middle">FAILED</text>
+
+      <text class="sub" x="60" y="566">取消 RUNNING 仅中断 hub 侧等待（引擎会跑完）；QUEUED 可直接取消。</text>
+
+      <!-- legend strip -->
+      <line class="divider" x1="40" y1="656" x2="1120" y2="656"/>
+      <text class="eyebrow-svg" x="40" y="680">LEGEND</text>
+      <circle class="dot-start" cx="150" cy="674" r="6"/>
+      <text class="sub" x="164" y="679">起始 start</text>
+      <rect class="n focal" x="360" y="668" width="16" height="12" rx="2"/>
+      <text class="sub" x="384" y="679">焦点 focal</text>
+      <rect class="n ok" x="580" y="668" width="16" height="12" rx="2"/>
+      <text class="sub" x="604" y="679">ok 完成 / 就绪</text>
+      <rect class="n warn" x="820" y="668" width="16" height="12" rx="2"/>
+      <text class="sub" x="844" y="679">warn 过渡 / 取消</text>
+      <rect class="n err" x="1020" y="668" width="16" height="12" rx="2"/>
+      <text class="sub" x="1044" y="679">err 失败</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">KEY POINT</p>
+      <h3><span class="dot ink"></span>就绪 ≠ 模型已进显存</h3>
+      <p><code>READY</code> 只代表 <code>GET /health</code> 通过；真正的加载由启动脚本的预热请求（RIFF 校验）确认。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">BOUNDARY</p>
+      <h3><span class="dot warn"></span>取消的运行语义</h3>
+      <p><code>DELETE /api/tasks/&lt;id&gt;</code> 对 <code>RUNNING</code> 只取消 hub 侧等待，引擎子进程仍会跑完——属已知限制。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE</p>
+      <h3><span class="dot soft"></span>依据</h3>
+      <ul><li>instance.go · healthTimeoutSeconds=120</li><li>task.go · Submit / Cancel / StopQueue</li><li>hub 重启回放：进行中任务标记 CANCELLED</li></ul>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · diagram-design monochrome skin · status colors only in state/ops diagrams · 4px grid</footer>
+</main>
+</body>
+</html>

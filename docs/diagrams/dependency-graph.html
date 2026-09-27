@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>依赖图 — audio.cpp-hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">DEPENDENCY · 依赖图</p>
+    <h1>Go 文件与内嵌资源如何相互依赖</h1>
+    <p class="subtitle">main.go 装配各管理器，api.go 是 HTTP 汇聚点；管理器共用 util.go 与 internal/ 校验层；models.json / model-packages.json 经 go:embed 编译进二进制。</p>
+  </header>
+  <figure class="diagram">
+    <svg role="img" aria-labelledby="dependency-graph-title dependency-graph-desc" viewBox="0 0 1160 720">
+      <title id="dependency-graph-title">audio.cpp-hub 依赖图：main.go 装配 api.go 与各管理器，共用 util.go 与 internal/wav、internal/idvalidate</title>
+      <desc id="dependency-graph-desc">按依赖深度分层：rank 0 main.go 入口，rank 1 api.go（HTTP 路由与 handler 汇聚），rank 2 六个管理器（instance.go、task.go、history.go、download.go、proxy.go、voices.go 与 registry.go 合并的资源登记），rank 3 公共层 util.go 与 internal/wav、internal/idvalidate。task.go 通过 TaskManager.history 调用 HistoryRecord（TTS taskId 即历史记录 id），是与历史模块的耦合点；其余依赖整体无环。models.json / model-packages.json 由 models.go、packages.go 以 go:embed 编译进二进制。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+      <rect class="bg" width="1160" height="720"/>
+
+      <!-- edges (drawn before nodes) -->
+      <path class="data" d="M580,120 V176" marker-end="url(#arrow)"/>
+      <path class="data" d="M532,232 V264 Q532,272 524,272 H120 Q112,272 112,280 V344" marker-end="url(#arrow)"/>
+      <path class="data" d="M508,232 V280 Q508,288 500,288 H304 Q296,288 296,296 V344" marker-end="url(#arrow)"/>
+      <path class="data" d="M484,232 V296 Q484,304 492,304 H504 Q512,304 512,312 V344" marker-end="url(#arrow)"/>
+      <path class="data" d="M616,232 V296 Q616,304 624,304 H680 Q688,304 688,312 V344" marker-end="url(#arrow)"/>
+      <path class="data" d="M652,232 V280 Q652,288 660,288 H864 Q872,288 872,296 V344" marker-end="url(#arrow)"/>
+      <path class="data" d="M688,232 V264 Q688,272 696,272 H1056 Q1064,272 1064,280 V344" marker-end="url(#arrow)"/>
+      <path class="data" d="M216,372 H200" marker-end="url(#arrow)"/>
+      <path class="data accent dash" d="M376,372 H432" marker-end="url(#arrow-accent)"/>
+      <path class="data" d="M912,344 V264 Q912,256 904,256 H88 Q80,256 80,264 V344" marker-end="url(#arrow)"/>
+      <path class="data" d="M152,400 V496 Q152,504 160,504 H432 Q440,504 440,512 V536" marker-end="url(#arrow)"/>
+      <path class="data" d="M512,400 V536" marker-end="url(#arrow)"/>
+      <path class="data" d="M688,400 V536" marker-end="url(#arrow)"/>
+      <path class="data" d="M1064,400 V496 Q1064,504 1056,504 H728 Q720,504 720,512 V536" marker-end="url(#arrow)"/>
+
+      <!-- edge labels (masked) -->
+      <rect class="mask" x="884" y="144" width="96" height="12" rx="2"/>
+      <text class="alabel" x="932" y="153" text-anchor="middle">装配 managers</text>
+      <rect class="mask" x="380" y="354" width="48" height="12" rx="2"/>
+      <text class="alabel" x="404" y="363" text-anchor="middle">TTS 1:1</text>
+      <!-- nodes: mask → styled rect → type tag → name → sublabel → fan-in badge -->
+      <rect class="mask" x="480" y="64" width="200" height="56" rx="6"/>
+      <rect class="n" x="480" y="64" width="200" height="56" rx="6"/>
+      <rect class="tag" x="488" y="72" width="44" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="510" y="81" text-anchor="middle">ENTRY</text>
+      <text class="name" x="488" y="102">main.go</text>
+      <text class="sub" x="488" y="114">装配 · 优雅关闭</text>
+      <rect class="tag" x="640" y="72" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="656" y="81" text-anchor="middle">0 in</text>
+
+      <rect class="mask" x="460" y="176" width="240" height="56" rx="6"/>
+      <g class="focal">
+        <rect class="n focal" x="460" y="176" width="240" height="56" rx="6"/>
+        <rect class="tag" x="468" y="184" width="44" height="12" rx="2"/>
+        <text class="eyebrow-svg" x="490" y="193" text-anchor="middle">HTTP</text>
+        <text class="name" x="468" y="214">api.go</text>
+        <text class="sub" x="468" y="226">路由 · handler 汇聚</text>
+      </g>
+      <rect class="mask" x="660" y="184" width="32" height="12" rx="2"/>
+      <rect class="tag" x="660" y="184" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="676" y="193" text-anchor="middle">1 in</text>
+
+      <rect class="mask" x="32" y="344" width="160" height="56" rx="6"/>
+      <rect class="n" x="32" y="344" width="160" height="56" rx="6"/>
+      <rect class="tag" x="40" y="352" width="36" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="58" y="361" text-anchor="middle">MGR</text>
+      <text class="name" x="40" y="382">instance.go</text>
+      <text class="sub" x="40" y="394">实例生命周期</text>
+      <rect class="tag" x="152" y="352" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="168" y="361" text-anchor="middle">3 in</text>
+
+      <rect class="mask" x="216" y="344" width="160" height="56" rx="6"/>
+      <rect class="n" x="216" y="344" width="160" height="56" rx="6"/>
+      <rect class="tag" x="224" y="352" width="36" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="242" y="361" text-anchor="middle">MGR</text>
+      <text class="name" x="224" y="382">task.go</text>
+      <text class="sub" x="224" y="394">推理任务队列</text>
+      <rect class="tag" x="336" y="352" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="352" y="361" text-anchor="middle">1 in</text>
+
+      <rect class="mask" x="432" y="344" width="160" height="56" rx="6"/>
+      <rect class="n" x="432" y="344" width="160" height="56" rx="6"/>
+      <rect class="tag" x="440" y="352" width="36" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="458" y="361" text-anchor="middle">MGR</text>
+      <text class="name" x="440" y="382">history.go</text>
+      <text class="sub" x="440" y="394">TTS 历史 · 分组</text>
+      <rect class="tag" x="552" y="352" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="568" y="361" text-anchor="middle">2 in</text>
+
+      <rect class="mask" x="608" y="344" width="160" height="56" rx="6"/>
+      <rect class="n" x="608" y="344" width="160" height="56" rx="6"/>
+      <rect class="tag" x="616" y="352" width="36" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="634" y="361" text-anchor="middle">MGR</text>
+      <text class="name" x="616" y="382">download.go</text>
+      <text class="sub" x="616" y="394">分段下载 · 续传</text>
+      <rect class="tag" x="728" y="352" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="744" y="361" text-anchor="middle">1 in</text>
+
+      <rect class="mask" x="792" y="344" width="160" height="56" rx="6"/>
+      <rect class="n" x="792" y="344" width="160" height="56" rx="6"/>
+      <rect class="tag" x="800" y="352" width="36" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="818" y="361" text-anchor="middle">MGR</text>
+      <text class="name" x="800" y="382">proxy.go</text>
+      <text class="sub" x="800" y="394">/v1/* 代理</text>
+      <rect class="tag" x="912" y="352" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="928" y="361" text-anchor="middle">1 in</text>
+
+      <rect class="mask" x="968" y="344" width="192" height="56" rx="6"/>
+      <rect class="n" x="968" y="344" width="192" height="56" rx="6"/>
+      <rect class="tag" x="976" y="352" width="44" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="998" y="361" text-anchor="middle">REG</text>
+      <text class="name" x="976" y="382">voices · registry.go</text>
+      <text class="sub" x="976" y="394">音色库 · 登记表</text>
+      <rect class="tag" x="1120" y="352" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="1136" y="361" text-anchor="middle">1 in</text>
+
+      <rect class="mask" x="400" y="536" width="360" height="64" rx="6"/>
+      <rect class="n store" x="400" y="536" width="360" height="64" rx="6"/>
+      <rect class="tag" x="408" y="544" width="56" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="436" y="553" text-anchor="middle">SHARED</text>
+      <text class="name" x="408" y="576">util.go · internal/wav · internal/idvalidate</text>
+      <text class="sub" x="408" y="590">JSON 响应 / 原子写 / WAV 解析 / 路径校验</text>
+      <rect class="tag" x="720" y="544" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="736" y="553" text-anchor="middle">4 in</text>
+      <!-- legend strip -->
+      <line class="divider" x1="40" y1="648" x2="1120" y2="648"/>
+      <text class="eyebrow-svg" x="40" y="668">LEGEND</text>
+      <rect class="n focal" x="120" y="656" width="16" height="12" rx="2"/>
+      <text class="sub" x="144" y="666">focal · api.go</text>
+      <rect class="n" x="300" y="656" width="16" height="12" rx="2"/>
+      <text class="sub" x="324" y="666">管理器 / 入口</text>
+      <rect class="n store" x="480" y="656" width="16" height="12" rx="2"/>
+      <text class="sub" x="504" y="666">公共依赖层</text>
+      <path class="data accent dash" d="M660,662 H692" marker-end="url(#arrow-accent)"/>
+      <text class="sub" x="700" y="666">耦合边 task ↔ history</text>
+      <text class="sub" x="40" y="692">models.json · model-packages.json 由 models.go、packages.go 以 go:embed 编译进二进制（只读）；除 task ↔ history 外依赖无环。</text>
+    </svg>
+  </figure>
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">KEY POINT</p>
+      <h3><span class="dot ink"></span>api.go 是汇聚点</h3>
+      <p>全部 /api/* handler 与 /v1/* 代理入口都在 api.go；它依赖六个管理器与公共层，是唯一同时触及所有模块的文件。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">COUPLING</p>
+      <h3><span class="dot muted"></span>task ↔ history</h3>
+      <p>task.go 通过 TaskManager.history 调用 RecordTTS，TTS 的 taskId 即历史记录 id（上图强调的耦合边）；Go 包内不构成 import 环。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE</p>
+      <h3><span class="dot soft"></span>依据</h3>
+      <ul><li>main.go · api.go</li><li>util.go · internal/*</li><li>go.mod · models.go</li></ul>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · diagram-design monochrome skin · edit the SVG above, keep 4px grid</footer>
+</main>
+</body>
+</html>

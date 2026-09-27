@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Web UI 信息架构 · audio.cpp-hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .band{fill:var(--ink);fill-opacity:.02;stroke:var(--rule-solid);stroke-width:1;stroke-dasharray:4,3}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">UI INFORMATION ARCHITECTURE · web/</p>
+    <h1>Web UI 信息架构</h1>
+    <p class="subtitle">原生单页应用：页头收纳全局操作，模型工作区完成「选模型 → 填参数 → 提交任务」，右侧任务 / 操作侧栏跟踪进度，五类全屏面板承载历史、音色、下载、文件与设备；<code>web/i18n.js</code> 的中英双语字典横贯全部面板。</p>
+  </header>
+
+  <figure class="diagram">
+    <!-- a11y: <title> is the FIRST child of <svg>; IDs are prefixed with the file slug -->
+    <svg role="img" aria-labelledby="ui-information-architecture-title ui-information-architecture-desc" viewBox="0 0 1160 780">
+      <title id="ui-information-architecture-title">audio.cpp-hub Web UI 信息架构树</title>
+      <desc id="ui-information-architecture-desc">树形结构：根为 web/ 单页应用，下分页头操作、模型工作区、任务与操作侧栏、全屏面板四组；全屏面板再含操作历史与分组、音色库、下载管理、文件浏览与设备探测。中英双语 i18n 层覆盖全部面板。依据 web/index.html、web/app.js、web/i18n.js。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+
+      <rect class="bg" width="1160" height="780"/>
+
+      <!-- tree connectors (before boxes) -->
+      <path class="data" d="M 228,280 H 288"/>
+      <path class="data" d="M 288,132 V 420"/>
+      <path class="data" d="M 288,132 H 312" marker-end="url(#arrow)"/>
+      <path class="data" d="M 288,228 H 312" marker-end="url(#arrow)"/>
+      <path class="data" d="M 288,324 H 312" marker-end="url(#arrow)"/>
+      <path class="data" d="M 288,420 H 312" marker-end="url(#arrow)"/>
+      <path class="data" d="M 540,420 H 600"/>
+      <path class="data" d="M 600,372 V 540"/>
+      <path class="data" d="M 600,372 H 632" marker-end="url(#arrow)"/>
+      <path class="data" d="M 600,428 H 632" marker-end="url(#arrow)"/>
+      <path class="data" d="M 600,484 H 632" marker-end="url(#arrow)"/>
+      <path class="data" d="M 600,540 H 632" marker-end="url(#arrow)"/>
+
+      <!-- i18n cross-cutting band -->
+      <rect class="band" x="40" y="620" width="1080" height="64" rx="8"/>
+      <rect class="zone-mask" x="52" y="612" width="132" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="118" y="621" text-anchor="middle">I18N · web/i18n.js</text>
+      <text class="sub" x="64" y="656">中英双语字典 · data-i18n 属性批量替换 · I18N.onChange 重渲染全部面板</text>
+      <rect class="tag" x="880" y="636" width="64" height="24" rx="2"/>
+      <text class="eyebrow-svg" x="912" y="651" text-anchor="middle">中文</text>
+      <rect class="tag" x="960" y="636" width="80" height="24" rx="2"/>
+      <text class="eyebrow-svg" x="1000" y="651" text-anchor="middle">ENGLISH</text>
+
+      <!-- root -->
+      <rect class="mask" x="48" y="248" width="180" height="64" rx="6"/>
+      <rect class="n focal" x="48" y="248" width="180" height="64" rx="6"/>
+      <text class="name" x="138" y="276" text-anchor="middle">web/ 单页应用</text>
+      <text class="sub" x="138" y="294" text-anchor="middle">index.html · app.js</text>
+
+      <!-- level 2 -->
+      <rect class="mask" x="320" y="104" width="220" height="56" rx="6"/>
+      <rect class="n" x="320" y="104" width="220" height="56" rx="6"/>
+      <text class="name" x="430" y="128" text-anchor="middle">页头操作</text>
+      <text class="sub" x="430" y="146" text-anchor="middle">🕘 历史 · 🎙 音色 · ⬇️ 下载 · ⚙️ 设置 · ☀ 主题</text>
+
+      <rect class="mask" x="320" y="200" width="220" height="56" rx="6"/>
+      <rect class="n" x="320" y="200" width="220" height="56" rx="6"/>
+      <text class="name" x="430" y="224" text-anchor="middle">模型工作区</text>
+      <text class="sub" x="430" y="242" text-anchor="middle">模型列表 → 参数表单 → 提交任务</text>
+
+      <rect class="mask" x="320" y="296" width="220" height="56" rx="6"/>
+      <rect class="n" x="320" y="296" width="220" height="56" rx="6"/>
+      <text class="name" x="430" y="320" text-anchor="middle">任务 / 操作侧栏</text>
+      <text class="sub" x="430" y="338" text-anchor="middle">2s 轮询 · 取消 / 载入 / 详情</text>
+
+      <rect class="mask" x="320" y="392" width="220" height="56" rx="6"/>
+      <rect class="n" x="320" y="392" width="220" height="56" rx="6"/>
+      <text class="name" x="430" y="416" text-anchor="middle">全屏面板</text>
+      <text class="sub" x="430" y="434" text-anchor="middle">full-screen panels · 5 类</text>
+
+      <!-- level 3: full-screen panels -->
+      <rect class="mask" x="640" y="348" width="260" height="48" rx="6"/>
+      <rect class="n" x="640" y="348" width="260" height="48" rx="6"/>
+      <text class="name" x="770" y="370" text-anchor="middle">操作历史 · 分组</text>
+      <text class="sub" x="770" y="386" text-anchor="middle">history.go · groups.json</text>
+
+      <rect class="mask" x="640" y="404" width="260" height="48" rx="6"/>
+      <rect class="n" x="640" y="404" width="260" height="48" rx="6"/>
+      <text class="name" x="770" y="426" text-anchor="middle">音色库</text>
+      <text class="sub" x="770" y="442" text-anchor="middle">voices.go · 名称唯一 + 文本</text>
+
+      <rect class="mask" x="640" y="460" width="260" height="48" rx="6"/>
+      <rect class="n" x="640" y="460" width="260" height="48" rx="6"/>
+      <text class="name" x="770" y="482" text-anchor="middle">下载管理</text>
+      <text class="sub" x="770" y="498" text-anchor="middle">download.go · 暂停 / 续传</text>
+
+      <rect class="mask" x="640" y="516" width="260" height="48" rx="6"/>
+      <rect class="n" x="640" y="516" width="260" height="48" rx="6"/>
+      <text class="name" x="770" y="538" text-anchor="middle">文件浏览 / 设备探测</text>
+      <text class="sub" x="770" y="554" text-anchor="middle">fs.go · --list-devices</text>
+
+      <!-- legend strip -->
+      <line class="divider" x1="40" y1="716" x2="1120" y2="716"/>
+      <text class="eyebrow-svg" x="40" y="740">LEGEND</text>
+      <rect class="n focal" x="150" y="730" width="16" height="12" rx="2"/>
+      <text class="sub" x="174" y="741">根 / 焦点</text>
+      <rect class="n" x="320" y="730" width="16" height="12" rx="2"/>
+      <text class="sub" x="344" y="741">面板 / 分组</text>
+      <rect class="n" x="520" y="730" width="16" height="12" rx="2"/>
+      <text class="sub" x="544" y="741">功能节点</text>
+      <rect class="band" x="720" y="730" width="16" height="12" rx="2"/>
+      <text class="sub" x="744" y="741">i18n 横切层</text>
+      <path class="data" d="M 940,736 H 972" marker-end="url(#arrow)"/>
+      <text class="sub" x="980" y="741">从属关系</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">KEY POINT</p>
+      <h3><span class="dot ink"></span>一页多面板</h3>
+      <p>历史 / 音色 / 下载管理均为页头按钮弹出的全屏面板；启动弹窗内联文件浏览与设备探测，无独立路由。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">BOUNDARY</p>
+      <h3><span class="dot muted"></span>i18n 是横切层</h3>
+      <p><code>data-i18n</code> 属性批量替换静态文案，<code>I18N.t()</code> 处理动态文案；语言切换回调重渲染全部面板。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE</p>
+      <h3><span class="dot soft"></span>依据</h3>
+      <ul><li>web/index.html · 页头 / 侧栏 / 弹窗</li><li>web/app.js · 渲染与面板装配</li><li>web/i18n.js · zh / en 字典</li></ul>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · diagram-design monochrome skin · grayscale (no status colors) · 4px grid</footer>
+</main>
+</body>
+</html>

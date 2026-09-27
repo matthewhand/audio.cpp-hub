@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CI 与发布流水线 · audio.cpp-hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">CI / RELEASE · .github/workflows</p>
+    <h1>CI 与发布流水线</h1>
+    <p class="subtitle">PR 走 <code>ci.yml</code> 四道质量门禁（gofmt / vet / race 测试 / 依赖校验）；打 <code>v*.*.*</code> tag 触发 <code>build-and-release.yml</code>：交叉编译、启动冒烟测试、打包 zip 与 SHA256SUMS，再由 <code>softprops/action-gh-release</code> 发布。</p>
+  </header>
+
+  <figure class="diagram">
+    <!-- a11y: <title> is the FIRST child of <svg>; IDs are prefixed with the file slug -->
+    <svg role="img" aria-labelledby="ci-release-pipeline-title ci-release-pipeline-desc" viewBox="0 0 1160 780">
+      <title id="ci-release-pipeline-title">audio.cpp-hub CI 与发布流水线</title>
+      <desc id="ci-release-pipeline-desc">上半区为 PR 质量门禁：checkout 与 setup Go 后并行跑 gofmt、go vet、go test -race、go mod verify。下半区为 tag 发布：v*.*.* 触发交叉编译 windows/linux amd64+arm64 与 darwin arm64，启动冒烟测试 GET /api/models 返回 200，再打包 zip 与 SHA256SUMS 并创建 GitHub Release。所有第三方 action 固定到 commit SHA。依据 .github/workflows/ci.yml 与 build-and-release.yml。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+
+      <rect class="bg" width="1160" height="780"/>
+
+      <!-- zones first (bg → zones → arrows → labels → nodes) -->
+      <rect class="zone" x="40" y="56" width="1080" height="300" rx="8"/>
+      <rect class="zone-mask" x="52" y="48" width="180" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="142" y="57" text-anchor="middle">CI · ci.yml (push / PR)</text>
+      <rect class="zone" x="40" y="396" width="1080" height="280" rx="8"/>
+      <rect class="zone-mask" x="52" y="388" width="220" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="162" y="397" text-anchor="middle">RELEASE · build-and-release.yml</text>
+
+      <!-- ci gate fan-out connectors (before boxes) -->
+      <path class="data" d="M 244,216 H 600"/>
+      <path class="data" d="M 600,120 V 312"/>
+      <path class="data" d="M 600,120 H 672" marker-end="url(#arrow)"/>
+      <path class="data" d="M 600,184 H 672" marker-end="url(#arrow)"/>
+      <path class="data" d="M 600,248 H 672" marker-end="url(#arrow)"/>
+      <path class="data" d="M 600,312 H 672" marker-end="url(#arrow)"/>
+
+      <!-- release chain connectors -->
+      <path class="data" d="M 244,548 H 292" marker-end="url(#arrow)"/>
+      <path class="data" d="M 500,548 H 552" marker-end="url(#arrow)"/>
+      <path class="data" d="M 760,548 H 812" marker-end="url(#arrow)"/>
+
+      <!-- ci gate nodes -->
+      <rect class="mask" x="64" y="188" width="180" height="56" rx="6"/>
+      <rect class="n" x="64" y="188" width="180" height="56" rx="6"/>
+      <text class="name" x="154" y="212" text-anchor="middle">质量门禁入口</text>
+      <text class="sub" x="154" y="230" text-anchor="middle">checkout + setup Go · @sha</text>
+
+      <rect class="mask" x="680" y="96" width="180" height="48" rx="6"/>
+      <rect class="n" x="680" y="96" width="180" height="48" rx="6"/>
+      <text class="name" x="770" y="118" text-anchor="middle">gofmt -l .</text>
+      <text class="sub" x="770" y="134" text-anchor="middle">格式检查</text>
+
+      <rect class="mask" x="680" y="160" width="180" height="48" rx="6"/>
+      <rect class="n" x="680" y="160" width="180" height="48" rx="6"/>
+      <text class="name" x="770" y="182" text-anchor="middle">go vet ./...</text>
+      <text class="sub" x="770" y="198" text-anchor="middle">静态检查</text>
+
+      <rect class="mask" x="680" y="224" width="180" height="48" rx="6"/>
+      <rect class="n" x="680" y="224" width="180" height="48" rx="6"/>
+      <text class="name" x="770" y="246" text-anchor="middle">go test -race ./...</text>
+      <text class="sub" x="770" y="262" text-anchor="middle">竞态检测 · 单元测试</text>
+
+      <rect class="mask" x="680" y="288" width="180" height="48" rx="6"/>
+      <rect class="n" x="680" y="288" width="180" height="48" rx="6"/>
+      <text class="name" x="770" y="310" text-anchor="middle">go mod verify</text>
+      <text class="sub" x="770" y="326" text-anchor="middle">依赖完整性</text>
+
+      <!-- release chain nodes -->
+      <rect class="mask" x="64" y="520" width="180" height="56" rx="6"/>
+      <rect class="n input" x="64" y="520" width="180" height="56" rx="6"/>
+      <text class="name" x="154" y="544" text-anchor="middle">触发 tag</text>
+      <text class="sub" x="154" y="562" text-anchor="middle">v*.*.* · workflow_dispatch</text>
+
+      <rect class="mask" x="300" y="520" width="200" height="56" rx="6"/>
+      <rect class="n" x="300" y="520" width="200" height="56" rx="6"/>
+      <text class="name" x="400" y="544" text-anchor="middle">交叉编译 4 平台</text>
+      <text class="sub" x="400" y="562" text-anchor="middle">win/linux amd64+arm64 · darwin</text>
+
+      <rect class="mask" x="560" y="520" width="200" height="56" rx="6"/>
+      <rect class="n" x="560" y="520" width="200" height="56" rx="6"/>
+      <text class="name" x="660" y="544" text-anchor="middle">启动冒烟测试</text>
+      <text class="sub" x="660" y="562" text-anchor="middle">GET /api/models → 200 ≤30s</text>
+
+      <rect class="mask" x="820" y="520" width="260" height="56" rx="6"/>
+      <rect class="n focal" x="820" y="520" width="260" height="56" rx="6"/>
+      <text class="name" x="950" y="544" text-anchor="middle">打包并发布</text>
+      <text class="sub" x="950" y="562" text-anchor="middle">zip + SHA256SUMS → GitHub Release</text>
+
+      <text class="sub" x="1092" y="620" text-anchor="end">第三方 action 均固定到 commit SHA</text>
+
+      <!-- legend strip -->
+      <line class="divider" x1="40" y1="716" x2="1120" y2="716"/>
+      <text class="eyebrow-svg" x="40" y="740">LEGEND</text>
+      <rect class="n focal" x="150" y="730" width="16" height="12" rx="2"/>
+      <text class="sub" x="174" y="741">发布产物 / 焦点</text>
+      <rect class="n" x="360" y="730" width="16" height="12" rx="2"/>
+      <text class="sub" x="384" y="741">流水线步骤</text>
+      <rect class="n input" x="560" y="730" width="16" height="12" rx="2"/>
+      <text class="sub" x="584" y="741">触发输入</text>
+      <path class="data" d="M 760,736 H 792" marker-end="url(#arrow)"/>
+      <text class="sub" x="800" y="741">顺序 / 并行</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">KEY POINT</p>
+      <h3><span class="dot ink"></span>两条触发路径</h3>
+      <p><code>ci.yml</code> 对 push 与 PR 全跑；<code>build-and-release.yml</code> 只在 tag 或手动触发，且 Release 步骤仅 tag 时执行。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">BOUNDARY</p>
+      <h3><span class="dot muted"></span>可复现构建</h3>
+      <p>四平台 <code>-trimpath</code> 交叉编译，<code>-X main.version</code> 注入 tag；产物含 <code>web/</code> 与 README，二进制不含 audio.cpp。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE</p>
+      <h3><span class="dot soft"></span>依据</h3>
+      <ul><li>.github/workflows/ci.yml</li><li>.github/workflows/build-and-release.yml</li><li>actions 固定 @commit SHA</li></ul>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · diagram-design monochrome skin · grayscale (no status colors) · 4px grid</footer>
+</main>
+</body>
+</html>
