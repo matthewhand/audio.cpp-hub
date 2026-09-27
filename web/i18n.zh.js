@@ -584,5 +584,13 @@ window.I18N_ZH = {
   "err.INSTANCE_PORT_INVALID": "端口不合法（必须在 1..65535 之间）",
   "err.INSTANCE_PORT_RESERVED": "端口已被 hub 占用",
   "err.INSTANCE_PORT_IN_USE": "端口已被其它实例或进程占用",
-  "err.INSTANCE_PORT_EXHAUSTED": "自动分配端口已耗尽，没有可用端口"
+  "err.INSTANCE_PORT_EXHAUSTED": "自动分配端口已耗尽，没有可用端口",
+  "state.loading": "加载中…",
+  "model.empty": "没有可用的模型",
+  "palette.title": "命令面板",
+  "palette.placeholder": "搜索模型、实例或面板…",
+  "palette.empty": "没有匹配项",
+  "palette.group.panels": "面板",
+  "settings.theme.system": "跟随系统",
+  "common.dismiss": "关闭通知"
 };

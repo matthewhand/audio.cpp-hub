@@ -584,5 +584,13 @@ window.I18N_EN = {
   "err.INSTANCE_PORT_INVALID": "Invalid port (must be within 1..65535)",
   "err.INSTANCE_PORT_RESERVED": "Port is reserved by the hub",
   "err.INSTANCE_PORT_IN_USE": "Port is already in use",
-  "err.INSTANCE_PORT_EXHAUSTED": "No free port available for auto-assignment"
+  "err.INSTANCE_PORT_EXHAUSTED": "No free port available for auto-assignment",
+  "state.loading": "Loading…",
+  "model.empty": "No models available",
+  "palette.title": "Command palette",
+  "palette.placeholder": "Search models, instances, or panels…",
+  "palette.empty": "No matches",
+  "palette.group.panels": "Panels",
+  "settings.theme.system": "System",
+  "common.dismiss": "Dismiss notification"
 };

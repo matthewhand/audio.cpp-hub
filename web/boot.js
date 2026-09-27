@@ -3,8 +3,13 @@
 
    主题模式三态："system"（跟随系统 prefers-color-scheme）/ "light" / "dark"。
    本文件在首次绘制前同步解析并写入 <html data-theme>，避免错误主题闪烁（FOUC）；
-   同时把解析逻辑挂到 window.HubTheme，供 app.js 复用，避免两处重复实现。 */
+   同时把解析逻辑挂到 window.HubTheme，供 app.js / core/features 复用，避免两处重复实现。
+
+   经典脚本（voices-panel.js）在解析期就需要 $；主逻辑 app.js 已改为 ES module（延迟执行），
+   其 core/dom.js 的导出在此之前不可用，故在这里提前提供等价的全局 $。 */
 (function () {
+  window.$ = (id) => document.getElementById(id);
+
   var media = window.matchMedia
     ? window.matchMedia("(prefers-color-scheme: dark)")
     : null;
