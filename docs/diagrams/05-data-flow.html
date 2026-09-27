@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>audio.cpp-hub — Data Flow</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #f5f5f5;
+      --color-ink:    #2d3142;
+      --color-muted:  #4f5d75;
+      --color-accent: #eb6c36;
+      --font-sans:    'Geist', system-ui, sans-serif;
+      --font-serif:   'Instrument Serif', serif;
+      --font-mono:    'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 900px; display: block; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Data Flow · Diagram Design</p>
+    <h1>How audio data moves and persists</h1>
+
+    <svg viewBox="0 0 1000 680" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="df-title df-desc">
+      <title id="df-title">audio.cpp-hub data flow</title>
+      <desc id="df-desc">Text and reference audio enter the hub, are queued and forwarded to an engine, and the returned JSON base64 audio is extracted to WAV under data/history per model, while non-TTS results land in data/tasks and uploaded audio in data/uploads.</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+      <!-- arrows first: main left->right pipeline -->
+      <path d="M 172,136 H 236" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <path d="M 172,232 H 236" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <path d="M 400,184 H 456" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 640,184 H 696" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 856,232 V 292" fill="none" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+      <path d="M 700,428 H 380 V 356" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 560,404 V 476" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 300,404 V 476" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 760,404 V 476" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+      <path d="M 200,320 H 140 V 232" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <!-- INPUTS -->
+      <rect x="40" y="104" width="132" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="40" y="104" width="132" height="64" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <text x="106" y="130" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Text prompt</text>
+      <text x="106" y="148" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">request.text</text>
+
+      <rect x="40" y="200" width="132" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="40" y="200" width="132" height="64" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <text x="106" y="226" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Reference WAV</text>
+      <text x="106" y="244" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">upload · voice</text>
+
+      <rect x="40" y="296" width="132" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="40" y="296" width="132" height="64" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <text x="106" y="322" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Client connects</text>
+      <text x="106" y="340" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">/api/tasks · /v1</text>
+
+      <!-- INGRESS -->
+      <rect x="236" y="104" width="164" height="160" rx="6" fill="#f5f5f5"/>
+      <rect x="236" y="104" width="164" height="160" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="244" y="110" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="264" y="119" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">HTTP</text>
+      <text x="318" y="136" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Ingress + validation</text>
+      <text x="318" y="156" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">CSRF same-origin</text>
+      <text x="318" y="172" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">64 MB body cap (/api)</text>
+      <text x="318" y="188" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">WAV probe (up to 50 MB)</text>
+      <text x="318" y="204" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">id/path validation</text>
+      <text x="318" y="226" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">api.go · audio.go</text>
+      <text x="318" y="246" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">internal/wav · idvalidate</text>
+
+      <!-- QUEUE + FORWARD -->
+      <rect x="456" y="104" width="184" height="160" rx="6" fill="#f5f5f5"/>
+      <rect x="456" y="104" width="184" height="160" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="464" y="110" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="484" y="119" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">QUEUE</text>
+      <text x="548" y="136" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Task queue + forward</text>
+      <text x="548" y="156" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">serial per instance</text>
+      <text x="548" y="172" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">queue cap 100</text>
+      <text x="548" y="188" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">state → data/tasks</text>
+      <text x="548" y="210" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">POST /v1/tasks/run</text>
+      <text x="548" y="226" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">no overall timeout</text>
+      <text x="548" y="246" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">task.go</text>
+
+      <!-- ENGINE / RESPONSE -->
+      <rect x="696" y="104" width="264" height="160" rx="6" fill="#f5f5f5"/>
+      <rect x="696" y="104" width="264" height="160" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="704" y="110" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="726" y="119" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PROC</text>
+      <text x="828" y="136" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">audiocpp_server</text>
+      <text x="828" y="156" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">engine runs model</text>
+      <text x="828" y="172" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">returns JSON</text>
+      <text x="828" y="188" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">{ "audio": base64 }</text>
+      <text x="828" y="210" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">streamed to temp file</text>
+      <text x="828" y="226" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">never fully in memory</text>
+      <text x="828" y="246" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">instance.go pilot</text>
+
+      <!-- EXTRACTION focal -->
+      <rect x="640" y="292" width="216" height="112" rx="8" fill="#f5f5f5"/>
+      <rect x="640" y="292" width="216" height="112" rx="8" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+      <rect x="652" y="304" width="56" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.40)" stroke-width="0.8"/>
+      <text x="680" y="313" fill="rgba(235,108,54,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">TRANSFORM</text>
+      <text x="748" y="330" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Audio extraction</text>
+      <text x="748" y="350" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">stream JSON decoder</text>
+      <text x="748" y="366" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">base64 → WAV bytes</text>
+      <text x="748" y="386" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">extractAudio()</text>
+
+      <!-- TTL / retention -->
+      <rect x="380" y="292" width="216" height="112" rx="6" fill="#f5f5f5"/>
+      <rect x="380" y="292" width="216" height="112" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="388" y="298" width="56" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="416" y="307" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">RETENTION</text>
+      <text x="488" y="326" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Retention policy</text>
+      <text x="488" y="346" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">history: no auto-evict</text>
+      <text x="488" y="362" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">tasks: keep last 100</text>
+      <text x="488" y="378" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">user deletes explicitly</text>
+      <text x="488" y="398" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">history.go · task.go</text>
+
+      <!-- STORES -->
+      <rect x="180" y="476" width="152" height="88" rx="6" fill="#f5f5f5"/>
+      <rect x="180" y="476" width="152" height="88" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="256" y="502" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">data/uploads/</text>
+      <text x="256" y="520" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">&lt;id&gt;.wav</text>
+      <text x="256" y="538" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">WAV ≤ 50 MB</text>
+      <text x="256" y="554" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">upload staging</text>
+
+      <rect x="424" y="476" width="216" height="88" rx="6" fill="#f5f5f5"/>
+      <rect x="424" y="476" width="216" height="88" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="532" y="502" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">data/history/&lt;modelId&gt;/</text>
+      <text x="532" y="520" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">index.jsonl · &lt;taskId&gt;.wav</text>
+      <text x="532" y="536" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">&lt;taskId&gt;.ref/.emo/.spkN.wav</text>
+      <text x="532" y="554" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">snapshots + groups.json</text>
+
+      <rect x="688" y="476" width="168" height="88" rx="6" fill="#f5f5f5"/>
+      <rect x="688" y="476" width="168" height="88" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="772" y="502" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">data/tasks/</text>
+      <text x="772" y="520" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">&lt;id&gt;.task.json</text>
+      <text x="772" y="536" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">&lt;id&gt;.result.json</text>
+      <text x="772" y="554" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">non-TTS output</text>
+
+      <rect x="180" y="580" width="152" height="44" rx="6" fill="#f5f5f5"/>
+      <rect x="180" y="580" width="152" height="44" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="256" y="608" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">data/voices/</text>
+
+      <rect x="424" y="580" width="216" height="44" rx="6" fill="#f5f5f5"/>
+      <rect x="424" y="580" width="216" height="44" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="532" y="608" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">models/ (weights) · run/proxy-cache/</text>
+
+      <rect x="688" y="580" width="168" height="44" rx="6" fill="#f5f5f5"/>
+      <rect x="688" y="580" width="168" height="44" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="772" y="600" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">run/&lt;id&gt;/</text>
+      <text x="772" y="614" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">server.json · server.log</text>
+
+      <!-- legend -->
+      <line x1="30" y1="644" x2="964" y2="644" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="30" y="660" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+      <rect x="120" y="652" width="16" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+      <text x="142" y="660" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">focal transform</text>
+      <rect x="260" y="652" width="16" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="282" y="660" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">process step</text>
+      <rect x="400" y="652" width="16" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="422" y="660" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">persistent store</text>
+      <rect x="560" y="652" width="16" height="10" rx="2" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <text x="582" y="660" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">input</text>
+      <line x1="660" y1="657" x2="692" y2="657" stroke="#eb6c36" stroke-width="1.2"/>
+      <text x="700" y="660" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">result audio</text>
+      <line x1="820" y1="657" x2="852" y2="657" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4"/>
+      <text x="860" y="660" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">metadata</text>
+    </svg>
+  </div>
+</body>
+</html>

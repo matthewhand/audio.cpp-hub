@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1000 680" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="deploy-title deploy-desc">
+      <title id="deploy-title">audio.cpp-hub deployment topologies</title>
+      <desc id="deploy-desc">Two deployment modes: a native single binary on the host (Windows tray or Linux systemd) and a Go-native Docker Compose container exposing port 18080, with model weights and the audiocpp_server binary bind-mounted read-only and data, logs and run directories persisted on the host.</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+      <!-- ZONES -->
+      <rect x="24" y="40" width="460" height="544" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,4"/>
+      <rect x="36" y="44" width="96" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="84" y="53" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">HOST — NATIVE</text>
+
+      <rect x="516" y="40" width="460" height="544" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,4"/>
+      <rect x="528" y="44" width="118" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="587" y="53" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">HOST — DOCKER</text>
+
+      <!-- ARROWS first -->
+      <!-- native: client -> hub -->
+      <path d="M 108,120 H 176" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <!-- docker: client -> container port -->
+      <path d="M 600,120 H 668" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <!-- native: hub -> engine -->
+      <path d="M 340,244 V 300" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <!-- native: hub -> data disk -->
+      <path d="M 220,244 V 380 H 108" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <!-- docker: container -> data volume -->
+      <path d="M 668,288 V 380 H 600" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <!-- docker: container -> ro mounts -->
+      <path d="M 832,288 V 356" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+      <!-- docker: container -> gpu -->
+      <path d="M 720,288 H 720 V 452 H 668" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+
+      <!-- NATIVE ZONE CONTENT -->
+      <!-- client -->
+      <rect x="40" y="88" width="136" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="40" y="88" width="136" height="64" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <text x="108" y="116" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Browser</text>
+      <text x="108" y="132" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">:8080</text>
+
+      <!-- hub binary node focal -->
+      <rect x="176" y="88" width="260" height="156" rx="8" fill="#f5f5f5"/>
+      <rect x="176" y="88" width="260" height="156" rx="8" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+      <rect x="188" y="100" width="44" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.40)" stroke-width="0.8"/>
+      <text x="210" y="109" fill="rgba(235,108,54,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">BINARY</text>
+      <text x="306" y="126" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">audio.cpp-hub</text>
+      <text x="306" y="144" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">static Go binary · CGO off</text>
+      <!-- artifact chips -->
+      <rect x="196" y="156" width="220" height="24" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="208" y="172" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">audio.cpp-hub</text>
+      <text x="404" y="172" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">v-ldflags</text>
+      <rect x="196" y="188" width="220" height="24" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="208" y="204" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">Windows: tray + autostart</text>
+      <text x="404" y="204" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">.exe</text>
+      <rect x="196" y="216" width="220" height="20" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="208" y="230" fill="#2d3142" font-size="11" font-family="'Geist', sans-serif">Linux: systemd unit</text>
+
+      <!-- engine native -->
+      <rect x="176" y="300" width="260" height="80" rx="6" fill="#f5f5f5"/>
+      <rect x="176" y="300" width="260" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="184" y="306" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="206" y="315" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PROC</text>
+      <text x="306" y="340" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">audiocpp_server</text>
+      <text x="306" y="358" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">child · 127.0.0.1:18090+</text>
+      <text x="306" y="372" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">--list-devices · CPU/GPU</text>
+
+      <!-- native data disk -->
+      <rect x="40" y="380" width="260" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="40" y="380" width="260" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="170" y="406" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">data/ · run/ · models/</text>
+      <text x="170" y="424" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">hub.config.json · executables.json</text>
+      <text x="170" y="438" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">relative to working directory</text>
+
+      <rect x="40" y="464" width="260" height="44" rx="6" fill="#f5f5f5"/>
+      <rect x="40" y="464" width="260" height="44" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <text x="170" y="492" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">web/ static files (on disk)</text>
+
+      <!-- DOCKER ZONE CONTENT -->
+      <rect x="532" y="88" width="136" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="532" y="88" width="136" height="64" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <text x="600" y="116" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Host client</text>
+      <text x="600" y="132" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">:18080</text>
+
+      <!-- container focal -->
+      <rect x="668" y="88" width="292" height="200" rx="8" fill="#f5f5f5"/>
+      <rect x="668" y="88" width="292" height="200" rx="8" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+      <rect x="680" y="100" width="62" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.40)" stroke-width="0.8"/>
+      <text x="711" y="109" fill="rgba(235,108,54,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CONTAINER</text>
+      <text x="814" y="126" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">audio-cpp-hub</text>
+      <text x="814" y="144" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">start-hub.sh entrypoint</text>
+      <text x="814" y="162" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">EXPOSE 18080</text>
+      <!-- artifacts inside container -->
+      <rect x="684" y="176" width="260" height="22" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="696" y="191" fill="#2d3142" font-size="11" font-family="'Geist', sans-serif">go hub + start-instance.sh</text>
+      <text x="932" y="191" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">internal :18080</text>
+      <rect x="684" y="204" width="260" height="22" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="696" y="219" fill="#2d3142" font-size="11" font-family="'Geist', sans-serif">compose.amd / Dockerfile.amd</text>
+      <text x="932" y="219" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">ubuntu 24.04</text>
+      <rect x="684" y="232" width="260" height="22" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="696" y="247" fill="#2d3142" font-size="11" font-family="'Geist', sans-serif">restart: unless-stopped</text>
+      <rect x="684" y="258" width="260" height="20" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="696" y="272" fill="#2d3142" font-size="11" font-family="'Geist', sans-serif">healthcheck: /v1/models</text>
+      <text x="932" y="272" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">curl</text>
+
+      <!-- persisted volume -->
+      <rect x="532" y="380" width="200" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="532" y="380" width="200" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="632" y="406" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">bind mounts</text>
+      <text x="632" y="424" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">./data · ./logs · ./run</text>
+      <text x="632" y="438" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">persist across restarts</text>
+
+      <!-- ro mounts node -->
+      <rect x="752" y="356" width="208" height="88" rx="6" fill="#f5f5f5"/>
+      <rect x="752" y="356" width="208" height="88" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <rect x="760" y="362" width="62" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="791" y="371" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">READ-ONLY</text>
+      <text x="856" y="394" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">audiocpp_server + ggml</text>
+      <text x="856" y="412" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">/audio.cpp/bin:ro</text>
+      <text x="856" y="430" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">weights .gguf :ro</text>
+
+      <!-- GPU device node -->
+      <rect x="532" y="452" width="136" height="72" rx="6" fill="#f5f5f5"/>
+      <rect x="532" y="452" width="136" height="72" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="600" y="478" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">GPU passthrough</text>
+      <text x="600" y="496" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">/dev/dri · /dev/kfd</text>
+      <text x="600" y="512" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">group_add video/render</text>
+
+      <!-- config note -->
+      <rect x="752" y="464" width="208" height="60" rx="6" fill="#f5f5f5"/>
+      <rect x="752" y="464" width="208" height="60" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <text x="856" y="488" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">env contract</text>
+      <text x="856" y="506" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">AUDIOCPP_* (canonical)</text>
+      <text x="856" y="518" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">MODEL_ID / WEIGHTS / DEVICE</text>
+
+      <!-- legend -->
+      <line x1="30" y1="608" x2="970" y2="608" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="30" y="624" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+      <rect x="120" y="616" width="16" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+      <text x="142" y="624" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">hub artifact</text>
+      <rect x="250" y="616" width="16" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="272" y="624" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">process</text>
+      <rect x="350" y="616" width="16" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="372" y="624" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">volume / state</text>
+      <rect x="490" y="616" width="16" height="10" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <text x="512" y="624" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">host resource</text>
+      <line x1="640" y1="621" x2="672" y2="621" stroke="#2e5aa8" stroke-width="1.2"/>
+      <text x="680" y="624" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">client traffic</text>
+      <line x1="790" y1="621" x2="822" y2="621" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4"/>
+      <text x="830" y="624" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">mount / device</text>
+    </svg>

@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1000 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="seqfail-title seqfail-desc">
+      <title id="seqfail-title">Sequence: failure, timeout and recovery</title>
+      <desc id="seqfail-desc">Three recovery legs: a slow instance fails its 120-second health poll and is removed with its run directory cleaned; an in-flight TTS task interrupted by a hub restart is replayed and marked cancelled; a failed download segment retries with backoff before surfacing an error.</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+      <!-- SECTION A: health timeout -->
+      <rect x="40" y="60" width="920" height="176" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="1"/>
+      <rect x="52" y="66" width="150" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="127" y="75" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">A · HEALTH TIMEOUT</text>
+
+      <text x="90" y="112" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif">awaitReady — instance.go</text>
+      <path d="M 430,100 H 610" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="470" y="84" width="120" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="530" y="93" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">poll /health 1s</text>
+      <rect x="300" y="80" width="100" height="20" rx="3" fill="#f5f5f5" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+      <text x="350" y="94" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">≤ 120 s</text>
+
+      <path d="M 610,132 H 430" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+      <rect x="460" y="116" width="140" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="530" y="125" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">no 200 within deadline</text>
+
+      <path d="M 430,164 H 610" fill="none" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+      <rect x="460" y="148" width="160" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="540" y="157" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">kill child · event(error) · cleanupRunDir</text>
+
+      <text x="640" y="112" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace">log tail captured in event</text>
+      <text x="640" y="128" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace">state removed from manager</text>
+
+      <!-- SECTION B: task replay -->
+      <rect x="40" y="252" width="920" height="176" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="1"/>
+      <rect x="52" y="258" width="150" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="127" y="267" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">B · TASK REPLAY</text>
+
+      <text x="90" y="304" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif">replay() on hub restart — task.go</text>
+      <path d="M 470,292 H 640" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="496" y="276" width="120" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="556" y="285" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">read *.task.json</text>
+      <rect x="300" y="272" width="150" height="20" rx="3" fill="#f5f5f5" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+      <text x="375" y="286" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">QUEUED / RUNNING</text>
+
+      <path d="M 640,324 H 470" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+      <rect x="496" y="308" width="140" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="566" y="317" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">validate id + modelId</text>
+
+      <path d="M 470,356 H 640" fill="none" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+      <rect x="480" y="340" width="170" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="565" y="349" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">mark CANCELLED · finishedAt</text>
+
+      <text x="660" y="304" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace">corrupt/traversal ids skipped</text>
+      <text x="660" y="320" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace">orphan result files swept</text>
+      <text x="660" y="336" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace">queue rebuilt lazily per instance</text>
+
+      <!-- SECTION C: segment retry -->
+      <rect x="40" y="444" width="920" height="176" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="1"/>
+      <rect x="52" y="450" width="150" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="127" y="459" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">C · SEGMENT RETRY</text>
+
+      <text x="90" y="496" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif">downloadSegment — download.go</text>
+      <path d="M 470,484 H 640" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="500" y="468" width="112" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="556" y="477" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">Range request</text>
+      <rect x="300" y="464" width="150" height="20" rx="3" fill="#f5f5f5" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+      <text x="375" y="478" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">attempt 1..N</text>
+
+      <path d="M 640,516 H 470" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+      <rect x="500" y="500" width="130" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="565" y="509" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">error / timeout</text>
+
+      <path d="M 470,548 H 640" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="484" y="532" width="160" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="564" y="541" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">backoff → retry from .part offset</text>
+
+      <path d="M 640,588 H 470" fill="none" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+      <rect x="480" y="572" width="170" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="565" y="581" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">retries exhausted → FAILED</text>
+
+      <text x="660" y="496" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace">context cancel respected</text>
+      <text x="660" y="512" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace">generation guards stale writes</text>
+      <text x="660" y="528" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace">pause/resume crash-safe via .part</text>
+
+      <!-- legend -->
+      <line x1="30" y1="672" x2="970" y2="672" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="30" y="688" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+      <line x1="120" y1="685" x2="152" y2="685" stroke="#4f5d75" stroke-width="1.2"/>
+      <text x="160" y="688" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">trigger</text>
+      <line x1="280" y1="685" x2="312" y2="685" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4"/>
+      <text x="320" y="688" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">condition</text>
+      <line x1="470" y1="685" x2="502" y2="685" stroke="#eb6c36" stroke-width="1.2"/>
+      <text x="510" y="688" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">terminal outcome</text>
+    </svg>
