@@ -223,6 +223,16 @@ The `/api/fs/*` endpoints intentionally expose server-local filesystem browsing 
 
 Build steps, code style and pre-commit checks are in [`CONTRIBUTING.md`](CONTRIBUTING.md); see [`CHANGELOG.md`](CHANGELOG.md) for the change history.
 
+## Frontend (web/)
+
+The Web UI is plain HTML/CSS/JS in `web/`: **no framework, no build step, and no Node.js at runtime** — the Go server
+serves the static files straight from disk, so a browser refresh is all it takes. Any Node/npm tooling (if introduced)
+is dev/CI-only and does not ship.
+
+See [`web/README.md`](web/README.md) for the module map, state and polling model, coding conventions and contribution
+checklist. Architecture/sequence/state diagrams live in [`docs/diagrams/`](docs/diagrams/); demo GIFs in
+[`docs/assets/`](docs/assets/); the API contract the frontend calls is in [`docs/API.md`](docs/API.md).
+
 ## Tech Stack & Provenance
 
 - Go 1.27, native single binary; the only dependencies are `github.com/getlantern/systray` (Windows tray) and `golang.org/x/sys`
