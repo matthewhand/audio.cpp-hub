@@ -50,3 +50,13 @@ jobs:
 
       - name: go test（含竞态检测）
         run: go test -race ./...
+
+  diagrams:
+    name: 图示 / 可访问性契约
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 校验图示 HTML（role=img / aria / 无远程依赖）
+        run: python3 scripts/check-diagrams.py docs/diagrams
