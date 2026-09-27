@@ -223,6 +223,15 @@ logs/                   # 运行时：Windows GUI 模式下的 logs/hub.log
 
 构建、代码风格与提交前检查见 [`CONTRIBUTING.md`](CONTRIBUTING.md)；变更记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
+## 前端（web/）
+
+Web UI 是纯原生 HTML/CSS/JS（`web/`），**无框架、无构建步骤，运行时不需要 Node.js**——Go 服务直接从磁盘提供
+静态文件，改完刷新浏览器即可。Node / npm 等工具（若引入）只用于开发与 CI，不随发行版分发。
+
+前端结构、模块地图、状态与轮询模型、编码约定与贡献检查清单见 [`web/README.md`](web/README.md)。
+架构 / 时序 / 状态图见 [`docs/diagrams/`](docs/diagrams/)；界面演示 GIF 见 [`docs/assets/`](docs/assets/)；
+前端调用的接口契约见 [`docs/API.md`](docs/API.md)。
+
 ## 技术栈与来源
 
 - Go 1.27，原生单二进制；依赖仅 `github.com/getlantern/systray`（Windows 托盘）与 `golang.org/x/sys`
