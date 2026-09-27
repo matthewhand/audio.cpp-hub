@@ -366,7 +366,8 @@ window.I18N = (() => {
     "settings.general.language": "界面语言",
     "settings.general.languageDesc": "切换界面显示语言，立即生效",
     "settings.general.theme": "界面主题",
-    "settings.general.themeDesc": "切换深色 / 浅色外观，立即生效",
+    "settings.general.themeDesc": "跟随系统 / 深色 / 浅色外观，立即生效",
+    "settings.theme.system": "跟随系统",
     "settings.theme.dark": "深色",
     "settings.theme.light": "浅色",
     /* ---------- HTTPS 证书面板 ---------- */
@@ -925,7 +926,8 @@ window.I18N = (() => {
     "settings.general.language": "Interface language",
     "settings.general.languageDesc": "Switch the display language, takes effect immediately",
     "settings.general.theme": "Interface theme",
-    "settings.general.themeDesc": "Switch between dark / light appearance, takes effect immediately",
+    "settings.general.themeDesc": "Follow system / dark / light appearance, takes effect immediately",
+    "settings.theme.system": "Follow system",
     "settings.theme.dark": "Dark",
     "settings.theme.light": "Light",
     /* ---------- HTTPS certificate panel ---------- */
