@@ -1,0 +1,30 @@
+# Dev/CI-only toolchain: Prettier checks the tooling files added here, not the
+# legacy no-build frontend. See web/README.md for the rationale.
+node_modules/
+package-lock.json
+
+# Runtime data produced by the hub (never committed)
+run/
+data/
+models/
+logs/
+
+# Legacy frontend assets — intentionally not formatted with Prettier so this
+# workstream's diff stays mechanical and reviewable.
+web/*.js
+web/*.html
+web/*.css
+
+# Existing repo content not owned by this workstream
+docs/
+**/*.md
+**/*.yml
+**/*.yaml
+**/*.json
+scripts/*.cjs
+
+# ...but DO check the tooling files we add.
+!package.json
+!tsconfig.json
+!.prettierrc.json
+!web/README.md

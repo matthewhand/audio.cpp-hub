@@ -1,0 +1,20 @@
+{
+  "name": "audio.cpp-hub-web-quality",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Dev/CI-only lint, format and typecheck tooling for the no-build web/ frontend. Not required at runtime.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "node scripts/web-quality/tsc-ratchet.mjs"
+  },
+  "devDependencies": {
+    "eslint": "^10.11.0",
+    "prettier": "^3.9.9",
+    "typescript": "^7.0.2"
+  }
+}
