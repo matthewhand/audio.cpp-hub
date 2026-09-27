@@ -18,3 +18,10 @@ release_notes.md
 
 # 容器内使用的默认配置（端口 18080），需纳入版本控制
 !docker/hub.config.json
+
+# 前端开发工具链（dev-only，不进入发布产物）
+/node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+
