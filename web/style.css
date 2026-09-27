@@ -1534,6 +1534,142 @@ footer { padding: 4px 24px 18px; }
 /* 列表加载失败提示 + 重试按钮 */
 .load-error { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .load-error button { flex: none; }
+
+/* ---------- 统一异步状态：骨架 / 空态 / 错误态 ---------- */
+/* 骨架屏：列表拉取期间占位，避免空白闪烁（aria-busy 由 JS 标注在容器上） */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 0;
+}
+.skeleton-card {
+  height: 58px;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+  background: linear-gradient(90deg, var(--ring) 25%, var(--wave-bg) 37%, var(--ring) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+#model-list .skeleton-card { height: 46px; }
+#dl-list .skeleton-card { height: 72px; }
+@keyframes skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+/* 空态 / 错误态统一的提示盒 */
+.state-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.state-box .state-msg { margin: 0; }
+.state-box .state-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.state-box.load-error {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.state-box.load-error .state-actions { flex: none; }
+#history-list .state-box,
+#voices-list .state-box { margin: 0; }
+
+/* 按钮内联 loading：本地化加载态，替代全局遮罩 */
+.btn-busy { position: relative; pointer-events: none; opacity: 0.75; }
+.btn-busy::before {
+  content: "";
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  animation: spin 0.8s linear infinite;
+}
+
+/* toast 语义色：成功 / 警告 / 信息 / 错误 */
+.toast.success { border-left-color: var(--ok); }
+.toast.warn { border-left-color: var(--warn); }
+.toast.info { border-left-color: var(--accent-2); }
+.toast.error { border-left-color: var(--err); }
+
+/* ---------- 命令面板（Ctrl/Cmd-K） ---------- */
+#command-palette { align-items: flex-start; }
+.command-palette-card {
+  width: min(620px, 94vw);
+  max-height: 70vh;
+  margin-top: 12vh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-hover);
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
+}
+#command-palette:not(.hidden) .command-palette-card { opacity: 1; transform: none; }
+#command-palette-input {
+  width: 100%;
+  margin-top: 0;
+  font-size: 14px;
+  padding: 10px 12px;
+}
+.cp-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cp-group {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  padding: 8px 10px 2px;
+}
+.cp-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.cp-item.active { background: var(--ring); }
+.cp-item-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-item-sub { flex: none; color: var(--text-dim); font-size: 12px; }
+.cp-empty { padding: 16px 10px; color: var(--text-dim); font-size: 13px; }
+.cp-hint {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  padding: 2px 10px 4px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cp-hint kbd {
+  font-family: inherit;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+  background: var(--input-bg);
+}
 /* 弹窗容器仅作程序化焦点落点，不显示轮廓（首个可聚焦控件会接管焦点） */
 .modal[tabindex="-1"]:focus, .history-panel-card[tabindex="-1"]:focus { outline: none; }
 
@@ -1555,10 +1691,15 @@ footer { padding: 4px 24px 18px; }
   }
   /* 加载/工作中指示是必要反馈，保留（略放慢）而非停成静止图标 */
   .spinner,
+  .skeleton-card,
+  .btn-busy::before,
   .badge.working::before,
   .badge.starting {
     animation-duration: 1.1s !important;
     animation-iteration-count: infinite !important;
+  }
+  .skeleton-card {
+    background: var(--ring);
   }
   /* 流光为纯装饰，降级为静态高亮条 */
   .dl-progress-fill.indeterminate {
