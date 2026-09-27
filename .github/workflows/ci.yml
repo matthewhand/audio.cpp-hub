@@ -50,3 +50,47 @@ jobs:
 
       - name: go test（含竞态检测）
         run: go test -race ./...
+
+  frontend:
+    name: 前端（单元 / e2e / 清单 / 预算）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: 设置 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖（跳过浏览器下载）
+        run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+      - name: 单元测试
+        run: npm run test:unit
+
+      - name: UI 清单漂移检查
+        run: npm run ui:inventory:check
+
+      - name: 性能预算检查
+        run: npm run perf:budget
+
+      - name: 安装 Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: e2e（headless，mock 后端）
+        run: npm run test:e2e
+
+      - name: 上传 Playwright 报告
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+

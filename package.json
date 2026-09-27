@@ -1,0 +1,17 @@
+{
+  "name": "audio.cpp-hub",
+  "version": "0.0.0",
+  "private": true,
+  "description": "audio.cpp-hub 前端开发工具链：Playwright e2e、node:test 单元测试、UI 清单与性能预算（均仅开发期使用，发布二进制不含）",
+  "scripts": {
+    "test:unit": "node --test \"test/unit/**/*.test.mjs\"",
+    "test:e2e": "playwright test --config e2e/playwright.config.mjs",
+    "test": "npm run test:unit && npm run test:e2e",
+    "ui:inventory": "node scripts/ui-inventory.mjs",
+    "ui:inventory:check": "node scripts/ui-inventory-check.mjs",
+    "perf:budget": "node scripts/perf-budget.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
