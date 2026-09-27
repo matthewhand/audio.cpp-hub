@@ -1,3 +1,6 @@
+# 前端工具链依赖（仅开发/CI，运行时不需要）
+/node_modules/
+
 /logs/
 /run/
 /data/

@@ -50,3 +50,33 @@ jobs:
 
       - name: go test（含竞态检测）
         run: go test -race ./...
+
+  frontend:
+    name: 前端格式 / Lint / 类型检查
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: 设置 Node
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 显示 Node 版本
+        run: node --version && npm --version
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 检查 Prettier 格式
+        run: npm run format:check
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript 棘轮检查（不高于基线）
+        run: npm run typecheck
