@@ -79,15 +79,19 @@ function renderListError(container, message, retry) {
 }
 const selectedModel = () => models.find(m => m.id === selectedModelId);
 
-/* ---------- 主题切换 ---------- */
+/* ---------- 主题切换（system → light → dark 循环，解析逻辑见 boot.js 的 window.HubTheme） ---------- */
 const themeBtn = $("theme-toggle");
+const THEME_MODES = ["system", "light", "dark"];
+const THEME_ICONS = { system: "🖥️", light: "☀️", dark: "🌙" };
 function applyThemeIcon() {
-  themeBtn.textContent = document.documentElement.dataset.theme === "dark" ? "☀️" : "🌙";
+  const mode = window.HubTheme.mode();
+  themeBtn.textContent = THEME_ICONS[mode] || THEME_ICONS.system;
+  themeBtn.title = t("settings.general.theme") + "：" + t("settings.theme." + mode);
 }
 themeBtn.onclick = () => {
-  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-  document.documentElement.dataset.theme = next;
-  localStorage.setItem("hub-theme", next);
+  const mode = window.HubTheme.mode();
+  const next = THEME_MODES[(THEME_MODES.indexOf(mode) + 1) % THEME_MODES.length];
+  window.HubTheme.setMode(next);
   applyThemeIcon();
   window.dispatchEvent(new Event("themechange"));
 };
@@ -101,6 +105,7 @@ function applyLangBtn() {
 langBtn.onclick = () => I18N.setLang(I18N.lang() === "zh" ? "en" : "zh");
 function rerenderAll() {
   applyLangBtn();
+  applyThemeIcon();
   if (models.length) { renderModelList(); updateQuickLaunchTitle(); }
   renderExecList(); updateLaunchExec(); renderLaunchProfiles();
   renderInstanceList(); updateInstanceBar();
@@ -332,13 +337,11 @@ settingsModal.onclick = (e) => { if (e.target === settingsModal) closeSettingsMo
 /* 通用面板：界面语言 / 主题（与页头开关同一状态源） */
 function syncGeneralPane() {
   $("ui-language").value = I18N.lang();
-  $("ui-theme").value = document.documentElement.dataset.theme;
+  $("ui-theme").value = window.HubTheme.mode();
 }
 $("ui-language").onchange = (e) => I18N.setLang(e.target.value);
 $("ui-theme").onchange = (e) => {
-  const next = e.target.value === "light" ? "light" : "dark";
-  document.documentElement.dataset.theme = next;
-  localStorage.setItem("hub-theme", next);
+  window.HubTheme.setMode(e.target.value);
   applyThemeIcon();
   window.dispatchEvent(new Event("themechange"));
 };
