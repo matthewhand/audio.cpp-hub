@@ -11,10 +11,11 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <a id="skip-to-content" class="skip-link" href="#main-content" data-i18n="a11y.skipToContent">跳到主要内容</a>
   <header>
     <div class="brand">
-      <button id="menu-toggle" class="theme-btn" data-i18n-title="header.menuTitle" title="模型与实例菜单">☰</button>
-      <span class="logo">audio.cpp-hub</span>
+      <button id="menu-toggle" class="theme-btn" data-i18n-title="a11y.openMenu" data-i18n-aria-label="a11y.openMenu" aria-label="打开菜单" title="模型与实例菜单">☰</button>
+      <h1 class="logo">audio.cpp-hub</h1>
       <span class="subtitle" data-i18n="header.subtitle">audiocpp_server 进程管理 &amp; 音频工作台</span>
     </div>
     <div class="header-actions">
@@ -27,9 +28,9 @@
     </div>
   </header>
 
-  <main>
+  <main id="main-content" tabindex="-1">
     <!-- 左栏：模型 + 实例 -->
-    <aside id="left">
+    <aside id="left" data-i18n-aria-label="nav.sidebarLabel" aria-label="模型与实例">
       <h2 data-i18n="nav.instances">实例</h2>
       <div id="instance-list" class="card-list"></div>
       <h2 data-i18n="nav.models">模型</h2>
@@ -43,7 +44,7 @@
         <!-- 实例状态条 -->
         <div id="instance-bar">
           <span class="bar-label" data-i18n="instance.barLabel">实例</span>
-          <select id="instance-select"></select>
+          <select id="instance-select" data-i18n-aria-label="instance.barLabel" aria-label="实例"></select>
           <span id="instance-pill" class="pill warn" data-i18n="instance.noReady">没有就绪实例</span>
           <button id="instance-detail" class="btn-ghost" disabled data-i18n="instance.detail">详情</button>
           <button id="instance-stop" class="stop-btn" disabled data-i18n="instance.stopCurrent">停止当前实例</button>
@@ -52,7 +53,7 @@
 
         <!-- TTS 面板 -->
         <div class="card panel-card" id="panel-tts">
-          <h2 id="tts-title">语音合成</h2>
+          <h2 id="tts-title" data-i18n="tts.title">语音合成</h2>
           <label id="tts-text-block"><span data-i18n="tts.textLabel">合成文本</span><textarea id="tts-text" rows="4" data-i18n-placeholder="tts.textPlaceholder" placeholder="要合成的文本"></textarea></label>
           <div id="tts-primary-instruction-row"></div>
           <div id="tts-language-row"></div>
@@ -72,11 +73,11 @@
           <div id="tts-enum-row"></div>
 
           <div id="tts-emotion-block" class="hidden">
-            <div class="tabs">
-              <button class="tab active" data-mode="none" data-i18n="emotion.tab.none">无</button>
-              <button class="tab" data-mode="emotion_audio" data-i18n="emotion.tab.emotion_audio">情感参考音频</button>
-              <button class="tab" data-mode="emotion_vector" data-i18n="emotion.tab.emotion_vector">情感向量</button>
-              <button class="tab" data-mode="emotion_text" data-i18n="emotion.tab.emotion_text">情感文本</button>
+            <div class="tabs" role="tablist" data-i18n-aria-label="emotion.tabsLabel" aria-label="情感模式">
+              <button class="tab active" data-mode="none" role="tab" aria-selected="true" data-i18n="emotion.tab.none">无</button>
+              <button class="tab" data-mode="emotion_audio" role="tab" aria-selected="false" data-i18n="emotion.tab.emotion_audio">情感参考音频</button>
+              <button class="tab" data-mode="emotion_vector" role="tab" aria-selected="false" data-i18n="emotion.tab.emotion_vector">情感向量</button>
+              <button class="tab" data-mode="emotion_text" role="tab" aria-selected="false" data-i18n="emotion.tab.emotion_text">情感文本</button>
             </div>
             <div id="emotion-pane-none" class="emotion-pane" data-i18n="emotion.paneNone">跟随说话人参考音频的情感。</div>
             <div id="emotion-pane-emotion_audio" class="emotion-pane hidden">
@@ -108,7 +109,7 @@
 
         <!-- ASR 面板 -->
         <div class="card panel-card hidden" id="panel-asr">
-          <h2 id="asr-title">语音识别</h2>
+          <h2 id="asr-title" data-i18n="asr.title">语音识别</h2>
           <div id="asr-audio-picker"></div>
           <div id="asr-language-row"></div>
           <div id="asr-text-row"></div>
@@ -127,7 +128,7 @@
 
         <!-- SEP 面板 -->
         <div class="card panel-card hidden" id="panel-sep">
-          <h2 id="sep-title">音频分离</h2>
+          <h2 id="sep-title" data-i18n="sep.title">音频分离</h2>
           <div class="hint" data-i18n="sep.hint">输入 44.1kHz 音乐效果最佳。</div>
           <div id="sep-audio-picker"></div>
           <button id="sep-submit" class="btn" data-i18n="sep.submit">分离</button>
@@ -138,7 +139,7 @@
 
         <!-- YuE2 音乐生成面板 -->
         <div class="card panel-card hidden" id="panel-music">
-          <h2 id="music-title">音乐生成</h2>
+          <h2 id="music-title" data-i18n="music.title">音乐生成</h2>
           <label><span data-i18n="music.styleLabel">音乐风格 style</span><textarea id="music-style" rows="2" data-i18n-placeholder="music.stylePlaceholder" placeholder="English, indie pop, bright acoustic guitar, soft drums, warm lead vocal"></textarea></label>
           <label><span data-i18n="music.lyricsLabel">歌词 lyrics</span><textarea id="music-lyrics" rows="8" data-i18n-placeholder="music.lyricsPlaceholder" placeholder="[Verse]"></textarea></label>
           <div class="hint" data-i18n="music.lyricsHint">风格与歌词均为必填；建议用 [Verse] / [Chorus] 等段落标记组织歌词。生成一首歌通常需要数分钟。</div>
@@ -157,7 +158,7 @@
 
         <!-- OTHER 面板 -->
         <div class="card panel-card hidden" id="panel-other">
-          <h2 id="other-title">工具</h2>
+          <h2 id="other-title" data-i18n="other.title">工具</h2>
           <div id="other-text-row"></div>
           <div id="other-audio-block"><div id="other-audio-picker"></div></div>
           <div id="other-voice-block"><div id="other-voice-picker"></div></div>
@@ -179,14 +180,14 @@
       <div class="history-header">
         <span class="history-title" id="history-panel-title" data-i18n="history.title">操作历史</span>
         <div class="history-actions">
-          <button id="history-privacy" type="button" class="btn-ghost">隐私</button>
+          <button id="history-privacy" type="button" class="btn-ghost" data-i18n="history.privacyBtn">隐私</button>
           <button id="history-group-new" type="button" class="btn-ghost" data-i18n="history.groupNew">新建分组</button>
           <button id="history-refresh" type="button" class="btn-ghost" data-i18n="history.refresh">刷新</button>
           <button id="history-clear" type="button" class="stop-btn" data-i18n="history.clear">清空</button>
           <button id="history-close" type="button" class="theme-btn" data-i18n-title="history.closeTitle" data-i18n-aria-label="history.closeTitle" title="关闭">×</button>
         </div>
       </div>
-      <div id="history-list"></div>
+      <div id="history-list" role="log" aria-live="polite" aria-relevant="additions text" data-i18n-aria-label="a11y.taskStatus"></div>
     </div>
   </div>
 
@@ -315,12 +316,14 @@
     </div>
   </div>
 
-  <!-- 任务处理中等待遮罩 -->
-  <div id="busy-overlay" class="modal-overlay hidden">
+  <!-- 任务处理中等待遮罩：role=alertdialog + aria-busy，焦点锁在遮罩内；
+       只有标签进入 live region，计时数字每 100ms 变化不能进 aria-live（否则读屏刷屏） -->
+  <div id="busy-overlay" class="modal-overlay hidden" role="alertdialog" aria-modal="true"
+       aria-busy="true" aria-labelledby="busy-label" tabindex="-1">
     <div class="busy-box">
-      <div class="spinner"></div>
-      <div id="busy-label" data-i18n="busy.label">正在处理中…</div>
-      <div id="busy-elapsed" class="busy-elapsed">0.0s</div>
+      <div class="spinner" aria-hidden="true"></div>
+      <div id="busy-label" data-i18n="busy.label" aria-live="polite">正在处理中…</div>
+      <div id="busy-elapsed" class="busy-elapsed" aria-hidden="true">0.0s</div>
     </div>
   </div>
 
@@ -332,7 +335,7 @@
         <button id="settings-modal-close" class="modal-close" data-i18n-aria-label="history.closeTitle">×</button>
       </div>
       <div class="settings-body">
-        <nav class="settings-nav">
+        <nav class="settings-nav" data-i18n-aria-label="settings.title" aria-label="设置">
           <button class="settings-nav-item active" data-section="general" data-i18n="settings.nav.general">通用</button>
           <button class="settings-nav-item" data-section="executables" data-i18n="settings.nav.executables">audio.cpp</button>
           <button class="settings-nav-item" data-section="https" data-i18n="settings.nav.https">HTTPS 证书</button>
@@ -346,7 +349,7 @@
                 <div class="settings-row-label" data-i18n="settings.general.language">界面语言</div>
                 <div class="settings-row-desc" data-i18n="settings.general.languageDesc">切换界面显示语言，立即生效</div>
               </div>
-              <select id="ui-language" class="settings-select">
+              <select id="ui-language" class="settings-select" data-i18n-aria-label="settings.general.language" aria-label="界面语言">
                 <option value="zh">中文</option>
                 <option value="en">English</option>
               </select>
@@ -356,7 +359,7 @@
                 <div class="settings-row-label" data-i18n="settings.general.theme">界面主题</div>
                 <div class="settings-row-desc" data-i18n="settings.general.themeDesc">切换深色 / 浅色外观，立即生效</div>
               </div>
-              <select id="ui-theme" class="settings-select">
+              <select id="ui-theme" class="settings-select" data-i18n-aria-label="settings.general.theme" aria-label="界面主题">
                 <option value="dark" data-i18n="settings.theme.dark">深色</option>
                 <option value="light" data-i18n="settings.theme.light">浅色</option>
               </select>
@@ -402,7 +405,7 @@
                 <div class="settings-row-label" data-i18n="https.enableLabel">启用 HTTPS</div>
                 <div class="settings-row-desc" data-i18n="https.enableDesc">同一端口提供 HTTPS，纯 HTTP 请求自动跳转；修改后需重启程序生效</div>
               </div>
-              <label class="switch"><input type="checkbox" id="https-enabled"><span class="switch-slider"></span></label>
+              <label class="switch"><input type="checkbox" id="https-enabled" data-i18n-aria-label="https.enableLabel" aria-label="启用 HTTPS"><span class="switch-slider" aria-hidden="true"></span></label>
             </div>
             <div class="settings-row">
               <div class="settings-row-text">
@@ -445,6 +448,8 @@
     </div>
   </div>
 
+  <script src="/i18n.zh.js"></script>
+  <script src="/i18n.en.js"></script>
   <script src="/i18n.js"></script>
   <script src="/wav.js"></script>
   <script src="/file-browser.js"></script>

@@ -53,6 +53,7 @@ window.VoiceSelect = class VoiceSelect {
   /* ---------- 语言切换 ---------- */
   refreshLabels() {
     this.root.querySelector(".vs-title").textContent = t(this.titleKey);
+    this.sel.setAttribute("aria-label", t(this.titleKey));
     this.playBtn.textContent = this.playing ? t("voiceSelect.pause") : t("voiceSelect.play");
     this.manageBtn.textContent = t("voiceSelect.manage");
     if (this.sel.options.length && this.sel.options[0].value === "") {

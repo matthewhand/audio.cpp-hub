@@ -53,8 +53,9 @@
   --ring: rgba(0, 0, 0, 0.10);
   --shadow: 0 4px 18px rgba(0, 0, 0, 0.07);
   --shadow-hover: 0 10px 28px rgba(0, 0, 0, 0.12);
-  --ok: #059669;
-  --warn: #d97706;
+  /* 对比度：浅色主题下 ok/warn 需比深色主题更深，白字/深字均 ≥ 4.5:1（WCAG AA） */
+  --ok: #047857;
+  --warn: #92400e;
   --err: #dc2626;
   --wave-bg: #f1f1f3;
   --wave-dim: #b8b8bf;
@@ -87,6 +88,49 @@ h2 { font-size: 15px; font-weight: 700; margin: 16px 0 10px; letter-spacing: 0.0
 h3 { font-size: 14px; font-weight: 600; margin: 0 0 12px; }
 
 .hidden { display: none !important; }
+/* 仅供读屏的文本（视觉隐藏但保留在无障碍树中） */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* 跳到主要内容：默认视觉隐藏，键盘聚焦时滑入页面左上角 */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-200%);
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
+#main-content:focus { outline: none; }
+/* 全站一致的键盘焦点可见样式（鼠标点击不触发 :focus-visible） */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input[type="text"]:focus-visible, input[type="number"]:focus-visible,
+textarea:focus-visible, select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+}
 .hint { font-size: 12.5px; color: var(--text-dim); margin: 6px 0; }
 /* 可执行文件为空时的占位下拉：弱化文字 + 指针提示可点击跳转设置 */
 #launch-exec.exec-empty { cursor: pointer; color: var(--text-dim); }
@@ -114,6 +158,8 @@ header {
   font-weight: 800;
   letter-spacing: 0.01em;
   color: var(--text);
+  margin: 0;
+  line-height: 1.15;
 }
 .subtitle { font-size: 12.5px; color: var(--text-dim); }
 .theme-btn {
@@ -302,13 +348,14 @@ footer { flex: none; }
   border-radius: 999px;
   font-size: 11.5px;
   font-weight: 600;
-  color: #fff;
+  /* 徽标底色为状态色：文字用与背景成对的强调对比色（深色主题深字、浅色主题白字） */
+  color: var(--accent-contrast);
 }
 .badge.ready { background: var(--ok); }
 .badge.starting { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
 .badge.error { background: var(--err); }
-.badge.stopped { background: #8a8f9c; }
-.badge.unconfigured { background: #8a8f9c; }
+.badge.stopped { background: #5b616e; color: #fff; }
+.badge.unconfigured { background: #5b616e; color: #fff; }
 /* 实例有活跃任务（QUEUED/RUNNING）：转圈“工作中”徽标（复用 @keyframes spin）。
    背景用 --accent、文字与弧线用 --accent-contrast，两套主题下均保持高对比 */
 .badge.working { background: var(--accent); color: var(--accent-contrast); display: inline-flex; align-items: center; gap: 5px; }
@@ -324,9 +371,9 @@ footer { flex: none; }
 }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-/* 无启动配置的模型：黯淡展示，表示暂不可用 */
-.card.unconfigured { opacity: 0.45; }
-.card.unconfigured:hover { opacity: 0.7; }
+/* 无启动配置的模型：黯淡展示，表示暂不可用（0.65 起仍可辨认文本） */
+.card.unconfigured { opacity: 0.65; }
+.card.unconfigured:hover { opacity: 0.85; }
 
 .pill {
   padding: 4px 14px;
@@ -400,7 +447,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; filter: none; }
 .btn-ghost:active { transform: scale(0.97); }
 
 .stop-btn { background: transparent; border-color: var(--err); color: var(--err); }
-.stop-btn:hover { background: var(--err); color: #fff; }
+.stop-btn:hover { background: var(--err); color: var(--accent-contrast); }
 
 /* ---------- 表单控件 ---------- */
 label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 10px; }

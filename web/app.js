@@ -121,10 +121,12 @@ function rerenderAll() {
 function openDrawer() {
   $("left").classList.add("open");
   $("drawer-overlay").classList.remove("hidden");
+  $("menu-toggle").setAttribute("aria-expanded", "true");
 }
 function closeDrawer() {
   $("left").classList.remove("open");
   $("drawer-overlay").classList.add("hidden");
+  $("menu-toggle").setAttribute("aria-expanded", "false");
 }
 $("menu-toggle").onclick = openDrawer;
 $("drawer-overlay").onclick = closeDrawer;
@@ -203,6 +205,19 @@ function modelConfigured(m) {
 let hfMenuEl = null;
 let hfMenuAnchor = null;
 
+/* 弹出菜单键盘导航：上下方向键 / Home / End 在菜单项间移动焦点 */
+function bindMenuKeys(menuEl, sel) {
+  menuEl.addEventListener("keydown", (e) => {
+    const items = [...menuEl.querySelectorAll(sel)];
+    if (!items.length) return;
+    const i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    else if (e.key === "Home") { e.preventDefault(); items[0].focus(); }
+    else if (e.key === "End") { e.preventDefault(); items[items.length - 1].focus(); }
+  });
+}
+
 function hfMirrorOf(url) {
   return url ? url.replace("https://huggingface.co/", "https://hf-mirror.com/") : null;
 }
@@ -217,8 +232,10 @@ function openHfMenu(anchor, m) {
   if (!hfMenuEl) {
     hfMenuEl = document.createElement("div");
     hfMenuEl.id = "hf-menu";
+    hfMenuEl.setAttribute("role", "menu");
     document.body.appendChild(hfMenuEl);
     hfMenuEl.addEventListener("click", (e) => { if (e.target.closest("a")) closeHfMenu(); });
+    bindMenuKeys(hfMenuEl, "a");
   }
   const items = [
     { label: t("model.hfMenu.hf"), url: safeHttpUrl(m.hfUrl) },
@@ -226,7 +243,7 @@ function openHfMenu(anchor, m) {
     { label: t("model.hfMenu.gguf"), url: safeHttpUrl(m.ggufUrl) },
     { label: t("model.hfMenu.ggufMirror"), url: safeHttpUrl(hfMirrorOf(m.ggufUrl)) },
   ].filter(x => x.url);
-  hfMenuEl.innerHTML = items.map(x => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}<span class="hf-menu-ext">↗</span></a>`).join("");
+  hfMenuEl.innerHTML = items.map(x => `<a href="${esc(x.url)}" target="_blank" rel="noopener" role="menuitem">${esc(x.label)}<span class="hf-menu-ext" aria-hidden="true">↗</span></a>`).join("");
   closeHfMenu();
   hfMenuAnchor = anchor;
   anchor.classList.add("open");
@@ -239,6 +256,8 @@ function openHfMenu(anchor, m) {
   if (right + mw > window.innerWidth - 8) right = 8;
   hfMenuEl.style.top = top + "px";
   hfMenuEl.style.right = right + "px";
+  const first = hfMenuEl.querySelector("a");
+  if (first) first.focus();
 }
 
 function toggleHfMenu(anchor, m) {
@@ -515,9 +534,10 @@ $("exec-browse-btn").onclick = async () => {
 /* ---------- 弹窗可访问性：焦点管理 / Esc 只关最上层 ---------- */
 /* 可见弹窗按 DOM 顺序（≈ 堆叠顺序），最后一个即最上层 */
 const OVERLAY_IDS = ["instance-detail-modal", "launch-modal", "downloads-modal",
-  "model-dl-modal", "settings-modal", "history-panel", "voices-panel"];
+  "model-dl-modal", "settings-modal", "history-panel", "voices-panel", "fb-overlay", "busy-overlay"];
 const FOCUSABLE_SEL = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-let dialogReturnFocus = null;
+/* 弹窗返回焦点的栈：支持嵌套弹窗（如启动弹窗里打开文件浏览器）逐层还原 */
+const dialogFocusStack = [];
 
 function visibleOverlays() {
   return OVERLAY_IDS.map(id => $(id)).filter(el => el && !el.classList.contains("hidden"));
@@ -526,19 +546,35 @@ function topmostOverlay() {
   const open = visibleOverlays();
   return open.length ? open[open.length - 1] : null;
 }
-/* 打开弹窗：记录触发元素并把焦点移入弹窗 */
+function setInert(node, on) {
+  if (on) node.setAttribute("inert", "");
+  else node.removeAttribute("inert");
+}
+/* 有弹窗时把主页面区域与非最上层弹窗设为 inert：键盘/读屏无法到达遮罩后的内容 */
+function syncInert() {
+  const open = visibleOverlays();
+  const top = open.length ? open[open.length - 1] : null;
+  /* toast-root 不设 inert：inert 会把 aria-live 区域移出无障碍树，弹窗内的错误提示就读不到了 */
+  const regions = [document.querySelector("header"), $("main-content"), document.querySelector("footer"),
+    $("drawer-overlay")];
+  for (const r of regions) if (r) setInert(r, !!top);
+  for (const o of open) setInert(o, o !== top);
+}
+/* 打开弹窗：记录触发元素、把背景设为 inert，并把焦点移入弹窗 */
 function focusDialog(overlay) {
   if (!overlay) return;
-  dialogReturnFocus = document.activeElement;
-  const card = overlay.querySelector(".modal, .history-panel-card") || overlay;
+  dialogFocusStack.push(document.activeElement);
+  const card = overlay.querySelector(".modal, .history-panel-card, .fb-modal, .busy-box") || overlay;
   if (!card.hasAttribute("tabindex")) card.setAttribute("tabindex", "-1");
+  syncInert();
   const first = overlay.querySelector(FOCUSABLE_SEL);
   (first || card).focus();
 }
-/* 关闭弹窗：焦点还原到打开它的元素 */
+/* 关闭弹窗：先解除/重算 inert，再把焦点还原到打开它的元素 */
 function restoreDialogFocus() {
-  if (dialogReturnFocus && typeof dialogReturnFocus.focus === "function") dialogReturnFocus.focus();
-  dialogReturnFocus = null;
+  const prev = dialogFocusStack.pop();
+  syncInert();
+  if (prev && typeof prev.focus === "function") prev.focus();
 }
 function closeTopmostOverlay() {
   const overlay = topmostOverlay();
@@ -550,7 +586,9 @@ function closeTopmostOverlay() {
   else if (overlay.id === "downloads-modal") closeDownloadsModal();
   else if (overlay.id === "model-dl-modal") closeModelDlModal();
   else if (overlay.id === "instance-detail-modal") closeInstanceDetail();
-  else overlay.classList.add("hidden");
+  else if (overlay.id === "fb-overlay") { if (window.FileBrowser) FileBrowser.cancel(); }
+  else if (overlay.id === "busy-overlay") { return; } // 忙碌遮罩不允许 Esc 关闭
+  else { overlay.classList.add("hidden"); restoreDialogFocus(); }
 }
 
 /* Tab 焦点锁定在当前最上层弹窗内，防止键盘用户 Tab 到遮罩后的页面 */
@@ -1257,7 +1295,7 @@ function renderInstanceDetail(inst) {
     [t("instance.field.port"), String(inst.port)],
     [t("instance.field.threads"), inst.threads != null ? String(inst.threads) : t("instance.valueAuto")],
     [t("instance.field.executable"), inst.executableName || "-"],
-    [t("instance.field.createdAt"), inst.createdAt ? new Date(inst.createdAt).toLocaleString() : "-"]
+    [t("instance.field.createdAt"), inst.createdAt ? I18N.date(inst.createdAt) : "-"]
   ];
   const addRow = (keyText, valueNode) => {
     const row = document.createElement("div");
@@ -1307,10 +1345,7 @@ let mdlModel = null;
 
 function fmtBytes(n) {
   if (n == null || n < 0) return "?";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let v = n, i = 0;
-  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-  return (i === 0 ? v : v.toFixed(1)) + " " + units[i];
+  return I18N.bytes(n);
 }
 
 const DL_STATUS_CLASS = { RUNNING: "starting", PENDING: "starting", PAUSED: "stopped", DONE: "ready", FAILED: "error" };
@@ -1372,7 +1407,7 @@ function renderDownloadList() {
       <span class="badge ${DL_STATUS_CLASS[d.status] || "stopped"}">${esc(t("dl.status." + d.status))}</span>
     </div>
     <div class="dl-progress"><div class="dl-progress-fill${!pctOk || pct < 0 ? " indeterminate" : ""}" style="width:${pctShown}%"></div></div>
-    <div class="dl-row-meta">${esc(fmtBytes(d.downloadedBytes))} / ${esc(fmtBytes(d.totalBytes))}${pctOk && pct >= 0 ? ` ｜ ${pctShown}%` : ""}${d.status === "RUNNING" && d.speedBps > 0 ? ` ｜ ${esc(fmtBytes(d.speedBps))}/s` : ""} ｜ ${esc(t("dl.fileProgress", { done: d.completedFiles, n: d.fileCount }))}</div>`;
+    <div class="dl-row-meta">${esc(fmtBytes(d.downloadedBytes))} / ${esc(fmtBytes(d.totalBytes))}${pctOk && pct >= 0 ? ` ｜ ${esc(I18N.percent(pctShown))}` : ""}${d.status === "RUNNING" && d.speedBps > 0 ? ` ｜ ${esc(fmtBytes(d.speedBps))}/s` : ""} ｜ ${esc(t("dl.fileProgress", { done: d.completedFiles, n: d.fileCount }))}</div>`;
     if (d.status === "FAILED" && d.error) {
       html += `<div class="error-text">${esc(d.error)}</div>`;
     }
@@ -1461,7 +1496,7 @@ function renderMdlPackages() {
       <input type="radio" name="mdl-package" value="${esc(p.id)}"${p.default || (!pkgs.some(x => x.default) && i === 0) ? " checked" : ""}>
       <span class="dl-package-text">
         <span class="dl-package-name"></span>
-        <span class="dl-package-meta">${esc([p.format, p.precision].filter(Boolean).join(" ｜ "))} → models/${esc(p.targetDir)} ｜ ${esc(t("dl.fileCount", { n: (p.files || []).length }))}</span>
+        <span class="dl-package-meta">${esc([p.format, p.precision].filter(Boolean).join(" ｜ "))} → models/${esc(p.targetDir)} ｜ ${esc(I18N.plural("dl.fileCount", (p.files || []).length))}</span>
       </span>
     </label>`);
     const name = row.querySelector(".dl-package-name");
@@ -1548,8 +1583,8 @@ async function refreshEvents() {
 
 function showToast(level, message) {
   const root = $("toast-root");
-  const node = el(`<div class="toast ${level === "error" ? "error" : "info"}">
-    <span class="toast-text"></span><button class="toast-close">×</button></div>`);
+  const node = el(`<div class="toast ${level === "error" ? "error" : "info"}" role="${level === "error" ? "alert" : "status"}">
+    <span class="toast-text"></span><button class="toast-close" aria-label="${esc(t("history.closeTitle"))}">×</button></div>`);
   node.querySelector(".toast-text").textContent = message;
   node.querySelector(".toast-close").onclick = () => dismissToast(node);
   root.appendChild(node);
@@ -1709,7 +1744,10 @@ function showBusy(label) {
   $("busy-label").textContent = label;
   const start = performance.now();
   $("busy-elapsed").textContent = "0.0s";
+  busyReturnFocus = document.activeElement;
   $("busy-overlay").classList.remove("hidden");
+  syncInert();
+  $("busy-overlay").focus();
   busyTimer = setInterval(() => {
     $("busy-elapsed").textContent = ((performance.now() - start) / 1000).toFixed(1) + "s";
   }, 100);
@@ -1719,7 +1757,11 @@ function hideBusy() {
   clearInterval(busyTimer);
   busyTimer = null;
   $("busy-overlay").classList.add("hidden");
+  syncInert();
+  if (busyReturnFocus && typeof busyReturnFocus.focus === "function") busyReturnFocus.focus();
+  busyReturnFocus = null;
 }
+let busyReturnFocus = null;
 
 function b64ToBlob(b64, mime) {
   const bin = atob(b64);
@@ -2211,7 +2253,11 @@ $("tts-submit").onclick = async () => {
 document.querySelectorAll("#tts-emotion-block .tab").forEach(tab => {
   tab.onclick = () => {
     emotionMode = tab.dataset.mode;
-    document.querySelectorAll("#tts-emotion-block .tab").forEach(tb => tb.classList.toggle("active", tb === tab));
+    document.querySelectorAll("#tts-emotion-block .tab").forEach(tb => {
+      const on = tb === tab;
+      tb.classList.toggle("active", on);
+      tb.setAttribute("aria-selected", on ? "true" : "false");
+    });
     document.querySelectorAll("#tts-emotion-block .emotion-pane").forEach(p => p.classList.add("hidden"));
     $("emotion-pane-" + emotionMode).classList.remove("hidden");
     $("emotion-alpha-row").classList.toggle("hidden", emotionMode === "none");
@@ -2382,7 +2428,7 @@ function makeTaskRow(task) {
       <span class="history-btns"></span>
     </div>
   </div>`);
-  row.querySelector(".history-time").textContent = new Date(task.createdAt).toLocaleString();
+  row.querySelector(".history-time").textContent = I18N.date(task.createdAt);
   const textEl = row.querySelector(".history-text");
   textEl.dataset.realText = task.text || "";
   textEl.textContent = privacyOn() && task.text ? t("history.masked") : task.text || t("history.noText");
@@ -2502,7 +2548,7 @@ function makeGroupHeaderRow(gid, name, count, collapsed) {
   toggle.textContent = collapsed ? "▸" : "▾";
   toggle.onclick = () => { groupCollapsed.set(gid, !collapsed); renderSidebarList(); };
   row.querySelector(".group-name").textContent = name;
-  row.querySelector(".group-count").textContent = t("history.groupCount", { n: count });
+  row.querySelector(".group-count").textContent = I18N.plural("history.groupCount", count);
   const btns = row.querySelector(".group-btns");
   if (gid) {
     const ren = el(`<button type="button" class="btn-ghost"></button>`);
@@ -2596,12 +2642,15 @@ function openGroupMenu(anchor, item) {
   if (!groupMenuEl) {
     groupMenuEl = document.createElement("div");
     groupMenuEl.id = "group-menu";
+    groupMenuEl.setAttribute("role", "menu");
     document.body.appendChild(groupMenuEl);
+    bindMenuKeys(groupMenuEl, "button");
   }
   groupMenuEl.innerHTML = "";
   const addOpt = (gid, name) => {
     const b = document.createElement("button");
     b.type = "button";
+    b.setAttribute("role", "menuitem");
     b.textContent = name;
     b.onclick = () => { closeGroupMenu(); moveToGroup(item.taskId, gid); };
     groupMenuEl.appendChild(b);
@@ -2619,6 +2668,8 @@ function openGroupMenu(anchor, item) {
   if (left + mw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - mw - 8);
   groupMenuEl.style.top = top + "px";
   groupMenuEl.style.left = left + "px";
+  const first = groupMenuEl.querySelector("button");
+  if (first) first.focus();
 }
 
 function toggleGroupMenu(anchor, item) {
@@ -2774,7 +2825,7 @@ function makeHistoryRow(item) {
     </div>
   </div>`);
   const timeEl = row.querySelector(".history-time");
-  timeEl.textContent = new Date(item.time).toLocaleString();
+  timeEl.textContent = I18N.date(item.time);
   const textEl = row.querySelector(".history-text");
   // 真实文本存 dataset，隐私模式切换时由 applyHistoryPrivacy 恢复/遮蔽
   textEl.dataset.realText = item.text || "";
