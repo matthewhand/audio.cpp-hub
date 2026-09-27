@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>模型实例生命周期序列图</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">SEQUENCE · 实例生命周期</p>
+    <h1>模型实例生命周期</h1>
+    <p class="subtitle">POST /api/instances 预占名称与端口并拉起子进程，/health 轮询（≤120s）转 READY；DELETE 停止子进程。</p>
+  </header>
+
+  <figure class="diagram">
+    <!-- a11y: <title> is the FIRST child of <svg>; IDs are prefixed with the file slug -->
+    <svg role="img" aria-labelledby="seq-instance-lifecycle-title seq-instance-lifecycle-desc" viewBox="0 0 1160 900">
+      <title id="seq-instance-lifecycle-title">模型实例生命周期序列图</title>
+      <desc id="seq-instance-lifecycle-desc">序列图展示 hub 启动模型实例时预占名称与端口、写 server.json、os/exec 拉起 audiocpp_server、轮询 /health 转 READY，以及 DELETE 停止子进程的完整过程。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+
+      <rect class="bg" width="1160" height="900"/>
+
+      <!-- zones first (bg → zones → lifelines → activation → arrows → labels → nodes) -->
+      <rect class="zone" x="240" y="56" width="700" height="780" rx="8"/>
+      <rect class="zone-mask" x="252" y="48" width="64" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="284" y="57" text-anchor="middle">HUB PROCESS</text>
+
+      <!-- lifelines -->
+      <line class="lifeline" x1="120" y1="136" x2="120" y2="836"/>
+      <line class="lifeline" x1="360" y1="136" x2="360" y2="836"/>
+      <line class="lifeline" x1="600" y1="136" x2="600" y2="836"/>
+      <line class="lifeline" x1="820" y1="136" x2="820" y2="836"/>
+      <line class="lifeline" x1="1040" y1="136" x2="1040" y2="836"/>
+
+      <!-- activation bars -->
+      <rect class="act" x="116" y="176" width="8" height="484"/>
+      <rect class="act" x="116" y="692" width="8" height="16"/>
+      <rect class="act" x="356" y="176" width="8" height="484"/>
+      <rect class="act" x="356" y="692" width="8" height="64"/>
+      <rect class="act" x="596" y="224" width="8" height="388"/>
+      <rect class="act" x="596" y="740" width="8" height="64"/>
+      <rect class="act" x="816" y="408" width="8" height="140"/>
+      <rect class="act" x="1036" y="336" width="8" height="136"/>
+      <rect class="act" x="1036" y="788" width="8" height="16"/>
+
+      <!-- alt fragment: start failure -->
+      <rect class="frame" x="560" y="368" width="500" height="200" rx="4"/>
+      <rect class="frame" x="560" y="368" width="40" height="16" rx="2"/>
+      <text class="eyebrow-svg" x="580" y="379" text-anchor="middle">ALT</text>
+      <text class="alabel" x="572" y="392">[/health → 200]</text>
+      <line class="divider" x1="568" y1="496" x2="1052" y2="496" stroke-dasharray="4,3"/>
+      <text class="alabel" x="572" y="516">[timeout / exit≠0]</text>
+
+      <!-- arrows -->
+      <path class="data" d="M124,184 H356" marker-end="url(#arrow)"/>
+      <path class="data" d="M364,232 H596" marker-end="url(#arrow)"/>
+      <path class="data" d="M604,280 H648 V312 H604" marker-end="url(#arrow)"/>
+      <path class="data" d="M604,344 H1036" marker-end="url(#arrow)"/>
+      <path class="data" d="M824,416 H1036" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M1036,464 H824" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M816,540 H604" marker-end="url(#arrow-open)"/>
+      <path class="data dash" d="M596,604 H364" marker-end="url(#arrow-open)"/>
+      <path class="data accent" d="M356,652 H124" marker-end="url(#arrow-accent)"/>
+      <path class="data" d="M124,700 H356" marker-end="url(#arrow)"/>
+      <path class="data" d="M364,748 H596" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M604,796 H1036" marker-end="url(#arrow-open)"/>
+
+      <!-- arrow labels: opaque mask + 8px gap above stroke -->
+      <rect class="mask" x="188" y="164" width="104" height="12" rx="2"/>
+      <text class="alabel" x="240" y="173" text-anchor="middle">POST /api/instances</text>
+      <rect class="mask" x="442" y="212" width="76" height="12" rx="2"/>
+      <text class="alabel" x="480" y="221" text-anchor="middle">Start(params)</text>
+      <rect class="mask" x="656" y="288" width="120" height="12" rx="2"/>
+      <text class="alabel" x="664" y="298">reserve + server.json</text>
+      <rect class="mask" x="772" y="324" width="96" height="12" rx="2"/>
+      <text class="alabel" x="820" y="333" text-anchor="middle">os/exec --config</text>
+      <rect class="mask" x="884" y="396" width="72" height="12" rx="2"/>
+      <text class="alabel" x="920" y="405" text-anchor="middle">GET /health</text>
+      <rect class="mask" x="882" y="444" width="48" height="12" rx="2"/>
+      <text class="alabel" x="906" y="453" text-anchor="middle">200 OK</text>
+      <rect class="mask" x="650" y="520" width="48" height="12" rx="2"/>
+      <text class="alabel" x="658" y="530">FAILED</text>
+      <rect class="mask" x="426" y="584" width="84" height="12" rx="2"/>
+      <text class="alabel" x="468" y="593" text-anchor="middle">status → READY</text>
+      <rect class="mask" x="202" y="632" width="76" height="12" rx="2"/>
+      <text class="alabel" x="240" y="641" text-anchor="middle">poll → READY</text>
+      <rect class="mask" x="168" y="680" width="140" height="12" rx="2"/>
+      <text class="alabel" x="238" y="689" text-anchor="middle">DELETE /api/instances/{id}</text>
+      <rect class="mask" x="452" y="728" width="56" height="12" rx="2"/>
+      <text class="alabel" x="480" y="737" text-anchor="middle">Stop(id)</text>
+      <rect class="mask" x="790" y="776" width="48" height="12" rx="2"/>
+      <text class="alabel" x="798" y="786">Kill()</text>
+
+      <!-- actor nodes -->
+      <rect class="mask" x="40" y="64" width="160" height="72" rx="6"/>
+      <rect class="n input" x="40" y="64" width="160" height="72" rx="6"/>
+      <rect class="tag" x="48" y="72" width="36" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="66" y="81" text-anchor="middle">USER</text>
+      <text class="name" x="120" y="108" text-anchor="middle">Operator</text>
+      <text class="sub" x="120" y="124" text-anchor="middle">Web UI · curl</text>
+
+      <g class="focal">
+        <rect class="mask" x="260" y="64" width="200" height="72" rx="6"/>
+        <rect class="n focal" x="260" y="64" width="200" height="72" rx="6"/>
+        <rect class="tag" x="268" y="72" width="28" height="12" rx="2"/>
+        <text class="eyebrow-svg" x="282" y="81" text-anchor="middle">API</text>
+        <text class="name" x="360" y="108" text-anchor="middle">Hub API</text>
+        <text class="sub" x="360" y="124" text-anchor="middle">api.go · :18080</text>
+      </g>
+
+      <g class="focal">
+        <rect class="mask" x="480" y="64" width="240" height="72" rx="6"/>
+        <rect class="n focal" x="480" y="64" width="240" height="72" rx="6"/>
+        <rect class="tag" x="488" y="72" width="48" height="12" rx="2"/>
+        <text class="eyebrow-svg" x="512" y="81" text-anchor="middle">MANAGER</text>
+        <text class="name" x="600" y="108" text-anchor="middle">InstanceManager</text>
+        <text class="sub" x="600" y="124" text-anchor="middle">instance.go · 串行化启动</text>
+      </g>
+
+      <rect class="mask" x="740" y="64" width="160" height="72" rx="6"/>
+      <rect class="n async" x="740" y="64" width="160" height="72" rx="6"/>
+      <rect class="tag" x="748" y="72" width="44" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="770" y="81" text-anchor="middle">HEALTH</text>
+      <text class="name" x="820" y="108" text-anchor="middle">健康检查</text>
+      <text class="sub" x="820" y="124" text-anchor="middle">awaitReady · ≤120s</text>
+
+      <rect class="mask" x="952" y="64" width="176" height="72" rx="6"/>
+      <rect class="n ext" x="952" y="64" width="176" height="72" rx="6"/>
+      <rect class="tag" x="960" y="72" width="36" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="978" y="81" text-anchor="middle">CHILD</text>
+      <text class="name" x="1040" y="108" text-anchor="middle">audiocpp_server</text>
+      <text class="sub" x="1040" y="124" text-anchor="middle">子进程 · --config</text>
+
+      <!-- legend strip -->
+      <line class="divider" x1="40" y1="856" x2="1120" y2="856"/>
+      <text class="eyebrow-svg" x="40" y="876">LEGEND</text>
+      <line class="lifeline" x1="150" y1="864" x2="150" y2="884"/>
+      <text class="sub" x="164" y="876">lifeline</text>
+      <path class="data" d="M260,874 H292" marker-end="url(#arrow)"/>
+      <text class="sub" x="300" y="876">call</text>
+      <path class="data dash" d="M380,874 H412" marker-end="url(#arrow)"/>
+      <text class="sub" x="420" y="876">return</text>
+      <path class="data dash" d="M500,874 H532" marker-end="url(#arrow-open)"/>
+      <text class="sub" x="540" y="876">async</text>
+      <rect class="frame" x="640" y="864" width="20" height="12" rx="2"/>
+      <rect class="frame" x="640" y="864" width="12" height="6" rx="1"/>
+      <text class="sub" x="668" y="876">fragment</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">KEY POINT</p>
+      <h3><span class="dot ink"></span>名称 + 端口原子预占</h3>
+      <p>Start 串行化：同一临界区内校验服务名全局唯一并登记占位实例，再从 instancePortBase 选空闲端口；随后写 run/&lt;id&gt;/server.json 并 os/exec 拉起子进程。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">ASYNC NOTE</p>
+      <h3><span class="dot muted"></span>READY 由后台轮询置位</h3>
+      <p>POST /api/instances 实际立即返回 200（status STARTING）；awaitReady 在后台每 1s 轮询 GET /health，≤120s 内 200 即置 READY，超时或进程退出转 FAILED。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE</p>
+      <h3><span class="dot soft"></span>依据</h3>
+      <ul><li>api.go · handleInstanceStart/Stop</li><li>instance.go · Start/awaitReady</li><li>instance.go · Stop/reservePort</li><li>task.go · StopQueue（停止时）</li></ul>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · diagram-design monochrome skin · edit the SVG above, keep 4px grid</footer>
+</main>
+</body>
+</html>

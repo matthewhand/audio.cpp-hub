@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>audio.cpp-hub 内部组件架构</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">Architecture · Internals</p>
+    <h1>hub 内部架构</h1>
+    <p class="subtitle">单进程内聚合 HTTP 路由与各管理器；实例、任务、下载、历史、音色与登记表各司其职，子进程与文件系统是唯一的进程外边界。</p>
+  </header>
+
+  <figure class="diagram">
+    <!-- a11y: <title> is the FIRST child of <svg>; IDs are prefixed with the file slug -->
+    <svg role="img" aria-labelledby="system-architecture-title system-architecture-desc" viewBox="0 0 1160 820">
+      <title id="system-architecture-title">audio.cpp-hub 内部组件架构图</title>
+      <desc id="system-architecture-desc">架构图：HTTP 路由把 /api/* 与 /v1/* 分发给实例管理、任务队列、权重下载、操作历史、音色库与登记表六个管理器；任务队列与实例管理经 loopback 驱动 audiocpp_server 子进程；实例管理、下载与历史管理器把 run/、models/ 与 data/ 写入持久化文件。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+
+      <rect class="bg" width="1160" height="820"/>
+
+      <!-- zones first (bg → zones → arrows → labels → nodes) -->
+      <rect class="zone" x="40" y="96" width="680" height="376" rx="8"/>
+      <rect class="zone-mask" x="52" y="88" width="64" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="84" y="97" text-anchor="middle">HUB 进程</text>
+
+      <rect class="zone" x="760" y="232" width="360" height="240" rx="8"/>
+      <rect class="zone-mask" x="772" y="224" width="72" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="808" y="233" text-anchor="middle">子进程</text>
+
+      <rect class="zone" x="40" y="520" width="1080" height="184" rx="8"/>
+      <rect class="zone-mask" x="52" y="512" width="72" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="88" y="521" text-anchor="middle">持久化</text>
+
+      <!-- arrows before boxes -->
+      <line class="data" x1="116" y1="232" x2="116" y2="320" marker-end="url(#arrow)"/>
+      <line class="data" x1="220" y1="232" x2="220" y2="320" marker-end="url(#arrow)"/>
+      <line class="data" x1="324" y1="232" x2="324" y2="320" marker-end="url(#arrow)"/>
+      <line class="data" x1="428" y1="232" x2="428" y2="320" marker-end="url(#arrow)"/>
+      <line class="data" x1="532" y1="232" x2="532" y2="320" marker-end="url(#arrow)"/>
+      <path class="data" d="M 636,232 V 272 a 8,8 0 0,0 0,16 V 320" marker-end="url(#arrow)"/>
+
+      <path class="data dash" d="M 196,144 V 128 Q 196,120 204,120 H 932 Q 940,120 940,128 V 280" marker-end="url(#arrow)"/>
+      <rect class="mask" x="538" y="101" width="60" height="12" rx="2"/>
+      <text class="alabel" x="568" y="110" text-anchor="middle">/v1 代理</text>
+
+      <line class="data" x1="680" y1="368" x2="784" y2="368" marker-end="url(#arrow)"/>
+      <rect class="mask" x="698" y="348" width="68" height="12" rx="2"/>
+      <text class="alabel" x="732" y="357" text-anchor="middle">拉起子进程</text>
+
+      <path class="data" d="M 560,320 V 288 Q 560,280 568,280 H 776 Q 784,280 784,288 V 300" marker-end="url(#arrow)"/>
+      <rect class="mask" x="568" y="295" width="76" height="12" rx="2"/>
+      <text class="alabel" x="568" y="304" text-anchor="start">/v1/tasks/run</text>
+
+      <line class="data" x1="116" y1="416" x2="116" y2="568" marker-end="url(#arrow)"/>
+      <rect class="mask" x="64" y="489" width="44" height="12" rx="2"/>
+      <text class="alabel" x="108" y="498" text-anchor="end">models/</text>
+
+      <line class="data" x1="220" y1="416" x2="220" y2="568" marker-end="url(#arrow)"/>
+      <rect class="mask" x="144" y="489" width="68" height="12" rx="2"/>
+      <text class="alabel" x="212" y="498" text-anchor="end">data/history</text>
+
+      <line class="data" x1="636" y1="416" x2="636" y2="568" marker-end="url(#arrow)"/>
+      <rect class="mask" x="644" y="489" width="36" height="12" rx="2"/>
+      <text class="alabel" x="644" y="498" text-anchor="start">run/</text>
+
+      <!-- nodes: mask → styled rect → type tag → name → sublabel -->
+      <rect class="mask" x="72" y="144" width="608" height="88" rx="6"/>
+      <rect class="n" x="72" y="144" width="608" height="88" rx="6"/>
+      <rect class="tag" x="80" y="150" width="40" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="100" y="159" text-anchor="middle">HTTP</text>
+      <text class="name" x="376" y="192" text-anchor="middle">HTTP 路由 / 多路复用</text>
+      <text class="sub" x="376" y="210" text-anchor="middle">api.go · /api/* 与 /v1/*</text>
+
+      <rect class="mask" x="72" y="320" width="88" height="96" rx="6"/>
+      <rect class="n" x="72" y="320" width="88" height="96" rx="6"/>
+      <rect class="tag" x="80" y="326" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="96" y="335" text-anchor="middle">MGR</text>
+      <text class="name" x="116" y="368" text-anchor="middle">权重下载</text>
+      <text class="sub" x="116" y="386" text-anchor="middle">Download</text>
+
+      <rect class="mask" x="176" y="320" width="88" height="96" rx="6"/>
+      <rect class="n" x="176" y="320" width="88" height="96" rx="6"/>
+      <rect class="tag" x="184" y="326" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="200" y="335" text-anchor="middle">MGR</text>
+      <text class="name" x="220" y="368" text-anchor="middle">操作历史</text>
+      <text class="sub" x="220" y="386" text-anchor="middle">History</text>
+
+      <rect class="mask" x="280" y="320" width="88" height="96" rx="6"/>
+      <rect class="n" x="280" y="320" width="88" height="96" rx="6"/>
+      <rect class="tag" x="288" y="326" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="304" y="335" text-anchor="middle">MGR</text>
+      <text class="name" x="324" y="368" text-anchor="middle">音色库</text>
+      <text class="sub" x="324" y="386" text-anchor="middle">Voices</text>
+
+      <rect class="mask" x="384" y="320" width="88" height="96" rx="6"/>
+      <rect class="n" x="384" y="320" width="88" height="96" rx="6"/>
+      <rect class="tag" x="392" y="326" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="408" y="335" text-anchor="middle">REG</text>
+      <text class="name" x="428" y="368" text-anchor="middle">登记表</text>
+      <text class="sub" x="428" y="386" text-anchor="middle">Exec+Profile</text>
+
+      <rect class="mask" x="488" y="320" width="88" height="96" rx="6"/>
+      <rect class="n focal" x="488" y="320" width="88" height="96" rx="6"/>
+      <rect class="tag" x="496" y="326" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="512" y="335" text-anchor="middle">MGR</text>
+      <text class="name" x="532" y="368" text-anchor="middle">任务队列</text>
+      <text class="sub" x="532" y="386" text-anchor="middle">TaskManager</text>
+
+      <rect class="mask" x="592" y="320" width="88" height="96" rx="6"/>
+      <rect class="n" x="592" y="320" width="88" height="96" rx="6"/>
+      <rect class="tag" x="600" y="326" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="616" y="335" text-anchor="middle">MGR</text>
+      <text class="name" x="636" y="368" text-anchor="middle">实例管理</text>
+      <text class="sub" x="636" y="386" text-anchor="middle">Instance</text>
+
+      <rect class="mask" x="784" y="280" width="312" height="160" rx="6"/>
+      <rect class="n ext" x="784" y="280" width="312" height="160" rx="6"/>
+      <rect class="tag" x="792" y="286" width="40" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="812" y="295" text-anchor="middle">CHILD</text>
+      <text class="name" x="940" y="368" text-anchor="middle">audiocpp_server 子进程</text>
+      <text class="sub" x="940" y="390" text-anchor="middle">每实例一个 · 127.0.0.1:1809x</text>
+      <text class="sub" x="940" y="408" text-anchor="middle">os/exec · --config server.json</text>
+
+      <rect class="mask" x="72" y="568" width="1016" height="96" rx="6"/>
+      <rect class="n store" x="72" y="568" width="1016" height="96" rx="6"/>
+      <rect class="tag" x="80" y="574" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="104" y="583" text-anchor="middle">STORE</text>
+      <text class="name" x="580" y="616" text-anchor="middle">持久化文件</text>
+      <text class="sub" x="580" y="634" text-anchor="middle">data/ · run/ · models/ · server.json · index.jsonl</text>
+
+      <!-- legend strip -->
+      <line class="divider" x1="40" y1="744" x2="1120" y2="744"/>
+      <text class="eyebrow-svg" x="40" y="764">LEGEND</text>
+      <rect class="n focal" x="360" y="754" width="16" height="12" rx="2"/>
+      <text class="sub" x="384" y="764">focal</text>
+      <rect class="n" x="520" y="754" width="16" height="12" rx="2"/>
+      <text class="sub" x="544" y="764">manager</text>
+      <rect class="n store" x="700" y="754" width="16" height="12" rx="2"/>
+      <text class="sub" x="724" y="764">store</text>
+      <path class="data dash" d="M 856,760 H 880" marker-end="url(#arrow)"/>
+      <text class="sub" x="888" y="764">proxy</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">KEY POINT</p>
+      <h3><span class="dot ink"></span>每实例串行队列</h3>
+      <p>TaskManager 为每个实例起一个单线程 executor，同实例任务排队执行，与引擎 busy 锁语义一致。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SEAM</p>
+      <h3><span class="dot muted"></span>进程内 vs 进程外</h3>
+      <p>所有管理器同处一个 Go 进程；仅子进程与文件系统在进程外。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE</p>
+      <h3><span class="dot soft"></span>依据</h3>
+      <ul><li>api.go / main.go</li><li>task.go / instance.go</li><li>download.go / history.go</li><li>proxy.go / registry.go</li></ul>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · diagram-design monochrome skin · edit the SVG above, keep 4px grid</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>audio.cpp-hub 部署模式：本机 / Docker bridge / LXC host-network</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">DEPLOYMENT · 部署模式</p>
+    <h1>三种部署形态：本机 systemd / Docker bridge / LXC host-network</h1>
+    <p class="subtitle">同一份 Go 单二进制按宿主能力选择放置方式。无论 hub 跑在裸机、bridge 容器还是 LXC 宿主网络里，模型子进程始终只监听回环 127.0.0.1，对外只暴露 hub 自己的端口。</p>
+  </header>
+
+  <figure class="diagram">
+    <!-- a11y: <title> is the FIRST child of <svg>; IDs are prefixed with the file slug -->
+    <svg role="img" aria-labelledby="deployment-modes-title deployment-modes-desc" viewBox="0 0 1160 520">
+      <title id="deployment-modes-title">audio.cpp-hub 三种部署模式</title>
+      <desc id="deployment-modes-desc">顶部是局域网客户端（浏览器与 OpenAI 兼容客户端）。下方三列分别是：原生二进制加 systemd、Docker bridge 端口映射、Compose host-network（LXC）。每种形态里 hub 都调用一个只监听 127.0.0.1 的 audiocpp_server 子进程；跨区域入站用虚线，区域内回环用实线。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+
+      <rect class="bg" width="1160" height="520"/>
+
+      <!-- zones first (bg → zones → arrows → labels → nodes) -->
+      <rect class="zone" x="40" y="136" width="340" height="280" rx="8"/>
+      <rect class="zone-mask" x="52" y="140" width="180" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="142" y="149" text-anchor="middle">NATIVE · SYSTEMD</text>
+
+      <rect class="zone" x="400" y="136" width="340" height="280" rx="8"/>
+      <rect class="zone-mask" x="412" y="140" width="180" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="502" y="149" text-anchor="middle">DOCKER · BRIDGE</text>
+
+      <rect class="zone" x="760" y="136" width="340" height="280" rx="8"/>
+      <rect class="zone-mask" x="772" y="140" width="180" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="862" y="149" text-anchor="middle">COMPOSE · HOST-NET</text>
+
+      <!-- arrows before boxes -->
+      <path class="data dash" d="M 210,104 V 168" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M 570,104 V 168" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M 930,104 V 168" marker-end="url(#arrow)"/>
+      <path class="data" d="M 210,232 V 272" marker-end="url(#arrow)"/>
+      <path class="data" d="M 570,232 V 272" marker-end="url(#arrow)"/>
+      <path class="data" d="M 930,232 V 272" marker-end="url(#arrow)"/>
+
+      <!-- arrow labels (mask → text) -->
+      <rect class="mask" x="218" y="122" width="76" height="12" rx="2"/>
+      <text class="alabel" x="256" y="131" text-anchor="middle">:8080</text>
+      <rect class="mask" x="578" y="122" width="100" height="12" rx="2"/>
+      <text class="alabel" x="628" y="131" text-anchor="middle">:18080 → 18080</text>
+      <rect class="mask" x="938" y="122" width="76" height="12" rx="2"/>
+      <text class="alabel" x="976" y="131" text-anchor="middle">:18080</text>
+      <rect class="mask" x="218" y="244" width="96" height="12" rx="2"/>
+      <text class="alabel" x="266" y="253" text-anchor="middle">127.0.0.1</text>
+      <rect class="mask" x="578" y="244" width="96" height="12" rx="2"/>
+      <text class="alabel" x="626" y="253" text-anchor="middle">127.0.0.1</text>
+      <rect class="mask" x="938" y="244" width="96" height="12" rx="2"/>
+      <text class="alabel" x="986" y="253" text-anchor="middle">127.0.0.1</text>
+
+      <!-- client tier -->
+      <rect class="mask" x="40" y="56" width="1060" height="48" rx="6"/>
+      <rect class="n input" x="40" y="56" width="1060" height="48" rx="6"/>
+      <rect class="tag" x="48" y="62" width="56" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="76" y="71" text-anchor="middle">CLIENT</text>
+      <text class="name" x="570" y="84" text-anchor="middle">LAN 客户端</text>
+      <text class="sub" x="570" y="100" text-anchor="middle">browser · OpenAI-compatible client</text>
+
+      <!-- zone 1: native + systemd -->
+      <rect class="mask" x="60" y="168" width="300" height="64" rx="6"/>
+      <rect class="n" x="60" y="168" width="300" height="64" rx="6"/>
+      <rect class="tag" x="68" y="174" width="40" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="88" y="183" text-anchor="middle">HUB</text>
+      <text class="name" x="210" y="198" text-anchor="middle">audio.cpp-hub</text>
+      <text class="sub" x="210" y="214" text-anchor="middle">:8080 · systemd unit</text>
+
+      <rect class="mask" x="60" y="272" width="300" height="64" rx="6"/>
+      <rect class="n" x="60" y="272" width="300" height="64" rx="6"/>
+      <rect class="tag" x="68" y="278" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="92" y="287" text-anchor="middle">ENGINE</text>
+      <text class="name" x="210" y="302" text-anchor="middle">audiocpp_server</text>
+      <text class="sub" x="210" y="318" text-anchor="middle">127.0.0.1:18090+</text>
+
+      <rect class="mask" x="60" y="348" width="200" height="24" rx="4"/>
+      <rect class="n store" x="60" y="348" width="200" height="24" rx="4"/>
+      <text class="sub" x="68" y="364">bin/audio.cpp-hub</text>
+      <text class="sub" x="60" y="396">dev / non-GPU · no container</text>
+
+      <!-- zone 2: docker bridge (focal) -->
+      <rect class="mask" x="420" y="168" width="300" height="64" rx="6"/>
+      <rect class="n focal" x="420" y="168" width="300" height="64" rx="6"/>
+      <rect class="tag" x="428" y="174" width="40" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="448" y="183" text-anchor="middle">HUB</text>
+      <text class="name" x="570" y="198" text-anchor="middle">audio.cpp-hub</text>
+      <text class="sub" x="570" y="214" text-anchor="middle">:18080 mapped · restart: unless-stopped</text>
+
+      <rect class="mask" x="420" y="272" width="300" height="64" rx="6"/>
+      <rect class="n" x="420" y="272" width="300" height="64" rx="6"/>
+      <rect class="tag" x="428" y="278" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="452" y="287" text-anchor="middle">ENGINE</text>
+      <text class="name" x="570" y="302" text-anchor="middle">audiocpp_server</text>
+      <text class="sub" x="570" y="318" text-anchor="middle">127.0.0.1:18090+ (in container)</text>
+
+      <rect class="mask" x="420" y="348" width="200" height="24" rx="4"/>
+      <rect class="n store" x="420" y="348" width="200" height="24" rx="4"/>
+      <text class="sub" x="428" y="364">audio-cpp-hub:amd</text>
+      <text class="sub" x="420" y="396">prod · AMD Vulkan · /dev/dri</text>
+
+      <!-- zone 3: compose host-network (LXC) -->
+      <rect class="mask" x="780" y="168" width="300" height="64" rx="6"/>
+      <rect class="n" x="780" y="168" width="300" height="64" rx="6"/>
+      <rect class="tag" x="788" y="174" width="40" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="808" y="183" text-anchor="middle">HUB</text>
+      <text class="name" x="930" y="198" text-anchor="middle">audio.cpp-hub</text>
+      <text class="sub" x="930" y="214" text-anchor="middle">:18080 · host network</text>
+
+      <rect class="mask" x="780" y="272" width="300" height="64" rx="6"/>
+      <rect class="n" x="780" y="272" width="300" height="64" rx="6"/>
+      <rect class="tag" x="788" y="278" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="812" y="287" text-anchor="middle">ENGINE</text>
+      <text class="name" x="930" y="302" text-anchor="middle">audiocpp_server</text>
+      <text class="sub" x="930" y="318" text-anchor="middle">127.0.0.1:18090+</text>
+
+      <rect class="mask" x="780" y="348" width="240" height="24" rx="4"/>
+      <rect class="n store" x="780" y="348" width="240" height="24" rx="4"/>
+      <text class="sub" x="788" y="364">audio-cpp-hub:amd · host</text>
+      <text class="sub" x="780" y="396">LXC · network_mode: host</text>
+
+      <!-- legend strip -->
+      <line class="divider" x1="40" y1="452" x2="1120" y2="452"/>
+      <text class="eyebrow-svg" x="40" y="472">LEGEND</text>
+      <rect class="n focal" x="160" y="464" width="16" height="12" rx="2"/>
+      <text class="sub" x="184" y="474">focal</text>
+      <rect class="n" x="300" y="464" width="16" height="12" rx="2"/>
+      <text class="sub" x="324" y="474">component</text>
+      <rect class="n input" x="460" y="464" width="16" height="12" rx="2"/>
+      <text class="sub" x="484" y="474">client</text>
+      <rect class="n store" x="600" y="464" width="16" height="12" rx="2"/>
+      <text class="sub" x="624" y="474">artifact chip</text>
+      <path class="data dash" d="M 760,470 H 792" marker-end="url(#arrow)"/>
+      <text class="sub" x="800" y="474">ingress · crosses zone</text>
+      <path class="data" d="M 980,470 H 1012" marker-end="url(#arrow)"/>
+      <text class="sub" x="1020" y="474">loopback · in zone</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">KEY POINT</p>
+      <h3><span class="dot ink"></span>放置决策：宿主 / 容器 / LXC</h3>
+      <ul>
+        <li>本机：开发 / 非 GPU，单一二进制 + systemd 托管，hub 与引擎同在一个宿主用户下。</li>
+        <li>Docker bridge：生产 AMD，<code>ports: 18080:18080</code> 映射，只挂载 <code>/dev/dri</code>（HIP 另加 <code>/dev/kfd</code>）与权重只读目录。</li>
+        <li>LXC：改用 Compose <code>network_mode: host</code>，规避 <code>init:true</code> 设置的 <code>ip_unprivileged_port_start</code> 在 Proxmox LXC 内被拒绝的问题。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="eyebrow">BOUNDARY · 端口与回环</p>
+      <h3><span class="dot muted"></span>子进程永远只在 127.0.0.1</h3>
+      <p>hub 监听 <code>:8080</code>（本仓库开发副本与 Docker 镜像为 <code>:18080</code>）；实例端口从 <code>instancePortBase=18090</code> 起自动分配，绑定 <code>127.0.0.1</code>。容器内同理——引擎端口不随 <code>ports:</code> 对外发布，外部只能经 hub 访问。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE · 依据</p>
+      <h3><span class="dot soft"></span>DOCKER.md / compose</h3>
+      <ul>
+        <li>DOCKER.md · compose.yaml · compose.amd.yaml</li>
+        <li>docker/start-hub.sh · docker/start-instance.sh</li>
+        <li>main.go（:8080 绑定）· instance.go（127.0.0.1 分配）</li>
+        <li>audio-cpp-hub.service</li>
+      </ul>
+      <p style="margin-top:8px">假设：本分支随附的 <code>audio-cpp-hub.service</code> 实为已退役的 Java systemd 单元（DOCKER.md 标注其被取代）；「本机 + systemd」按同等的 systemd 托管模式示意，非该文件的逐字复刻。</p>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · deployment · monochrome skin · edit the SVG above, keep 4px grid</footer>
+</main>
+</body>
+</html>

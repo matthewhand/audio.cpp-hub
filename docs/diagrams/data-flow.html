@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>数据流 — audio.cpp-hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">DATA FLOW · 数据流</p>
+    <h1>数据如何流入、变换、持久化与流出</h1>
+    <p class="subtitle">客户端上传与引用经 hub 编排进入引擎推理，结果分别落入历史、任务状态与权重目录；历史无自动淘汰，任务/下载状态重启回放。</p>
+  </header>
+  <figure class="diagram">
+    <svg role="img" aria-labelledby="data-flow-title data-flow-desc" viewBox="0 0 1160 820">
+      <title id="data-flow-title">audio.cpp-hub 数据流：输入 → hub 编排 → 引擎推理 → 结果处理 → 持久化 → HTTP 响应</title>
+      <desc id="data-flow-desc">客户端上传 WAV、voice_ref 与提示词经 /api/tasks 进入 hub 编排（api.go / task.go），hub 转发 /v1/tasks/run 到外部引擎 audiocpp_server；结果经 extractAudio 写入 data/history/&lt;modelId&gt;/（index.jsonl + wav + 参考快照 + groups.json），非 TTS 经 forwardToFile 写 data/tasks/&lt;id&gt;.result.json；任务与下载状态落盘，权重下载写入 models/；结果经 /api/history/.../audio、/api/tasks/&lt;id&gt;/result 与 /v1/* 代理返回客户端。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+      <rect class="bg" width="1160" height="820"/>
+      <!-- arrows first (z-order: arrows → label masks → labels → nodes) -->
+      <path class="data" d="M200,272 V184 Q200,176 208,176 H336" marker-end="url(#arrow)"/>
+      <path class="data" d="M592,176 H688" marker-end="url(#arrow)"/>
+      <path class="data" d="M896,176 H944" marker-end="url(#arrow)"/>
+      <path class="data" d="M1016,240 V520" marker-end="url(#arrow)"/>
+      <path class="data" d="M976,240 V448 Q976,456 968,456 H552 Q544,456 544,464 V520" marker-end="url(#arrow)"/>
+      <path class="data" d="M480,240 V520" marker-end="url(#arrow)"/>
+      <path class="data" d="M144,520 V312 Q144,304 152,304 H392 Q400,304 400,296 V240" marker-end="url(#arrow)"/>
+      <path class="data" d="M752,520 V462 A6,6 0 0 1 752,450 V240" marker-end="url(#arrow)"/>
+      <path class="data" d="M576,576 H640" marker-end="url(#arrow)"/>
+      <path class="data" d="M1000,632 V672 Q1000,680 992,680 H32 Q24,680 24,672 V360 Q24,352 32,352 H40" marker-end="url(#arrow)"/>
+      <path class="data" d="M448,632 V674 A6,6 0 0 1 448,686 V712 Q448,720 440,720 H16 Q8,720 8,712 V328 Q8,320 16,320 H40" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M880,112 V72 Q880,64 872,64 H72 Q64,64 64,72 V272" marker-end="url(#arrow)"/>
+      <!-- arrow label masks + labels (mask keeps a 6–10px visible gap to the stroke) -->
+      <rect class="mask" x="204" y="156" width="128" height="12" rx="2"/>
+      <text class="alabel" x="268" y="165" text-anchor="middle">POST /api/tasks · 上传</text>
+      <rect class="mask" x="596" y="156" width="88" height="12" rx="2"/>
+      <text class="alabel" x="640" y="165" text-anchor="middle">/v1/tasks/run</text>
+      <rect class="mask" x="900" y="156" width="40" height="12" rx="2"/>
+      <text class="alabel" x="920" y="165" text-anchor="middle">响应</text>
+      <rect class="mask" x="1024" y="292" width="120" height="12" rx="2"/>
+      <text class="alabel" x="1084" y="301" text-anchor="middle">extractAudio → wav</text>
+      <rect class="mask" x="792" y="436" width="176" height="12" rx="2"/>
+      <text class="alabel" x="880" y="445" text-anchor="middle">forwardToFile · 非 TTS</text>
+      <rect class="mask" x="488" y="388" width="152" height="12" rx="2"/>
+      <text class="alabel" x="564" y="397" text-anchor="middle">任务状态 · .task.json</text>
+      <rect class="mask" x="228" y="284" width="88" height="12" rx="2"/>
+      <text class="alabel" x="272" y="293" text-anchor="middle">voice_ref 引用</text>
+      <rect class="mask" x="580" y="556" width="56" height="12" rx="2"/>
+      <text class="alabel" x="608" y="565" text-anchor="middle">下载写入</text>
+      <rect class="mask" x="760" y="288" width="72" height="12" rx="2"/>
+      <text class="alabel" x="796" y="297" text-anchor="middle">加载权重</text>
+      <rect class="mask" x="424" y="660" width="152" height="12" rx="2"/>
+      <text class="alabel" x="500" y="669" text-anchor="middle">/api/history/.../audio</text>
+      <rect class="mask" x="120" y="702" width="160" height="12" rx="2"/>
+      <text class="alabel" x="200" y="711" text-anchor="middle">/api/tasks/&lt;id&gt;/result</text>
+      <rect class="mask" x="344" y="44" width="112" height="12" rx="2"/>
+      <text class="alabel" x="400" y="53" text-anchor="middle">/v1/* 流式代理</text>
+      <!-- nodes: mask → styled rect → type tag → name → sublabel -->
+      <rect class="mask" x="40" y="272" width="200" height="112" rx="6"/>
+      <rect class="n input" x="40" y="272" width="200" height="112" rx="6"/>
+      <rect class="tag" x="48" y="280" width="56" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="76" y="289" text-anchor="middle">CLIENT</text>
+      <text class="name" x="140" y="340" text-anchor="middle">客户端</text>
+      <text class="sub" x="140" y="360" text-anchor="middle">Web UI · /api/*</text>
+
+      <rect class="mask" x="336" y="112" width="256" height="128" rx="6"/>
+      <g class="focal">
+        <rect class="n focal" x="336" y="112" width="256" height="128" rx="6"/>
+        <rect class="tag" x="344" y="120" width="48" height="12" rx="2"/>
+        <text class="eyebrow-svg" x="368" y="129" text-anchor="middle">HUB</text>
+        <text class="name" x="464" y="184" text-anchor="middle">hub 编排</text>
+        <text class="sub" x="464" y="204" text-anchor="middle">api.go · task.go · 串行队列</text>
+      </g>
+
+      <rect class="mask" x="688" y="112" width="208" height="128" rx="6"/>
+      <rect class="n ext" x="688" y="112" width="208" height="128" rx="6"/>
+      <rect class="tag" x="696" y="120" width="56" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="724" y="129" text-anchor="middle">ENGINE</text>
+      <text class="name" x="792" y="184" text-anchor="middle">引擎推理</text>
+      <text class="sub" x="792" y="204" text-anchor="middle">audiocpp_server :port</text>
+
+      <rect class="mask" x="944" y="112" width="176" height="128" rx="6"/>
+      <rect class="n" x="944" y="112" width="176" height="128" rx="6"/>
+      <rect class="tag" x="952" y="120" width="56" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="980" y="129" text-anchor="middle">EXTRACT</text>
+      <text class="name" x="1032" y="184" text-anchor="middle">结果处理</text>
+      <text class="sub" x="1032" y="204" text-anchor="middle">extractAudio · forwardToFile</text>
+
+      <rect class="mask" x="40" y="520" width="208" height="112" rx="6"/>
+      <rect class="n store" x="40" y="520" width="208" height="112" rx="6"/>
+      <rect class="tag" x="48" y="528" width="56" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="76" y="537" text-anchor="middle">STORE</text>
+      <text class="name" x="144" y="582" text-anchor="middle">data/voices/</text>
+      <text class="sub" x="144" y="602" text-anchor="middle">index.json · &lt;vid&gt;.wav</text>
+
+      <rect class="mask" x="320" y="520" width="256" height="112" rx="6"/>
+      <rect class="n store" x="320" y="520" width="256" height="112" rx="6"/>
+      <rect class="tag" x="328" y="528" width="56" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="356" y="537" text-anchor="middle">STORE</text>
+      <text class="name" x="448" y="582" text-anchor="middle">任务 / 下载状态</text>
+      <text class="sub" x="448" y="602" text-anchor="middle">data/tasks · data/downloads</text>
+
+      <rect class="mask" x="640" y="520" width="224" height="112" rx="6"/>
+      <rect class="n store" x="640" y="520" width="224" height="112" rx="6"/>
+      <rect class="tag" x="648" y="528" width="56" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="676" y="537" text-anchor="middle">STORE</text>
+      <text class="name" x="752" y="582" text-anchor="middle">models/</text>
+      <text class="sub" x="752" y="602" text-anchor="middle">&lt;targetDir&gt;/ 权重</text>
+
+      <rect class="mask" x="920" y="520" width="200" height="112" rx="6"/>
+      <rect class="n store" x="920" y="520" width="200" height="112" rx="6"/>
+      <rect class="tag" x="928" y="528" width="56" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="956" y="537" text-anchor="middle">STORE</text>
+      <text class="name" x="1020" y="582" text-anchor="middle">data/history/</text>
+      <text class="sub" x="1020" y="602" text-anchor="middle">index.jsonl · wav · groups.json</text>
+      <!-- legend strip -->
+      <line class="divider" x1="40" y1="752" x2="1120" y2="752"/>
+      <text class="eyebrow-svg" x="40" y="772">LEGEND</text>
+      <rect class="n input" x="120" y="760" width="16" height="12" rx="2"/>
+      <text class="sub" x="144" y="770">输入 / 客户端</text>
+      <rect class="n focal" x="260" y="760" width="16" height="12" rx="2"/>
+      <text class="sub" x="284" y="770">hub 编排 · focal</text>
+      <rect class="n ext" x="440" y="760" width="16" height="12" rx="2"/>
+      <text class="sub" x="464" y="770">外部引擎</text>
+      <rect class="n store" x="600" y="760" width="16" height="12" rx="2"/>
+      <text class="sub" x="624" y="770">持久化存储</text>
+      <path class="data dash" d="M780,766 H812" marker-end="url(#arrow)"/>
+      <text class="sub" x="820" y="770">回写 / /v1 代理</text>
+      <text class="sub" x="40" y="800">保留：data/history 无自动淘汰（仅手动删除）；data/tasks · data/downloads 状态落盘，重启回放。</text>
+    </svg>
+  </figure>
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">KEY POINT</p>
+      <h3><span class="dot ink"></span>历史无淘汰</h3>
+      <p>data/history/&lt;modelId&gt;/ 是用户资产：index.jsonl 只追加，结果 wav 与参考音频快照自包含；无数量/容量上限，只由用户手动删除。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">RETENTION</p>
+      <h3><span class="dot muted"></span>状态重启回放</h3>
+      <p>data/tasks/&lt;id&gt;.task.json 与 data/downloads/&lt;id&gt;/task.json 原子落盘；hub 重启后回放，进行中任务标记 CANCELLED，下载从分段断点续传。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE</p>
+      <h3><span class="dot soft"></span>依据</h3>
+      <ul><li>api.go · task.go</li><li>history.go · download.go</li><li>audio.go · voices.go</li></ul>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · diagram-design monochrome skin · edit the SVG above, keep 4px grid</footer>
+</main>
+</body>
+</html>

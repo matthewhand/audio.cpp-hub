@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>audio.cpp-hub 安全边界：无鉴权的可达路径与禁止路径</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">ARCHITECTURE · SECURE PAVED ROAD</p>
+    <h1>安全边界：哪些路径被放行，哪些在边界被拒绝</h1>
+    <p class="subtitle">信任区从不可信的局域网客户端，经过「无鉴权」的 hub，到只监听回环的模型引擎。放行的是同源 JSON 请求；被拒绝的是跨站/非 JSON 变更与指向私网的下载地址。密钥与运行数据落在本机磁盘上。</p>
+  </header>
+
+  <figure class="diagram">
+    <!-- a11y: <title> is the FIRST child of <svg>; IDs are prefixed with the file slug -->
+    <svg role="img" aria-labelledby="security-boundaries-title security-boundaries-desc" viewBox="0 0 1160 640">
+      <title id="security-boundaries-title">audio.cpp-hub 安全边界与放行/禁止路径</title>
+      <desc id="security-boundaries-desc">三个信任区：左为不可信局域网（浏览器、curl/OpenAI 客户端、跨站页面），中为无鉴权的 hub 及其入口校验中间件，右为本机私有回环（audiocpp_server、密钥数据落盘、事件日志）。放行路径用实线：同源 JSON /api/* 经校验中间件进入 hub，JSON /v1/* 直接进入 hub，hub 再经回环调用引擎、写入数据并记录日志。禁止路径用虚线加停止符号：跨站页面发起的变更、以及 hub 下载器指向私网/链路本地地址的 SSRF 尝试，都在边界处终止。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+
+      <rect class="bg" width="1160" height="640"/>
+
+      <!-- zones first (bg → zones → arrows → labels → nodes) -->
+      <rect class="zone" x="40" y="100" width="280" height="460" rx="8"/>
+      <rect class="zone-mask" x="52" y="104" width="180" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="142" y="113" text-anchor="middle">UNTRUSTED · LAN</text>
+
+      <rect class="zone" x="360" y="100" width="360" height="460" rx="8"/>
+      <rect class="zone-mask" x="372" y="104" width="160" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="452" y="113" text-anchor="middle">HUB · NO AUTH</text>
+
+      <rect class="zone" x="760" y="100" width="360" height="460" rx="8"/>
+      <rect class="zone-mask" x="772" y="104" width="180" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="862" y="113" text-anchor="middle">PRIVATE · 127.0.0.1</text>
+
+      <!-- arrows before boxes -->
+      <path class="data" d="M 300,184 H 380" marker-end="url(#arrow)"/>
+      <path class="data" d="M 300,304 H 380" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M 300,424 H 352"/>
+      <path class="data" d="M 540,216 V 280" marker-end="url(#arrow)"/>
+      <path class="data" d="M 700,296 H 740 Q 748,296 748,288 V 192 Q 748,184 756,184 H 780" marker-end="url(#arrow)"/>
+      <path class="data" d="M 700,312 H 780" marker-end="url(#arrow)"/>
+      <path class="data" d="M 560,360 V 416 Q 560,424 568,424 H 780" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M 680,360 V 416 a 8,8 0 0,0 0,16 V 468 Q 680,476 688,476 H 744"/>
+
+      <!-- stop symbols on forbidden paths -->
+      <line class="data" x1="352" y1="418" x2="352" y2="430"/>
+      <line class="data" x1="744" y1="470" x2="744" y2="482"/>
+
+      <!-- arrow labels (mask → text) -->
+      <rect class="mask" x="308" y="164" width="64" height="12" rx="2"/>
+      <text class="alabel" x="340" y="173" text-anchor="middle">JSON /api/*</text>
+      <rect class="mask" x="308" y="284" width="64" height="12" rx="2"/>
+      <text class="alabel" x="340" y="293" text-anchor="middle">JSON /v1/*</text>
+      <rect class="mask" x="304" y="404" width="128" height="12" rx="2"/>
+      <text class="alabel" x="368" y="413" text-anchor="middle">cross-site · text/plain</text>
+      <rect class="mask" x="548" y="240" width="64" height="12" rx="2"/>
+      <text class="alabel" x="580" y="249" text-anchor="middle">PERMIT</text>
+      <rect class="mask" x="756" y="220" width="88" height="12" rx="2"/>
+      <text class="alabel" x="800" y="229" text-anchor="middle">127.0.0.1</text>
+      <rect class="mask" x="708" y="292" width="64" height="12" rx="2"/>
+      <text class="alabel" x="740" y="301" text-anchor="middle">secrets</text>
+      <rect class="mask" x="644" y="404" width="56" height="12" rx="2"/>
+      <text class="alabel" x="672" y="413" text-anchor="middle">audit</text>
+      <rect class="mask" x="620" y="456" width="88" height="12" rx="2"/>
+      <text class="alabel" x="664" y="465" text-anchor="middle">SSRF · private</text>
+
+      <!-- zone 1: untrusted clients -->
+      <rect class="mask" x="60" y="152" width="240" height="64" rx="6"/>
+      <rect class="n input" x="60" y="152" width="240" height="64" rx="6"/>
+      <rect class="tag" x="68" y="158" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="92" y="167" text-anchor="middle">BROWSER</text>
+      <text class="name" x="180" y="182" text-anchor="middle">Web UI 浏览器</text>
+      <text class="sub" x="180" y="198" text-anchor="middle">same-origin · fetch /api/*</text>
+
+      <rect class="mask" x="60" y="272" width="240" height="64" rx="6"/>
+      <rect class="n input" x="60" y="272" width="240" height="64" rx="6"/>
+      <rect class="tag" x="68" y="278" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="92" y="287" text-anchor="middle">CLIENT</text>
+      <text class="name" x="180" y="302" text-anchor="middle">curl / OpenAI 客户端</text>
+      <text class="sub" x="180" y="318" text-anchor="middle">JSON body · /v1/*</text>
+
+      <rect class="mask" x="60" y="392" width="240" height="64" rx="6"/>
+      <rect class="n async" x="60" y="392" width="240" height="64" rx="6"/>
+      <rect class="tag" x="68" y="398" width="56" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="96" y="407" text-anchor="middle">FOREIGN</text>
+      <text class="name" x="180" y="422" text-anchor="middle">跨站页面</text>
+      <text class="sub" x="180" y="438" text-anchor="middle">third-party origin</text>
+
+      <!-- zone 2: hub + gate -->
+      <rect class="mask" x="380" y="152" width="320" height="64" rx="6"/>
+      <rect class="n" x="380" y="152" width="320" height="64" rx="6"/>
+      <rect class="tag" x="388" y="158" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="412" y="167" text-anchor="middle">GATE</text>
+      <text class="name" x="540" y="182" text-anchor="middle">入口校验中间件</text>
+      <text class="sub" x="540" y="198" text-anchor="middle">Origin · Content-Type · idvalidate</text>
+
+      <rect class="mask" x="380" y="280" width="320" height="80" rx="6"/>
+      <rect class="n focal" x="380" y="280" width="320" height="80" rx="6"/>
+      <rect class="tag" x="388" y="286" width="40" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="408" y="295" text-anchor="middle">HUB</text>
+      <text class="name" x="540" y="320" text-anchor="middle">audio.cpp-hub</text>
+      <text class="sub" x="540" y="336" text-anchor="middle">no auth · single Go binary</text>
+
+      <!-- zone 3: private loopback -->
+      <rect class="mask" x="780" y="152" width="320" height="64" rx="6"/>
+      <rect class="n" x="780" y="152" width="320" height="64" rx="6"/>
+      <rect class="tag" x="788" y="158" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="812" y="167" text-anchor="middle">ENGINE</text>
+      <text class="name" x="940" y="182" text-anchor="middle">audiocpp_server</text>
+      <text class="sub" x="940" y="198" text-anchor="middle">127.0.0.1:18090+</text>
+
+      <rect class="mask" x="780" y="280" width="320" height="64" rx="6"/>
+      <rect class="n store" x="780" y="280" width="320" height="64" rx="6"/>
+      <rect class="tag" x="788" y="286" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="812" y="295" text-anchor="middle">STORE</text>
+      <text class="name" x="940" y="310" text-anchor="middle">密钥 / 数据落盘</text>
+      <text class="sub" x="940" y="326" text-anchor="middle">downloads/*.task.json · token 0600</text>
+
+      <rect class="mask" x="780" y="392" width="320" height="64" rx="6"/>
+      <rect class="n store" x="780" y="392" width="320" height="64" rx="6"/>
+      <rect class="tag" x="788" y="398" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="812" y="407" text-anchor="middle">AUDIT</text>
+      <text class="name" x="940" y="422" text-anchor="middle">事件日志</text>
+      <text class="sub" x="940" y="438" text-anchor="middle">GET /api/events · logs/hub.log</text>
+
+      <!-- legend strip -->
+      <line class="divider" x1="40" y1="580" x2="1120" y2="580"/>
+      <text class="eyebrow-svg" x="40" y="600">LEGEND</text>
+      <rect class="n focal" x="160" y="592" width="16" height="12" rx="2"/>
+      <text class="sub" x="184" y="602">focal</text>
+      <rect class="n" x="300" y="592" width="16" height="12" rx="2"/>
+      <text class="sub" x="324" y="602">component</text>
+      <rect class="n input" x="440" y="592" width="16" height="12" rx="2"/>
+      <text class="sub" x="464" y="602">input / actor</text>
+      <rect class="n store" x="600" y="592" width="16" height="12" rx="2"/>
+      <text class="sub" x="624" y="602">store / audit</text>
+      <path class="data" d="M 760,598 H 792" marker-end="url(#arrow)"/>
+      <text class="sub" x="800" y="602">permitted</text>
+      <path class="data dash" d="M 920,598 H 948"/>
+      <line class="data" x1="948" y1="592" x2="948" y2="604"/>
+      <text class="sub" x="956" y="602">forbidden (stop)</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">KEY POINT</p>
+      <h3><span class="dot ink"></span>没有认证，也没有授权</h3>
+      <p>hub 不校验任何身份：任何能连到端口的客户端都被视为受信（SECURITY.md 的威胁模型）。下图的校验仅用于降噪与防误用，<strong>不是访问控制</strong>——不要把它当作鉴权层。需要鉴权请在反向代理侧加 HTTPS + mTLS / Basic / OAuth。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">PERMITTED vs FORBIDDEN</p>
+      <h3><span class="dot muted"></span>放行 / 拒绝</h3>
+      <ul>
+        <li>放行：同源 <code>POST /api/*</code>（<code>Origin</code> 与 Host 同源、<code>Content-Type: application/json</code>）；<code>/v1/*</code> 仅接受 JSON，用于提取顶层 <code>model</code>。</li>
+        <li>拒绝：跨站 <code>Origin</code> / <code>null</code> 或 <code>Sec-Fetch-Site: cross-site</code> 的变更 → <code>CROSS_SITE_FORBIDDEN</code>；<code>text/plain</code> 等非 JSON → <code>UNSUPPORTED_MEDIA_TYPE</code>。</li>
+        <li>拒绝：<code>/v1/*</code> 的 multipart 无法提取 <code>model</code> → 400；<code>download.go</code> 对私网/链路本地/元数据地址 → <code>DOWNLOAD_SSRF_BLOCKED</code>；<code>idvalidate</code> 拒绝 <code>..</code>、绝对路径、盘符。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE · 依据</p>
+      <h3><span class="dot soft"></span>代码与文档</h3>
+      <ul>
+        <li>api.go（csrfProtect / isSameSiteRequest）</li>
+        <li>util.go（readBodyMap 仅 application/json）</li>
+        <li>download.go（dlDisallowedIP 保留网段）</li>
+        <li>internal/idvalidate · fs.go · proxy.go</li>
+        <li>SECURITY.md（无鉴权、无 TLS）</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · secure paved road · monochrome skin · edit the SVG above, keep 4px grid</footer>
+</main>
+</body>
+</html>

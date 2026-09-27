@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenAI 兼容 /v1 代理序列图</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">SEQUENCE · OpenAI 兼容代理</p>
+    <h1>OpenAI 兼容代理链路</h1>
+    <p class="subtitle">请求体流式落盘 proxy-cache → 逐字节提取 model → 按服务名路由到 READY 实例 → 响应分块回写。</p>
+  </header>
+
+  <figure class="diagram">
+    <!-- a11y: <title> is the FIRST child of <svg>; IDs are prefixed with the file slug -->
+    <svg role="img" aria-labelledby="seq-openai-proxy-title seq-openai-proxy-desc" viewBox="0 0 1160 720">
+      <title id="seq-openai-proxy-title">OpenAI 兼容 /v1 代理序列图</title>
+      <desc id="seq-openai-proxy-desc">序列图展示 OpenAI 客户端请求如何被 hub 的 /v1 代理缓存请求体、逐字节提取顶层 model 字段、按服务名路由到就绪实例，并把实例响应分块流式回写。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+
+      <rect class="bg" width="1160" height="720"/>
+
+      <!-- zones first (bg → zones → lifelines → activation → arrows → labels → nodes) -->
+      <rect class="zone" x="260" y="56" width="680" height="560" rx="8"/>
+      <rect class="zone-mask" x="272" y="48" width="64" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="304" y="57" text-anchor="middle">HUB PROCESS</text>
+
+      <!-- lifelines -->
+      <line class="lifeline" x1="120" y1="136" x2="120" y2="600"/>
+      <line class="lifeline" x1="360" y1="136" x2="360" y2="600"/>
+      <line class="lifeline" x1="600" y1="136" x2="600" y2="600"/>
+      <line class="lifeline" x1="840" y1="136" x2="840" y2="600"/>
+      <line class="lifeline" x1="1040" y1="136" x2="1040" y2="600"/>
+
+      <!-- activation bars -->
+      <rect class="act" x="116" y="176" width="8" height="392"/>
+      <rect class="act" x="356" y="176" width="8" height="392"/>
+      <rect class="act" x="596" y="224" width="8" height="24"/>
+      <rect class="act" x="836" y="344" width="8" height="64"/>
+      <rect class="act" x="1036" y="448" width="8" height="64"/>
+
+      <!-- arrows -->
+      <path class="data" d="M124,184 H356" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M364,232 H596" marker-end="url(#arrow-open)"/>
+      <path class="data" d="M364,280 H408 V312 H364" marker-end="url(#arrow)"/>
+      <path class="data" d="M364,352 H836" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M836,400 H364" marker-end="url(#arrow)"/>
+      <path class="data" d="M364,456 H1036" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M1036,504 H364" marker-end="url(#arrow)"/>
+      <path class="data accent" d="M356,560 H124" marker-end="url(#arrow-accent)"/>
+
+      <!-- arrow labels: opaque mask + 8px gap above stroke -->
+      <rect class="mask" x="180" y="164" width="120" height="12" rx="2"/>
+      <text class="alabel" x="240" y="173" text-anchor="middle">POST /v1/audio/speech</text>
+      <rect class="mask" x="436" y="212" width="88" height="12" rx="2"/>
+      <text class="alabel" x="480" y="221" text-anchor="middle">spool req-*.req</text>
+      <rect class="mask" x="416" y="288" width="72" height="12" rx="2"/>
+      <text class="alabel" x="424" y="298">scan "model"</text>
+      <rect class="mask" x="550" y="332" width="100" height="12" rx="2"/>
+      <text class="alabel" x="600" y="341" text-anchor="middle">FindByName(model)</text>
+      <rect class="mask" x="558" y="380" width="84" height="12" rx="2"/>
+      <text class="alabel" x="600" y="389" text-anchor="middle">READY · :18090</text>
+      <rect class="mask" x="640" y="436" width="120" height="12" rx="2"/>
+      <text class="alabel" x="700" y="445" text-anchor="middle">POST /v1/audio/speech</text>
+      <rect class="mask" x="648" y="484" width="104" height="12" rx="2"/>
+      <text class="alabel" x="700" y="493" text-anchor="middle">200 · Content-Type</text>
+      <rect class="mask" x="202" y="540" width="76" height="12" rx="2"/>
+      <text class="alabel" x="240" y="549" text-anchor="middle">chunked flush</text>
+
+      <!-- actor nodes -->
+      <rect class="mask" x="40" y="64" width="160" height="72" rx="6"/>
+      <rect class="n input" x="40" y="64" width="160" height="72" rx="6"/>
+      <rect class="tag" x="48" y="72" width="40" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="68" y="81" text-anchor="middle">CLIENT</text>
+      <text class="name" x="120" y="108" text-anchor="middle">OpenAI 客户端</text>
+      <text class="sub" x="120" y="124" text-anchor="middle">speech / tools</text>
+
+      <g class="focal">
+        <rect class="mask" x="280" y="64" width="160" height="72" rx="6"/>
+        <rect class="n focal" x="280" y="64" width="160" height="72" rx="6"/>
+        <rect class="tag" x="288" y="72" width="40" height="12" rx="2"/>
+        <text class="eyebrow-svg" x="308" y="81" text-anchor="middle">PROXY</text>
+        <text class="name" x="360" y="108" text-anchor="middle">Hub /v1 proxy</text>
+        <text class="sub" x="360" y="124" text-anchor="middle">proxy.go · :18080</text>
+      </g>
+
+      <rect class="mask" x="500" y="64" width="200" height="72" rx="6"/>
+      <rect class="n store" x="500" y="64" width="200" height="72" rx="6"/>
+      <rect class="tag" x="508" y="72" width="40" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="528" y="81" text-anchor="middle">STORE</text>
+      <text class="name" x="600" y="108" text-anchor="middle">proxy-cache</text>
+      <text class="sub" x="600" y="124" text-anchor="middle">run/proxy-cache/ · temp</text>
+
+      <rect class="mask" x="740" y="64" width="200" height="72" rx="6"/>
+      <rect class="n" x="740" y="64" width="200" height="72" rx="6"/>
+      <rect class="tag" x="748" y="72" width="44" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="770" y="81" text-anchor="middle">ROUTER</text>
+      <text class="name" x="840" y="108" text-anchor="middle">Instance 路由</text>
+      <text class="sub" x="840" y="124" text-anchor="middle">FindByName · READY</text>
+
+      <rect class="mask" x="952" y="64" width="176" height="72" rx="6"/>
+      <rect class="n ext" x="952" y="64" width="176" height="72" rx="6"/>
+      <rect class="tag" x="960" y="72" width="44" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="982" y="81" text-anchor="middle">ENGINE</text>
+      <text class="name" x="1040" y="108" text-anchor="middle">audiocpp_server</text>
+      <text class="sub" x="1040" y="124" text-anchor="middle">127.0.0.1:18090</text>
+
+      <!-- legend strip -->
+      <line class="divider" x1="40" y1="656" x2="1120" y2="656"/>
+      <text class="eyebrow-svg" x="40" y="676">LEGEND</text>
+      <line class="lifeline" x1="150" y1="664" x2="150" y2="684"/>
+      <text class="sub" x="164" y="676">lifeline</text>
+      <path class="data" d="M260,674 H292" marker-end="url(#arrow)"/>
+      <text class="sub" x="300" y="676">call</text>
+      <path class="data dash" d="M380,674 H412" marker-end="url(#arrow)"/>
+      <text class="sub" x="420" y="676">return</text>
+      <path class="data dash" d="M500,674 H532" marker-end="url(#arrow-open)"/>
+      <text class="sub" x="540" y="676">async</text>
+      <rect class="n focal" x="640" y="664" width="16" height="12" rx="2"/>
+      <text class="sub" x="664" y="676">focal</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">KEY POINT</p>
+      <h3><span class="dot ink"></span>请求体先落盘、model 后路由</h3>
+      <p>body 流式写入 run/proxy-cache/（超 proxyMaxBodyBytes 返回 413），再用逐字节 extractor 取顶层 "model"，按服务名查 READY 实例；不存在 404、启动中 409。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">KNOWN LIMIT</p>
+      <h3><span class="dot muted"></span>multipart 无法提 model</h3>
+      <p>extractor 只识别 JSON；multipart/form-data 请求体提取不到 model，会返回 400。响应状态码 / Content-Type 透传，逐块 Flush 兼容 SSE。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE</p>
+      <h3><span class="dot soft"></span>依据</h3>
+      <ul><li>proxy.go · handleV1Proxy</li><li>proxy.go · extractV1Model</li><li>proxy.go · forwardV1</li><li>api.go · /v1/ 挂载</li></ul>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · diagram-design monochrome skin · edit the SVG above, keep 4px grid</footer>
+</main>
+</body>
+</html>

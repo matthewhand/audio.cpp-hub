@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>audio.cpp-hub 外部集成：Hugging Face / 镜像 / ModelScope / OpenAI 客户端 / 引擎</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">DP INTEGRATION · 外部集成</p>
+    <h1>hub 与外部系统的接线：入站协议、出站下载源、回环引擎</h1>
+    <p class="subtitle">左侧是 OpenAI 兼容客户端，右侧是三个公网下载源与回环引擎。每条线都标注方向、协议与端口；有 gated 仓库的下载源需要 bearer token，且两条已知失败边界（multipart 路由、ModelScope 仅镜像一个仓库）在图中明示。</p>
+  </header>
+
+  <figure class="diagram">
+    <!-- a11y: <title> is the FIRST child of <svg>; IDs are prefixed with the file slug -->
+    <svg role="img" aria-labelledby="integration-external-title integration-external-desc" viewBox="0 0 1160 640">
+      <title id="integration-external-title">audio.cpp-hub 外部集成拓扑</title>
+      <desc id="integration-external-desc">左侧 OpenAI 兼容客户端经 HTTP :18080 的 JSON /v1/* 入站到 hub；multipart 请求在边界被拒（400）。hub 在中央，向下经回环 HTTP 127.0.0.1:18090 调用 audiocpp_server，向左下把 gated 仓库的 bearer token 明文写入 data/downloads。hub 向右经 HTTPS :443 访问公共集成区：Hugging Face（默认源，gated 需 token）、hfEndpoint 镜像、ModelScope（source:"modelscope"，仅镜像 HereIsMark/*，其它仓库返回 REMOTE_NOT_FOUND）。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+
+      <rect class="bg" width="1160" height="640"/>
+
+      <!-- zones first (bg → zones → arrows → labels → nodes) -->
+      <rect class="zone" x="760" y="96" width="360" height="440" rx="8"/>
+      <rect class="zone-mask" x="772" y="100" width="180" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="862" y="109" text-anchor="middle">PUBLIC · HTTPS :443</text>
+
+      <!-- arrows before boxes -->
+      <path class="data" d="M 240,276 H 380" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M 240,320 H 372"/>
+      <path class="data" d="M 500,344 V 440" marker-end="url(#arrow)"/>
+      <path class="data" d="M 620,272 H 704 Q 716,272 716,260 V 196 Q 716,184 728,184 H 780" marker-end="url(#arrow)"/>
+      <path class="data" d="M 620,296 H 736 Q 748,296 748,304 H 780" marker-end="url(#arrow)"/>
+      <path class="data" d="M 620,320 H 720 Q 732,320 732,332 V 412 Q 732,424 744,424 H 780" marker-end="url(#arrow)"/>
+      <path class="data" d="M 440,344 V 400 Q 440,408 432,408 H 248 Q 240,408 240,416 V 440" marker-end="url(#arrow)"/>
+
+      <!-- stop symbol on forbidden multipart path -->
+      <line class="data" x1="372" y1="314" x2="372" y2="326"/>
+
+      <!-- arrow labels (mask → text) -->
+      <rect class="mask" x="274" y="256" width="72" height="12" rx="2"/>
+      <text class="alabel" x="310" y="265" text-anchor="middle">JSON /v1/*</text>
+      <rect class="mask" x="244" y="300" width="104" height="12" rx="2"/>
+      <text class="alabel" x="296" y="309" text-anchor="middle">multipart /v1</text>
+      <rect class="mask" x="508" y="380" width="112" height="12" rx="2"/>
+      <text class="alabel" x="564" y="389" text-anchor="middle">HTTP 127.0.0.1:18090</text>
+      <rect class="mask" x="724" y="224" width="80" height="12" rx="2"/>
+      <text class="alabel" x="764" y="233" text-anchor="middle">HTTPS :443</text>
+      <rect class="mask" x="656" y="276" width="80" height="12" rx="2"/>
+      <text class="alabel" x="696" y="285" text-anchor="middle">HTTPS :443</text>
+      <rect class="mask" x="740" y="360" width="80" height="12" rx="2"/>
+      <text class="alabel" x="780" y="369" text-anchor="middle">HTTPS :443</text>
+      <rect class="mask" x="300" y="388" width="88" height="12" rx="2"/>
+      <text class="alabel" x="344" y="397" text-anchor="middle">token · 0600</text>
+
+      <!-- OpenAI-compatible client -->
+      <rect class="mask" x="40" y="248" width="200" height="88" rx="6"/>
+      <rect class="n input" x="40" y="248" width="200" height="88" rx="6"/>
+      <rect class="tag" x="48" y="254" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="72" y="263" text-anchor="middle">CLIENT</text>
+      <text class="name" x="140" y="290" text-anchor="middle">OpenAI 兼容客户端</text>
+      <text class="sub" x="140" y="306" text-anchor="middle">curl / SDK · :18080</text>
+
+      <!-- hub -->
+      <rect class="mask" x="380" y="240" width="240" height="104" rx="6"/>
+      <rect class="n focal" x="380" y="240" width="240" height="104" rx="6"/>
+      <rect class="tag" x="388" y="246" width="40" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="408" y="255" text-anchor="middle">HUB</text>
+      <text class="name" x="500" y="288" text-anchor="middle">audio.cpp-hub</text>
+      <text class="sub" x="500" y="304" text-anchor="middle">route by model name</text>
+
+      <!-- engine -->
+      <rect class="mask" x="380" y="440" width="240" height="72" rx="6"/>
+      <rect class="n" x="380" y="440" width="240" height="72" rx="6"/>
+      <rect class="tag" x="388" y="446" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="412" y="455" text-anchor="middle">ENGINE</text>
+      <text class="name" x="500" y="476" text-anchor="middle">audiocpp_server</text>
+      <text class="sub" x="500" y="492" text-anchor="middle">127.0.0.1:18090</text>
+
+      <!-- secret store -->
+      <rect class="mask" x="80" y="440" width="296" height="64" rx="6"/>
+      <rect class="n store" x="80" y="440" width="296" height="64" rx="6"/>
+      <rect class="tag" x="88" y="446" width="48" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="112" y="455" text-anchor="middle">STORE</text>
+      <text class="name" x="228" y="470" text-anchor="middle">密钥落盘</text>
+      <text class="sub" x="228" y="486" text-anchor="middle">data/downloads/&lt;id&gt;/task.json</text>
+
+      <!-- public integrations -->
+      <rect class="mask" x="780" y="152" width="320" height="64" rx="6"/>
+      <rect class="n ext" x="780" y="152" width="320" height="64" rx="6"/>
+      <rect class="tag" x="788" y="158" width="56" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="816" y="167" text-anchor="middle">REMOTE</text>
+      <text class="name" x="940" y="182" text-anchor="middle">Hugging Face</text>
+      <text class="sub" x="940" y="198" text-anchor="middle">default · gated repos → bearer token</text>
+
+      <rect class="mask" x="780" y="272" width="320" height="64" rx="6"/>
+      <rect class="n ext" x="780" y="272" width="320" height="64" rx="6"/>
+      <rect class="tag" x="788" y="278" width="56" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="816" y="287" text-anchor="middle">MIRROR</text>
+      <text class="name" x="940" y="302" text-anchor="middle">hfEndpoint 镜像</text>
+      <text class="sub" x="940" y="318" text-anchor="middle">hf-mirror.com · per-request override</text>
+
+      <rect class="mask" x="780" y="392" width="320" height="64" rx="6"/>
+      <rect class="n ext" x="780" y="392" width="320" height="64" rx="6"/>
+      <rect class="tag" x="788" y="398" width="56" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="816" y="407" text-anchor="middle">REMOTE</text>
+      <text class="name" x="940" y="422" text-anchor="middle">ModelScope</text>
+      <text class="sub" x="940" y="438" text-anchor="middle">source:"modelscope" · revision master</text>
+
+      <text class="sub" x="780" y="516">mirrored: HereIsMark/* only</text>
+
+      <!-- legend strip -->
+      <line class="divider" x1="40" y1="580" x2="1120" y2="580"/>
+      <text class="eyebrow-svg" x="40" y="600">LEGEND</text>
+      <rect class="n focal" x="160" y="592" width="16" height="12" rx="2"/>
+      <text class="sub" x="184" y="602">focal</text>
+      <rect class="n" x="300" y="592" width="16" height="12" rx="2"/>
+      <text class="sub" x="324" y="602">component</text>
+      <rect class="n ext" x="440" y="592" width="16" height="12" rx="2"/>
+      <text class="sub" x="464" y="602">external</text>
+      <rect class="n input" x="580" y="592" width="16" height="12" rx="2"/>
+      <text class="sub" x="604" y="602">input</text>
+      <rect class="n store" x="700" y="592" width="16" height="12" rx="2"/>
+      <text class="sub" x="724" y="602">secret store</text>
+      <path class="data dash" d="M 880,598 H 908"/>
+      <line class="data" x1="908" y1="592" x2="908" y2="604"/>
+      <text class="sub" x="916" y="602">blocked · stop</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">KEY POINT</p>
+      <h3><span class="dot ink"></span>三个方向，三种协议</h3>
+      <ul>
+        <li>入站：<code>GET /v1/models</code> 与 <code>POST|PUT /v1/*</code>（如 <code>/v1/audio/speech</code>），HTTP <code>:18080</code>，<strong>仅 JSON</strong> body 才能提取顶层 <code>model</code>。</li>
+        <li>回环：hub → 引擎 <code>HTTP 127.0.0.1:18090</code>，与 Web UI 的 <code>/api/tasks</code> 链路共用同一串行队列。</li>
+        <li>出站：权重下载 <code>HTTPS :443</code>，按 <code>hfEndpoint</code> 或不带 scheme 的 <code>source:"modelscope"</code> 选择源。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="eyebrow">BOUNDARY · 已知失败边界</p>
+      <h3><span class="dot muted"></span>认证与失败</h3>
+      <ul>
+        <li>gated 仓库：<code>POST /api/downloads</code> 需传 HF <code>token</code>（bearer）；缺失或无效 → <code>DOWNLOAD_AUTH</code>。token 以明文存 <code>data/downloads/&lt;id&gt;/task.json</code>（目录 0700 / 文件 0600，API 输出剔除）。</li>
+        <li><code>/v1/*</code> 的 multipart 无法提取 <code>model</code> → <strong>400</strong>（图中 blocked 线）。</li>
+        <li><code>source:"modelscope"</code> 仅映射 <code>HereIsMark/&lt;repo&gt;</code>；当前只镜像 <code>audio.cpp-gguf</code>，其它包 → <strong>REMOTE_NOT_FOUND</strong>。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE · 依据</p>
+      <h3><span class="dot soft"></span>代码与文档</h3>
+      <ul>
+        <li>proxy.go（/v1 路由与 model 提取）</li>
+        <li>download.go（分段下载、SSRF、token 落盘）</li>
+        <li>packages.go（resolve URL、modelscope 映射）</li>
+        <li>models.go（models.json 内嵌清单）</li>
+        <li>README.md「OpenAI 接口兼容性」· DOCKER.md</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · dp integration · monochrome skin · edit the SVG above, keep 4px grid</footer>
+</main>
+</body>
+</html>

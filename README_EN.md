@@ -29,6 +29,12 @@ These GIFs are captured from the running web UI (Playwright recording + ffmpeg e
 
 ![hub-downloads](docs/assets/hub-downloads.gif)
 
+## Diagrams
+
+Architecture, deployment, sequence, data and operations diagrams — editable HTML source plus light/dark PNG previews: [`docs/diagrams/`](docs/diagrams/README.md).
+
+![Overall architecture](docs/diagrams/assets/hero-overview.png)
+
 ## Features
 
 - **Multi-instance management**: writes a `server.json` per instance and launches `audiocpp_server` as a subprocess — automatic port allocation (bound to 127.0.0.1), health polling (up to 120s), log viewing, one-click stop
