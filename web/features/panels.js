@@ -3,7 +3,13 @@
 import { $, el } from "../core/dom.js";
 import { I18N, t } from "../core/i18n.js";
 import { state, selectedModel } from "../core/state.js";
-import { buildLanguageRow, renderAdvancedGrid, collectParams, paramInput, RESERVED_KEYS } from "./params.js";
+import {
+  buildLanguageRow,
+  renderAdvancedGrid,
+  collectParams,
+  paramInput,
+  RESERVED_KEYS,
+} from "./params.js";
 import { submitTask, trackTask } from "./tasks.js";
 
 /* ---------- 结果通用：base64 → Blob / 轨道行 / 容器清理 ---------- */
@@ -46,7 +52,11 @@ export function renderAsrPanel(m) {
   const textRow = $("asr-text-row");
   textRow.innerHTML = "";
   if (m.inputs && m.inputs.text === "optional") {
-    textRow.appendChild(el(`<label>${t("asr.contextLabel")}<textarea id="asr-text-input" rows="2" placeholder="${t("asr.contextPlaceholder")}"></textarea></label>`));
+    textRow.appendChild(
+      el(
+        `<label>${t("asr.contextLabel")}<textarea id="asr-text-input" rows="2" placeholder="${t("asr.contextPlaceholder")}"></textarea></label>`,
+      ),
+    );
   }
   const hasAdvanced = renderAdvancedGrid($("asr-advanced-grid"), m, "asr-adv");
   $("asr-advanced").classList.toggle("hidden", !hasAdvanced);
@@ -77,10 +87,16 @@ $("asr-submit").onclick = async () => {
   const msg = $("asr-msg");
   msg.textContent = "";
   $("asr-result").classList.add("hidden");
-  if (!state.activeInstanceId) { msg.textContent = t("instance.noReady"); return; }
+  if (!state.activeInstanceId) {
+    msg.textContent = t("instance.noReady");
+    return;
+  }
 
   const audio = state.asrAudioPicker.getValue();
-  if (!audio) { msg.textContent = t("asr.errNoAudio"); return; }
+  if (!audio) {
+    msg.textContent = t("asr.errNoAudio");
+    return;
+  }
 
   const req = { audio };
   if (state.asrLanguageSel && state.asrLanguageSel.value) req.language = state.asrLanguageSel.value;
@@ -100,7 +116,9 @@ $("asr-submit").onclick = async () => {
 $("asr-copy").onclick = () => {
   navigator.clipboard.writeText($("asr-text").textContent);
   $("asr-copy").textContent = t("asr.copied");
-  setTimeout(() => { $("asr-copy").textContent = t("asr.copy"); }, 1500);
+  setTimeout(() => {
+    $("asr-copy").textContent = t("asr.copy");
+  }, 1500);
 };
 
 /* ---------- SEP 面板 ---------- */
@@ -131,10 +149,16 @@ $("sep-submit").onclick = async () => {
   const msg = $("sep-msg");
   msg.textContent = "";
   clearResult($("sep-result"));
-  if (!state.activeInstanceId) { msg.textContent = t("instance.noReady"); return; }
+  if (!state.activeInstanceId) {
+    msg.textContent = t("instance.noReady");
+    return;
+  }
 
   const audio = state.sepAudioPicker.getValue();
-  if (!audio) { msg.textContent = t("sep.errNoAudio"); return; }
+  if (!audio) {
+    msg.textContent = t("sep.errNoAudio");
+    return;
+  }
 
   // 异步任务：提交即返回，进度/结果由 trackTask 轮询处理
   $("sep-stats").textContent = "";
@@ -175,15 +199,27 @@ $("music-submit").onclick = async () => {
   const msg = $("music-msg");
   msg.textContent = "";
   clearResult($("music-result"));
-  if (!state.activeInstanceId) { msg.textContent = t("instance.noReady"); return; }
+  if (!state.activeInstanceId) {
+    msg.textContent = t("instance.noReady");
+    return;
+  }
 
   const style = $("music-style").value.trim();
   const lyrics = $("music-lyrics").value.trim();
   const cot = $("music-cot").value;
   const abc = $("music-abc").value.trim();
-  if (!style) { msg.textContent = t("music.errNoStyle"); return; }
-  if (!lyrics) { msg.textContent = t("music.errNoLyrics"); return; }
-  if (abc && cot === "off") { msg.textContent = t("music.errAbcCot"); return; }
+  if (!style) {
+    msg.textContent = t("music.errNoStyle");
+    return;
+  }
+  if (!lyrics) {
+    msg.textContent = t("music.errNoLyrics");
+    return;
+  }
+  if (abc && cot === "off") {
+    msg.textContent = t("music.errAbcCot");
+    return;
+  }
 
   // yue2 全部专属参数放 options；text 既作任务记录预览，也是引擎的歌词回退通道
   const options = { style, lyrics, cot };
@@ -192,7 +228,7 @@ $("music-submit").onclick = async () => {
     text: lyrics,
     lyrics: lyrics,
     options,
-    busy_timeout_ms: YUE2_BUSY_TIMEOUT_MS
+    busy_timeout_ms: YUE2_BUSY_TIMEOUT_MS,
   };
   // 种子：超过 2^53 的整数用 JSON number 会丢精度，按协议以字符串传输
   const seed = $("music-seed").value.trim();
@@ -222,7 +258,7 @@ export function renderMusicResult(json) {
       line.textContent = t("music.timingLine", {
         wall: ((timing.wall_ms || 0) / 1000).toFixed(1) + "s",
         dur: ((timing.audio_duration_ms || 0) / 1000).toFixed(1) + "s",
-        rtf: timing.rtf != null ? Number(timing.rtf).toFixed(2) : "?"
+        rtf: timing.rtf != null ? Number(timing.rtf).toFixed(2) : "?",
       });
       out.appendChild(line);
     }
@@ -239,7 +275,11 @@ export function renderOtherPanel(m) {
   const textRow = $("other-text-row");
   textRow.innerHTML = "";
   if (inputs.text !== "none") {
-    textRow.appendChild(el(`<label>${t("other.textLabel")}${inputs.text === "required" ? t("common.required") : t("common.optionalSuffix")}<textarea id="other-text-input" rows="3"></textarea></label>`));
+    textRow.appendChild(
+      el(
+        `<label>${t("other.textLabel")}${inputs.text === "required" ? t("common.required") : t("common.optionalSuffix")}<textarea id="other-text-input" rows="3"></textarea></label>`,
+      ),
+    );
   }
   $("other-audio-block").classList.toggle("hidden", inputs.audio === "none");
   $("other-voice-block").classList.toggle("hidden", inputs.voiceRef === "none");
@@ -263,26 +303,39 @@ $("other-submit").onclick = async () => {
   const msg = $("other-msg");
   msg.textContent = "";
   clearResult($("other-result"));
-  if (!state.activeInstanceId) { msg.textContent = t("instance.noReady"); return; }
+  if (!state.activeInstanceId) {
+    msg.textContent = t("instance.noReady");
+    return;
+  }
   const inputs = m.inputs || { text: "none", audio: "none", voiceRef: "none" };
 
   const req = {};
   if (inputs.text !== "none") {
     const txt = $("other-text-input").value.trim();
-    if (inputs.text === "required" && !txt) { msg.textContent = t("other.errNoText"); return; }
+    if (inputs.text === "required" && !txt) {
+      msg.textContent = t("other.errNoText");
+      return;
+    }
     if (txt) req.text = txt;
   }
   if (inputs.audio !== "none") {
     const v = state.otherAudioPicker.getValue();
-    if (inputs.audio === "required" && !v) { msg.textContent = t("other.errNoAudio"); return; }
+    if (inputs.audio === "required" && !v) {
+      msg.textContent = t("other.errNoAudio");
+      return;
+    }
     if (v) req.audio = v;
   }
   if (inputs.voiceRef !== "none") {
     const v = state.otherVoicePicker.getValue();
-    if (inputs.voiceRef === "required" && !v) { msg.textContent = t("other.errNoVoice"); return; }
+    if (inputs.voiceRef === "required" && !v) {
+      msg.textContent = t("other.errNoVoice");
+      return;
+    }
     if (v) req.voice_ref = v;
   }
-  if (state.otherLanguageSel && state.otherLanguageSel.value) req.language = state.otherLanguageSel.value;
+  if (state.otherLanguageSel && state.otherLanguageSel.value)
+    req.language = state.otherLanguageSel.value;
 
   // paramSchema 字段：与 TTS/ASR 面板一致，放进 options 透传（服务端顶层只认白名单，
   // 如 stable_audio 的 negative_prompt 放顶层会被静默丢弃）；
@@ -291,12 +344,19 @@ $("other-submit").onclick = async () => {
     if (!p || Array.isArray(p) || !p.type) continue;
     const input = $(`other-field-${key}`);
     if (!input) continue;
-    const target = RESERVED_KEYS.has(key) ? req : (req.options || (req.options = {}));
-    if (p.type === "boolean") { target[key] = input.checked; continue; }
+    const target = RESERVED_KEYS.has(key) ? req : req.options || (req.options = {});
+    if (p.type === "boolean") {
+      target[key] = input.checked;
+      continue;
+    }
     const v = String(input.value).trim();
     if (v === "") continue;
-    target[key] = (p.type === "string" || p.type === "enum") ? v
-      : (p.type === "integer" ? parseInt(v, 10) : parseFloat(v));
+    target[key] =
+      p.type === "string" || p.type === "enum"
+        ? v
+        : p.type === "integer"
+          ? parseInt(v, 10)
+          : parseFloat(v);
   }
 
   // 额外参数 JSON 合并
@@ -337,7 +397,11 @@ export function renderOtherResult(json) {
   for (const [k, v] of Object.entries(json)) {
     if (k === "audio") continue;
     if (k === "named_audio_outputs") {
-      summary[k] = v.map(tr => ({ id: tr.id, sample_rate: tr.sample_rate, channels: tr.channels }));
+      summary[k] = v.map((tr) => ({
+        id: tr.id,
+        sample_rate: tr.sample_rate,
+        channels: tr.channels,
+      }));
       continue;
     }
     summary[k] = v;

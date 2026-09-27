@@ -9,8 +9,9 @@ data/
 models/
 logs/
 
-# Legacy frontend assets — intentionally not formatted with Prettier so this
-# workstream's diff stays mechanical and reviewable.
+# Legacy frontend assets (pre-module-split) — intentionally not formatted with
+# Prettier so the toolchain workstream's diff stays mechanical and reviewable.
+# The NEW ES-module tree (core/ + features/) IS formatted — see below.
 web/*.js
 web/*.html
 web/*.css
@@ -28,3 +29,6 @@ scripts/*.cjs
 !tsconfig.json
 !.prettierrc.json
 !web/README.md
+# ...and the new ES-module tree (not matched by web/*.js).
+!web/core/**
+!web/features/**

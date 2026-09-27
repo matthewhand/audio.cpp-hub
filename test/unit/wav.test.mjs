@@ -16,7 +16,7 @@ function fakeAudioBuffer(channels, sampleRate = 8000) {
     length: channels[0].length,
     numberOfChannels: channels.length,
     duration: channels[0].length / sampleRate,
-    getChannelData: (c) => Float32Array.from(channels[c])
+    getChannelData: (c) => Float32Array.from(channels[c]),
   };
 }
 
@@ -35,11 +35,23 @@ test("wav: 空加载后导出四个工具函数", () => {
 
 test("wav: 编码 PCM16 单声道头与数据长度", async () => {
   const W = loadWav();
-  const buf = fakeAudioBuffer([[0, 0.5, -0.5, 1], [0, 0, 0, 0]], 8000);
+  const buf = fakeAudioBuffer(
+    [
+      [0, 0.5, -0.5, 1],
+      [0, 0, 0, 0],
+    ],
+    8000,
+  );
   const blob = W.audioBufferToWav(buf);
   assert.equal(blob.type, "audio/wav");
   const dv = await readWav(blob);
-  const str = (off) => String.fromCharCode(dv.getUint8(off), dv.getUint8(off + 1), dv.getUint8(off + 2), dv.getUint8(off + 3));
+  const str = (off) =>
+    String.fromCharCode(
+      dv.getUint8(off),
+      dv.getUint8(off + 1),
+      dv.getUint8(off + 2),
+      dv.getUint8(off + 3),
+    );
   assert.equal(str(0), "RIFF");
   assert.equal(str(8), "WAVE");
   assert.equal(str(12), "fmt ");
@@ -57,7 +69,10 @@ test("wav: 编码 PCM16 单声道头与数据长度", async () => {
 
 test("wav: 双声道混单声道求平均", async () => {
   const W = loadWav();
-  const buf = fakeAudioBuffer([[1, -1], [-1, 1]]);
+  const buf = fakeAudioBuffer([
+    [1, -1],
+    [-1, 1],
+  ]);
   const dv = await readWav(W.audioBufferToWav(buf));
   assert.equal(dv.getInt16(44, true), 0);
   assert.equal(dv.getInt16(46, true), 0);

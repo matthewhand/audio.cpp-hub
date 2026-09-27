@@ -19,22 +19,20 @@ export default defineConfig({
   outputDir: path.join(rootDir, "test-results"),
   reporter: [
     ["list"],
-    ["html", { open: "never", outputFolder: path.join(rootDir, "playwright-report") }]
+    ["html", { open: "never", outputFolder: path.join(rootDir, "playwright-report") }],
   ],
   use: {
     baseURL: "http://127.0.0.1:4173",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
-    video: "off"
+    video: "off",
   },
-  projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } }
-  ],
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     command: "node static-server.mjs",
     cwd: e2eDir,
     url: "http://127.0.0.1:4173",
     reuseExistingServer: !process.env.CI,
-    timeout: 15000
-  }
+    timeout: 15000,
+  },
 });

@@ -12,26 +12,50 @@ let paletteActive = 0;
 
 function paletteSources() {
   const items = [];
-  for (const [route, key] of [["history", "history.title"], ["voices", "voices.title"],
-    ["downloads", "dl.managerTitle"], ["settings", "settings.title"]]) {
+  for (const [route, key] of [
+    ["history", "history.title"],
+    ["voices", "voices.title"],
+    ["downloads", "dl.managerTitle"],
+    ["settings", "settings.title"],
+  ]) {
     const label = t(key);
-    items.push({ group: t("palette.group.panels"), label, sub: "#/" + route, search: label + " " + route, run: () => go("#/" + route) });
+    items.push({
+      group: t("palette.group.panels"),
+      label,
+      sub: "#/" + route,
+      search: label + " " + route,
+      run: () => go("#/" + route),
+    });
   }
   for (const m of state.models) {
     const label = I18N.pick(m, "displayName") || m.id;
-    items.push({ group: t("nav.models"), label, sub: categoryName(m.category), search: label + " " + m.id + " " + m.family, run: () => go(modelRoute(m.id)) });
+    items.push({
+      group: t("nav.models"),
+      label,
+      sub: categoryName(m.category),
+      search: label + " " + m.id + " " + m.family,
+      run: () => go(modelRoute(m.id)),
+    });
   }
   for (const inst of state.instances) {
     const label = inst.instanceName || inst.modelId;
-    items.push({ group: t("nav.instances"), label, sub: statusText(inst.status) + " ｜ #" + inst.id, search: label + " " + inst.id + " " + inst.modelId, run: () => go("#/instance/" + encodeURIComponent(inst.id)) });
+    items.push({
+      group: t("nav.instances"),
+      label,
+      sub: statusText(inst.status) + " ｜ #" + inst.id,
+      search: label + " " + inst.id + " " + inst.modelId,
+      run: () => go("#/instance/" + encodeURIComponent(inst.id)),
+    });
   }
   return items;
 }
 
 function renderPalette(query) {
-  const q = String(query || "").trim().toLowerCase();
+  const q = String(query || "")
+    .trim()
+    .toLowerCase();
   const all = paletteSources();
-  paletteItems = q ? all.filter(it => it.search.toLowerCase().includes(q)) : all;
+  paletteItems = q ? all.filter((it) => it.search.toLowerCase().includes(q)) : all;
   if (paletteActive >= paletteItems.length) paletteActive = 0;
   const list = $("command-palette-list");
   list.innerHTML = "";
@@ -49,7 +73,9 @@ function renderPalette(query) {
       g.textContent = it.group;
       list.appendChild(g);
     }
-    const row = el(`<div class="cp-item" role="option" data-idx="${i}"><span class="cp-item-label"></span><span class="cp-item-sub"></span></div>`);
+    const row = el(
+      `<div class="cp-item" role="option" data-idx="${i}"><span class="cp-item-label"></span><span class="cp-item-sub"></span></div>`,
+    );
     row.querySelector(".cp-item-label").textContent = it.label;
     row.querySelector(".cp-item-sub").textContent = it.sub || "";
     if (i === paletteActive) row.classList.add("active");
@@ -61,8 +87,9 @@ function renderPalette(query) {
 }
 function setPaletteActive(i) {
   paletteActive = i;
-  $("command-palette-list").querySelectorAll(".cp-item").forEach(r =>
-    r.classList.toggle("active", Number(r.dataset.idx) === i));
+  $("command-palette-list")
+    .querySelectorAll(".cp-item")
+    .forEach((r) => r.classList.toggle("active", Number(r.dataset.idx) === i));
   scrollPaletteActive();
 }
 function scrollPaletteActive() {
@@ -90,14 +117,18 @@ function runPaletteItem(i) {
   it.run();
 }
 
-$("command-palette-input").addEventListener("input", (e) => { paletteActive = 0; renderPalette(e.target.value); });
+$("command-palette-input").addEventListener("input", (e) => {
+  paletteActive = 0;
+  renderPalette(e.target.value);
+});
 $("command-palette-input").addEventListener("keydown", (e) => {
   if (e.key === "ArrowDown") {
     e.preventDefault();
     if (paletteItems.length) setPaletteActive((paletteActive + 1) % paletteItems.length);
   } else if (e.key === "ArrowUp") {
     e.preventDefault();
-    if (paletteItems.length) setPaletteActive((paletteActive - 1 + paletteItems.length) % paletteItems.length);
+    if (paletteItems.length)
+      setPaletteActive((paletteActive - 1 + paletteItems.length) % paletteItems.length);
   } else if (e.key === "Enter") {
     e.preventDefault();
     runPaletteItem(paletteActive);
@@ -113,7 +144,8 @@ $("command-palette").addEventListener("mousedown", (e) => {
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "k" || e.key === "K")) {
     e.preventDefault();
-    if (isOpen("command-palette")) closeCommandPalette(); else openCommandPalette();
+    if (isOpen("command-palette")) closeCommandPalette();
+    else openCommandPalette();
   }
 });
 

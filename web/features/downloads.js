@@ -4,10 +4,25 @@ import { apiGet, apiPost, apiDelete } from "../core/api.js";
 import { I18N, t } from "../core/i18n.js";
 import { state } from "../core/state.js";
 import { fmtBytes } from "../core/format.js";
-import { showToast, showSkeleton, renderEmptyState, renderStateError, isOpen, focusDialog, restoreDialogFocus, registerOverlay } from "../core/ui.js";
+import {
+  showToast,
+  showSkeleton,
+  renderEmptyState,
+  renderStateError,
+  isOpen,
+  focusDialog,
+  restoreDialogFocus,
+  registerOverlay,
+} from "../core/ui.js";
 import { go, goPanel, hubPanelClosed } from "../core/router.js";
 
-const DL_STATUS_CLASS = { RUNNING: "starting", PENDING: "starting", PAUSED: "stopped", DONE: "ready", FAILED: "error" };
+const DL_STATUS_CLASS = {
+  RUNNING: "starting",
+  PENDING: "starting",
+  PAUSED: "stopped",
+  DONE: "ready",
+  FAILED: "error",
+};
 
 let downloadsLoaded = false;
 export async function refreshDownloads() {
@@ -17,7 +32,8 @@ export async function refreshDownloads() {
     data = await apiGet("/api/downloads");
     if (!Array.isArray(data)) throw new Error(t("common.loadFailed"));
   } catch (e) {
-    if (isOpen("downloads-modal") && !state.downloads.length) renderStateError($("dl-list"), e, refreshDownloads);
+    if (isOpen("downloads-modal") && !state.downloads.length)
+      renderStateError($("dl-list"), e, refreshDownloads);
     return;
   }
   downloadsLoaded = true;
@@ -28,7 +44,9 @@ export async function refreshDownloads() {
 
 /* 页头角标：进行中的任务数 */
 function updateDlBadge() {
-  const running = state.downloads.filter(d => d.status === "RUNNING" || d.status === "PENDING").length;
+  const running = state.downloads.filter(
+    (d) => d.status === "RUNNING" || d.status === "PENDING",
+  ).length;
   const badge = $("dl-badge");
   badge.textContent = running;
   badge.classList.toggle("hidden", running === 0);
@@ -38,7 +56,10 @@ export function openDownloadsModal() {
   renderDownloadList();
   $("downloads-modal").classList.remove("hidden");
   // 首次数据尚未返回时显示骨架并立即拉取
-  if (!downloadsLoaded) { showSkeleton($("dl-list"), 3); refreshDownloads(); }
+  if (!downloadsLoaded) {
+    showSkeleton($("dl-list"), 3);
+    refreshDownloads();
+  }
   focusDialog($("downloads-modal"));
 }
 export function closeDownloadsModal() {
@@ -48,7 +69,9 @@ export function closeDownloadsModal() {
 }
 $("downloads-btn").onclick = () => goPanel("downloads");
 $("downloads-modal-close").onclick = closeDownloadsModal;
-$("downloads-modal").onclick = (e) => { if (e.target === $("downloads-modal")) closeDownloadsModal(); };
+$("downloads-modal").onclick = (e) => {
+  if (e.target === $("downloads-modal")) closeDownloadsModal();
+};
 registerOverlay("downloads-modal", closeDownloadsModal);
 
 export function renderDownloadList() {
@@ -60,7 +83,7 @@ export function renderDownloadList() {
     return;
   }
   for (const d of state.downloads) {
-    const model = d.modelId ? state.models.find(m => m.id === d.modelId) : null;
+    const model = d.modelId ? state.models.find((m) => m.id === d.modelId) : null;
     const title = model ? I18N.pick(model, "displayName") : d.targetDir;
     // 百分比来自服务端，做数值化 + 钳制后再拼进 style，杜绝属性注入
     const pct = Number(d.percent);
@@ -138,7 +161,9 @@ function closeModelDlModal() {
   restoreDialogFocus();
 }
 $("model-dl-modal-close").onclick = closeModelDlModal;
-$("model-dl-modal").onclick = (e) => { if (e.target === $("model-dl-modal")) closeModelDlModal(); };
+$("model-dl-modal").onclick = (e) => {
+  if (e.target === $("model-dl-modal")) closeModelDlModal();
+};
 registerOverlay("model-dl-modal", closeModelDlModal);
 
 async function loadMdlPackages(m) {
@@ -163,7 +188,7 @@ export function renderMdlPackages() {
   }
   pkgs.forEach((p, i) => {
     const row = el(`<label class="dl-package-row">
-      <input type="radio" name="mdl-package" value="${esc(p.id)}"${p.default || (!pkgs.some(x => x.default) && i === 0) ? " checked" : ""}>
+      <input type="radio" name="mdl-package" value="${esc(p.id)}"${p.default || (!pkgs.some((x) => x.default) && i === 0) ? " checked" : ""}>
       <span class="dl-package-text">
         <span class="dl-package-name"></span>
         <span class="dl-package-meta">${esc([p.format, p.precision].filter(Boolean).join(" ｜ "))} → models/${esc(p.targetDir)} ｜ ${esc(I18N.plural("dl.fileCount", (p.files || []).length))}</span>
@@ -188,7 +213,7 @@ $("mdl-start").onclick = async () => {
   const body = {
     modelId: state.mdlModel.id,
     packageId: sel.value,
-    overwrite: $("mdl-overwrite").checked
+    overwrite: $("mdl-overwrite").checked,
   };
   const token = $("mdl-token").value.trim();
   if (token) body.token = token;

@@ -4,8 +4,14 @@ import { MockBackend } from "./mock-backend.mjs";
 import { openApp, pickAudioByPath } from "./helpers.mjs";
 
 const READY = {
-  id: "i2", modelId: "citrinet_asr", instanceName: "citrinet_asr", status: "READY",
-  backend: "cpu", device: 0, port: 19002, taskCount: 0
+  id: "i2",
+  modelId: "citrinet_asr",
+  instanceName: "citrinet_asr",
+  status: "READY",
+  backend: "cpu",
+  device: 0,
+  port: 19002,
+  taskCount: 0,
 };
 
 test("ASR 任务：路径选音频 → 提交 → 识别文本展示", async ({ page }) => {

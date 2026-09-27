@@ -4,8 +4,15 @@ import { I18N, t } from "../core/i18n.js";
 import { state, selectedModel, VIBEVOICE_MAX_SPEAKERS } from "../core/state.js";
 import { qwen3VariantOf } from "../core/format.js";
 import {
-  buildLanguageRow, renderEnumRow, renderAdvancedGrid, collectParams, collectEnums,
-  buildTextRow, buildBreezeInstructionRow, paramInput, schemaParams
+  buildLanguageRow,
+  renderEnumRow,
+  renderAdvancedGrid,
+  collectParams,
+  collectEnums,
+  buildTextRow,
+  buildBreezeInstructionRow,
+  paramInput,
+  schemaParams,
 } from "./params.js";
 import { submitTask, trackTask } from "./tasks.js";
 import { historyRefPath } from "./history.js";
@@ -49,7 +56,7 @@ function addSpeakerRow(path) {
   removeBtn.textContent = t("tts.speakerRemove");
   linesTa.placeholder = t("tts.speakerLinesPlaceholder");
   removeBtn.onclick = () => {
-    const i = state.speakerPickers.findIndex(sp => sp.row === row);
+    const i = state.speakerPickers.findIndex((sp) => sp.row === row);
     if (i < 0) return;
     const idx = (window.__voiceSelects || []).indexOf(state.speakerPickers[i].picker);
     if (idx >= 0) window.__voiceSelects.splice(idx, 1);
@@ -63,7 +70,13 @@ function addSpeakerRow(path) {
   row.querySelector(".speaker-actions").addEventListener("click", (e) => e.preventDefault());
   const picker = new VoiceSelect(row.querySelector(".speaker-picker-mount"), "Speaker " + n);
   $("tts-speakers-list").appendChild(row);
-  state.speakerPickers.push({ picker, row, label: row.querySelector(".speaker-label"), removeBtn, linesTa });
+  state.speakerPickers.push({
+    picker,
+    row,
+    label: row.querySelector(".speaker-label"),
+    removeBtn,
+    linesTa,
+  });
   renumberSpeakerRows();
   if (path) picker.setByPath(path);
 }
@@ -74,10 +87,16 @@ function renderSpeakersBlock(m) {
   // VibeVoice 的脚本由各说话人行内的台词框组装，主文本框不使用
   $("tts-text-block").classList.toggle("hidden", show);
   // 语言切换等重渲染会重建本区块：先快照已填的音色与台词，重建后还原
-  const saved = state.speakerPickers.map(sp => ({ path: sp.picker.getValue(), lines: sp.linesTa.value }));
+  const saved = state.speakerPickers.map((sp) => ({
+    path: sp.picker.getValue(),
+    lines: sp.linesTa.value,
+  }));
   clearSpeakerRows();
   if (!show) return;
-  if (!saved.length) { addSpeakerRow(); return; }
+  if (!saved.length) {
+    addSpeakerRow();
+    return;
+  }
   for (const s of saved.slice(0, VIBEVOICE_MAX_SPEAKERS)) {
     addSpeakerRow(s.path);
     state.speakerPickers[state.speakerPickers.length - 1].linesTa.value = s.lines;
@@ -88,8 +107,13 @@ $("tts-speaker-add").onclick = () => addSpeakerRow();
 
 /* 各说话人台词按行号轮流拼接：所有人的第 1 句 → 第 2 句 → …，空行跳过 */
 function buildVibeVoiceScript() {
-  const per = state.speakerPickers.map(sp => sp.linesTa.value.split("\n").map(s => s.trim()).filter(Boolean));
-  const maxLen = Math.max(0, ...per.map(a => a.length));
+  const per = state.speakerPickers.map((sp) =>
+    sp.linesTa.value
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  const maxLen = Math.max(0, ...per.map((a) => a.length));
   const out = [];
   for (let k = 0; k < maxLen; k++) {
     for (let i = 0; i < per.length; i++) {
@@ -136,7 +160,13 @@ export function renderTtsPanel(m) {
   }
 
   buildTextRow($("tts-instruct-row"), m, "instruct", t("tts.instructLabel"), "tts-instruct");
-  buildTextRow($("tts-ref-text-row"), m, "reference_text", t("tts.refTextLabel"), "tts-reference-text");
+  buildTextRow(
+    $("tts-ref-text-row"),
+    m,
+    "reference_text",
+    t("tts.refTextLabel"),
+    "tts-reference-text",
+  );
   // OmniVoice 原生克隆要求 reference_text，占位提示不能写"可选"
   const rtInput = $("tts-reference-text");
   if (rtInput && m.family === "omnivoice") {
@@ -174,7 +204,10 @@ function updateTtsBlocks(m) {
     // instruct 在 VoiceDesign 下必填，CustomVoice 下可选
     const insInput = $("tts-instruct");
     if (insInput) {
-      insInput.placeholder = state.ttsVariant === "voice_design" ? t("tts.instructPlaceholderRequired") : t("tts.instructPlaceholderOptional");
+      insInput.placeholder =
+        state.ttsVariant === "voice_design"
+          ? t("tts.instructPlaceholderRequired")
+          : t("tts.instructPlaceholderOptional");
     }
   }
   if (m.family === "breeze_tts") {
@@ -187,19 +220,28 @@ $("tts-submit").onclick = async () => {
   const msg = $("tts-msg");
   msg.textContent = "";
   $("tts-result").classList.add("hidden");
-  if (!state.activeInstanceId) { msg.textContent = t("instance.noReady"); return; }
+  if (!state.activeInstanceId) {
+    msg.textContent = t("instance.noReady");
+    return;
+  }
 
   const req = {};
   // VibeVoice 的脚本由各说话人台词框组装；其它模型用主文本框
   req.text = m.family === "vibevoice" ? buildVibeVoiceScript() : $("tts-text").value;
-  if (!req.text.trim()) { msg.textContent = t("tts.errNoText"); return; }
+  if (!req.text.trim()) {
+    msg.textContent = t("tts.errNoText");
+    return;
+  }
   if (state.ttsLanguageSel && state.ttsLanguageSel.value) req.language = state.ttsLanguageSel.value;
 
   // 声音来源
   if (m.family === "qwen3_tts") {
     if (state.ttsVariant === "base") {
       const v = state.voicePicker.getValue();
-      if (!v) { msg.textContent = t("tts.errNoVoice"); return; }
+      if (!v) {
+        msg.textContent = t("tts.errNoVoice");
+        return;
+      }
       req.voice_ref = v;
       const rt = $("tts-reference-text");
       if (rt && rt.value.trim()) req.reference_text = rt.value.trim();
@@ -209,7 +251,10 @@ $("tts-submit").onclick = async () => {
       if (ins && ins.value.trim()) req.instruct = ins.value.trim();
     } else {
       const ins = $("tts-instruct");
-      if (!ins || !ins.value.trim()) { msg.textContent = t("tts.errNoInstruct"); return; }
+      if (!ins || !ins.value.trim()) {
+        msg.textContent = t("tts.errNoInstruct");
+        return;
+      }
       req.instruct = ins.value.trim();
     }
   } else {
@@ -219,34 +264,50 @@ $("tts-submit").onclick = async () => {
     }
     if (voiceRefMode && voiceRefMode !== "none") {
       const v = state.voicePicker.getValue();
-      if (voiceRefMode === "required" && !v) { msg.textContent = t("tts.errNoVoice"); return; }
+      if (voiceRefMode === "required" && !v) {
+        msg.textContent = t("tts.errNoVoice");
+        return;
+      }
       if (v) req.voice_ref = v;
     }
     // VibeVoice 多说话人：音色按行序拼成 voice_samples，中间不能有空洞
     // （引擎按下标映射 Speaker 编号，空洞会导致映射错位）
     if (m.family === "vibevoice") {
-      const vals = state.speakerPickers.map(sp => sp.picker.getValue());
+      const vals = state.speakerPickers.map((sp) => sp.picker.getValue());
       let last = -1;
-      vals.forEach((v, i) => { if (v) last = i; });
+      vals.forEach((v, i) => {
+        if (v) last = i;
+      });
       if (last >= 0) {
         for (let i = 0; i <= last; i++) {
-          if (!vals[i]) { msg.textContent = t("tts.errVibevoiceGap", { n: i + 1 }); return; }
+          if (!vals[i]) {
+            msg.textContent = t("tts.errVibevoiceGap", { n: i + 1 });
+            return;
+          }
         }
         // 脚本引用的最大 Speaker 编号（引擎按最小编号归一化：min>0 时整体减 1）
-        let minId = Infinity, maxId = 0;
+        let minId = Infinity,
+          maxId = 0;
         for (const mm of req.text.matchAll(/^Speaker\s+(\d+)\s*:/gim)) {
           const id = parseInt(mm[1], 10);
           if (id < minId) minId = id;
           if (id > maxId) maxId = id;
         }
         const need = maxId > 0 ? (minId > 0 ? maxId : maxId + 1) : 0;
-        if (need > last + 1) { msg.textContent = t("tts.errVibevoiceNeedVoices", { n: need }); return; }
+        if (need > last + 1) {
+          msg.textContent = t("tts.errVibevoiceNeedVoices", { n: need });
+          return;
+        }
         const opts = req.options || (req.options = {});
         opts.voice_samples = vals.slice(0, last + 1).join(",");
       }
     }
     const rt = $("tts-reference-text");
-    if (rt && rt.value.trim() && (m.family !== "breeze_tts" || state.breezeMode === "voice_clone")) {
+    if (
+      rt &&
+      rt.value.trim() &&
+      (m.family !== "breeze_tts" || state.breezeMode === "voice_clone")
+    ) {
       req.reference_text = rt.value.trim();
     }
     // OmniVoice 原生克隆：提供了参考音频就必须给出参考文本（引擎侧硬约束）
@@ -281,7 +342,10 @@ $("tts-submit").onclick = async () => {
     const opts = req.options || (req.options = {});
     if (state.emotionMode === "emotion_audio") {
       const v = state.emotionPicker.getValue();
-      if (!v) { msg.textContent = t("tts.errNoEmotionAudio"); return; }
+      if (!v) {
+        msg.textContent = t("tts.errNoEmotionAudio");
+        return;
+      }
       req.audio = v;
     } else if (state.emotionMode === "emotion_vector") {
       opts.emotion_vector = state.emotionVector.slice();
@@ -308,15 +372,17 @@ $("tts-submit").onclick = async () => {
 };
 
 /* ---------- 情感模式 Tab（index_tts2 / index_tts2_5） ---------- */
-document.querySelectorAll("#tts-emotion-block .tab").forEach(tab => {
+document.querySelectorAll("#tts-emotion-block .tab").forEach((tab) => {
   tab.onclick = () => {
     state.emotionMode = tab.dataset.mode;
-    document.querySelectorAll("#tts-emotion-block .tab").forEach(tb => {
+    document.querySelectorAll("#tts-emotion-block .tab").forEach((tb) => {
       const on = tb === tab;
       tb.classList.toggle("active", on);
       tb.setAttribute("aria-selected", on ? "true" : "false");
     });
-    document.querySelectorAll("#tts-emotion-block .emotion-pane").forEach(p => p.classList.add("hidden"));
+    document
+      .querySelectorAll("#tts-emotion-block .emotion-pane")
+      .forEach((p) => p.classList.add("hidden"));
     $("emotion-pane-" + state.emotionMode).classList.remove("hidden");
     $("emotion-alpha-row").classList.toggle("hidden", state.emotionMode === "none");
   };
@@ -347,8 +413,11 @@ $("tts-emotion-alpha").addEventListener("input", (e) => {
 /* ---------- 历史记录回填 TTS 表单 ---------- */
 export function fillTtsForm(m, rec) {
   $("tts-text").value = rec.text || "";
-  if (rec.language && state.ttsLanguageSel &&
-      [...state.ttsLanguageSel.options].some(o => o.value === rec.language)) {
+  if (
+    rec.language &&
+    state.ttsLanguageSel &&
+    [...state.ttsLanguageSel.options].some((o) => o.value === rec.language)
+  ) {
     state.ttsLanguageSel.value = rec.language;
   }
 
@@ -381,7 +450,8 @@ export function fillTtsForm(m, rec) {
   if (breezeInstruction) {
     const saved = rec.options && rec.options.instruction;
     const schema = m.paramSchema && m.paramSchema.instruction;
-    breezeInstruction.value = saved !== undefined ? String(saved) : String(schema && schema.default || "");
+    breezeInstruction.value =
+      saved !== undefined ? String(saved) : String((schema && schema.default) || "");
   }
 
   applyHistoryOptions(m, rec.options || {});
@@ -389,9 +459,13 @@ export function fillTtsForm(m, rec) {
   // VibeVoice：voice_samples 按顺序填回各行音色（本地路径页签 + 探测，与手动粘贴等价），
   // 脚本里的 Speaker N: 行按编号分发回各行台词框（0 起编号上移 1；无 Speaker 行的旧记录整段归入 Speaker 1）
   if (m.family === "vibevoice") {
-    const paths = rec.options && rec.options.voice_samples
-      ? String(rec.options.voice_samples).split(",").map(s => s.trim()).filter(Boolean)
-      : [];
+    const paths =
+      rec.options && rec.options.voice_samples
+        ? String(rec.options.voice_samples)
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [];
     // 有快照的说话人音色改用快照路径（源文件可能已删除/移动）
     for (let i = 0; i < paths.length; i++) {
       const snap = historyRefPath(m, rec, "spk" + i);
@@ -401,16 +475,17 @@ export function fillTtsForm(m, rec) {
     for (const mm of String(rec.text || "").matchAll(/^Speaker\s+(\d+)\s*:\s*(.*)$/gim)) {
       lines.push({ id: parseInt(mm[1], 10), text: mm[2] });
     }
-    const minId = lines.length ? Math.min(...lines.map(x => x.id)) : 1;
+    const minId = lines.length ? Math.min(...lines.map((x) => x.id)) : 1;
     const shift = lines.length && minId === 0 ? 1 : 0;
-    const maxRow = Math.max(1, paths.length, ...lines.map(x => x.id + shift));
+    const maxRow = Math.max(1, paths.length, ...lines.map((x) => x.id + shift));
     clearSpeakerRows();
     for (let i = 0; i < maxRow; i++) addSpeakerRow(paths[i]);
     for (const x of lines) {
       const sp = state.speakerPickers[x.id + shift - 1];
       if (sp) sp.linesTa.value = (sp.linesTa.value ? sp.linesTa.value + "\n" : "") + x.text;
     }
-    if (!lines.length && rec.text && state.speakerPickers[0]) state.speakerPickers[0].linesTa.value = rec.text;
+    if (!lines.length && rec.text && state.speakerPickers[0])
+      state.speakerPickers[0].linesTa.value = rec.text;
   }
 }
 
@@ -419,12 +494,16 @@ function applyHistoryOptions(m, options) {
   for (const [key, p] of schemaParams(m)) {
     const input = $("adv-" + key);
     if (!input || options[key] === undefined) continue;
-    if (p.type === "boolean") { input.checked = !!options[key]; continue; }
+    if (p.type === "boolean") {
+      input.checked = !!options[key];
+      continue;
+    }
     input.value = String(options[key]);
   }
   const s = m.paramSchema || {};
   for (const [key, p] of Object.entries(s)) {
-    if (!p || Array.isArray(p) || p.type !== "enum" || ["language", "speaker"].includes(key)) continue;
+    if (!p || Array.isArray(p) || p.type !== "enum" || ["language", "speaker"].includes(key))
+      continue;
     const sel = $(`tts-enum-${key}`);
     if (sel && options[key] !== undefined) sel.value = String(options[key]);
   }

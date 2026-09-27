@@ -21,11 +21,36 @@ const SCRIPTS = [
   "audio-picker.js",
   "voice-select.js",
   "app.js",
-  "voices-panel.js"
+  "voices-panel.js",
+  // ES module 树：入口 app.js 只做装配，控件绑定 / API 调用 / 快捷键在 core 与 features 中
+  "core/api.js",
+  "core/dom.js",
+  "core/format.js",
+  "core/i18n.js",
+  "core/router.js",
+  "core/state.js",
+  "core/ui.js",
+  "features/downloads.js",
+  "features/executables.js",
+  "features/history.js",
+  "features/instances.js",
+  "features/models.js",
+  "features/palette.js",
+  "features/panels.js",
+  "features/params.js",
+  "features/settings.js",
+  "features/tasks.js",
+  "features/tts.js",
+  "features/workspace.js",
 ];
 
 const CONTROL_TAGS = new Set(["button", "input", "select", "textarea", "a"]);
-const I18N_ATTRS = ["data-i18n", "data-i18n-placeholder", "data-i18n-title", "data-i18n-aria-label"];
+const I18N_ATTRS = [
+  "data-i18n",
+  "data-i18n-placeholder",
+  "data-i18n-title",
+  "data-i18n-aria-label",
+];
 
 function read(file) {
   return fs.readFileSync(file, "utf8");
@@ -69,14 +94,16 @@ function parseHtml(html) {
       id,
       kind,
       label: [...keys][0] || null,
-      i18n: [...keys].sort()
+      i18n: [...keys].sort(),
     });
   };
 
   // 工作区面板
-  for (const m of html.matchAll(/<([a-z]+)\b[^>]*\bid="(panel-[^"]+)"/g)) addPanel(m[2], "panel", m[1]);
+  for (const m of html.matchAll(/<([a-z]+)\b[^>]*\bid="(panel-[^"]+)"/g))
+    addPanel(m[2], "panel", m[1]);
   // 设置子面板
-  for (const m of html.matchAll(/<([a-z]+)\b[^>]*\bid="(settings-pane-[^"]+)"/g)) addPanel(m[2], "settings-pane", m[1]);
+  for (const m of html.matchAll(/<([a-z]+)\b[^>]*\bid="(settings-pane-[^"]+)"/g))
+    addPanel(m[2], "settings-pane", m[1]);
   // 全屏 / 模态覆盖层
   for (const m of html.matchAll(/<([a-z]+)\b([^>]*\bclass="[^"]*modal-overlay[^"]*"[^>]*)>/g)) {
     const id = attr(m[2], "id");
@@ -118,23 +145,34 @@ function parseHandlers(scripts) {
     ev.get(event).add(source);
   };
   for (const { name, code } of scripts) {
-    for (const m of code.matchAll(/\$\("([^"]+)"\)\.(onclick|onchange|oninput|onkeydown|onkeyup|onsubmit|onmousedown)\s*=/g)) {
+    for (const m of code.matchAll(
+      /\$\("([^"]+)"\)\.(onclick|onchange|oninput|onkeydown|onkeyup|onsubmit|onmousedown)\s*=/g,
+    )) {
       add(m[1], m[2].slice(2), name);
     }
     for (const m of code.matchAll(/\$\("([^"]+)"\)\.addEventListener\("([a-z]+)"/g)) {
       add(m[1], m[2], name);
     }
-    for (const m of code.matchAll(/document\.getElementById\("([^"]+)"\)\.(onclick|onchange|oninput|onkeydown)\s*=/g)) {
+    for (const m of code.matchAll(
+      /document\.getElementById\("([^"]+)"\)\.(onclick|onchange|oninput|onkeydown)\s*=/g,
+    )) {
       add(m[1], m[2].slice(2), name);
     }
     // 经由中间变量的绑定：const themeBtn = $("theme-toggle"); themeBtn.onclick = ...
     const varMap = new Map();
-    for (const m of code.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\$\("([^"]+)"\)/g)) {
+    for (const m of code.matchAll(
+      /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*\$\("([^"]+)"\)/g,
+    )) {
       varMap.set(m[1], m[2]);
     }
     for (const [varName, id] of varMap) {
       const v = varName.replace(/[$]/g, "\\$&");
-      for (const m of code.matchAll(new RegExp(`\\b${v}\\.(onclick|onchange|oninput|onkeydown|onkeyup|onsubmit|onmousedown)\\s*=`, "g"))) {
+      for (const m of code.matchAll(
+        new RegExp(
+          `\\b${v}\\.(onclick|onchange|oninput|onkeydown|onkeyup|onsubmit|onmousedown)\\s*=`,
+          "g",
+        ),
+      )) {
         add(id, m[1].slice(2), name);
       }
       for (const m of code.matchAll(new RegExp(`\\b${v}\\.addEventListener\\("([a-z]+)"`, "g"))) {
@@ -152,13 +190,22 @@ function matchParen(src, openIndex) {
   for (let i = openIndex; i < src.length; i++) {
     const ch = src[i];
     if (mode) {
-      if (ch === "\\") { i++; continue; }
+      if (ch === "\\") {
+        i++;
+        continue;
+      }
       if (ch === mode) mode = null;
       continue;
     }
-    if (ch === '"' || ch === "'" || ch === "`") { mode = ch; continue; }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      mode = ch;
+      continue;
+    }
     if (ch === "(") depth++;
-    else if (ch === ")") { depth--; if (depth === 0) return i; }
+    else if (ch === ")") {
+      depth--;
+      if (depth === 0) return i;
+    }
   }
   return src.length - 1;
 }
@@ -171,14 +218,22 @@ function firstArgument(callText) {
   for (let i = open; i < callText.length; i++) {
     const ch = callText[i];
     if (mode) {
-      if (ch === "\\") { i++; continue; }
+      if (ch === "\\") {
+        i++;
+        continue;
+      }
       if (ch === mode) mode = null;
       continue;
     }
-    if (ch === '"' || ch === "'" || ch === "`") { mode = ch; continue; }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      mode = ch;
+      continue;
+    }
     if (ch === "(" || ch === "[" || ch === "{") depth++;
-    else if (ch === ")" || ch === "]" || ch === "}") { depth--; if (depth === 0) return callText.slice(open + 1, i); }
-    else if (ch === "," && depth === 1) return callText.slice(open + 1, i);
+    else if (ch === ")" || ch === "]" || ch === "}") {
+      depth--;
+      if (depth === 0) return callText.slice(open + 1, i);
+    } else if (ch === "," && depth === 1) return callText.slice(open + 1, i);
   }
   return callText.slice(open + 1);
 }
@@ -215,11 +270,17 @@ function topLevelIndex(arg, ch, from = 0) {
   for (let i = from; i < arg.length; i++) {
     const c = arg[i];
     if (mode) {
-      if (c === "\\") { i++; continue; }
+      if (c === "\\") {
+        i++;
+        continue;
+      }
       if (c === mode) mode = null;
       continue;
     }
-    if (c === '"' || c === "'" || c === "`") { mode = c; continue; }
+    if (c === '"' || c === "'" || c === "`") {
+      mode = c;
+      continue;
+    }
     if (c === "(" || c === "[" || c === "{") depth++;
     else if (c === ")" || c === "]" || c === "}") depth--;
     else if (c === ch && depth === 0) return i;
@@ -251,22 +312,27 @@ function methodsFrom(callText) {
   return ms.length ? ms : ["GET"];
 }
 
-/** 从 JS 源收集 API 端点（method + 归一化 path + 来源）。 */
+/** 从 JS 源收集 API 端点（method + 归一化 path + 来源）。
+    同时识别经典脚本的 `fetch(...)` 与 ES module 树经 core/api.js 的
+    `apiGet/apiPost/apiPut/apiDelete(...)` 包装调用（架构整合后模块不再直接 fetch）。 */
 function parseEndpoints(scripts) {
   const map = new Map();
+  const API_METHODS = { apiGet: "GET", apiPost: "POST", apiPut: "PUT", apiDelete: "DELETE" };
   const add = (method, p, source) => {
     if (!p || !p.startsWith("/")) return;
-    if (!map.has(`${method} ${p}`)) map.set(`${method} ${p}`, { method, path: p, sources: new Set() });
+    if (!map.has(`${method} ${p}`))
+      map.set(`${method} ${p}`, { method, path: p, sources: new Set() });
     map.get(`${method} ${p}`).sources.add(source);
   };
   for (const { name, code } of scripts) {
-    for (const m of code.matchAll(/fetch\(/g)) {
+    for (const m of code.matchAll(/\b(fetch|apiGet|apiPost|apiPut|apiDelete)\s*\(/g)) {
+      const call = m[1];
       const open = m.index + m[0].length - 1;
       const close = matchParen(code, open);
       const callText = code.slice(open, close + 1);
       const paths = pathsFromArg(firstArgument(callText)).filter(Boolean);
       if (!paths.length) continue;
-      const methods = methodsFrom(callText);
+      const methods = call === "fetch" ? methodsFrom(callText) : [API_METHODS[call]];
       if (methods.length === paths.length) {
         for (let i = 0; i < paths.length; i++) add(methods[i], paths[i], name);
       } else {
@@ -292,19 +358,26 @@ function parseShortcuts(scripts) {
     const key = `${s.key}|${s.negated}|${s.source}`;
     if (!dedup.has(key)) dedup.set(key, s);
   }
-  return [...dedup.values()].sort((a, b) => a.key.localeCompare(b.key) || a.source.localeCompare(b.source));
+  return [...dedup.values()].sort(
+    (a, b) => a.key.localeCompare(b.key) || a.source.localeCompare(b.source),
+  );
 }
 
 export function buildInventory() {
   const html = read(INDEX_HTML);
-  const scripts = SCRIPTS.map((name) => ({ name: `web/${name}`, code: read(path.join(WEB_DIR, name)) }));
+  const scripts = SCRIPTS.map((name) => ({
+    name: `web/${name}`,
+    code: read(path.join(WEB_DIR, name)),
+  }));
   const { panels, controls, dataHooks } = parseHtml(html);
   const handlerMap = parseHandlers(scripts);
 
   const controlsOut = controls.map((c) => {
     const ev = handlerMap.get(c.id);
     const handlers = ev
-      ? [...ev.entries()].map(([event, sources]) => ({ event, sources: [...sources].sort() })).sort((a, b) => a.event.localeCompare(b.event))
+      ? [...ev.entries()]
+          .map(([event, sources]) => ({ event, sources: [...sources].sort() }))
+          .sort((a, b) => a.event.localeCompare(b.event))
       : [];
     return { ...c, handlers };
   });
@@ -315,7 +388,7 @@ export function buildInventory() {
     controls: controlsOut,
     dataHooks,
     shortcuts: parseShortcuts(scripts),
-    endpoints: parseEndpoints(scripts)
+    endpoints: parseEndpoints(scripts),
   };
 }
 
@@ -326,7 +399,9 @@ export function renderMarkdown(inv) {
   L.push("> 由 `npm run ui:inventory` 从 `web/index.html` 与 `web/*.js` 自动生成，请勿手改。");
   L.push("> 漂移检查：`npm run ui:inventory:check`（CI 会跑）。");
   L.push("");
-  L.push(`来源：\`${inv.generatedFrom.indexHtml}\` + ${inv.generatedFrom.scripts.map((s) => `\`${s}\``).join("、")}`);
+  L.push(
+    `来源：\`${inv.generatedFrom.indexHtml}\` + ${inv.generatedFrom.scripts.map((s) => `\`${s}\``).join("、")}`,
+  );
   L.push("");
 
   L.push("## 面板地图");
@@ -357,7 +432,7 @@ export function renderMarkdown(inv) {
     L.push(`| \`${s.key}\` | ${s.negated ? "非 (guard)" : "等值"} | \`${s.source}\` |`);
   }
   L.push("");
-  L.push("说明：上表由源码中的 `e.key === \"...\"` 判定推导；Escape 用于关闭最上层弹窗 / 菜单，");
+  L.push('说明：上表由源码中的 `e.key === "..."` 判定推导；Escape 用于关闭最上层弹窗 / 菜单，');
   L.push("Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散落在各模块事件处理器中。");
   L.push("");
 
@@ -385,7 +460,11 @@ export function renderMarkdown(inv) {
 
 export function generate() {
   const inv = buildInventory();
-  return { json: JSON.stringify(inv, null, 2) + "\n", markdown: renderMarkdown(inv), inventory: inv };
+  return {
+    json: JSON.stringify(inv, null, 2) + "\n",
+    markdown: renderMarkdown(inv),
+    inventory: inv,
+  };
 }
 
 export function writeInventory() {
@@ -400,6 +479,8 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPat
 if (isMain) {
   const { OUT_JSON: j, OUT_MD: m } = writeInventory();
   const inv = buildInventory();
-  console.log(`ui inventory written: ${path.relative(ROOT, j)} (${inv.panels.length} panels, ${inv.controls.length} controls, ${inv.endpoints.length} endpoints)`);
+  console.log(
+    `ui inventory written: ${path.relative(ROOT, j)} (${inv.panels.length} panels, ${inv.controls.length} controls, ${inv.endpoints.length} endpoints)`,
+  );
   console.log(`docs written: ${path.relative(ROOT, m)}`);
 }

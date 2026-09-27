@@ -1,7 +1,12 @@
 /* 展示层格式化：状态/分类文案、提交按钮标签、字节数、任务耗时等。 */
 import { I18N, t } from "./i18n.js";
 
-export const STATUS_CLASS = { STARTING: "starting", READY: "ready", ERROR: "error", STOPPED: "stopped" };
+export const STATUS_CLASS = {
+  STARTING: "starting",
+  READY: "ready",
+  ERROR: "error",
+  STOPPED: "stopped",
+};
 
 export function statusText(s) {
   const v = t("instance.status." + s);
@@ -14,10 +19,19 @@ export function categoryName(cat) {
   return t("category." + cat);
 }
 
-export const SUBMIT_BTNS = ["tts-submit", "asr-submit", "sep-submit", "music-submit", "other-submit"];
+export const SUBMIT_BTNS = [
+  "tts-submit",
+  "asr-submit",
+  "sep-submit",
+  "music-submit",
+  "other-submit",
+];
 export const SUBMIT_KEYS = {
-  "tts-submit": "tts.submit", "asr-submit": "asr.submit", "sep-submit": "sep.submit",
-  "music-submit": "music.submit", "other-submit": "other.submit"
+  "tts-submit": "tts.submit",
+  "asr-submit": "asr.submit",
+  "sep-submit": "sep.submit",
+  "music-submit": "music.submit",
+  "other-submit": "other.submit",
 };
 
 export function submitLabel(id) {

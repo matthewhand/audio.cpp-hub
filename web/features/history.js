@@ -6,7 +6,15 @@ import { apiGet, apiPost, apiPut, apiDelete, ApiError } from "../core/api.js";
 import { I18N, t } from "../core/i18n.js";
 import { state, selectedModel, historyModelId } from "../core/state.js";
 import { taskElapsed } from "../core/format.js";
-import { showToast, showSkeleton, renderEmptyState, renderStateError, focusDialog, restoreDialogFocus, registerOverlay } from "../core/ui.js";
+import {
+  showToast,
+  showSkeleton,
+  renderEmptyState,
+  renderStateError,
+  focusDialog,
+  restoreDialogFocus,
+  registerOverlay,
+} from "../core/ui.js";
 import { goPanel, hubPanelClosed } from "../core/router.js";
 import { cancelTask, renderTaskResult } from "./tasks.js";
 import { fillTtsForm } from "./tts.js";
@@ -70,13 +78,15 @@ export async function loadHistory() {
     renderSidebarList();
     return;
   }
-  let items, groups = [];
+  let items,
+    groups = [];
   // 尚无任何实际行（仅空态/错误态）时显示骨架；后续轮询/刷新复用已有节点，避免闪动
-  if (!$("history-list").querySelector(".history-row, .history-group-header")) showSkeleton($("history-list"), 3);
+  if (!$("history-list").querySelector(".history-row, .history-group-header"))
+    showSkeleton($("history-list"), 3);
   try {
     const [resItems, resGroups] = await Promise.all([
       apiGet("/api/history/" + modelId),
-      apiGet("/api/history/" + modelId + "/groups").catch(() => [])
+      apiGet("/api/history/" + modelId + "/groups").catch(() => []),
     ]);
     items = resItems;
     groups = Array.isArray(resGroups) ? resGroups : [];
@@ -93,17 +103,30 @@ export async function loadHistory() {
   state.sidebarHistoryItems = Array.isArray(items) ? items : [];
   state.sidebarGroups = groups;
   // 清理已不在列表中的详情展开缓存（记录被删/淘汰后不留残留）
-  const aliveIds = new Set(state.sidebarHistoryItems.map(i => i.taskId));
-  for (const id of state.historyDetails.keys()) if (!aliveIds.has(id)) state.historyDetails.delete(id);
+  const aliveIds = new Set(state.sidebarHistoryItems.map((i) => i.taskId));
+  for (const id of state.historyDetails.keys())
+    if (!aliveIds.has(id)) state.historyDetails.delete(id);
   renderSidebarList();
 }
 
 /* 任务行渲染签名：数据不变即复用节点；RUNNING 附带整秒耗时让计时继续走（秒级变化才重建该行）。
    ctx 为「隐私模式 + 界面语言」，切换后签名变化触发整行重建以刷新文案 */
 function taskRowSig(task, ctx) {
-  return JSON.stringify([task.status, task.position, task.createdAt, task.startedAt, task.finishedAt,
-    task.text, task.instanceName, task.error, state.taskDetails.has(task.id), ctx,
-    task.status === "RUNNING" ? Math.floor((Date.now() - (task.startedAt || task.createdAt)) / 1000) : 0]);
+  return JSON.stringify([
+    task.status,
+    task.position,
+    task.createdAt,
+    task.startedAt,
+    task.finishedAt,
+    task.text,
+    task.instanceName,
+    task.error,
+    state.taskDetails.has(task.id),
+    ctx,
+    task.status === "RUNNING"
+      ? Math.floor((Date.now() - (task.startedAt || task.createdAt)) / 1000)
+      : 0,
+  ]);
 }
 
 /* 侧栏合并渲染：进行中任务（创建时间升序）→ 已结束任务（新→旧，TTS 已被历史代表的去重）→ TTS 历史。
@@ -118,19 +141,24 @@ export function renderSidebarList() {
     renderEmptyState(list, t("history.empty"));
     return;
   }
-  const tasks = [...state.taskViews.values()].filter(x => x.modelId === modelId);
-  const active = tasks.filter(x => x.status === "QUEUED" || x.status === "RUNNING")
+  const tasks = [...state.taskViews.values()].filter((x) => x.modelId === modelId);
+  const active = tasks
+    .filter((x) => x.status === "QUEUED" || x.status === "RUNNING")
     .sort((a, b) => a.createdAt - b.createdAt);
-  const finished = tasks.filter(x => x.status !== "QUEUED" && x.status !== "RUNNING")
+  const finished = tasks
+    .filter((x) => x.status !== "QUEUED" && x.status !== "RUNNING")
     .sort((a, b) => (b.finishedAt || b.createdAt) - (a.finishedAt || a.createdAt));
-  const historyIds = new Set(state.sidebarHistoryItems.map(i => i.taskId));
+  const historyIds = new Set(state.sidebarHistoryItems.map((i) => i.taskId));
   const ctx = privacyOn() + ":" + I18N.lang();
   const desired = [];
   const used = new Set();
   const pushRow = (key, sig, make) => {
     used.add(key);
     const cached = state.sidebarRows.get(key);
-    if (cached && cached.sig === sig) { desired.push(cached.node); return; }
+    if (cached && cached.sig === sig) {
+      desired.push(cached.node);
+      return;
+    }
     const node = make();
     state.sidebarRows.set(key, { node, sig });
     desired.push(node);
@@ -145,9 +173,16 @@ export function renderSidebarList() {
   }
   // 历史区按分组展开为渲染序列（组标题行 + 组内记录行；无分组时退化为旧版平直列表）
   for (const row of historyRowsFlattened(modelId, ctx)) {
-    if (row.header) { pushRow(row.key, row.sig, row.make); continue; }
+    if (row.header) {
+      pushRow(row.key, row.sig, row.make);
+      continue;
+    }
     const item = row.item;
-    pushRow("h:" + modelId + ":" + item.taskId, JSON.stringify([item, state.historyDetails.has(item.taskId), ctx]), () => makeHistoryRow(item));
+    pushRow(
+      "h:" + modelId + ":" + item.taskId,
+      JSON.stringify([item, state.historyDetails.has(item.taskId), ctx]),
+      () => makeHistoryRow(item),
+    );
   }
   // 清理不再展示的行缓存（删记录/切模型/任务淘汰）
   for (const key of state.sidebarRows.keys()) if (!used.has(key)) state.sidebarRows.delete(key);
@@ -173,11 +208,14 @@ function makeTaskRow(task) {
   row.querySelector(".history-time").textContent = I18N.date(task.createdAt);
   const textEl = row.querySelector(".history-text");
   textEl.dataset.realText = task.text || "";
-  textEl.textContent = privacyOn() && task.text ? t("history.masked") : task.text || t("history.noText");
+  textEl.textContent =
+    privacyOn() && task.text ? t("history.masked") : task.text || t("history.noText");
   if (task.text && !privacyOn()) textEl.title = task.text;
   const meta = [];
   if (task.status === "QUEUED") {
-    meta.push(t("task.queued") + (task.position > 0 ? t("task.queuedPos", { n: task.position }) : ""));
+    meta.push(
+      t("task.queued") + (task.position > 0 ? t("task.queuedPos", { n: task.position }) : ""),
+    );
   } else if (task.status === "RUNNING") {
     meta.push(t("task.running") + " " + taskElapsed(task));
   } else if (task.status === "DONE") {
@@ -249,7 +287,7 @@ function historyRowsFlattened(modelId, ctx) {
     for (const item of state.sidebarHistoryItems) rows.push({ item });
     return rows;
   }
-  const known = new Set(state.sidebarGroups.map(g => g.id));
+  const known = new Set(state.sidebarGroups.map((g) => g.id));
   const byGroup = new Map();
   for (const item of state.sidebarHistoryItems) {
     // 记录指向已不存在的组（异常残留）时按未分组处理，保证记录始终可见
@@ -265,7 +303,7 @@ function historyRowsFlattened(modelId, ctx) {
       header: true,
       key: "g:" + modelId + ":" + gid,
       sig: JSON.stringify([name, items.length, collapsed, ctx]),
-      make: () => makeGroupHeaderRow(gid, name, items.length, collapsed)
+      make: () => makeGroupHeaderRow(gid, name, items.length, collapsed),
     });
     if (collapsed) return;
     for (const item of items) rows.push({ item });
@@ -285,7 +323,10 @@ function makeGroupHeaderRow(gid, name, count, collapsed) {
   </div>`);
   const toggle = row.querySelector(".group-toggle");
   toggle.textContent = collapsed ? "▸" : "▾";
-  toggle.onclick = () => { state.groupCollapsed.set(gid, !collapsed); renderSidebarList(); };
+  toggle.onclick = () => {
+    state.groupCollapsed.set(gid, !collapsed);
+    renderSidebarList();
+  };
   row.querySelector(".group-name").textContent = name;
   row.querySelector(".group-count").textContent = I18N.plural("history.groupCount", count);
   const btns = row.querySelector(".group-btns");
@@ -378,7 +419,10 @@ function openGroupMenu(anchor, item) {
     b.type = "button";
     b.setAttribute("role", "menuitem");
     b.textContent = name;
-    b.onclick = () => { closeGroupMenu(); moveToGroup(item.taskId, gid); };
+    b.onclick = () => {
+      closeGroupMenu();
+      moveToGroup(item.taskId, gid);
+    };
     groupMenuEl.appendChild(b);
   };
   addOpt(null, t("history.groupUngrouped"));
@@ -387,7 +431,8 @@ function openGroupMenu(anchor, item) {
   groupMenuAnchor = anchor;
   groupMenuEl.classList.add("open");
   const r = anchor.getBoundingClientRect();
-  const mw = groupMenuEl.offsetWidth, mh = groupMenuEl.offsetHeight;
+  const mw = groupMenuEl.offsetWidth,
+    mh = groupMenuEl.offsetHeight;
   let top = r.bottom + 6;
   if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
   let left = r.left;
@@ -399,15 +444,21 @@ function openGroupMenu(anchor, item) {
 }
 
 function toggleGroupMenu(anchor, item) {
-  if (groupMenuAnchor === anchor) { closeGroupMenu(); return; }
+  if (groupMenuAnchor === anchor) {
+    closeGroupMenu();
+    return;
+  }
   openGroupMenu(anchor, item);
 }
 
 document.addEventListener("mousedown", (e) => {
-  if (groupMenuAnchor && !e.target.closest("#group-menu") && !e.target.closest(".group-move-btn")) closeGroupMenu();
+  if (groupMenuAnchor && !e.target.closest("#group-menu") && !e.target.closest(".group-move-btn"))
+    closeGroupMenu();
 });
 /* Esc 关闭分组菜单；弹窗本身的关闭统一由顶层 Escape 处理器负责（只关最上层） */
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeGroupMenu(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeGroupMenu();
+});
 document.addEventListener("scroll", closeGroupMenu, true);
 window.addEventListener("resize", closeGroupMenu);
 
@@ -421,7 +472,10 @@ async function toggleHistoryDetail(item) {
     return;
   }
   try {
-    state.historyDetails.set(item.taskId, await apiGet("/api/history/" + modelId + "/" + item.taskId));
+    state.historyDetails.set(
+      item.taskId,
+      await apiGet("/api/history/" + modelId + "/" + item.taskId),
+    );
     renderSidebarList();
   } catch (e) {
     showToast("error", t("history.detailFailed") + t("common.colon") + e.message);
@@ -430,7 +484,9 @@ async function toggleHistoryDetail(item) {
 
 /* 历史记录的快照路径（相对工作目录，可被 /api/audio/info 探测）；无快照返回 null */
 export function historyRefPath(m, rec, name) {
-  return rec.refs && rec.refs[name] ? "data/history/" + m.id + "/" + rec.taskId + "." + name + ".wav" : null;
+  return rec.refs && rec.refs[name]
+    ? "data/history/" + m.id + "/" + rec.taskId + "." + name + ".wav"
+    : null;
 }
 
 /* 历史详情面板：四要素分节完整展示。生成内容/参考文本/提示词在隐私模式下遮蔽；
@@ -454,8 +510,9 @@ function buildHistoryDetail(item, rec) {
   // 参考音频：ref=主参考音频，emo=情感参考，spkN=VibeVoice 各说话人
   const refs = rec.refs || {};
   const refOrder = { ref: 0, emo: 1 };
-  const refNames = Object.keys(refs).sort((a, b) =>
-    (refOrder[a] ?? 2) - (refOrder[b] ?? 2) || a.localeCompare(b));
+  const refNames = Object.keys(refs).sort(
+    (a, b) => (refOrder[a] ?? 2) - (refOrder[b] ?? 2) || a.localeCompare(b),
+  );
   if (refNames.length || voice.voiceRef) {
     const audioSec = addSection(t("history.detailRefAudio"));
     for (const name of refNames) {
@@ -520,12 +577,22 @@ function buildRefAudioRow(modelId, taskId, name, origName) {
   const playBtn = row.querySelector(".ref-play");
   playBtn.textContent = t("history.play");
   playBtn.onclick = () => {
-    if (!audio.src) { audio.src = url; audio.classList.remove("hidden"); }
-    if (audio.paused) audio.play(); else audio.pause();
+    if (!audio.src) {
+      audio.src = url;
+      audio.classList.remove("hidden");
+    }
+    if (audio.paused) audio.play();
+    else audio.pause();
   };
-  audio.onplay = () => { playBtn.textContent = t("history.pause"); };
-  audio.onpause = () => { playBtn.textContent = t("history.play"); };
-  audio.onended = () => { playBtn.textContent = t("history.play"); };
+  audio.onplay = () => {
+    playBtn.textContent = t("history.pause");
+  };
+  audio.onpause = () => {
+    playBtn.textContent = t("history.play");
+  };
+  audio.onended = () => {
+    playBtn.textContent = t("history.play");
+  };
   const a = row.querySelector("a");
   a.textContent = t("history.download");
   a.href = url;
@@ -536,7 +603,8 @@ function buildRefAudioRow(modelId, taskId, name, origName) {
 /* 单行历史：信息行（时间 / 文本预览 / 时长与大小 / 按钮）+ 成功行内播放与下载；失败行红字显示 error */
 function makeHistoryRow(item) {
   const audioUrl = "/api/history/" + state.selectedModelId + "/" + item.taskId + "/audio";
-  const row = el(`<div class="history-row${item.ok ? "" : " failed"}${state.sidebarGroups.length ? " grouped" : ""}">
+  const row =
+    el(`<div class="history-row${item.ok ? "" : " failed"}${state.sidebarGroups.length ? " grouped" : ""}">
     <div class="history-info">
       <span class="history-time"></span>
       <span class="history-text"></span>
@@ -552,7 +620,8 @@ function makeHistoryRow(item) {
   const textEl = row.querySelector(".history-text");
   // 真实文本存 dataset，隐私模式切换时由 applyHistoryPrivacy 恢复/遮蔽
   textEl.dataset.realText = item.text || "";
-  textEl.textContent = privacyOn() && item.text ? t("history.masked") : item.text || t("history.noText");
+  textEl.textContent =
+    privacyOn() && item.text ? t("history.masked") : item.text || t("history.noText");
   if (item.text && !privacyOn()) textEl.title = item.text;
   const meta = [];
   if (item.ok && item.result) {
@@ -584,9 +653,15 @@ function makeHistoryRow(item) {
       if (audio.paused) audio.play();
       else audio.pause();
     };
-    audio.onplay = () => { playBtn.textContent = t("history.pause"); };
-    audio.onpause = () => { playBtn.textContent = t("history.play"); };
-    audio.onended = () => { playBtn.textContent = t("history.play"); };
+    audio.onplay = () => {
+      playBtn.textContent = t("history.pause");
+    };
+    audio.onpause = () => {
+      playBtn.textContent = t("history.play");
+    };
+    audio.onended = () => {
+      playBtn.textContent = t("history.play");
+    };
     const a = player.querySelector("a");
     a.textContent = t("history.download");
     a.href = audioUrl;
@@ -602,7 +677,9 @@ function makeHistoryRow(item) {
   // 「详情」：行内展开四要素完整内容；「移动」：弹出菜单移入分组（仅 TTS 历史有分组）
   const btns = row.querySelector(".history-btns");
   const detailBtn = el(`<button type="button"></button>`);
-  detailBtn.textContent = state.historyDetails.has(item.taskId) ? t("task.collapse") : t("task.detail");
+  detailBtn.textContent = state.historyDetails.has(item.taskId)
+    ? t("task.collapse")
+    : t("task.detail");
   detailBtn.onclick = () => toggleHistoryDetail(item);
   btns.insertBefore(detailBtn, loadBtn);
   const moveBtn = el(`<button type="button" class="group-move-btn"></button>`);
@@ -641,8 +718,9 @@ $("history-refresh").onclick = loadHistory;
 /* 删除该模型全部已结束任务记录（进行中的保留）：清空历史/侧栏时随历史一并清理，
    否则历史没了任务记录还在，去重失效后它们会以无按钮的任务行“复活”。404 视为已淘汰，照常收尾 */
 async function deleteFinishedTasks(modelId) {
-  const finished = [...state.taskViews.values()].filter(x =>
-    x.modelId === modelId && x.status !== "QUEUED" && x.status !== "RUNNING");
+  const finished = [...state.taskViews.values()].filter(
+    (x) => x.modelId === modelId && x.status !== "QUEUED" && x.status !== "RUNNING",
+  );
   for (const task of finished) {
     try {
       await apiDelete("/api/tasks/" + task.id);

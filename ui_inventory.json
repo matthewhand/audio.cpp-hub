@@ -9,7 +9,26 @@
       "web/audio-picker.js",
       "web/voice-select.js",
       "web/app.js",
-      "web/voices-panel.js"
+      "web/voices-panel.js",
+      "web/core/api.js",
+      "web/core/dom.js",
+      "web/core/format.js",
+      "web/core/i18n.js",
+      "web/core/router.js",
+      "web/core/state.js",
+      "web/core/ui.js",
+      "web/features/downloads.js",
+      "web/features/executables.js",
+      "web/features/history.js",
+      "web/features/instances.js",
+      "web/features/models.js",
+      "web/features/palette.js",
+      "web/features/panels.js",
+      "web/features/params.js",
+      "web/features/settings.js",
+      "web/features/tasks.js",
+      "web/features/tts.js",
+      "web/features/workspace.js"
     ]
   },
   "panels": [
@@ -19,6 +38,16 @@
       "label": "busy.label",
       "i18n": [
         "busy.label"
+      ]
+    },
+    {
+      "id": "command-palette",
+      "kind": "modal",
+      "label": "palette.title",
+      "i18n": [
+        "palette.hint",
+        "palette.placeholder",
+        "palette.title"
       ]
     },
     {
@@ -35,9 +64,11 @@
       "kind": "modal",
       "label": "history.title",
       "i18n": [
+        "a11y.taskStatus",
         "history.clear",
         "history.closeTitle",
         "history.groupNew",
+        "history.privacyBtn",
         "history.refresh",
         "history.title"
       ]
@@ -104,18 +135,19 @@
     {
       "id": "panel-asr",
       "kind": "panel",
-      "label": "common.advanced",
+      "label": "asr.title",
       "i18n": [
         "asr.copy",
         "asr.details",
         "asr.submit",
+        "asr.title",
         "common.advanced"
       ]
     },
     {
       "id": "panel-music",
       "kind": "panel",
-      "label": "music.styleLabel",
+      "label": "music.title",
       "i18n": [
         "common.advanced",
         "music.abcHint",
@@ -129,31 +161,34 @@
         "music.seedPlaceholder",
         "music.styleLabel",
         "music.stylePlaceholder",
-        "music.submit"
+        "music.submit",
+        "music.title"
       ]
     },
     {
       "id": "panel-other",
       "kind": "panel",
-      "label": "other.extraLabel",
+      "label": "other.title",
       "i18n": [
         "other.extraLabel",
-        "other.submit"
+        "other.submit",
+        "other.title"
       ]
     },
     {
       "id": "panel-sep",
       "kind": "panel",
-      "label": "sep.hint",
+      "label": "sep.title",
       "i18n": [
         "sep.hint",
-        "sep.submit"
+        "sep.submit",
+        "sep.title"
       ]
     },
     {
       "id": "panel-tts",
       "kind": "panel",
-      "label": "tts.textLabel",
+      "label": "tts.title",
       "i18n": [
         "common.advanced",
         "emotion.alphaLabel",
@@ -163,6 +198,7 @@
         "emotion.tab.emotion_text",
         "emotion.tab.emotion_vector",
         "emotion.tab.none",
+        "emotion.tabsLabel",
         "emotion.textLabel",
         "emotion.textPlaceholder",
         "tts.download",
@@ -171,7 +207,8 @@
         "tts.speakersLabel",
         "tts.submit",
         "tts.textLabel",
-        "tts.textPlaceholder"
+        "tts.textPlaceholder",
+        "tts.title"
       ]
     },
     {
@@ -218,6 +255,7 @@
         "settings.nav.https",
         "settings.theme.dark",
         "settings.theme.light",
+        "settings.theme.system",
         "settings.title"
       ]
     },
@@ -251,7 +289,8 @@
         "settings.general.theme",
         "settings.general.themeDesc",
         "settings.theme.dark",
-        "settings.theme.light"
+        "settings.theme.light",
+        "settings.theme.system"
       ]
     },
     {
@@ -303,7 +342,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/panels.js"
           ]
         }
       ]
@@ -319,7 +358,30 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/panels.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "command-palette-input",
+      "tag": "input",
+      "type": "text",
+      "i18n": [
+        "palette.placeholder",
+        "palette.title"
+      ],
+      "handlers": [
+        {
+          "event": "input",
+          "sources": [
+            "web/features/palette.js"
+          ]
+        },
+        {
+          "event": "keydown",
+          "sources": [
+            "web/features/palette.js"
           ]
         }
       ]
@@ -335,7 +397,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/downloads.js"
           ]
         }
       ]
@@ -351,7 +413,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/downloads.js"
           ]
         }
       ]
@@ -367,7 +429,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -383,7 +445,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -399,7 +461,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -424,7 +486,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/settings.js"
           ]
         }
       ]
@@ -449,7 +511,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -481,7 +543,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/history.js"
           ]
         }
       ]
@@ -497,7 +559,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/history.js"
           ]
         }
       ]
@@ -514,7 +576,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/history.js"
           ]
         }
       ]
@@ -530,7 +592,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/history.js"
           ]
         }
       ]
@@ -539,12 +601,14 @@
       "id": "history-privacy",
       "tag": "button",
       "type": null,
-      "i18n": [],
+      "i18n": [
+        "history.privacyBtn"
+      ],
       "handlers": [
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/history.js"
           ]
         }
       ]
@@ -560,7 +624,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/history.js"
           ]
         }
       ]
@@ -576,7 +640,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/settings.js"
           ]
         }
       ]
@@ -592,7 +656,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/settings.js"
           ]
         }
       ]
@@ -601,12 +665,14 @@
       "id": "https-enabled",
       "tag": "input",
       "type": "checkbox",
-      "i18n": [],
+      "i18n": [
+        "https.enableLabel"
+      ],
       "handlers": [
         {
           "event": "change",
           "sources": [
-            "web/app.js"
+            "web/features/settings.js"
           ]
         }
       ]
@@ -622,7 +688,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/settings.js"
           ]
         }
       ]
@@ -675,7 +741,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/instances.js"
           ]
         }
       ]
@@ -691,7 +757,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/instances.js"
           ]
         }
       ]
@@ -700,12 +766,14 @@
       "id": "instance-select",
       "tag": "select",
       "type": null,
-      "i18n": [],
+      "i18n": [
+        "instance.barLabel"
+      ],
       "handlers": [
         {
           "event": "change",
           "sources": [
-            "web/app.js"
+            "web/features/instances.js"
           ]
         }
       ]
@@ -721,7 +789,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/instances.js"
           ]
         }
       ]
@@ -737,7 +805,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/settings.js"
           ]
         }
       ]
@@ -767,7 +835,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -781,7 +849,7 @@
         {
           "event": "change",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -795,13 +863,13 @@
         {
           "event": "change",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         },
         {
           "event": "mousedown",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -817,7 +885,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -842,7 +910,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -865,7 +933,7 @@
         {
           "event": "change",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -881,7 +949,7 @@
         {
           "event": "input",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -897,7 +965,7 @@
         {
           "event": "input",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -927,7 +995,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/downloads.js"
           ]
         }
       ]
@@ -946,13 +1014,14 @@
       "tag": "button",
       "type": null,
       "i18n": [
-        "header.menuTitle"
+        "a11y.openMenu",
+        "a11y.openMenu"
       ],
       "handlers": [
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/core/ui.js"
           ]
         }
       ]
@@ -968,7 +1037,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/downloads.js"
           ]
         }
       ]
@@ -1027,7 +1096,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/panels.js"
           ]
         }
       ]
@@ -1050,7 +1119,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/panels.js"
           ]
         }
       ]
@@ -1066,7 +1135,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -1082,7 +1151,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -1098,7 +1167,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/panels.js"
           ]
         }
       ]
@@ -1114,7 +1183,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/settings.js"
           ]
         }
       ]
@@ -1130,10 +1199,19 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/settings.js"
           ]
         }
       ]
+    },
+    {
+      "id": "skip-to-content",
+      "tag": "a",
+      "type": null,
+      "i18n": [
+        "a11y.skipToContent"
+      ],
+      "handlers": []
     },
     {
       "id": "theme-toggle",
@@ -1146,7 +1224,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/settings.js"
           ]
         }
       ]
@@ -1171,7 +1249,7 @@
         {
           "event": "input",
           "sources": [
-            "web/app.js"
+            "web/features/tts.js"
           ]
         }
       ]
@@ -1196,7 +1274,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/tts.js"
           ]
         }
       ]
@@ -1212,7 +1290,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/tts.js"
           ]
         }
       ]
@@ -1230,12 +1308,14 @@
       "id": "ui-language",
       "tag": "select",
       "type": null,
-      "i18n": [],
+      "i18n": [
+        "settings.general.language"
+      ],
       "handlers": [
         {
           "event": "change",
           "sources": [
-            "web/app.js"
+            "web/features/settings.js"
           ]
         }
       ]
@@ -1244,12 +1324,14 @@
       "id": "ui-theme",
       "tag": "select",
       "type": null,
-      "i18n": [],
+      "i18n": [
+        "settings.general.theme"
+      ],
       "handlers": [
         {
           "event": "change",
           "sources": [
-            "web/app.js"
+            "web/features/settings.js"
           ]
         }
       ]
@@ -1332,7 +1414,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -1348,7 +1430,7 @@
         {
           "event": "click",
           "sources": [
-            "web/app.js"
+            "web/features/executables.js"
           ]
         }
       ]
@@ -1357,15 +1439,15 @@
   "dataHooks": [
     {
       "name": "data-i18n",
-      "count": 115
+      "count": 125
     },
     {
       "name": "data-i18n-aria-label",
-      "count": 8
+      "count": 18
     },
     {
       "name": "data-i18n-placeholder",
-      "count": 17
+      "count": 18
     },
     {
       "name": "data-i18n-title",
@@ -1391,6 +1473,56 @@
       "source": "web/audio-picker.js"
     },
     {
+      "key": " ",
+      "negated": false,
+      "source": "web/file-browser.js"
+    },
+    {
+      "key": "ArrowDown",
+      "negated": false,
+      "source": "web/core/dom.js"
+    },
+    {
+      "key": "ArrowDown",
+      "negated": false,
+      "source": "web/features/palette.js"
+    },
+    {
+      "key": "ArrowLeft",
+      "negated": false,
+      "source": "web/audio-picker.js"
+    },
+    {
+      "key": "ArrowRight",
+      "negated": false,
+      "source": "web/audio-picker.js"
+    },
+    {
+      "key": "ArrowUp",
+      "negated": false,
+      "source": "web/core/dom.js"
+    },
+    {
+      "key": "ArrowUp",
+      "negated": false,
+      "source": "web/features/palette.js"
+    },
+    {
+      "key": "Delete",
+      "negated": false,
+      "source": "web/audio-picker.js"
+    },
+    {
+      "key": "End",
+      "negated": false,
+      "source": "web/audio-picker.js"
+    },
+    {
+      "key": "End",
+      "negated": false,
+      "source": "web/core/dom.js"
+    },
+    {
       "key": "Enter",
       "negated": false,
       "source": "web/audio-picker.js"
@@ -1398,27 +1530,67 @@
     {
       "key": "Enter",
       "negated": false,
+      "source": "web/features/palette.js"
+    },
+    {
+      "key": "Enter",
+      "negated": false,
       "source": "web/file-browser.js"
     },
     {
       "key": "Escape",
       "negated": false,
-      "source": "web/app.js"
+      "source": "web/audio-picker.js"
     },
     {
       "key": "Escape",
       "negated": true,
-      "source": "web/app.js"
+      "source": "web/core/ui.js"
+    },
+    {
+      "key": "Escape",
+      "negated": false,
+      "source": "web/features/history.js"
+    },
+    {
+      "key": "Escape",
+      "negated": false,
+      "source": "web/features/models.js"
+    },
+    {
+      "key": "Escape",
+      "negated": false,
+      "source": "web/features/palette.js"
     },
     {
       "key": "Escape",
       "negated": false,
       "source": "web/file-browser.js"
+    },
+    {
+      "key": "Home",
+      "negated": false,
+      "source": "web/audio-picker.js"
+    },
+    {
+      "key": "Home",
+      "negated": false,
+      "source": "web/core/dom.js"
+    },
+    {
+      "key": "k",
+      "negated": false,
+      "source": "web/features/palette.js"
+    },
+    {
+      "key": "K",
+      "negated": false,
+      "source": "web/features/palette.js"
     },
     {
       "key": "Tab",
       "negated": true,
-      "source": "web/app.js"
+      "source": "web/core/ui.js"
     }
   ],
   "endpoints": [
@@ -1440,84 +1612,84 @@
       "method": "POST",
       "path": "/api/cert/generate",
       "sources": [
-        "web/app.js"
+        "web/features/settings.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/cert/status",
       "sources": [
-        "web/app.js"
+        "web/features/settings.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/downloads",
       "sources": [
-        "web/app.js"
+        "web/features/downloads.js"
       ]
     },
     {
       "method": "POST",
       "path": "/api/downloads",
       "sources": [
-        "web/app.js"
+        "web/features/downloads.js"
       ]
     },
     {
       "method": "DELETE",
       "path": "/api/downloads/{param}?purge=true",
       "sources": [
-        "web/app.js"
+        "web/features/downloads.js"
       ]
     },
     {
       "method": "POST",
       "path": "/api/downloads/{param}/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/downloads.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/events",
       "sources": [
-        "web/app.js"
+        "web/core/ui.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/executables",
       "sources": [
-        "web/app.js"
+        "web/features/executables.js"
       ]
     },
     {
       "method": "POST",
       "path": "/api/executables",
       "sources": [
-        "web/app.js"
+        "web/features/executables.js"
       ]
     },
     {
       "method": "DELETE",
       "path": "/api/executables/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/executables.js"
       ]
     },
     {
       "method": "PUT",
       "path": "/api/executables/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/executables.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/executables/{param}/devices",
       "sources": [
-        "web/app.js"
+        "web/features/executables.js"
       ]
     },
     {
@@ -1545,168 +1717,170 @@
       "method": "DELETE",
       "path": "/api/history/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/history.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/history/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/history.js"
       ]
     },
     {
       "method": "DELETE",
       "path": "/api/history/{param}/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/history.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/history/{param}/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/history.js"
       ]
     },
     {
       "method": "PUT",
       "path": "/api/history/{param}/{param}/group",
       "sources": [
-        "web/app.js"
+        "web/features/history.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/history/{param}/groups",
       "sources": [
-        "web/app.js"
+        "web/features/history.js"
       ]
     },
     {
       "method": "POST",
       "path": "/api/history/{param}/groups",
       "sources": [
-        "web/app.js"
+        "web/features/history.js"
       ]
     },
     {
       "method": "DELETE",
       "path": "/api/history/{param}/groups/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/history.js"
       ]
     },
     {
       "method": "PUT",
       "path": "/api/history/{param}/groups/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/history.js"
       ]
     },
     {
       "method": "POST",
       "path": "/api/https/config",
       "sources": [
-        "web/app.js"
+        "web/features/settings.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/instances",
       "sources": [
-        "web/app.js"
+        "web/features/instances.js"
       ]
     },
     {
       "method": "POST",
       "path": "/api/instances",
       "sources": [
-        "web/app.js"
+        "web/features/executables.js"
       ]
     },
     {
       "method": "DELETE",
       "path": "/api/instances/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/instances.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/models",
       "sources": [
-        "web/app.js"
+        "web/features/models.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/models/{param}/packages",
       "sources": [
-        "web/app.js"
+        "web/features/downloads.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/profiles",
       "sources": [
-        "web/app.js"
+        "web/features/executables.js"
       ]
     },
     {
       "method": "POST",
       "path": "/api/profiles",
       "sources": [
-        "web/app.js"
+        "web/features/executables.js"
       ]
     },
     {
       "method": "DELETE",
       "path": "/api/profiles/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/executables.js"
       ]
     },
     {
       "method": "PUT",
       "path": "/api/profiles/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/executables.js"
       ]
     },
     {
       "method": "POST",
       "path": "/api/tasks",
       "sources": [
-        "web/app.js"
+        "web/features/tasks.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/tasks?modelId={param}",
       "sources": [
-        "web/app.js"
+        "web/features/tasks.js"
       ]
     },
     {
       "method": "DELETE",
       "path": "/api/tasks/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/history.js",
+        "web/features/tasks.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/tasks/{param}",
       "sources": [
-        "web/app.js"
+        "web/features/tasks.js"
       ]
     },
     {
       "method": "GET",
       "path": "/api/tasks/{param}/result",
       "sources": [
-        "web/app.js"
+        "web/features/history.js",
+        "web/features/tasks.js"
       ]
     },
     {

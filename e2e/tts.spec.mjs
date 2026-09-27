@@ -4,8 +4,14 @@ import { MockBackend } from "./mock-backend.mjs";
 import { openApp } from "./helpers.mjs";
 
 const READY = {
-  id: "i1", modelId: "supertonic", instanceName: "supertonic", status: "READY",
-  backend: "cpu", device: 0, port: 19001, taskCount: 0
+  id: "i1",
+  modelId: "supertonic",
+  instanceName: "supertonic",
+  status: "READY",
+  backend: "cpu",
+  device: 0,
+  port: 19001,
+  taskCount: 0,
 };
 
 test("TTS 任务：提交 → 轮询到 DONE → 结果音频可见", async ({ page }) => {
@@ -17,8 +23,14 @@ test("TTS 任务：提交 → 轮询到 DONE → 结果音频可见", async ({ p
   await page.locator("#tts-submit").click();
 
   await expect(page.locator("#tts-result")).toBeVisible({ timeout: 12000 });
-  await expect(page.locator("#tts-player")).toHaveAttribute("src", /\/api\/history\/supertonic\/t\d+\/audio/);
-  await expect(page.locator("#tts-download")).toHaveAttribute("href", /\/api\/history\/supertonic\/t\d+\/audio/);
+  await expect(page.locator("#tts-player")).toHaveAttribute(
+    "src",
+    /\/api\/history\/supertonic\/t\d+\/audio/,
+  );
+  await expect(page.locator("#tts-download")).toHaveAttribute(
+    "href",
+    /\/api\/history\/supertonic\/t\d+\/audio/,
+  );
 
   expect(backend.tasks).toHaveLength(1);
   expect(backend.tasks[0].category).toBe("tts");

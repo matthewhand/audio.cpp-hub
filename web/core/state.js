@@ -29,15 +29,15 @@ export const state = {
   otherAudioPicker: null,
   otherVoicePicker: null,
   // 任务 / 事件
-  taskViews: new Map(),      // taskId → 已知任务（进行中 + 已完成保留展示）
-  taskDetails: new Map(),    // taskId → 已展开的完整结果文本
-  activePolls: new Map(),    // taskId → intervalId
+  taskViews: new Map(), // taskId → 已知任务（进行中 + 已完成保留展示）
+  taskDetails: new Map(), // taskId → 已展开的完整结果文本
+  activePolls: new Map(), // taskId → intervalId
   // 侧栏历史
   sidebarHistoryItems: [],
   sidebarGroups: [],
   groupCollapsed: new Map(), // 组折叠状态（未分组为 ""）
   historyDetails: new Map(), // taskId → 完整历史记录（详情展开缓存）
-  sidebarRows: new Map(),    // key → { node, sig } 侧栏行节点复用缓存
+  sidebarRows: new Map(), // key → { node, sig } 侧栏行节点复用缓存
   // 下载
   downloads: [],
   mdlPackages: null,
@@ -47,7 +47,7 @@ export const state = {
 export const VIBEVOICE_MAX_SPEAKERS = 4;
 
 /** 当前选中的模型条目。 */
-export const selectedModel = () => state.models.find(m => m.id === state.selectedModelId);
+export const selectedModel = () => state.models.find((m) => m.id === state.selectedModelId);
 
 /** 当前选中模型的 id（历史按 modelId 隔离）。 */
 export function historyModelId() {

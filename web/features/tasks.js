@@ -6,11 +6,22 @@ import { t } from "../core/i18n.js";
 import { state, selectedModel } from "../core/state.js";
 import { taskElapsed } from "../core/format.js";
 import { showToast } from "../core/ui.js";
-import { renderAsrResult, renderSepResult, renderMusicResult, renderOtherResult } from "./panels.js";
+import {
+  renderAsrResult,
+  renderSepResult,
+  renderMusicResult,
+  renderOtherResult,
+} from "./panels.js";
 import { refreshInstances } from "./instances.js";
 import { loadHistory, renderSidebarList } from "./history.js";
 
-const TASK_VERB = { tts: "tts.verb", asr: "asr.verb", sep: "sep.verb", music: "music.verb", other: "other.verb" };
+const TASK_VERB = {
+  tts: "tts.verb",
+  asr: "asr.verb",
+  sep: "sep.verb",
+  music: "music.verb",
+  other: "other.verb",
+};
 
 export async function submitTask(req) {
   const task = await apiPost("/api/tasks", { instanceId: state.activeInstanceId, request: req });
@@ -77,9 +88,11 @@ function finishTask(task) {
     if (stats) stats.textContent = t("common.doneElapsed", { verb, t: taskElapsed(task) });
     if (current) renderTaskResult(task);
   } else {
-    const errText = task.status === "CANCELLED" ? t("task.cancelled") : task.error || t("task.failed");
+    const errText =
+      task.status === "CANCELLED" ? t("task.cancelled") : task.error || t("task.failed");
     showToast("error", t("common.failedElapsed", { verb, t: taskElapsed(task), msg: errText }));
-    if (msg) msg.textContent = t("common.failedElapsed", { verb, t: taskElapsed(task), msg: errText });
+    if (msg)
+      msg.textContent = t("common.failedElapsed", { verb, t: taskElapsed(task), msg: errText });
   }
   // 成功与失败后端都已写历史（TTS），刷新侧栏让其即时可见
   if (task.category === "tts") loadHistory();
@@ -116,5 +129,7 @@ export async function reattachTasks() {
     const tasks = await apiGet("/api/tasks?modelId=" + encodeURIComponent(m.id));
     if (!Array.isArray(tasks)) return;
     for (const task of tasks) trackTask(task);
-  } catch (e) { /* 忽略：下次切换/轮询再试 */ }
+  } catch (e) {
+    /* 忽略：下次切换/轮询再试 */
+  }
 }

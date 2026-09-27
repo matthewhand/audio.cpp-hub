@@ -12,13 +12,14 @@ import { openSettingsModal, closeSettingsModal } from "../features/settings.js";
 import { openInstanceDetail, closeInstanceDetail } from "../features/instances.js";
 
 const ROUTE_VIEWS = ["history", "voices", "downloads", "settings"];
-let applyingRoute = false;      // applyRoute 执行中：关闭函数不得再改 hash（防递归）
+let applyingRoute = false; // applyRoute 执行中：关闭函数不得再改 hash（防递归）
 
 export function parseRoute(hash) {
   const s = String(hash || "").replace(/^#\/?/, "");
   const parts = s.split("/").filter(Boolean);
   if (parts[0] === "model" && parts[1]) return { view: "model", id: decodeURIComponent(parts[1]) };
-  if (parts[0] === "instance" && parts[1]) return { view: "instance", id: decodeURIComponent(parts[1]) };
+  if (parts[0] === "instance" && parts[1])
+    return { view: "instance", id: decodeURIComponent(parts[1]) };
   if (ROUTE_VIEWS.includes(parts[0])) return { view: parts[0] };
   return { view: "home" };
 }
@@ -26,10 +27,15 @@ export function modelRoute(id) {
   const mid = id || state.selectedModelId;
   return mid ? "#/model/" + encodeURIComponent(mid) : "#/";
 }
-function defaultRoute() { return modelRoute(); }
+function defaultRoute() {
+  return modelRoute();
+}
 /* 改 hash 触发 hashchange → applyRoute；同 hash 时直接重放（用于重试） */
 export function go(hash) {
-  if (location.hash === hash) { applyRoute(); return; }
+  if (location.hash === hash) {
+    applyRoute();
+    return;
+  }
   location.hash = hash;
 }
 /* 页头按钮：同一面板再次点击则收起（回到默认模型路由） */
@@ -51,7 +57,8 @@ export function applyRoute() {
     const r = parseRoute(location.hash);
     // 先关闭非目标面板（仅关闭确实打开的，避免误触焦点还原）
     if (r.view !== "history" && isOpen("history-panel")) closeHistoryPanel();
-    if (r.view !== "voices" && isOpen("voices-panel") && window.closeVoicesPanel) window.closeVoicesPanel();
+    if (r.view !== "voices" && isOpen("voices-panel") && window.closeVoicesPanel)
+      window.closeVoicesPanel();
     if (r.view !== "downloads" && isOpen("downloads-modal")) closeDownloadsModal();
     if (r.view !== "settings" && isOpen("settings-modal")) closeSettingsModal();
     if (r.view !== "instance") {
@@ -60,15 +67,18 @@ export function applyRoute() {
     }
     // 再打开目标面板
     if (r.view === "history") openHistoryPanel();
-    else if (r.view === "voices") { if (window.openVoicesPanel) window.openVoicesPanel(); }
-    else if (r.view === "downloads") openDownloadsModal();
+    else if (r.view === "voices") {
+      if (window.openVoicesPanel) window.openVoicesPanel();
+    } else if (r.view === "downloads") openDownloadsModal();
     else if (r.view === "settings") {
       openSettingsModal(state.pendingSettingsSection || "general");
       state.pendingSettingsSection = null;
     } else if (r.view === "instance") {
-      const inst = state.instances.find(i => i.id === r.id);
-      if (inst) { state.pendingInstanceId = null; openInstanceDetail(inst); }
-      else state.pendingInstanceId = r.id;
+      const inst = state.instances.find((i) => i.id === r.id);
+      if (inst) {
+        state.pendingInstanceId = null;
+        openInstanceDetail(inst);
+      } else state.pendingInstanceId = r.id;
     }
     if (r.view === "model") selectModelById(r.id);
   } finally {

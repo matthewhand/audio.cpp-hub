@@ -5,11 +5,20 @@ import { openApp } from "./helpers.mjs";
 
 test("下载管理：暂停 → 续传", async ({ page }) => {
   const backend = new MockBackend({
-    downloads: [{
-      id: "d1", modelId: "supertonic", targetDir: "supertonic", status: "RUNNING",
-      percent: 42, downloadedBytes: 420, totalBytes: 1000, speedBps: 1024,
-      completedFiles: 1, fileCount: 3
-    }]
+    downloads: [
+      {
+        id: "d1",
+        modelId: "supertonic",
+        targetDir: "supertonic",
+        status: "RUNNING",
+        percent: 42,
+        downloadedBytes: 420,
+        totalBytes: 1000,
+        speedBps: 1024,
+        completedFiles: 1,
+        fileCount: 3,
+      },
+    ],
   });
   await openApp(page, backend, { modelId: "supertonic", lang: "zh" });
 

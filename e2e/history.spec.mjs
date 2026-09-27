@@ -5,17 +5,33 @@ import { openApp } from "./helpers.mjs";
 
 function historyItem(taskId, text) {
   return {
-    taskId, time: Date.now(), text, ok: true,
+    taskId,
+    time: Date.now(),
+    text,
+    ok: true,
     result: { durationSec: 1.2, size: 48044 },
-    instanceName: "supertonic", groupId: null, voice: { kind: "default" }
+    instanceName: "supertonic",
+    groupId: null,
+    voice: { kind: "default" },
   };
 }
 
 test("历史：加载列表 → 新建分组 → 删除分组 → 删除记录", async ({ page }) => {
   const backend = new MockBackend({
-    instances: [{ id: "i1", modelId: "supertonic", instanceName: "supertonic", status: "READY", backend: "cpu", device: 0, port: 19001, taskCount: 0 }],
+    instances: [
+      {
+        id: "i1",
+        modelId: "supertonic",
+        instanceName: "supertonic",
+        status: "READY",
+        backend: "cpu",
+        device: 0,
+        port: 19001,
+        taskCount: 0,
+      },
+    ],
     history: { supertonic: [historyItem("h1", "第一条"), historyItem("h2", "第二条")] },
-    groups: { supertonic: [] }
+    groups: { supertonic: [] },
   });
   await openApp(page, backend, { modelId: "supertonic", lang: "zh" });
 

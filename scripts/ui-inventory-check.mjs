@@ -13,7 +13,7 @@ fs.writeFileSync(tmpMd, markdown);
 
 const targets = [
   [tmpJson, path.join(ROOT, "ui_inventory.json"), "ui_inventory.json"],
-  [tmpMd, path.join(ROOT, "docs", "ui.md"), "docs/ui.md"]
+  [tmpMd, path.join(ROOT, "docs", "ui.md"), "docs/ui.md"],
 ];
 
 let failed = false;

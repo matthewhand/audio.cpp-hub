@@ -15,6 +15,8 @@ const browserGlobals = {
   window: "readonly",
   document: "readonly",
   navigator: "readonly",
+  location: "readonly",
+  history: "readonly",
   localStorage: "readonly",
   sessionStorage: "readonly",
   console: "readonly",
@@ -58,6 +60,24 @@ const browserGlobals = {
   confirm: "readonly",
   prompt: "readonly",
   getComputedStyle: "readonly",
+};
+
+/* Service-worker scope (web/sw.js) — not available to page scripts. */
+const serviceWorkerGlobals = {
+  self: "readonly",
+  caches: "readonly",
+  clients: "readonly",
+  skipWaiting: "readonly",
+  importScripts: "readonly",
+  ServiceWorkerGlobalScope: "readonly",
+  Cache: "readonly",
+  CacheStorage: "readonly",
+  FetchEvent: "readonly",
+  ExtendableEvent: "readonly",
+  Response: "readonly",
+  Request: "readonly",
+  Headers: "readonly",
+  URL: "readonly",
 };
 
 /* APIs published by the IIFE modules (window.I18N, window.AudioPicker, ...)
@@ -141,6 +161,28 @@ export default [
       ecmaVersion: 2022,
       sourceType: "script",
       globals: { ...browserGlobals, ...windowApiGlobals },
+    },
+    linterOptions: webLinterOptions,
+    rules: webRules,
+  },
+  /* ES modules: the module entry + the core/ and features/ trees. */
+  {
+    files: ["web/app.js", "web/core/**/*.js", "web/features/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: { ...browserGlobals, ...windowApiGlobals },
+    },
+    linterOptions: webLinterOptions,
+    rules: webRules,
+  },
+  /* Service worker: its own global scope. */
+  {
+    files: ["web/sw.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "script",
+      globals: { ...browserGlobals, ...serviceWorkerGlobals },
     },
     linterOptions: webLinterOptions,
     rules: webRules,

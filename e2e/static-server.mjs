@@ -17,7 +17,7 @@ const CONTENT_TYPES = {
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
   ".wav": "audio/wav",
-  ".png": "image/png"
+  ".png": "image/png",
 };
 
 export function createStaticServer() {
@@ -36,7 +36,9 @@ export function createStaticServer() {
         res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("not found");
         return;
       }
-      res.writeHead(200, { "Content-Type": CONTENT_TYPES[path.extname(target)] || "application/octet-stream" });
+      res.writeHead(200, {
+        "Content-Type": CONTENT_TYPES[path.extname(target)] || "application/octet-stream",
+      });
       fs.createReadStream(target).pipe(res);
     });
   });

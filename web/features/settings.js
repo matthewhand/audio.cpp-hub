@@ -2,7 +2,13 @@
 import { $ } from "../core/dom.js";
 import { apiGet, apiPost } from "../core/api.js";
 import { I18N, t } from "../core/i18n.js";
-import { showToast, setButtonBusy, focusDialog, restoreDialogFocus, registerOverlay } from "../core/ui.js";
+import {
+  showToast,
+  setButtonBusy,
+  focusDialog,
+  restoreDialogFocus,
+  registerOverlay,
+} from "../core/ui.js";
 import { state } from "../core/state.js";
 import { go, goPanel, hubPanelClosed } from "../core/router.js";
 import { loadExecutables, resetExecForm } from "./executables.js";
@@ -51,20 +57,29 @@ export function closeSettingsModal() {
 }
 function activateSettingsSection(section) {
   settingsSection = section;
-  document.querySelectorAll(".settings-nav-item").forEach(b =>
-    b.classList.toggle("active", b.dataset.section === section));
-  document.querySelectorAll(".settings-pane").forEach(p => p.classList.add("hidden"));
+  document
+    .querySelectorAll(".settings-nav-item")
+    .forEach((b) => b.classList.toggle("active", b.dataset.section === section));
+  document.querySelectorAll(".settings-pane").forEach((p) => p.classList.add("hidden"));
   $("settings-pane-" + section).classList.remove("hidden");
   if (section === "https") loadCertStatus();
   if (section === "executables") resetExecForm();
 }
-document.querySelectorAll(".settings-nav-item").forEach(btn => {
+document.querySelectorAll(".settings-nav-item").forEach((btn) => {
   btn.onclick = () => activateSettingsSection(btn.dataset.section);
 });
-$("settings-btn").onclick = () => { state.pendingSettingsSection = "general"; goPanel("settings"); };
-$("exec-goto-btn").onclick = () => { state.pendingSettingsSection = "executables"; go("#/settings"); };
+$("settings-btn").onclick = () => {
+  state.pendingSettingsSection = "general";
+  goPanel("settings");
+};
+$("exec-goto-btn").onclick = () => {
+  state.pendingSettingsSection = "executables";
+  go("#/settings");
+};
 $("settings-modal-close").onclick = closeSettingsModal;
-settingsModal.onclick = (e) => { if (e.target === settingsModal) closeSettingsModal(); };
+settingsModal.onclick = (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+};
 registerOverlay("settings-modal", closeSettingsModal);
 
 /* 通用面板：界面语言 / 主题（与页头开关同一状态源） */
@@ -84,7 +99,9 @@ export async function loadCertStatus() {
   try {
     const json = await apiGet("/api/cert/status");
     if (json && json.data) renderCertStatus(json.data);
-  } catch (e) { /* 状态拉取失败不影响面板其他操作 */ }
+  } catch (e) {
+    /* 状态拉取失败不影响面板其他操作 */
+  }
 }
 
 export function renderCertStatus(data) {
@@ -100,7 +117,7 @@ export function renderCertStatus(data) {
   }
   $("https-status-text").textContent = t("https.statusLine", {
     path: data.path,
-    ca: data.caCertExists ? t("https.caExists") : t("https.caMissing")
+    ca: data.caCertExists ? t("https.caExists") : t("https.caMissing"),
   });
 }
 
@@ -151,10 +168,16 @@ $("https-generate-btn").onclick = async () => {
   msg.textContent = "";
   result.textContent = "";
   const body = {
-    hostnames: $("https-hostnames").value.split("\n").map(s => s.trim()).filter(Boolean),
-    ips: $("https-ips").value.split("\n").map(s => s.trim()).filter(Boolean),
+    hostnames: $("https-hostnames")
+      .value.split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    ips: $("https-ips")
+      .value.split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean),
     validity: parseInt($("https-validity").value, 10) || 3650,
-    keysize: parseInt($("https-keysize").value, 10) || 2048
+    keysize: parseInt($("https-keysize").value, 10) || 2048,
   };
   const password = $("https-password").value.trim();
   if (password) body.password = password;
@@ -164,7 +187,10 @@ $("https-generate-btn").onclick = async () => {
   try {
     const data = (await apiPost("/api/cert/generate", body)).data;
     result.textContent = t("https.generateDone", {
-      path: data.path, ca: data.caCertPath, password: data.password, expire: data.expireDate
+      path: data.path,
+      ca: data.caCertPath,
+      password: data.password,
+      expire: data.expireDate,
     });
     loadCertStatus();
   } catch (e) {

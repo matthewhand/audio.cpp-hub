@@ -4,7 +4,14 @@ import { apiGet, apiDelete } from "../core/api.js";
 import { I18N, t } from "../core/i18n.js";
 import { state } from "../core/state.js";
 import { STATUS_CLASS, statusText, SUBMIT_BTNS, submitLabel } from "../core/format.js";
-import { showSkeleton, renderEmptyState, renderStateError, focusDialog, restoreDialogFocus, registerOverlay } from "../core/ui.js";
+import {
+  showSkeleton,
+  renderEmptyState,
+  renderStateError,
+  focusDialog,
+  restoreDialogFocus,
+  registerOverlay,
+} from "../core/ui.js";
 import { go, hubPanelClosed } from "../core/router.js";
 import { openLaunchModal } from "./executables.js";
 
@@ -24,8 +31,11 @@ export async function refreshInstances() {
   state.instances = data;
   // 深链接 #/instance/<id>：实例列表就绪后补齐打开详情
   if (state.pendingInstanceId) {
-    const inst = state.instances.find(i => i.id === state.pendingInstanceId);
-    if (inst) { state.pendingInstanceId = null; openInstanceDetail(inst); }
+    const inst = state.instances.find((i) => i.id === state.pendingInstanceId);
+    if (inst) {
+      state.pendingInstanceId = null;
+      openInstanceDetail(inst);
+    }
   }
   renderInstanceList();
   updateInstanceBar();
@@ -36,25 +46,28 @@ export function renderInstanceList() {
   list.removeAttribute("aria-busy");
   // 展示全部实例（不再按选中模型过滤）：就绪 > 启动中 > 其它，可用的始终排在最前
   const order = { READY: 0, STARTING: 1 };
-  const sorted = [...state.instances].sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2));
+  const sorted = [...state.instances].sort(
+    (a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2),
+  );
   list.innerHTML = "";
   if (state.instances.length === 0) {
     renderEmptyState(list, t("instance.empty"), {
       label: t("instance.create"),
-      onClick: openLaunchModal
+      onClick: openLaunchModal,
     });
     return;
   }
   for (const inst of sorted) {
-    const m = state.models.find(x => x.id === inst.modelId);
+    const m = state.models.find((x) => x.id === inst.modelId);
     const modelName = m ? I18N.pick(m, "displayName") : inst.modelId;
     const card = document.createElement("div");
     const statusClass = STATUS_CLASS[inst.status] || "stopped";
     card.className = "card" + (inst.id === state.activeInstanceId ? " selected" : "");
     // 有活跃任务（QUEUED/RUNNING）时追加转圈“工作中”徽标，随 2s 轮询自动出现/消失
-    const workingBadge = (inst.taskCount || 0) > 0
-      ? ` <span class="badge working">${esc(inst.taskCount > 1 ? t("instance.workingCount", { n: inst.taskCount }) : t("instance.working"))}</span>`
-      : "";
+    const workingBadge =
+      (inst.taskCount || 0) > 0
+        ? ` <span class="badge working">${esc(inst.taskCount > 1 ? t("instance.workingCount", { n: inst.taskCount }) : t("instance.working"))}</span>`
+        : "";
     let html = `<div class="card-title">${esc(inst.instanceName || inst.modelId)} <span class="badge ${statusClass}">${esc(statusText(inst.status))}</span>${workingBadge}</div>
       <div class="card-family">${esc(modelName)} ｜ #${esc(inst.id)}</div>
       <div class="card-desc">${esc(inst.backend)}${inst.device != null ? ":" + esc(inst.device) : ""} ｜ ${esc(t("instance.port"))} ${esc(inst.port)}${inst.executableName ? " ｜ " + esc(inst.executableName) : ""}</div>`;
@@ -79,7 +92,9 @@ export function renderInstanceList() {
 }
 
 export function updateInstanceBar() {
-  const ready = state.instances.filter(i => i.modelId === state.selectedModelId && i.status === "READY");
+  const ready = state.instances.filter(
+    (i) => i.modelId === state.selectedModelId && i.status === "READY",
+  );
   const select = $("instance-select");
   select.innerHTML = "";
   for (const inst of ready) {
@@ -90,7 +105,7 @@ export function updateInstanceBar() {
   }
   const has = ready.length > 0;
   if (has) {
-    if (!ready.some(i => i.id === state.activeInstanceId)) {
+    if (!ready.some((i) => i.id === state.activeInstanceId)) {
       state.activeInstanceId = ready[0].id;
     }
     select.value = state.activeInstanceId;
@@ -104,8 +119,9 @@ export function updateInstanceBar() {
   $("instance-detail").disabled = !has;
   // 详情弹窗打开时跟随轮询刷新；实例已消失则自动关闭
   if (detailInstanceId) {
-    const cur = state.instances.find(i => i.id === detailInstanceId);
-    if (cur) renderInstanceDetail(cur); else closeInstanceDetail();
+    const cur = state.instances.find((i) => i.id === detailInstanceId);
+    if (cur) renderInstanceDetail(cur);
+    else closeInstanceDetail();
   }
 
   const pill = $("instance-pill");
@@ -149,19 +165,28 @@ export function closeInstanceDetail() {
 function renderInstanceDetail(inst) {
   const body = $("instance-detail-body");
   body.innerHTML = "";
-  const model = state.models.find(m => m.id === inst.modelId);
+  const model = state.models.find((m) => m.id === inst.modelId);
   const rows = [
     [t("instance.field.name"), inst.instanceName || inst.modelId],
     [t("instance.field.id"), "#" + inst.id],
-    [t("instance.field.model"), model ? `${I18N.pick(model, "displayName")}（${inst.modelId}）` : inst.modelId],
+    [
+      t("instance.field.model"),
+      model ? `${I18N.pick(model, "displayName")}（${inst.modelId}）` : inst.modelId,
+    ],
     [t("instance.field.status"), statusText(inst.status)],
     [t("instance.field.weights"), inst.weightsPath],
     [t("instance.field.backend"), inst.backend],
-    [t("instance.field.device"), inst.device != null ? String(inst.device) : t("instance.valueAuto")],
+    [
+      t("instance.field.device"),
+      inst.device != null ? String(inst.device) : t("instance.valueAuto"),
+    ],
     [t("instance.field.port"), String(inst.port)],
-    [t("instance.field.threads"), inst.threads != null ? String(inst.threads) : t("instance.valueAuto")],
+    [
+      t("instance.field.threads"),
+      inst.threads != null ? String(inst.threads) : t("instance.valueAuto"),
+    ],
     [t("instance.field.executable"), inst.executableName || "-"],
-    [t("instance.field.createdAt"), inst.createdAt ? I18N.date(inst.createdAt) : "-"]
+    [t("instance.field.createdAt"), inst.createdAt ? I18N.date(inst.createdAt) : "-"],
   ];
   const addRow = (keyText, valueNode) => {
     const row = document.createElement("div");
@@ -201,5 +226,7 @@ $("instance-detail").onclick = () => {
   if (state.activeInstanceId) go("#/instance/" + encodeURIComponent(state.activeInstanceId));
 };
 $("instance-detail-close").onclick = closeInstanceDetail;
-instanceDetailModal.onclick = (e) => { if (e.target === instanceDetailModal) closeInstanceDetail(); };
+instanceDetailModal.onclick = (e) => {
+  if (e.target === instanceDetailModal) closeInstanceDetail();
+};
 registerOverlay("instance-detail-modal", closeInstanceDetail);

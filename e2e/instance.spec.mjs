@@ -5,7 +5,9 @@ import { openApp } from "./helpers.mjs";
 
 test("启动后实例就绪，停止后回到无就绪", async ({ page }) => {
   const backend = new MockBackend({
-    executables: [{ id: "e1", name: "Mock CPU", path: "/opt/audiocpp_server", note: "", env: {}, exists: true }]
+    executables: [
+      { id: "e1", name: "Mock CPU", path: "/opt/audiocpp_server", note: "", env: {}, exists: true },
+    ],
   });
   await openApp(page, backend, { modelId: "supertonic", lang: "zh" });
   await expect(page.locator("#instance-pill")).toHaveClass(/warn/);

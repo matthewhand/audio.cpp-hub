@@ -23,38 +23,38 @@ Node / npm 等工具链（若引入）**只用于开发与 CI**，不参与运�
 
 ## 3. 模块地图
 
-| 文件（行数） | 职责 | 入口 / 主要 API | 关键位置 |
-| --- | --- | --- | --- |
-| `index.html`（456） | 全部静态 DOM（面板、弹窗、表单）、CSP、脚本加载顺序 | 页面骨架 | 脚本标签 `web/index.html:448`–`454` |
-| `boot.js`（6） | 绘制前恢复主题与语言，避免首屏闪烁（CSP 要求独立文件） | 顶层立即执行 | `web/boot.js:3` |
-| `i18n.js`（1203） | 中英双语字典 + 运行时 `I18N` API | `I18N.t` / `applyI18n` / `setLang` / `onChange` / `errText` / `pick` | `t` `web/i18n.js:1144`，字典 zh `web/i18n.js:9`、en `web/i18n.js:568` |
-| `app.js`（3359） | 应用主逻辑：状态、渲染、事件接线、轮询、任务队列 | 见下方「app.js 内部分区」 | `web/app.js:1` |
-| `wav.js`（95） | 音频工具：解码、PCM16 单声道 WAV 编码、时长/体积格式化、输出设备预热 | `window.WavUtil` | `web/wav.js:2` |
-| `audio-picker.js`（620） | 音频选择组件：上传 / 录制 / 音色库 / 本地路径，含波形、播放、裁剪 | `window.AudioPicker` | class `web/audio-picker.js:9`，`getValue` `web/audio-picker.js:595` |
-| `voice-select.js`（179） | 音色下拉：从音色库直选，选中即生效，返回服务器路径 | `window.VoiceSelect` | class `web/voice-select.js:10`，`refreshVoiceSelects` `web/voice-select.js:176` |
-| `voices-panel.js`（211） | 音色库管理面板（页头 🎙）：列表 / 试听 / 行内编辑 / 删除 / 添加 | `window.openVoicesPanel` | `web/voices-panel.js:9` |
-| `file-browser.js`（422） | 服务器端文件 / 目录选择弹窗（选权重路径等），动态创建 overlay | `window.FileBrowser.open` | `web/file-browser.js:84` |
-| `style.css`（1569） | 设计系统：主题变量、组件样式、动效令牌 | — | 动效令牌 `web/style.css:6` |
+| 文件（行数）             | 职责                                                                 | 入口 / 主要 API                                                      | 关键位置                                                                        |
+| ------------------------ | -------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `index.html`（456）      | 全部静态 DOM（面板、弹窗、表单）、CSP、脚本加载顺序                  | 页面骨架                                                             | 脚本标签 `web/index.html:448`–`454`                                             |
+| `boot.js`（6）           | 绘制前恢复主题与语言，避免首屏闪烁（CSP 要求独立文件）               | 顶层立即执行                                                         | `web/boot.js:3`                                                                 |
+| `i18n.js`（1203）        | 中英双语字典 + 运行时 `I18N` API                                     | `I18N.t` / `applyI18n` / `setLang` / `onChange` / `errText` / `pick` | `t` `web/i18n.js:1144`，字典 zh `web/i18n.js:9`、en `web/i18n.js:568`           |
+| `app.js`（3359）         | 应用主逻辑：状态、渲染、事件接线、轮询、任务队列                     | 见下方「app.js 内部分区」                                            | `web/app.js:1`                                                                  |
+| `wav.js`（95）           | 音频工具：解码、PCM16 单声道 WAV 编码、时长/体积格式化、输出设备预热 | `window.WavUtil`                                                     | `web/wav.js:2`                                                                  |
+| `audio-picker.js`（620） | 音频选择组件：上传 / 录制 / 音色库 / 本地路径，含波形、播放、裁剪    | `window.AudioPicker`                                                 | class `web/audio-picker.js:9`，`getValue` `web/audio-picker.js:595`             |
+| `voice-select.js`（179） | 音色下拉：从音色库直选，选中即生效，返回服务器路径                   | `window.VoiceSelect`                                                 | class `web/voice-select.js:10`，`refreshVoiceSelects` `web/voice-select.js:176` |
+| `voices-panel.js`（211） | 音色库管理面板（页头 🎙）：列表 / 试听 / 行内编辑 / 删除 / 添加       | `window.openVoicesPanel`                                             | `web/voices-panel.js:9`                                                         |
+| `file-browser.js`（422） | 服务器端文件 / 目录选择弹窗（选权重路径等），动态创建 overlay        | `window.FileBrowser.open`                                            | `web/file-browser.js:84`                                                        |
+| `style.css`（1569）      | 设计系统：主题变量、组件样式、动效令牌                               | —                                                                    | 动效令牌 `web/style.css:6`                                                      |
 
 ### app.js 内部分区
 
-| 区域 | 说明 | 关键位置 |
-| --- | --- | --- |
-| 常量与工具 | `t()` 快捷取词、状态/分类文案、保留参数键 | `web/app.js:3`–`23` |
-| 模块级状态 | 选中模型 / 实例、列表缓存、情绪向量等 | `web/app.js:25`–`40` |
-| DOM 辅助 | `$()` / `el()` / `esc()` / `safeHttpUrl()` | `web/app.js:42`–`58` |
-| 主题 / 语言 / 全局重渲染 | 切换按钮、`rerenderAll` 统一重渲染 | `web/app.js:82`–`118` |
-| 模型列表 | 拉取 `/api/models`、分组卡片、HF 菜单 | `loadModels` `web/app.js:173`，`renderModelList` `web/app.js:256` |
-| 设置弹窗 | 通用 / 可执行文件 / HTTPS 三个分栏 | `web/app.js:298`–`456` |
-| 启动弹窗 + Profile | 权重 / 设备 / 高级参数、启动配置存取 | `web/app.js:457`–`1117` |
-| 实例 | 列表刷新、状态条、详情弹窗 | `refreshInstances` `web/app.js:1118`，`renderInstanceList` `web/app.js:1135` |
-| 下载 | 下载管理面板、模型下载弹窗 | `refreshDownloads` `web/app.js:1318`，`renderDownloadList` `web/app.js:1354` |
-| 事件 / toast | 后端事件轮询与轻提示 | `refreshEvents` `web/app.js:1521`，`showToast` `web/app.js:1549` |
-| 任务队列前端 | 提交、轮询、终态收尾、结果渲染 | `submitTask` `web/app.js:1575`，`trackTask` `web/app.js:1616` |
-| 工作区分发 | 按模型类别显示对应面板 | `renderWorkspace` `web/app.js:1757` |
-| 五类任务面板 | TTS / ASR / SEP / Music / Other 各自的表单与结果渲染 | `renderTtsPanel` `web/app.js:2003`、`renderAsrPanel` `web/app.js:3009`、`renderSepPanel` `web/app.js:3073`、`renderMusicPanel` `web/app.js:3119`、`renderOtherPanel` `web/app.js:3201` |
-| 历史侧栏 | 任务 + 历史合并渲染、分组、行内详情 | `loadHistory` `web/app.js:2269`，`renderSidebarList` `web/app.js:2324` |
-| 初始化 + 轮询 | 组件实例化、首屏加载、全局 2s 轮询 | `web/app.js:3318`–`3359` |
+| 区域                     | 说明                                                 | 关键位置                                                                                                                                                                               |
+| ------------------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 常量与工具               | `t()` 快捷取词、状态/分类文案、保留参数键            | `web/app.js:3`–`23`                                                                                                                                                                    |
+| 模块级状态               | 选中模型 / 实例、列表缓存、情绪向量等                | `web/app.js:25`–`40`                                                                                                                                                                   |
+| DOM 辅助                 | `$()` / `el()` / `esc()` / `safeHttpUrl()`           | `web/app.js:42`–`58`                                                                                                                                                                   |
+| 主题 / 语言 / 全局重渲染 | 切换按钮、`rerenderAll` 统一重渲染                   | `web/app.js:82`–`118`                                                                                                                                                                  |
+| 模型列表                 | 拉取 `/api/models`、分组卡片、HF 菜单                | `loadModels` `web/app.js:173`，`renderModelList` `web/app.js:256`                                                                                                                      |
+| 设置弹窗                 | 通用 / 可执行文件 / HTTPS 三个分栏                   | `web/app.js:298`–`456`                                                                                                                                                                 |
+| 启动弹窗 + Profile       | 权重 / 设备 / 高级参数、启动配置存取                 | `web/app.js:457`–`1117`                                                                                                                                                                |
+| 实例                     | 列表刷新、状态条、详情弹窗                           | `refreshInstances` `web/app.js:1118`，`renderInstanceList` `web/app.js:1135`                                                                                                           |
+| 下载                     | 下载管理面板、模型下载弹窗                           | `refreshDownloads` `web/app.js:1318`，`renderDownloadList` `web/app.js:1354`                                                                                                           |
+| 事件 / toast             | 后端事件轮询与轻提示                                 | `refreshEvents` `web/app.js:1521`，`showToast` `web/app.js:1549`                                                                                                                       |
+| 任务队列前端             | 提交、轮询、终态收尾、结果渲染                       | `submitTask` `web/app.js:1575`，`trackTask` `web/app.js:1616`                                                                                                                          |
+| 工作区分发               | 按模型类别显示对应面板                               | `renderWorkspace` `web/app.js:1757`                                                                                                                                                    |
+| 五类任务面板             | TTS / ASR / SEP / Music / Other 各自的表单与结果渲染 | `renderTtsPanel` `web/app.js:2003`、`renderAsrPanel` `web/app.js:3009`、`renderSepPanel` `web/app.js:3073`、`renderMusicPanel` `web/app.js:3119`、`renderOtherPanel` `web/app.js:3201` |
+| 历史侧栏                 | 任务 + 历史合并渲染、分组、行内详情                  | `loadHistory` `web/app.js:2269`，`renderSidebarList` `web/app.js:2324`                                                                                                                 |
+| 初始化 + 轮询            | 组件实例化、首屏加载、全局 2s 轮询                   | `web/app.js:3318`–`3359`                                                                                                                                                               |
 
 ## 4. 脚本加载顺序与初始化
 
@@ -145,16 +145,16 @@ Prettier 通过根目录 `.prettierignore` 排除既有 `web/` 前端文件，�
 
 ## 9. 相关文档与设计资产
 
-| 文档 | 内容 |
-| --- | --- |
-| [`../TESTING.md`](../TESTING.md) | 前端 e2e / 单元测试与本地运行方式 |
-| [`styleguide.html`](styleguide.html) | 组件样式指南页（在浏览器中打开） |
-| [`../docs/ui.md`](../docs/ui.md) | UI 清单：界面 / 控件逐项登记 |
-| [`../docs/diagrams/`](../docs/diagrams/) | 视觉文档：14 张架构 / 时序 / 状态图 + `previews/`，入口见 `README.md`、`INVENTORY.md` |
-| [`../docs/API.md`](../docs/API.md) | 前端调用的 `/api/*` 接口契约 |
-| [`../docs/assets/`](../docs/assets/) | README 演示 GIF（Playwright 实拍） |
-| [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | 通用贡献流程与代码约定 |
-| [`../SECURITY.md`](../SECURITY.md) | 威胁模型与漏洞上报渠道 |
+| 文档                                       | 内容                                                                                  |
+| ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| [`../TESTING.md`](../TESTING.md)           | 前端 e2e / 单元测试与本地运行方式                                                     |
+| [`styleguide.html`](styleguide.html)       | 组件样式指南页（在浏览器中打开）                                                      |
+| [`../docs/ui.md`](../docs/ui.md)           | UI 清单：界面 / 控件逐项登记                                                          |
+| [`../docs/diagrams/`](../docs/diagrams/)   | 视觉文档：14 张架构 / 时序 / 状态图 + `previews/`，入口见 `README.md`、`INVENTORY.md` |
+| [`../docs/API.md`](../docs/API.md)         | 前端调用的 `/api/*` 接口契约                                                          |
+| [`../docs/assets/`](../docs/assets/)       | README 演示 GIF（Playwright 实拍）                                                    |
+| [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | 通用贡献流程与代码约定                                                                |
+| [`../SECURITY.md`](../SECURITY.md)         | 威胁模型与漏洞上报渠道                                                                |
 
 ## 10. 贡献检查清单
 

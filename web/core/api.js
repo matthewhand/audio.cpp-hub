@@ -40,11 +40,16 @@ export async function apiRequest(path, opts = {}) {
   const text = await res.text();
   let data = null;
   if (text) {
-    try { data = JSON.parse(text); } catch (e) { data = null; }
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      data = null;
+    }
   }
   // 错误判定：HTTP 非 2xx，或响应体是明确的错误信封（ok:false 且带 code/error）。
   // 只认 code/error 可避免把恰好含 ok:false 的正常结果（如引擎结果 JSON）误判为错误。
-  const envelopeError = data && typeof data === "object" && data.ok === false && (data.code || data.error);
+  const envelopeError =
+    data && typeof data === "object" && data.ok === false && (data.code || data.error);
   if (!res.ok || envelopeError) {
     throw new ApiError(I18N.errText(text), {
       code: data && data.code,

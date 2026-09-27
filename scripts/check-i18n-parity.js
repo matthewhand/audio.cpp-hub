@@ -28,20 +28,34 @@ const missingInEn = [...zhKeys].filter((k) => !enKeys.has(k));
 const missingInZh = [...enKeys].filter((k) => !zhKeys.has(k));
 
 const placeholder = (v) =>
-  typeof v === "string" ? [...v.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(",") : "";
+  typeof v === "string"
+    ? [...v.matchAll(/\{(\w+)\}/g)]
+        .map((m) => m[1])
+        .sort()
+        .join(",")
+    : "";
 const mismatchedParams = [...zhKeys]
   .filter((k) => enKeys.has(k) && placeholder(zh[k]) !== placeholder(en[k]))
   .map((k) => `${k}: zh={${placeholder(zh[k])}} en={${placeholder(en[k])}}`);
 
 console.log(`zh keys: ${zhKeys.size}  |  en keys: ${enKeys.size}`);
-if (missingInEn.length) console.log(`missing in en (${missingInEn.length}):\n  ` + missingInEn.join("\n  "));
-if (missingInZh.length) console.log(`missing in zh (${missingInZh.length}):\n  ` + missingInZh.join("\n  "));
-if (mismatchedParams.length) console.log(`placeholder mismatch (${mismatchedParams.length}):\n  ` + mismatchedParams.join("\n  "));
+if (missingInEn.length)
+  console.log(`missing in en (${missingInEn.length}):\n  ` + missingInEn.join("\n  "));
+if (missingInZh.length)
+  console.log(`missing in zh (${missingInZh.length}):\n  ` + missingInZh.join("\n  "));
+if (mismatchedParams.length)
+  console.log(
+    `placeholder mismatch (${mismatchedParams.length}):\n  ` + mismatchedParams.join("\n  "),
+  );
 
 if (dupZh.length) console.log(`duplicate keys in zh (${dupZh.length}):\n  ` + dupZh.join("\n  "));
 if (dupEn.length) console.log(`duplicate keys in en (${dupEn.length}):\n  ` + dupEn.join("\n  "));
 
-const ok = !missingInEn.length && !missingInZh.length && !mismatchedParams.length &&
-  !dupZh.length && !dupEn.length;
+const ok =
+  !missingInEn.length &&
+  !missingInZh.length &&
+  !mismatchedParams.length &&
+  !dupZh.length &&
+  !dupEn.length;
 console.log(ok ? "OK: zh/en parity holds" : "FAIL: zh/en parity broken");
 process.exit(ok ? 0 : 1);

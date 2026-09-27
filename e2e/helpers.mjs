@@ -10,7 +10,9 @@ export async function openApp(page, backend, prefs = {}) {
       if (p.modelId) localStorage.setItem("hub-model", p.modelId);
       if (p.theme) localStorage.setItem("hub-theme", p.theme);
       if (p.lang) localStorage.setItem("hub-lang", p.lang);
-    } catch { /* about:blank 等场景忽略 */ }
+    } catch {
+      /* about:blank 等场景忽略 */
+    }
   }, prefs);
   await page.goto("/");
   await expect(page.locator("#model-list .card-title").first()).toBeVisible();

@@ -47,15 +47,19 @@ export class MockBackend {
     this.requests = [];
   }
 
-  nextId() { return String(this.seq++).padStart(4, "0"); }
+  nextId() {
+    return String(this.seq++).padStart(4, "0");
+  }
 
-  model(id) { return this.models.find(m => m.id === id) || null; }
+  model(id) {
+    return this.models.find((m) => m.id === id) || null;
+  }
 
   /** 拦截浏览器内所有 /api/* 与 /v1/* 请求。 */
   install(page) {
     page.route(
       (url) => url.pathname.startsWith("/api/") || url.pathname.startsWith("/v1/"),
-      (route) => this.handle(route)
+      (route) => this.handle(route),
     );
   }
 
@@ -63,7 +67,7 @@ export class MockBackend {
     return route.fulfill({
       status,
       contentType: "application/json; charset=utf-8",
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
   }
 
@@ -80,7 +84,11 @@ export class MockBackend {
 
     let body = {};
     if (method === "POST" || method === "PUT" || method === "PATCH") {
-      try { body = req.postDataJSON() || {}; } catch { body = {}; }
+      try {
+        body = req.postDataJSON() || {};
+      } catch {
+        body = {};
+      }
     }
 
     // ---------- 模型 / 包 ----------
@@ -92,24 +100,34 @@ export class MockBackend {
     if (p === "/api/executables") {
       if (method === "GET") return this.json(route, this.executables);
       if (method === "POST") {
-        const ex = { id: "ex" + this.nextId(), name: body.name || "exec", path: body.path || "", note: body.note || "", env: body.env || {}, exists: true };
+        const ex = {
+          id: "ex" + this.nextId(),
+          name: body.name || "exec",
+          path: body.path || "",
+          note: body.note || "",
+          env: body.env || {},
+          exists: true,
+        };
         this.executables.push(ex);
         return this.json(route, ex);
       }
     }
     m = p.match(/^\/api\/executables\/([^/]+)\/devices$/);
     if (method === "GET" && m) {
-      return this.json(route, { devices: [{ backend: "cpu", index: 0, name: "Mock CPU 0", type: "cpu" }], raw: "" });
+      return this.json(route, {
+        devices: [{ backend: "cpu", index: 0, name: "Mock CPU 0", type: "cpu" }],
+        raw: "",
+      });
     }
     m = p.match(/^\/api\/executables\/([^/]+)$/);
     if (m) {
       if (method === "PUT") {
-        const ex = this.executables.find(x => x.id === m[1]);
+        const ex = this.executables.find((x) => x.id === m[1]);
         if (ex) Object.assign(ex, body);
         return this.json(route, ex || {});
       }
       if (method === "DELETE") {
-        this.executables = this.executables.filter(x => x.id !== m[1]);
+        this.executables = this.executables.filter((x) => x.id !== m[1]);
         return this.json(route, { ok: true });
       }
     }
@@ -140,7 +158,7 @@ export class MockBackend {
           weightsPath: body.weightsPath || "",
           executableName: "mock",
           taskCount: 0,
-          createdAt: Date.now()
+          createdAt: Date.now(),
         };
         this.instances.push(inst);
         return this.json(route, inst);
@@ -148,7 +166,7 @@ export class MockBackend {
     }
     m = p.match(/^\/api\/instances\/([^/]+)$/);
     if (m && method === "DELETE") {
-      this.instances = this.instances.filter(x => x.id !== m[1]);
+      this.instances = this.instances.filter((x) => x.id !== m[1]);
       return this.json(route, { ok: true });
     }
 
@@ -166,7 +184,7 @@ export class MockBackend {
           totalBytes: 1000,
           speedBps: 0,
           completedFiles: 0,
-          fileCount: 1
+          fileCount: 1,
         };
         this.downloads.push(d);
         return this.json(route, d);
@@ -174,21 +192,23 @@ export class MockBackend {
     }
     m = p.match(/^\/api\/downloads\/([^/]+)\/(pause|resume)$/);
     if (m && method === "POST") {
-      const d = this.downloads.find(x => x.id === m[1]);
+      const d = this.downloads.find((x) => x.id === m[1]);
       if (!d) return this.json(route, { ok: false, error: "not found" }, 404);
       d.status = m[2] === "pause" ? "PAUSED" : "RUNNING";
       return this.json(route, d);
     }
     m = p.match(/^\/api\/downloads\/([^/]+)$/);
     if (m && method === "DELETE") {
-      this.downloads = this.downloads.filter(x => x.id !== m[1]);
+      this.downloads = this.downloads.filter((x) => x.id !== m[1]);
       return this.json(route, { ok: true });
     }
 
     // ---------- 事件 / 证书 ----------
     if (method === "GET" && p === "/api/events") return this.json(route, this.events);
-    if (method === "GET" && p === "/api/cert/status") return this.json(route, { ok: true, data: { enabled: false, exists: false } });
-    if (method === "GET" && p === "/api/https/config") return this.json(route, { ok: true, enabled: false });
+    if (method === "GET" && p === "/api/cert/status")
+      return this.json(route, { ok: true, data: { enabled: false, exists: false } });
+    if (method === "GET" && p === "/api/https/config")
+      return this.json(route, { ok: true, enabled: false });
     if (method === "POST" && p === "/api/cert/generate") return this.json(route, { ok: true });
 
     // ---------- 音频 ----------
@@ -201,11 +221,20 @@ export class MockBackend {
         sampleRate: 16000,
         channels: 1,
         bitsPerSample: 16,
-        sizeBytes: 48044
+        sizeBytes: 48044,
       });
     }
     if (method === "POST" && p === "/api/audio/upload") {
-      return this.json(route, { ok: true, id: "u" + this.nextId(), path: "data/uploads/mock.wav", durationSec: 1.5, sampleRate: 16000, channels: 1, bitsPerSample: 16, sizeBytes: 48044 });
+      return this.json(route, {
+        ok: true,
+        id: "u" + this.nextId(),
+        path: "data/uploads/mock.wav",
+        durationSec: 1.5,
+        sampleRate: 16000,
+        channels: 1,
+        bitsPerSample: 16,
+        sizeBytes: 48044,
+      });
     }
 
     // ---------- 音色库 ----------
@@ -213,7 +242,8 @@ export class MockBackend {
       if (method === "GET") return this.json(route, this.voices);
       if (method === "POST") {
         const name = (body.name || "").trim();
-        if (this.voices.some(v => v.name === name)) return this.err(route, "VOICE_NAME_EXISTS", "音色名称已存在");
+        if (this.voices.some((v) => v.name === name))
+          return this.err(route, "VOICE_NAME_EXISTS", "音色名称已存在");
         const v = { vid: "v" + this.nextId(), name, text: body.text || "", durationSec: 1.5 };
         this.voices.push(v);
         return this.json(route, v);
@@ -226,14 +256,15 @@ export class MockBackend {
     m = p.match(/^\/api\/voices\/([^/]+)$/);
     if (m) {
       if (method === "PUT") {
-        const v = this.voices.find(x => x.vid === m[1]);
+        const v = this.voices.find((x) => x.vid === m[1]);
         if (!v) return this.json(route, { ok: false, error: "not found" }, 404);
-        if (body.name && this.voices.some(x => x.vid !== m[1] && x.name === body.name)) return this.err(route, "VOICE_NAME_EXISTS", "音色名称已存在");
+        if (body.name && this.voices.some((x) => x.vid !== m[1] && x.name === body.name))
+          return this.err(route, "VOICE_NAME_EXISTS", "音色名称已存在");
         Object.assign(v, { name: body.name ?? v.name, text: body.text ?? v.text });
         return this.json(route, v);
       }
       if (method === "DELETE") {
-        this.voices = this.voices.filter(x => x.vid !== m[1]);
+        this.voices = this.voices.filter((x) => x.vid !== m[1]);
         return this.json(route, { ok: true });
       }
     }
@@ -241,11 +272,11 @@ export class MockBackend {
     // ---------- 任务队列 ----------
     if (method === "GET" && p === "/api/tasks") {
       const modelId = url.searchParams.get("modelId");
-      const list = modelId ? this.tasks.filter(t => t.modelId === modelId) : this.tasks;
+      const list = modelId ? this.tasks.filter((t) => t.modelId === modelId) : this.tasks;
       return this.json(route, list);
     }
     if (method === "POST" && p === "/api/tasks") {
-      const inst = this.instances.find(i => i.id === body.instanceId);
+      const inst = this.instances.find((i) => i.id === body.instanceId);
       const modelId = inst ? inst.modelId : null;
       const model = this.model(modelId);
       const category = model ? model.category : "other";
@@ -261,21 +292,21 @@ export class MockBackend {
         finishedAt: null,
         text: req.text || "",
         instanceId: body.instanceId,
-        instanceName: inst ? (inst.instanceName || inst.modelId) : null,
-        result: this.defaultResult(category, req)
+        instanceName: inst ? inst.instanceName || inst.modelId : null,
+        result: this.defaultResult(category, req),
       };
       this.tasks.push(task);
       return this.json(route, task);
     }
     m = p.match(/^\/api\/tasks\/([^/]+)\/result$/);
     if (method === "GET" && m) {
-      const task = this.tasks.find(t => t.id === m[1]);
+      const task = this.tasks.find((t) => t.id === m[1]);
       if (!task) return this.json(route, { ok: false, error: "task not found" }, 404);
       return this.json(route, task.result || {});
     }
     m = p.match(/^\/api\/tasks\/([^/]+)$/);
     if (m) {
-      const task = this.tasks.find(t => t.id === m[1]);
+      const task = this.tasks.find((t) => t.id === m[1]);
       if (method === "GET") {
         if (!task) return this.json(route, { ok: false, code: "TASK_NOT_FOUND" }, 404);
         // 首次查询即进入终态，让前端 2s 轮询快速收尾（确定性）
@@ -300,7 +331,8 @@ export class MockBackend {
       const list = this.groups[modelId] || (this.groups[modelId] = []);
       if (method === "GET") return this.json(route, list);
       if (method === "POST") {
-        if (list.some(g => g.name === body.name)) return this.err(route, "GROUP_EXISTS", "分组已存在");
+        if (list.some((g) => g.name === body.name))
+          return this.err(route, "GROUP_EXISTS", "分组已存在");
         const g = { id: "g" + this.nextId(), name: body.name };
         list.push(g);
         return this.json(route, g);
@@ -310,19 +342,19 @@ export class MockBackend {
     if (m) {
       const list = this.groups[m[1]] || [];
       if (method === "PUT") {
-        const g = list.find(x => x.id === m[2]);
+        const g = list.find((x) => x.id === m[2]);
         if (g) g.name = body.name;
         return this.json(route, g || {});
       }
       if (method === "DELETE") {
-        this.groups[m[1]] = list.filter(x => x.id !== m[2]);
-        for (const item of (this.history[m[1]] || [])) if (item.groupId === m[2]) item.groupId = null;
+        this.groups[m[1]] = list.filter((x) => x.id !== m[2]);
+        for (const item of this.history[m[1]] || []) if (item.groupId === m[2]) item.groupId = null;
         return this.json(route, { ok: true });
       }
     }
     m = p.match(/^\/api\/history\/([^/]+)\/([^/]+)\/group$/);
     if (m && method === "PUT") {
-      const item = (this.history[m[1]] || []).find(x => x.taskId === m[2]);
+      const item = (this.history[m[1]] || []).find((x) => x.taskId === m[2]);
       if (item) item.groupId = body.groupId || null;
       return this.json(route, { ok: true });
     }
@@ -338,12 +370,12 @@ export class MockBackend {
     if (m) {
       const list = this.history[m[1]] || (this.history[m[1]] = []);
       if (method === "GET") {
-        const item = list.find(x => x.taskId === m[2]);
+        const item = list.find((x) => x.taskId === m[2]);
         if (!item) return this.json(route, { ok: false, code: "HISTORY_NOT_FOUND" }, 404);
         return this.json(route, item.full || item);
       }
       if (method === "DELETE") {
-        this.history[m[1]] = list.filter(x => x.taskId !== m[2]);
+        this.history[m[1]] = list.filter((x) => x.taskId !== m[2]);
         return this.json(route, { ok: true });
       }
     }
@@ -357,17 +389,24 @@ export class MockBackend {
     }
 
     // ---------- 文件浏览 ----------
-    if (method === "GET" && p === "/api/fs/roots") return this.json(route, { roots: [{ name: "/", path: "/" }] });
-    if (method === "GET" && p === "/api/fs/list") return this.json(route, { path: url.searchParams.get("path") || "/", entries: [] });
+    if (method === "GET" && p === "/api/fs/roots")
+      return this.json(route, { roots: [{ name: "/", path: "/" }] });
+    if (method === "GET" && p === "/api/fs/list")
+      return this.json(route, { path: url.searchParams.get("path") || "/", entries: [] });
 
     // ---------- OpenAI 代理（前端未用，占位） ----------
     if (p.startsWith("/v1/")) return this.json(route, { data: [] });
 
-    return this.json(route, { ok: false, code: "MOCK_UNHANDLED", error: `no mock for ${method} ${p}` }, 404);
+    return this.json(
+      route,
+      { ok: false, code: "MOCK_UNHANDLED", error: `no mock for ${method} ${p}` },
+      404,
+    );
   }
 
   defaultResult(category, req) {
-    if (category === "asr") return { text: "mock transcript: hello from audio.cpp-hub", language: "en" };
+    if (category === "asr")
+      return { text: "mock transcript: hello from audio.cpp-hub", language: "en" };
     return { text: req.text || "mock result" };
   }
 }

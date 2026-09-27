@@ -24,10 +24,11 @@ export async function loadModels() {
   if (state.models.length && !state.selectedModelId) {
     // 路由优先（深链接），其次恢复上次选中的模型（localStorage 仅作默认落地）
     const r = parseRoute(location.hash);
-    const wanted = state.pendingModelId
-      || (r.view === "model" ? r.id : null)
-      || localStorage.getItem("hub-model");
-    state.selectedModelId = state.models.some(m => m.id === wanted) ? wanted : state.models[0].id;
+    const wanted =
+      state.pendingModelId ||
+      (r.view === "model" ? r.id : null) ||
+      localStorage.getItem("hub-model");
+    state.selectedModelId = state.models.some((m) => m.id === wanted) ? wanted : state.models[0].id;
     state.pendingModelId = null;
   }
   // 深链接指向不存在的模型：用 replaceState 修正 URL（不新增历史记录、不触发 hashchange）
@@ -43,8 +44,11 @@ export async function loadModels() {
 
 /* 经路由选择模型：URL 同步为 #/model/<id>，前进/后退可还原 */
 export function selectModelById(id) {
-  if (!state.models.length) { state.pendingModelId = id; return; }
-  const m = state.models.find(x => x.id === id);
+  if (!state.models.length) {
+    state.pendingModelId = id;
+    return;
+  }
+  const m = state.models.find((x) => x.id === id);
   if (!m || m.id === state.selectedModelId) return;
   state.selectedModelId = m.id;
   localStorage.setItem("hub-model", m.id);
@@ -60,8 +64,10 @@ export function selectModelById(id) {
    注意：Profile 关联的 executableId 可能已失效（可执行文件被删除/重加），
    但启动弹窗可改选其他可执行文件，所以不把失效的关联当作"未配置"。 */
 export function modelConfigured(m) {
-  const weightsOk = state.profiles.some(x => x.modelId === m.id && x.weightsPath && x.weightsExists !== false);
-  return weightsOk && state.executables.some(e => e.exists);
+  const weightsOk = state.profiles.some(
+    (x) => x.modelId === m.id && x.weightsPath && x.weightsExists !== false,
+  );
+  return weightsOk && state.executables.some((e) => e.exists);
 }
 
 let hfMenuEl = null;
@@ -83,7 +89,9 @@ function openHfMenu(anchor, m) {
     hfMenuEl.id = "hf-menu";
     hfMenuEl.setAttribute("role", "menu");
     document.body.appendChild(hfMenuEl);
-    hfMenuEl.addEventListener("click", (e) => { if (e.target.closest("a")) closeHfMenu(); });
+    hfMenuEl.addEventListener("click", (e) => {
+      if (e.target.closest("a")) closeHfMenu();
+    });
     bindMenuKeys(hfMenuEl, "a");
   }
   const items = [
@@ -91,14 +99,20 @@ function openHfMenu(anchor, m) {
     { label: t("model.hfMenu.mirror"), url: safeHttpUrl(hfMirrorOf(m.hfUrl)) },
     { label: t("model.hfMenu.gguf"), url: safeHttpUrl(m.ggufUrl) },
     { label: t("model.hfMenu.ggufMirror"), url: safeHttpUrl(hfMirrorOf(m.ggufUrl)) },
-  ].filter(x => x.url);
-  hfMenuEl.innerHTML = items.map(x => `<a href="${esc(x.url)}" target="_blank" rel="noopener" role="menuitem">${esc(x.label)}<span class="hf-menu-ext" aria-hidden="true">↗</span></a>`).join("");
+  ].filter((x) => x.url);
+  hfMenuEl.innerHTML = items
+    .map(
+      (x) =>
+        `<a href="${esc(x.url)}" target="_blank" rel="noopener" role="menuitem">${esc(x.label)}<span class="hf-menu-ext" aria-hidden="true">↗</span></a>`,
+    )
+    .join("");
   closeHfMenu();
   hfMenuAnchor = anchor;
   anchor.classList.add("open");
   hfMenuEl.classList.add("open");
   const r = anchor.getBoundingClientRect();
-  const mw = hfMenuEl.offsetWidth, mh = hfMenuEl.offsetHeight;
+  const mw = hfMenuEl.offsetWidth,
+    mh = hfMenuEl.offsetHeight;
   let top = r.bottom + 6;
   if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
   let right = window.innerWidth - r.right;
@@ -110,14 +124,19 @@ function openHfMenu(anchor, m) {
 }
 
 function toggleHfMenu(anchor, m) {
-  if (hfMenuAnchor === anchor) { closeHfMenu(); return; }
+  if (hfMenuAnchor === anchor) {
+    closeHfMenu();
+    return;
+  }
   openHfMenu(anchor, m);
 }
 
 document.addEventListener("mousedown", (e) => {
   if (hfMenuAnchor && !e.target.closest("#hf-menu") && !e.target.closest(".hf-link")) closeHfMenu();
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHfMenu(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeHfMenu();
+});
 document.addEventListener("scroll", closeHfMenu, true);
 window.addEventListener("resize", closeHfMenu);
 
@@ -131,7 +150,7 @@ export function renderModelList() {
     return;
   }
   for (const cat of CATEGORY_ORDER) {
-    const group = state.models.filter(m => m.category === cat);
+    const group = state.models.filter((m) => m.category === cat);
     if (group.length === 0) continue;
     const title = document.createElement("div");
     title.className = "group-title";
@@ -140,14 +159,24 @@ export function renderModelList() {
     for (const m of group) {
       const usable = modelConfigured(m);
       const card = document.createElement("div");
-      card.className = "card" + (m.id === state.selectedModelId ? " selected" : "") + (usable ? "" : " unconfigured");
+      card.className =
+        "card" +
+        (m.id === state.selectedModelId ? " selected" : "") +
+        (usable ? "" : " unconfigured");
       card.innerHTML = `<div class="card-title">${esc(I18N.pick(m, "displayName"))}${usable ? "" : ` <span class="badge unconfigured">${esc(t("model.unconfigured"))}</span>`}<button class="dl-link" title="${esc(t("dl.cardBtn"))}">⬇</button>${m.hfUrl ? `<button class="hf-link" title="${esc(t("model.hfRepo"))}">HF ▾</button>` : ""}</div>
         <div class="card-family">${esc(m.family)} <span class="cat-badge cat-${cat}">${esc(categoryName(cat))}</span></div>
         <div class="card-desc">${esc(I18N.pick(m, "description"))}</div>`;
       if (!usable) card.title = t("model.unconfiguredTip");
-      card.querySelector(".dl-link").onclick = (e) => { e.stopPropagation(); openModelDlModal(m); };
+      card.querySelector(".dl-link").onclick = (e) => {
+        e.stopPropagation();
+        openModelDlModal(m);
+      };
       const hfBtn = card.querySelector(".hf-link");
-      if (hfBtn) hfBtn.onclick = (e) => { e.stopPropagation(); toggleHfMenu(hfBtn, m); };
+      if (hfBtn)
+        hfBtn.onclick = (e) => {
+          e.stopPropagation();
+          toggleHfMenu(hfBtn, m);
+        };
       card.onclick = () => {
         // 经路由选择模型：URL 同步为 #/model/<id>，前进/后退可还原
         go(modelRoute(m.id));

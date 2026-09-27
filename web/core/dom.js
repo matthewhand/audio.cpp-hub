@@ -12,8 +12,11 @@ export const el = (html) => {
 /* 服务端/用户可控字符串插入 HTML（文本或属性）前统一转义，防存储型 XSS */
 export function esc(v) {
   return String(v == null ? "" : v)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /* 仅放行 http(s) 链接，其余返回空串（用于 href 等 URL 属性） */
@@ -38,7 +41,9 @@ export function renderListError(container, message, retry) {
   if (!container) return;
   container.removeAttribute("aria-busy");
   container.innerHTML = "";
-  const box = el(`<div class="state-box load-error"><p class="state-msg hint"></p><div class="state-actions"></div></div>`);
+  const box = el(
+    `<div class="state-box load-error"><p class="state-msg hint"></p><div class="state-actions"></div></div>`,
+  );
   box.querySelector(".state-msg").textContent = message;
   if (retry) {
     const btn = el(`<button type="button" class="btn-ghost"></button>`);
@@ -55,9 +60,18 @@ export function bindMenuKeys(menuEl, sel) {
     const items = [...menuEl.querySelectorAll(sel)];
     if (!items.length) return;
     const i = items.indexOf(document.activeElement);
-    if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
-    else if (e.key === "Home") { e.preventDefault(); items[0].focus(); }
-    else if (e.key === "End") { e.preventDefault(); items[items.length - 1].focus(); }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      items[(i + 1) % items.length].focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      items[(i - 1 + items.length) % items.length].focus();
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      items[0].focus();
+    } else if (e.key === "End") {
+      e.preventDefault();
+      items[items.length - 1].focus();
+    }
   });
 }

@@ -17,7 +17,11 @@ export async function loadExecutables() {
     state.executables = Array.isArray(data) ? data : [];
   } catch (e) {
     state.executables = [];
-    renderListError($("exec-list"), t("common.loadFailed") + t("common.colon") + e.message, loadExecutables);
+    renderListError(
+      $("exec-list"),
+      t("common.loadFailed") + t("common.colon") + e.message,
+      loadExecutables,
+    );
     updateLaunchExec();
     return;
   }
@@ -125,7 +129,9 @@ function parseEnvText() {
 
 function envToText(env) {
   if (!env) return "";
-  return Object.entries(env).map(([k, v]) => k + "=" + v).join("\n");
+  return Object.entries(env)
+    .map(([k, v]) => k + "=" + v)
+    .join("\n");
 }
 
 /* 解析高级参数输入：每行一个 key=value（写入 server.json 模型条目的 session_options），
@@ -177,7 +183,14 @@ $("launch-exec").addEventListener("mousedown", (e) => {
 /* ---------- 设备探测：打开启动弹窗/切换程序时自动 --list-devices，设备改为下拉选择 ---------- */
 
 /* 探测输出中的后端名（ggml 注册名，不区分大小写）→ 启动表单的后端值，ROCm 对应 hip */
-const DEVICE_BACKEND_MAP = { cuda: "cuda", vulkan: "vulkan", metal: "metal", hip: "hip", rocm: "hip", cpu: "cpu" };
+const DEVICE_BACKEND_MAP = {
+  cuda: "cuda",
+  vulkan: "vulkan",
+  metal: "metal",
+  hip: "hip",
+  rocm: "hip",
+  cpu: "cpu",
+};
 
 /* 每个可执行文件的探测结果缓存（id → devices 数组）；可执行文件增删改时整体清空 */
 const deviceCache = {};
@@ -224,7 +237,8 @@ function renderDeviceOptions(devices) {
     opt.dataset.index = dev.index;
     opt.dataset.backend = dev.backend;
     const name = (dev.name || "").trim();
-    opt.textContent = (name || dev.backend + " " + dev.index) + "（" + dev.backend + ":" + dev.index + "）";
+    opt.textContent =
+      (name || dev.backend + " " + dev.index) + "（" + dev.backend + ":" + dev.index + "）";
     sel.appendChild(opt);
   }
   applyWantedDevice();
@@ -237,9 +251,13 @@ function applyWantedDevice() {
     sel.value = "";
     return;
   }
-  const opt = [...sel.options].find(o => o.value !== ""
-    && parseInt(o.dataset.index, 10) === wantedDevice.index
-    && (!wantedDevice.backend || DEVICE_BACKEND_MAP[(o.dataset.backend || "").toLowerCase()] === wantedDevice.backend));
+  const opt = [...sel.options].find(
+    (o) =>
+      o.value !== "" &&
+      parseInt(o.dataset.index, 10) === wantedDevice.index &&
+      (!wantedDevice.backend ||
+        DEVICE_BACKEND_MAP[(o.dataset.backend || "").toLowerCase()] === wantedDevice.backend),
+  );
   sel.value = opt ? opt.value : "";
 }
 
@@ -252,9 +270,13 @@ function selectedDeviceIndex() {
 /* 手动选择设备：记住选择并联动后端下拉框 */
 $("launch-device").onchange = () => {
   const opt = $("launch-device").selectedOptions[0];
-  wantedDevice = opt && opt.value !== ""
-    ? { index: parseInt(opt.dataset.index, 10), backend: DEVICE_BACKEND_MAP[(opt.dataset.backend || "").toLowerCase()] }
-    : null;
+  wantedDevice =
+    opt && opt.value !== ""
+      ? {
+          index: parseInt(opt.dataset.index, 10),
+          backend: DEVICE_BACKEND_MAP[(opt.dataset.backend || "").toLowerCase()],
+        }
+      : null;
   if (wantedDevice && wantedDevice.backend) $("launch-backend").value = wantedDevice.backend;
 };
 
@@ -278,7 +300,7 @@ $("exec-add-btn").onclick = async () => {
     name: $("exec-name").value.trim(),
     path: $("exec-path").value.trim(),
     note: $("exec-note").value.trim(),
-    env
+    env,
   };
   const editing = editingExecId !== null;
   try {
@@ -287,7 +309,8 @@ $("exec-add-btn").onclick = async () => {
     resetExecForm();
     loadExecutables();
   } catch (e) {
-    msg.textContent = t(editing ? "exec.saveFailed" : "exec.addFailed") + t("common.colon") + e.message;
+    msg.textContent =
+      t(editing ? "exec.saveFailed" : "exec.addFailed") + t("common.colon") + e.message;
   }
 };
 
@@ -323,7 +346,9 @@ export function closeLaunchModal() {
 }
 $("launch-open-btn").onclick = openLaunchModal;
 $("launch-modal-close").onclick = closeLaunchModal;
-launchModal.onclick = (e) => { if (e.target === launchModal) closeLaunchModal(); };
+launchModal.onclick = (e) => {
+  if (e.target === launchModal) closeLaunchModal();
+};
 registerOverlay("launch-modal", closeLaunchModal);
 
 /* 权重目录：服务器端文件选择器（目录模式） */
@@ -331,7 +356,7 @@ $("weights-browse-btn").onclick = async () => {
   const path = await FileBrowser.open({
     mode: "dir",
     title: t("launch.weightsBrowseTitle"),
-    startPath: $("launch-weights").value.trim()
+    startPath: $("launch-weights").value.trim(),
   });
   if (path) {
     $("launch-weights").value = path;
@@ -345,7 +370,7 @@ $("weights-gguf-btn").onclick = async () => {
     mode: "file",
     title: t("launch.weightsGgufBrowseTitle"),
     extensions: [".gguf"],
-    startPath: $("launch-weights").value.trim()
+    startPath: $("launch-weights").value.trim(),
   });
   if (path) {
     $("launch-weights").value = path;
@@ -360,7 +385,7 @@ $("exec-browse-btn").onclick = async () => {
     title: t("launch.execBrowseTitle"),
     extensions: [".exe"],
     defaultAll: true,
-    startPath: $("exec-path").value.trim()
+    startPath: $("exec-path").value.trim(),
   });
   if (path) {
     $("exec-path").value = path;
@@ -389,13 +414,13 @@ export function renderLaunchProfiles() {
   const sel = $("launch-profile");
   const current = sel.value;
   sel.innerHTML = `<option value="">${t("launch.profileNew")}</option>`;
-  for (const p of state.profiles.filter(p => p.modelId === state.selectedModelId)) {
+  for (const p of state.profiles.filter((p) => p.modelId === state.selectedModelId)) {
     const opt = document.createElement("option");
     opt.value = p.id;
     opt.textContent = p.name;
     sel.appendChild(opt);
   }
-  const has = (v) => [...sel.options].some(o => o.value === v);
+  const has = (v) => [...sel.options].some((o) => o.value === v);
   if (current && has(current)) {
     // 弹窗打开期间的重渲染（语言切换、保存/删除后）：保留用户当前选择
     sel.value = current;
@@ -415,7 +440,7 @@ export function renderLaunchProfiles() {
 }
 
 function selectedProfile() {
-  return state.profiles.find(p => p.id === $("launch-profile").value) || null;
+  return state.profiles.find((p) => p.id === $("launch-profile").value) || null;
 }
 
 function updateProfileButtons() {
@@ -433,8 +458,11 @@ function fillLaunchForm(p) {
   $("launch-port").value = p.port ?? "";
   $("launch-threads").value = p.threads ?? "";
   $("launch-adv-options").value = envToText(p.sessionOptions);
-  if (p.executableId && [...$("launch-exec").options].some(o => o.value === p.executableId)
-      && $("launch-exec").value !== p.executableId) {
+  if (
+    p.executableId &&
+    [...$("launch-exec").options].some((o) => o.value === p.executableId) &&
+    $("launch-exec").value !== p.executableId
+  ) {
     // 配置指向另一个可执行文件：设备列表随之失效，重新探测（当前选择在探测完成后还原）
     $("launch-exec").value = p.executableId;
     probeDevices(p.executableId);
@@ -454,7 +482,7 @@ function collectProfileFields(name) {
     name,
     modelId: state.selectedModelId,
     weightsPath: $("launch-weights").value.trim(),
-    backend: $("launch-backend").value
+    backend: $("launch-backend").value,
   };
   const execId = $("launch-exec").value;
   if (execId) fields.executableId = execId;
@@ -474,7 +502,10 @@ function collectProfileFields(name) {
 async function saveProfile(url, method, fields, failKey) {
   const msg = $("launch-msg");
   msg.textContent = "";
-  if (!fields.weightsPath) { msg.textContent = t("launch.weightsRequired"); return false; }
+  if (!fields.weightsPath) {
+    msg.textContent = t("launch.weightsRequired");
+    return false;
+  }
   try {
     if (method === "PUT") await apiPut(url, fields);
     else await apiPost(url, fields);
@@ -497,7 +528,9 @@ $("profile-save-btn").onclick = async () => {
   }
   if (await saveProfile("/api/profiles", "POST", fields, "profile.saveFailed")) {
     await loadProfiles();
-    const saved = state.profiles.find(p => p.modelId === state.selectedModelId && p.name === name);
+    const saved = state.profiles.find(
+      (p) => p.modelId === state.selectedModelId && p.name === name,
+    );
     if (saved) {
       $("launch-profile").value = saved.id;
       localStorage.setItem(launchProfileKey(), saved.id);
@@ -510,7 +543,8 @@ $("profile-save-btn").onclick = async () => {
 /* 启动模型时顺带动态保存参数：已有配置则原地更新，否则新建“默认”配置 */
 async function autoSaveProfile() {
   try {
-    const existing = selectedProfile() || state.profiles.find(p => p.modelId === state.selectedModelId);
+    const existing =
+      selectedProfile() || state.profiles.find((p) => p.modelId === state.selectedModelId);
     const fields = collectProfileFields(existing ? existing.name : t("profile.autoName"));
     if (!fields.weightsPath) return;
     if (existing) await apiPut("/api/profiles/" + existing.id, fields);
@@ -518,14 +552,16 @@ async function autoSaveProfile() {
     await loadProfiles();
     // 记住本次启动实际使用的配置：下次打开弹窗自动选中并回填，无需再手动切换
     const saved = existing
-      ? state.profiles.find(p => p.id === existing.id)
-      : state.profiles.find(p => p.modelId === state.selectedModelId && p.name === fields.name);
+      ? state.profiles.find((p) => p.id === existing.id)
+      : state.profiles.find((p) => p.modelId === state.selectedModelId && p.name === fields.name);
     if (saved) {
       localStorage.setItem(launchProfileKey(), saved.id);
       $("launch-profile").value = saved.id;
       updateProfileButtons();
     }
-  } catch (e) { /* 动态保存失败不影响启动结果 */ }
+  } catch (e) {
+    /* 动态保存失败不影响启动结果 */
+  }
 }
 
 $("profile-del-btn").onclick = async () => {
@@ -546,7 +582,7 @@ $("launch-btn").onclick = async () => {
   const body = {
     modelId: state.selectedModelId,
     weightsPath: $("launch-weights").value.trim(),
-    backend: $("launch-backend").value
+    backend: $("launch-backend").value,
   };
   const execId = $("launch-exec").value;
   if (execId) body.executableId = execId;

@@ -25,23 +25,36 @@
     violations.forEach(function (v) {
       console.group(v.impact + " · " + v.id + " — " + v.help);
       console.log(v.helpUrl);
-      v.nodes.forEach(function (n) { console.log(n.target.join(" "), n.failureSummary); });
+      v.nodes.forEach(function (n) {
+        console.log(n.target.join(" "), n.failureSummary);
+      });
       console.groupEnd();
     });
   }
 
   function run() {
-    if (!window.axe) { console.warn("[axe] axe-core 未加载"); return; }
-    window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] })
+    if (!window.axe) {
+      console.warn("[axe] axe-core 未加载");
+      return;
+    }
+    window.axe
+      .run(document, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] })
       .then(summarize)
-      .catch(function (e) { console.error("[axe] 审计失败", e); });
+      .catch(function (e) {
+        console.error("[axe] 审计失败", e);
+      });
   }
   window.runAxeAudit = run;
 
-  if (window.axe) { run(); return; }
+  if (window.axe) {
+    run();
+    return;
+  }
   var s = document.createElement("script");
   s.src = AXE_URL;
   s.onload = run;
-  s.onerror = function () { console.warn("[axe] 加载失败，请按文件头注释使用本地副本"); };
+  s.onerror = function () {
+    console.warn("[axe] 加载失败，请按文件头注释使用本地副本");
+  };
   document.head.appendChild(s);
 })();

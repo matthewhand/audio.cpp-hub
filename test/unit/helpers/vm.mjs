@@ -3,9 +3,14 @@
 import vm from "node:vm";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+export const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "..",
+);
 export const webDir = path.join(repoRoot, "web");
 
 export function readWeb(name) {
@@ -43,25 +48,68 @@ export function matchBrace(source, openIndex) {
   for (; i < source.length; i++) {
     const ch = source[i];
     const next = source[i + 1];
-    if (mode === "line") { if (ch === "\n") mode = null; continue; }
-    if (mode === "block") { if (ch === "*" && next === "/") { mode = null; i++; } continue; }
+    if (mode === "line") {
+      if (ch === "\n") mode = null;
+      continue;
+    }
+    if (mode === "block") {
+      if (ch === "*" && next === "/") {
+        mode = null;
+        i++;
+      }
+      continue;
+    }
     if (mode === "regex") {
-      if (ch === "\\") { i++; continue; }
-      if (ch === "[") { while (i + 1 < source.length && source[i + 1] !== "]") { if (source[i + 1] === "\\") i++; i++; } i++; continue; }
-      if (ch === "/") { mode = null; prevSig = "x"; }
+      if (ch === "\\") {
+        i++;
+        continue;
+      }
+      if (ch === "[") {
+        while (i + 1 < source.length && source[i + 1] !== "]") {
+          if (source[i + 1] === "\\") i++;
+          i++;
+        }
+        i++;
+        continue;
+      }
+      if (ch === "/") {
+        mode = null;
+        prevSig = "x";
+      }
       continue;
     }
     if (mode) {
-      if (ch === "\\") { i++; continue; }
+      if (ch === "\\") {
+        i++;
+        continue;
+      }
       if (ch === mode) mode = null;
       continue;
     }
-    if (ch === "/" && next === "/") { mode = "line"; i++; continue; }
-    if (ch === "/" && next === "*") { mode = "block"; i++; continue; }
-    if (ch === "/" && (prevSig === "" || REGEX_PREFIX.has(prevSig))) { mode = "regex"; continue; }
-    if (ch === "'" || ch === '"' || ch === "`") { mode = ch; prevSig = ch; continue; }
+    if (ch === "/" && next === "/") {
+      mode = "line";
+      i++;
+      continue;
+    }
+    if (ch === "/" && next === "*") {
+      mode = "block";
+      i++;
+      continue;
+    }
+    if (ch === "/" && (prevSig === "" || REGEX_PREFIX.has(prevSig))) {
+      mode = "regex";
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === "`") {
+      mode = ch;
+      prevSig = ch;
+      continue;
+    }
     if (ch === "{") depth++;
-    else if (ch === "}") { depth--; if (depth === 0) return i; }
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return i;
+    }
     if (!/\s/.test(ch)) prevSig = ch;
   }
   throw new Error("unbalanced braces");
@@ -71,6 +119,42 @@ export function matchBrace(source, openIndex) {
 export function makeFunction(fnSource, deps = {}) {
   const context = vm.createContext({ ...deps });
   return new vm.Script(`(${fnSource})`, { filename: "extracted-fn.js" }).runInContext(context);
+}
+
+/**
+ * 在 sandbox 里按运行时顺序加载拆分后的 i18n 词典（i18n.zh.js → window.I18N_ZH，
+ * i18n.en.js → window.I18N_EN）与框架 i18n.js，返回带可用 window.I18N 的 sandbox。
+ * 与 index.html 的 <script> 顺序一致。
+ */
+export function makeI18nSandbox(overrides = {}) {
+  const sandbox = makeBrowserSandbox(overrides);
+  runClassic(readWeb("i18n.zh.js"), sandbox, "i18n.zh.js");
+  runClassic(readWeb("i18n.en.js"), sandbox, "i18n.en.js");
+  runClassic(readWeb("i18n.js"), sandbox, "i18n.js");
+  return sandbox;
+}
+
+/**
+ * 真实加载 web/ 下的 ES module（如 core/dom.js、core/format.js）。
+ * 这些模块在求值时读 window.I18N（core/i18n.js），因此先把浏览器全局桥接到
+ * globalThis，用 makeI18nSandbox 造出可用 I18N 后再 dynamic import；import 完成后还原。
+ * name 相对 webDir，如 "core/dom.js"。
+ */
+export async function importWebModule(name, overrides = {}) {
+  const sandbox = makeI18nSandbox(overrides);
+  const keys = ["window", "document", "localStorage", "navigator"];
+  const saved = new Map(keys.map((k) => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
+  for (const k of keys)
+    Object.defineProperty(globalThis, k, { value: sandbox[k], configurable: true, writable: true });
+  try {
+    return await import(pathToFileURL(path.join(webDir, name)).href);
+  } finally {
+    for (const k of keys) {
+      const d = saved.get(k);
+      if (d) Object.defineProperty(globalThis, k, d);
+      else delete globalThis[k];
+    }
+  }
 }
 
 /** 轻量 localStorage / navigator / document stub，供 i18n.js、wav.js 加载。 */
@@ -86,15 +170,15 @@ export function makeBrowserSandbox(overrides = {}) {
       setItem: (k, v) => store.set(k, String(v)),
       removeItem: (k) => store.delete(k),
       clear: () => store.clear(),
-      _dump: () => Object.fromEntries(store)
+      _dump: () => Object.fromEntries(store),
     },
     document: {
       documentElement,
       addEventListener: (evt, cb) => listeners.push([evt, cb]),
       querySelectorAll: () => [],
-      hidden: false
+      hidden: false,
     },
-    ...overrides
+    ...overrides,
   };
   return sandbox;
 }
