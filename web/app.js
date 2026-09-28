@@ -80,13 +80,123 @@ function markRowEnter(node, key) {
 /* 列表加载失败的可见提示 + 重试按钮（替代空白列表） */
 function renderListError(container, message, retry) {
   if (!container) return;
+  renderStateError(container, new Error(message), retry, true);
+}
+
+/* ---------- 统一异步状态：toast / 骨架 / 空态 / 错误态 ---------- */
+const TOAST_LEVELS = ["success", "error", "info", "warn"];
+const TOAST_DEFAULT_TIMEOUT = 8000;
+
+/* toast 组件：notify({level,message,timeout}) → {node, dismiss()}
+   level: success | error | info | warn；timeout 毫秒，0 表示不自动关闭；
+   堆叠渲染在 #toast-root（ARIA live region），hover 暂停自动关闭 */
+function notify(opts) {
+  const o = opts || {};
+  const level = TOAST_LEVELS.includes(o.level) ? o.level : "info";
+  const root = $("toast-root");
+  if (!root) return { node: null, dismiss() {} };
+  const node = el(`<div class="toast ${level}" role="${level === "error" ? "alert" : "status"}">
+    <span class="toast-text"></span><button type="button" class="toast-close">×</button></div>`);
+  node.querySelector(".toast-text").textContent = o.message == null ? "" : String(o.message);
+  const closeBtn = node.querySelector(".toast-close");
+  closeBtn.setAttribute("aria-label", t("common.dismiss"));
+  closeBtn.onclick = () => dismissToast(node);
+  root.appendChild(node);
+  const timeout = o.timeout === undefined ? TOAST_DEFAULT_TIMEOUT : Number(o.timeout);
+  if (timeout > 0) {
+    let timer = setTimeout(() => dismissToast(node), timeout);
+    node.addEventListener("mouseenter", () => clearTimeout(timer));
+    node.addEventListener("mouseleave", () => { timer = setTimeout(() => dismissToast(node), timeout); });
+  }
+  return { node, dismiss: () => dismissToast(node) };
+}
+/* 兼容旧调用：showToast(level, message) */
+function showToast(level, message) {
+  return notify({ level: level === "warning" ? "warn" : level, message });
+}
+
+/* 解析后端错误响应，保留 code/params 供 i18n 映射 */
+function parseApiError(text) {
+  /** @type {HubHttpError} */
+  const e = new Error(text ? I18N.errText(text) : t("common.loadFailed"));
+  try {
+    const j = JSON.parse(text);
+    if (j && typeof j === "object") {
+      if (j.code) { e.code = j.code; e.params = j.params || {}; }
+      else if (j.error) e.message = String(j.error);
+    }
+  } catch (err) { /* 非 JSON：保留原文 */ }
+  return e;
+}
+/* 错误信息 i18n：优先 err.<code> 映射，回退 e.message */
+function stateErrorMessage(e) {
+  if (e && e.code) {
+    const key = "err." + e.code;
+    if (I18N.t(key) !== key) return I18N.t(key, e.params || {});
+  }
+  return e && e.message ? e.message : String(e || "");
+}
+function isOpen(id) {
+  const n = $(id);
+  return !!n && !n.classList.contains("hidden");
+}
+/* 骨架屏：列表拉取期间占位 */
+function showSkeleton(container, rows) {
+  if (!container) return;
+  container.setAttribute("aria-busy", "true");
   container.innerHTML = "";
-  const box = el(`<div class="hint load-error"><span></span><button type="button" class="btn-ghost"></button></div>`);
-  box.querySelector("span").textContent = message;
-  const btn = box.querySelector("button");
-  btn.textContent = t("common.retry");
-  btn.onclick = retry;
+  const wrap = el(`<div class="skeleton" role="status" aria-label="${esc(t("state.loading"))}"></div>`);
+  const n = Math.max(1, rows || 4);
+  for (let i = 0; i < n; i++) wrap.appendChild(el(`<div class="skeleton-card"></div>`));
+  container.appendChild(wrap);
+}
+/* 空态：message + 可选 CTA 按钮 */
+function renderEmptyState(container, message, cta) {
+  if (!container) return;
+  container.removeAttribute("aria-busy");
+  container.innerHTML = "";
+  const box = el(`<div class="state-box empty-state"><p class="state-msg hint"></p><div class="state-actions"></div></div>`);
+  box.querySelector(".state-msg").textContent = message;
+  if (cta && cta.label) {
+    const b = el(`<button type="button" class="btn-ghost"></button>`);
+    b.textContent = cta.label;
+    b.onclick = cta.onClick;
+    box.querySelector(".state-actions").appendChild(b);
+  }
   container.appendChild(box);
+}
+/* 错误态：message + 重试按钮；raw=true 时 message 视为已组装（旧 renderListError 语义） */
+function renderStateError(container, error, retry, raw) {
+  if (!container) return;
+  container.removeAttribute("aria-busy");
+  container.innerHTML = "";
+  const box = el(`<div class="state-box load-error"><p class="state-msg hint"></p><div class="state-actions"></div></div>`);
+  box.querySelector(".state-msg").textContent = raw
+    ? (error && error.message ? error.message : String(error || ""))
+    : t("common.loadFailed") + t("common.colon") + stateErrorMessage(error);
+  if (retry) {
+    const b = el(`<button type="button" class="btn-ghost"></button>`);
+    b.textContent = t("common.retry");
+    b.onclick = retry;
+    box.querySelector(".state-actions").appendChild(b);
+  }
+  container.appendChild(box);
+}
+/* 按钮内联 loading 态：替代不必要的全局遮罩 */
+function setButtonBusy(btn, busy, busyLabel) {
+  if (!btn) return;
+  if (busy) {
+    if (btn.dataset.idleText === undefined) btn.dataset.idleText = btn.textContent;
+    btn.classList.add("btn-busy");
+    btn.disabled = true;
+    btn.setAttribute("aria-busy", "true");
+    if (busyLabel) btn.textContent = busyLabel;
+  } else {
+    btn.classList.remove("btn-busy");
+    btn.disabled = false;
+    btn.removeAttribute("aria-busy");
+    if (btn.dataset.idleText !== undefined) { btn.textContent = btn.dataset.idleText; delete btn.dataset.idleText; }
+  }
 }
 const selectedModel = () => models.find(m => m.id === selectedModelId);
 
@@ -145,15 +255,110 @@ function closeDrawer() {
 $("menu-toggle").onclick = openDrawer;
 $("drawer-overlay").onclick = closeDrawer;
 
-/* ---------- 历史全屏面板：页头 🕘 打开；遮罩点击 / × / Esc 关闭 ---------- */
-$("history-btn").onclick = () => {
-  $("history-panel").classList.remove("hidden");
-  focusDialog($("history-panel"));
-  loadHistory();
+/* ---------- Hash 路由（#67）：URL 为视图状态来源，localStorage 仅作默认落地 ----------
+   路由表：#/model/<id> #/instance/<id> #/history #/voices #/downloads #/settings
+   打开/关闭面板与选择模型统一经 go() 改 hash，applyRoute() 是唯一应用视图的地方，
+   因此浏览器前进/后退可自然还原，深链接刷新后也能恢复面板与选中项。 */
+const ROUTE_VIEWS = ["history", "voices", "downloads", "settings"];
+let applyingRoute = false;      // applyRoute 执行中：关闭函数不得再改 hash（防递归）
+let pendingModelId = null;      // 模型列表未加载完成时的期望模型
+let pendingInstanceId = null;   // 实例列表未加载完成时的期望实例
+let pendingSettingsSection = null;
+
+function parseRoute(hash) {
+  const s = String(hash || "").replace(/^#\/?/, "");
+  const parts = s.split("/").filter(Boolean);
+  if (parts[0] === "model" && parts[1]) return { view: "model", id: decodeURIComponent(parts[1]) };
+  if (parts[0] === "instance" && parts[1]) return { view: "instance", id: decodeURIComponent(parts[1]) };
+  if (ROUTE_VIEWS.includes(parts[0])) return { view: parts[0] };
+  return { view: "home" };
+}
+function modelRoute(id) {
+  const mid = id || selectedModelId;
+  return mid ? "#/model/" + encodeURIComponent(mid) : "#/";
+}
+function defaultRoute() { return modelRoute(); }
+/* 改 hash 触发 hashchange → applyRoute；同 hash 时直接重放（用于重试） */
+function go(hash) {
+  if (location.hash === hash) { applyRoute(); return; }
+  location.hash = hash;
+}
+/* 页头按钮：同一面板再次点击则收起（回到默认模型路由） */
+function goPanel(route) {
+  const target = "#/" + route;
+  go(location.hash === target ? defaultRoute() : target);
+}
+window.hubNavigate = go;
+window.hubTogglePanel = goPanel;
+window.hubApplyRoute = applyRoute;
+/* 由各 closeX() 调用：仅当当前路由仍指向该面板时才回退（避免自动关闭误导航） */
+window.hubPanelClosed = function (view) {
+  if (applyingRoute) return;
+  if (parseRoute(location.hash).view !== view) return;
+  go(defaultRoute());
 };
+
+function selectModelById(id) {
+  if (!models.length) { pendingModelId = id; return; }
+  const m = models.find(x => x.id === id);
+  if (!m || m.id === selectedModelId) return;
+  selectedModelId = m.id;
+  localStorage.setItem("hub-model", m.id);
+  renderModelList();
+  updateQuickLaunchTitle();
+  restoreWeightsPath();
+  refreshInstances();
+  renderWorkspace();
+  closeDrawer();
+}
+
+function applyRoute() {
+  if (applyingRoute) return;
+  applyingRoute = true;
+  try {
+    const r = parseRoute(location.hash);
+    // 先关闭非目标面板（仅关闭确实打开的，避免误触焦点还原）
+    if (r.view !== "history" && isOpen("history-panel")) closeHistoryPanel();
+    if (r.view !== "voices" && isOpen("voices-panel") && window.closeVoicesPanel) window.closeVoicesPanel();
+    if (r.view !== "downloads" && isOpen("downloads-modal")) closeDownloadsModal();
+    if (r.view !== "settings" && isOpen("settings-modal")) closeSettingsModal();
+    if (r.view !== "instance") {
+      pendingInstanceId = null;
+      if (isOpen("instance-detail-modal")) closeInstanceDetail();
+    }
+    // 再打开目标面板
+    if (r.view === "history") openHistoryPanel();
+    else if (r.view === "voices") { if (window.openVoicesPanel) window.openVoicesPanel(); }
+    else if (r.view === "downloads") openDownloadsModal();
+    else if (r.view === "settings") {
+      openSettingsModal(pendingSettingsSection || "general");
+      pendingSettingsSection = null;
+    } else if (r.view === "instance") {
+      const inst = instances.find(i => i.id === r.id);
+      if (inst) { pendingInstanceId = null; openInstanceDetail(inst); }
+      else pendingInstanceId = r.id;
+    }
+    if (r.view === "model") selectModelById(r.id);
+  } finally {
+    applyingRoute = false;
+  }
+}
+window.addEventListener("hashchange", applyRoute);
+
+/* ---------- 历史全屏面板：页头 🕘 打开；遮罩点击 / × / Esc 关闭 ---------- */
+function openHistoryPanel() {
+  const wasHidden = $("history-panel").classList.contains("hidden");
+  $("history-panel").classList.remove("hidden");
+  if (wasHidden) {
+    focusDialog($("history-panel"));
+    loadHistory();
+  }
+}
+$("history-btn").onclick = () => goPanel("history");
 function closeHistoryPanel() {
   $("history-panel").classList.add("hidden");
   restoreDialogFocus();
+  window.hubPanelClosed("history");
 }
 $("history-close").onclick = closeHistoryPanel;
 $("history-panel").addEventListener("mousedown", (e) => {
@@ -189,16 +394,26 @@ applyHistoryPrivacy();
 /* 首次加载：非 2xx 由 ApiError 统一抛出（code/params 已本地化到 message），
    非数组返回体由 Api.list 拦成 CLIENT_BAD_SHAPE，两者都走同一处可见错误 + 重试。 */
 async function loadModels() {
+  showSkeleton($("model-list"), 5);
   try {
     models = await Api.list("/api/models");
   } catch (e) {
-    renderListError($("model-list"), t("common.loadFailed") + t("common.colon") + e.message, loadModels);
+    renderStateError($("model-list"), e, loadModels);
     return;
   }
   if (models.length && !selectedModelId) {
-    // 刷新后恢复上次选中的模型（否则回到第一个模型，其历史/实例视图会让用户误以为数据丢失）
-    const saved = localStorage.getItem("hub-model");
-    selectedModelId = models.some(m => m.id === saved) ? saved : models[0].id;
+    // 路由优先（深链接），其次恢复上次选中的模型（localStorage 仅作默认落地）
+    const r = parseRoute(location.hash);
+    const wanted = pendingModelId
+      || (r.view === "model" ? r.id : null)
+      || localStorage.getItem("hub-model");
+    selectedModelId = models.some(m => m.id === wanted) ? wanted : models[0].id;
+    pendingModelId = null;
+  }
+  // 深链接指向不存在的模型：用 replaceState 修正 URL（不新增历史记录、不触发 hashchange）
+  const cur = parseRoute(location.hash);
+  if (selectedModelId && cur.view === "model" && cur.id !== selectedModelId) {
+    history.replaceState(null, "", modelRoute(selectedModelId));
   }
   renderModelList();
   updateQuickLaunchTitle();
@@ -270,7 +485,12 @@ window.addEventListener("resize", closeHfMenu);
 function renderModelList() {
   closeHfMenu();
   const list = $("model-list");
+  list.removeAttribute("aria-busy");
   list.innerHTML = "";
+  if (models.length === 0) {
+    renderEmptyState(list, t("model.empty"), { label: t("common.retry"), onClick: loadModels });
+    return;
+  }
   for (const cat of CATEGORY_ORDER) {
     const group = models.filter(m => m.category === cat);
     if (group.length === 0) continue;
@@ -290,14 +510,8 @@ function renderModelList() {
       const hfBtn = card.querySelector(".hf-link");
       if (hfBtn) hfBtn.onclick = (e) => { e.stopPropagation(); toggleHfMenu(hfBtn, m); };
       card.onclick = () => {
-        selectedModelId = m.id;
-        localStorage.setItem("hub-model", m.id);
-        renderModelList();
-        updateQuickLaunchTitle();
-        restoreWeightsPath();
-        refreshInstances();
-        renderWorkspace();
-        closeDrawer();
+        // 经路由选择模型：URL 同步为 #/model/<id>，前进/后退可还原
+        go(modelRoute(m.id));
       };
       list.appendChild(card);
     }
@@ -325,6 +539,7 @@ function openSettingsModal(section) {
 function closeSettingsModal() {
   settingsModal.classList.add("hidden");
   restoreDialogFocus();
+  window.hubPanelClosed("settings");
 }
 function activateSettingsSection(section) {
   settingsSection = section;
@@ -338,8 +553,8 @@ function activateSettingsSection(section) {
 document.querySelectorAll(".settings-nav-item").forEach(btn => {
   btn.onclick = () => activateSettingsSection(btn.dataset.section);
 });
-$("settings-btn").onclick = () => openSettingsModal("general");
-$("exec-goto-btn").onclick = () => openSettingsModal("executables");
+$("settings-btn").onclick = () => { pendingSettingsSection = "general"; goPanel("settings"); };
+$("exec-goto-btn").onclick = () => { pendingSettingsSection = "executables"; go("#/settings"); };
 $("settings-modal-close").onclick = closeSettingsModal;
 settingsModal.onclick = (e) => { if (e.target === settingsModal) closeSettingsModal(); };
 
@@ -436,9 +651,8 @@ $("https-generate-btn").onclick = async () => {
   const password = $("https-password").value.trim();
   if (password) body.password = password;
   const btn = $("https-generate-btn");
-  btn.disabled = true;
-  btn.textContent = t("https.generating");
-  showBusy(t("https.busy"));
+  // 证书生成是本地化的长任务：按钮内联 loading 即可，无需全局遮罩
+  setButtonBusy(btn, true, t("https.generating"));
   try {
     const res = await fetch("/api/cert/generate", {
       method: "POST",
@@ -458,9 +672,7 @@ $("https-generate-btn").onclick = async () => {
   } catch (e) {
     msg.textContent = t("https.generateFailed") + t("common.colon") + e.message;
   } finally {
-    hideBusy();
-    btn.disabled = false;
-    btn.textContent = t("https.generate");
+    setButtonBusy(btn, false);
   }
 };
 
@@ -527,7 +739,7 @@ $("exec-browse-btn").onclick = async () => {
 /* ---------- 弹窗可访问性：焦点管理 / Esc 只关最上层 ---------- */
 /* 可见弹窗按 DOM 顺序（≈ 堆叠顺序），最后一个即最上层 */
 const OVERLAY_IDS = ["instance-detail-modal", "launch-modal", "downloads-modal",
-  "model-dl-modal", "settings-modal", "history-panel", "voices-panel"];
+  "model-dl-modal", "settings-modal", "command-palette", "history-panel", "voices-panel"];
 const FOCUSABLE_SEL = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 let dialogReturnFocus = null;
 
@@ -562,6 +774,7 @@ function closeTopmostOverlay() {
   else if (overlay.id === "downloads-modal") closeDownloadsModal();
   else if (overlay.id === "model-dl-modal") closeModelDlModal();
   else if (overlay.id === "instance-detail-modal") closeInstanceDetail();
+  else if (overlay.id === "command-palette") closeCommandPalette();
   else overlay.classList.add("hidden");
 }
 
@@ -749,7 +962,8 @@ function updateLaunchExec() {
 $("launch-exec").addEventListener("mousedown", (e) => {
   if (executables.length === 0) {
     e.preventDefault();
-    openSettingsModal("executables");
+    pendingSettingsSection = "executables";
+    go("#/settings");
   }
 });
 
@@ -1128,9 +1342,16 @@ $("launch-btn").onclick = async () => {
 
 /* ---------- 实例列表 + 状态条（每 2s 轮询） ---------- */
 let instancePoller = null;
+let instancesLoaded = false;   // 首次成功拉取前显示骨架屏 / 失败时给可见错误+重试
 /* 轮询数据回调：只在成功时更新视图；失败由 Api.poll 的 onError 处理 */
 function applyInstances(data) {
+  instancesLoaded = true;
   instances = data;
+  // 深链接 #/instance/<id>：实例列表就绪后补齐打开详情
+  if (pendingInstanceId) {
+    const inst = instances.find(i => i.id === pendingInstanceId);
+    if (inst) { pendingInstanceId = null; openInstanceDetail(inst); }
+  }
   renderInstanceList();
   updateInstanceBar();
 }
@@ -1147,12 +1368,16 @@ function refreshInstances() {
 
 function renderInstanceList() {
   const list = $("instance-list");
+  list.removeAttribute("aria-busy");
   // 展示全部实例（不再按选中模型过滤）：就绪 > 启动中 > 其它，可用的始终排在最前
   const order = { READY: 0, STARTING: 1 };
   const sorted = [...instances].sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2));
   list.innerHTML = "";
   if (instances.length === 0) {
-    list.innerHTML = `<div class="hint">${t("instance.empty")}</div>`;
+    renderEmptyState(list, t("instance.empty"), {
+      label: t("instance.create"),
+      onClick: openLaunchModal
+    });
     return;
   }
   for (const inst of sorted) {
@@ -1176,7 +1401,7 @@ function renderInstanceList() {
     }
     card.innerHTML = html;
     const detailBtn = card.querySelector(".detail-btn");
-    if (detailBtn) detailBtn.onclick = () => openInstanceDetail(inst);
+    if (detailBtn) detailBtn.onclick = () => go("#/instance/" + encodeURIComponent(inst.id));
     const stopBtn = card.querySelector(".stop-btn");
     if (stopBtn) {
       stopBtn.onclick = async () => {
@@ -1254,6 +1479,7 @@ function closeInstanceDetail() {
   detailInstanceId = null;
   instanceDetailModal.classList.add("hidden");
   restoreDialogFocus();
+  window.hubPanelClosed("instance");
 }
 function renderInstanceDetail(inst) {
   const body = $("instance-detail-body");
@@ -1307,8 +1533,7 @@ function renderInstanceDetail(inst) {
   }
 }
 $("instance-detail").onclick = () => {
-  const inst = instances.find(i => i.id === activeInstanceId);
-  if (inst) openInstanceDetail(inst);
+  if (activeInstanceId) go("#/instance/" + encodeURIComponent(activeInstanceId));
 };
 $("instance-detail-close").onclick = closeInstanceDetail;
 instanceDetailModal.onclick = (e) => { if (e.target === instanceDetailModal) closeInstanceDetail(); };
@@ -1317,7 +1542,6 @@ instanceDetailModal.onclick = (e) => { if (e.target === instanceDetailModal) clo
 let downloads = [];
 let mdlPackages = null;
 let mdlModel = null;
-let downloadsPoller = null;
 
 function fmtBytes(n) {
   if (n == null || n < 0) return "?";
@@ -1329,13 +1553,20 @@ function fmtBytes(n) {
 
 const DL_STATUS_CLASS = { RUNNING: "starting", PENDING: "starting", PAUSED: "stopped", DONE: "ready", FAILED: "error" };
 
+let downloadsPoller = null;
+let downloadsLoaded = false;   // 首次成功拉取前才显示骨架屏 / 失败时才给可见错误
 function applyDownloads(data) {
+  downloadsLoaded = true;
   downloads = data;
   updateDlBadge();
-  if (!$("downloads-modal").classList.contains("hidden")) renderDownloadList();
+  if (isOpen("downloads-modal")) renderDownloadList();
 }
-/* 失败静默：下载列表是 2s 轮询的附属信息，瞬时失败无需打扰用户（下轮自愈） */
-function onDownloadsError() { /* 静默 */ }
+/* 失败处理：已加载过一次就静默（下载列表是 2s 轮询的附属信息，瞬时失败下轮自愈）；
+   从未加载成功且面板正开着时，给可见错误 + 重试，避免只剩骨架屏。 */
+function onDownloadsError(e) {
+  if (downloadsLoaded) return;
+  if (isOpen("downloads-modal")) renderStateError($("dl-list"), e, refreshDownloads);
+}
 /* 立即拉一次：复用轮询句柄（可 await），轮询未建立时直接请求一次 */
 function refreshDownloads() {
   if (downloadsPoller) return downloadsPoller.refresh();
@@ -1353,21 +1584,25 @@ function updateDlBadge() {
 function openDownloadsModal() {
   renderDownloadList();
   $("downloads-modal").classList.remove("hidden");
+  // 首次数据尚未返回时显示骨架并立即拉取
+  if (!downloadsLoaded) { showSkeleton($("dl-list"), 3); refreshDownloads(); }
   focusDialog($("downloads-modal"));
 }
 function closeDownloadsModal() {
   $("downloads-modal").classList.add("hidden");
   restoreDialogFocus();
+  window.hubPanelClosed("downloads");
 }
-$("downloads-btn").onclick = openDownloadsModal;
+$("downloads-btn").onclick = () => goPanel("downloads");
 $("downloads-modal-close").onclick = closeDownloadsModal;
 $("downloads-modal").onclick = (e) => { if (e.target === $("downloads-modal")) closeDownloadsModal(); };
 
 function renderDownloadList() {
   const list = $("dl-list");
+  list.removeAttribute("aria-busy");
   list.innerHTML = "";
   if (downloads.length === 0) {
-    list.innerHTML = `<div class="hint exec-empty">${t("dl.empty")}</div>`;
+    renderEmptyState(list, t("dl.empty"));
     return;
   }
   for (const d of downloads) {
@@ -1518,7 +1753,7 @@ $("mdl-start").onclick = async () => {
     closeModelDlModal();
     showToast("info", t("dl.started"));
     await refreshDownloads();
-    openDownloadsModal();
+    go("#/downloads");
   } catch (e) {
     msg.textContent = t("dl.startFailed") + t("common.colon") + e.message;
   } finally {
@@ -1552,15 +1787,6 @@ function applyEvents(data) {
 /* 失败静默：事件流是通知性数据，瞬时失败丢一轮即可（服务端窗口只保留最近 20 条） */
 function onEventsError() { /* 静默 */ }
 
-function showToast(level, message) {
-  const root = $("toast-root");
-  const node = el(`<div class="toast ${level === "error" ? "error" : "info"}">
-    <span class="toast-text"></span><button class="toast-close">×</button></div>`);
-  node.querySelector(".toast-text").textContent = message;
-  node.querySelector(".toast-close").onclick = () => dismissToast(node);
-  root.appendChild(node);
-  setTimeout(() => dismissToast(node), 8000);
-}
 /* 先播放滑出动画再移除节点；reduced-motion 下动画被压缩，由 timeout 兜底 */
 function dismissToast(node) {
   if (!node.isConnected || node.classList.contains("leaving")) return;
@@ -1692,23 +1918,19 @@ async function reattachTasks() {
   } catch (e) { /* 忽略：下次切换/轮询再试 */ }
 }
 
-/* ---------- 任务等待遮罩（spinner + 实时计时） ---------- */
-let busyTimer = null;
-function showBusy(label) {
-  $("busy-label").textContent = label;
-  const start = performance.now();
-  $("busy-elapsed").textContent = "0.0s";
-  $("busy-overlay").classList.remove("hidden");
-  busyTimer = setInterval(() => {
-    $("busy-elapsed").textContent = ((performance.now() - start) / 1000).toFixed(1) + "s";
-  }, 100);
-  return start;
-}
-function hideBusy() {
-  clearInterval(busyTimer);
-  busyTimer = null;
-  $("busy-overlay").classList.add("hidden");
-}
+/* #busy-overlay（全局等待遮罩 + 实时耗时）的接线已移除：唯一使用方（HTTPS 证书生成）
+   按 #88 的统一异步状态改用 setButtonBusy() 按钮内联 loading。遮罩的 DOM / 样式 /
+   i18n 文案仍保留在 index.html 与 style.css，需要全局阻塞反馈时按下列实现重新接线。 */
+/* function showBusy(label) {
+     $("busy-label").textContent = label;
+     const start = performance.now();
+     $("busy-elapsed").textContent = "0.0s";
+     $("busy-overlay").classList.remove("hidden");
+     const timer = setInterval(() => {
+       $("busy-elapsed").textContent = ((performance.now() - start) / 1000).toFixed(1) + "s";
+     }, 100);
+     return () => { clearInterval(timer); $("busy-overlay").classList.add("hidden"); };
+   } */
 
 function b64ToBlob(b64, mime) {
   const bin = atob(b64);
@@ -2269,13 +2491,15 @@ async function loadHistory() {
     return;
   }
   let items, groups;
+  // 尚无任何实际行（仅空态/错误态）时显示骨架；后续轮询/刷新复用已有节点，避免闪动
+  if (!$("history-list").querySelector(".history-row, .history-group-header")) showSkeleton($("history-list"), 3);
   try {
     const [res, gres] = await Promise.all([
       fetch("/api/history/" + modelId),
       fetch("/api/history/" + modelId + "/groups")
     ]);
     const text = await res.text();
-    if (!res.ok) throw new Error(I18N.errText(text));
+    if (!res.ok) throw parseApiError(text);
     items = JSON.parse(text);
     groups = gres.ok ? await gres.json() : [];
   } catch (e) {
@@ -2283,11 +2507,7 @@ async function loadHistory() {
     if (historyModelId() !== modelId) return;
     sidebarHistoryItems = [];
     sidebarGroups = [];
-    const list = $("history-list");
-    list.innerHTML = "";
-    const hint = el(`<div class="hint history-empty"></div>`);
-    hint.textContent = t("history.listFailed") + t("common.colon") + e.message;
-    list.appendChild(hint);
+    renderStateError($("history-list"), e, loadHistory);
     return;
   }
   // 同上：响应晚到时当前模型可能已不是 modelId，过期数据不得渲染
@@ -2313,11 +2533,11 @@ function taskRowSig(task, ctx) {
    避免轮询重渲染打断历史行中正在播放的音频 */
 function renderSidebarList() {
   const list = $("history-list");
+  list.removeAttribute("aria-busy");
   const modelId = historyModelId();
   if (!modelId) {
     sidebarRows.clear();
-    list.innerHTML = "";
-    list.appendChild(el(`<div class="hint history-empty">${t("history.empty")}</div>`));
+    renderEmptyState(list, t("history.empty"));
     return;
   }
   const tasks = [...taskViews.values()].filter(x => x.modelId === modelId);
@@ -2358,7 +2578,7 @@ function renderSidebarList() {
     if (list.children[i] !== desired[i]) list.insertBefore(desired[i], list.children[i] || null);
   }
   while (list.children.length > desired.length) list.removeChild(list.lastChild);
-  if (!desired.length) list.appendChild(el(`<div class="hint history-empty">${t("history.empty")}</div>`));
+  if (!desired.length) renderEmptyState(list, t("history.empty"));
 }
 
 /* 单行任务：复用 history-row 结构。进行中显示状态与「取消」；DONE 非 TTS 可「载入」重新渲染结果；
@@ -3305,6 +3525,114 @@ function renderOtherResult(json) {
   }
 }
 
+/* ---------- 命令面板（Ctrl/Cmd-K）：跳转模型 / 实例 / 面板 ---------- */
+let paletteItems = [];
+let paletteActive = 0;
+function paletteSources() {
+  const items = [];
+  for (const [route, key] of [["history", "history.title"], ["voices", "voices.title"],
+    ["downloads", "dl.managerTitle"], ["settings", "settings.title"]]) {
+    const label = t(key);
+    items.push({ group: t("palette.group.panels"), label, sub: "#/" + route, search: label + " " + route, run: () => go("#/" + route) });
+  }
+  for (const m of models) {
+    const label = I18N.pick(m, "displayName") || m.id;
+    items.push({ group: t("nav.models"), label, sub: categoryName(m.category), search: label + " " + m.id + " " + m.family, run: () => go(modelRoute(m.id)) });
+  }
+  for (const inst of instances) {
+    const label = inst.instanceName || inst.modelId;
+    items.push({ group: t("nav.instances"), label, sub: statusText(inst.status) + " ｜ #" + inst.id, search: label + " " + inst.id + " " + inst.modelId, run: () => go("#/instance/" + encodeURIComponent(inst.id)) });
+  }
+  return items;
+}
+function renderPalette(query) {
+  const q = String(query || "").trim().toLowerCase();
+  const all = paletteSources();
+  paletteItems = q ? all.filter(it => it.search.toLowerCase().includes(q)) : all;
+  if (paletteActive >= paletteItems.length) paletteActive = 0;
+  const list = $("command-palette-list");
+  list.innerHTML = "";
+  if (!paletteItems.length) {
+    const empty = el(`<div class="cp-empty"></div>`);
+    empty.textContent = t("palette.empty");
+    list.appendChild(empty);
+    return;
+  }
+  let lastGroup = null;
+  paletteItems.forEach((it, i) => {
+    if (it.group !== lastGroup) {
+      lastGroup = it.group;
+      const g = el(`<div class="cp-group"></div>`);
+      g.textContent = it.group;
+      list.appendChild(g);
+    }
+    const row = el(`<div class="cp-item" role="option" data-idx="${i}"><span class="cp-item-label"></span><span class="cp-item-sub"></span></div>`);
+    row.querySelector(".cp-item-label").textContent = it.label;
+    row.querySelector(".cp-item-sub").textContent = it.sub || "";
+    if (i === paletteActive) row.classList.add("active");
+    row.onmouseenter = () => setPaletteActive(i);
+    row.onclick = () => runPaletteItem(i);
+    list.appendChild(row);
+  });
+  scrollPaletteActive();
+}
+function setPaletteActive(i) {
+  paletteActive = i;
+  $("command-palette-list").querySelectorAll(".cp-item").forEach(r =>
+    r.classList.toggle("active", Number(r.dataset.idx) === i));
+  scrollPaletteActive();
+}
+function scrollPaletteActive() {
+  const activeEl = $("command-palette-list").querySelector(".cp-item.active");
+  if (activeEl) activeEl.scrollIntoView({ block: "nearest" });
+}
+function openCommandPalette() {
+  const input = $("command-palette-input");
+  input.value = "";
+  paletteActive = 0;
+  renderPalette("");
+  $("command-palette").classList.remove("hidden");
+  focusDialog($("command-palette"));
+  input.focus();
+  input.select();
+}
+function closeCommandPalette() {
+  $("command-palette").classList.add("hidden");
+  restoreDialogFocus();
+}
+function runPaletteItem(i) {
+  const it = paletteItems[i];
+  if (!it) return;
+  closeCommandPalette();
+  it.run();
+}
+$("command-palette-input").addEventListener("input", (e) => { paletteActive = 0; renderPalette(e.target.value); });
+$("command-palette-input").addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    if (paletteItems.length) setPaletteActive((paletteActive + 1) % paletteItems.length);
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    if (paletteItems.length) setPaletteActive((paletteActive - 1 + paletteItems.length) % paletteItems.length);
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    runPaletteItem(paletteActive);
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation();
+    closeCommandPalette();
+  }
+});
+$("command-palette").addEventListener("mousedown", (e) => {
+  if (e.target === e.currentTarget) closeCommandPalette();
+});
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "k" || e.key === "K")) {
+    e.preventDefault();
+    if (isOpen("command-palette")) closeCommandPalette(); else openCommandPalette();
+  }
+});
+
 /* ---------- 初始化 ---------- */
 /* 参考音频选择器（VoiceSelect）：音色库直选，选中即生效；输入音频仍用完整 AudioPicker。
    主音色选中后自动把音色的文本内容回填到参考文本框（用户可再改） */
@@ -3324,7 +3652,9 @@ buildEmotionSliders();
 
 /* 全局轮询（2s）：实例 / 事件 / 下载三条独立轮询，由 Api.poll 托管（list:true 带数组守卫）。
    Api.poll 保证：上一轮结束才排下一轮（不叠加请求）、标签页隐藏时不发请求、
-   重新可见立即补一次；不需要时用句柄 stop() 即可无残留地收尾。 */
+   重新可见立即补一次；不需要时用句柄 stop() 即可无残留地收尾。
+   Api.poll 默认 immediate，首轮请求已在建轮询时发出，无需再手工 refresh* 一次。 */
+if (!instancesLoaded) showSkeleton($("instance-list"), 3);
 instancePoller = Api.poll("/api/instances", applyInstances, { list: true, onError: onInstancesError });
 Api.poll("/api/events", applyEvents, { list: true, onError: onEventsError });
 downloadsPoller = Api.poll("/api/downloads", applyDownloads, { list: true, onError: onDownloadsError });
@@ -3332,3 +3662,5 @@ downloadsPoller = Api.poll("/api/downloads", applyDownloads, { list: true, onErr
 loadModels();
 loadExecutables();
 loadProfiles();
+// 应用初始 hash（深链接还原面板 / 选中项）；模型未加载时由 loadModels 补齐
+applyRoute();
