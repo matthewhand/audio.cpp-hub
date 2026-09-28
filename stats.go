@@ -20,21 +20,25 @@ import (
 
 // modelStats 单个模型的聚合结果。
 type modelStats struct {
-	ModelID        string  `json:"modelId"`
-	InstanceName   string  `json:"instanceName,omitempty"`
-	Category       string  `json:"category,omitempty"`
-	Total          int     `json:"total"`         // 历史记录总数（含失败）
-	OK             int     `json:"ok"`            // 成功数
-	Failed         int     `json:"failed"`        // 失败数
-	SuccessRate    float64 `json:"successRate"`   // ok / total，0..1
-	AudioSeconds   float64 `json:"audioSeconds"`  // 生成音频总时长（秒）
-	OutputBytes    int64   `json:"outputBytes"`   // 生成音频总字节
-	LastAt         int64   `json:"lastAt"`        // 最近一次时间戳（ms）
-	QueueMsP50     float64 `json:"queueMsP50"`    // 排队等待中位数（ms）
-	RunMsP50       float64 `json:"runMsP50"`      // 执行耗时中位数（ms）
-	RunMsP95       float64 `json:"runMsP95"`      // 执行耗时 P95（ms）
-	RTFP50         float64 `json:"rtfP50"`        // 实时率中位数
-	SamplesForPerf int     `json:"samplesForPerf"` // 参与性能统计的样本数
+	ModelID      string `json:"modelId"`
+	InstanceName string `json:"instanceName,omitempty"`
+	Category     string `json:"category,omitempty"`
+
+	// 用量（来自历史索引，无淘汰）
+	Total        int     `json:"total"`       // 历史记录总数（含失败）
+	OK           int     `json:"ok"`          // 成功数
+	Failed       int     `json:"failed"`      // 失败数
+	SuccessRate  float64 `json:"successRate"` // ok / total，0..1
+	AudioSeconds float64 `json:"audioSeconds"`
+	OutputBytes  int64   `json:"outputBytes"`
+	LastAt       int64   `json:"lastAt"` // 最近一次时间戳（ms）
+
+	// 性能（来自内存任务的时间戳 + result.durationSec）
+	QueueMsP50     float64 `json:"queueMsP50"` // 排队等待中位数（ms）
+	RunMsP50       float64 `json:"runMsP50"`   // 执行耗时中位数（ms）
+	RunMsP95       float64 `json:"runMsP95"`   // 执行耗时 P95（ms）
+	RTFP50         float64 `json:"rtfP50"`     // 实时率中位数
+	SamplesForPerf int     `json:"samplesForPerf"`
 }
 
 // statsResponse 是 /api/stats 的响应体。
