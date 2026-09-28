@@ -155,9 +155,11 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | POST | `/api/audio/upload` | `web/audio-picker.js` |
 | POST | `/api/cert/generate` | `web/modules/settings.js` |
 | GET | `/api/cert/status` | `web/modules/settings.js` |
+| GET | `/api/downloads` | `web/modules/downloads.js` |
 | POST | `/api/downloads` | `web/modules/downloads.js` |
 | DELETE | `/api/downloads/{param}?purge=true` | `web/modules/downloads.js` |
 | POST | `/api/downloads/{param}/{param}` | `web/modules/downloads.js` |
+| GET | `/api/events` | `web/modules/async-ui.js` |
 | GET | `/api/executables` | `web/modules/settings.js` |
 | POST | `/api/executables` | `web/modules/launch.js` |
 | DELETE | `/api/executables/{param}` | `web/modules/settings.js` |
@@ -176,14 +178,19 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | DELETE | `/api/history/{param}/groups/{param}` | `web/modules/sidebar.js` |
 | PUT | `/api/history/{param}/groups/{param}` | `web/modules/sidebar.js` |
 | POST | `/api/https/config` | `web/modules/settings.js` |
+| GET | `/api/instances` | `web/modules/instances.js` |
 | POST | `/api/instances` | `web/modules/launch.js` |
 | DELETE | `/api/instances/{param}` | `web/modules/instances.js` |
+| GET | `/api/models` | `web/modules/models.js` |
 | GET | `/api/models/{param}/packages` | `web/modules/downloads.js` |
 | GET | `/api/profiles` | `web/modules/launch.js` |
 | POST | `/api/profiles` | `web/modules/launch.js` |
 | DELETE | `/api/profiles/{param}` | `web/modules/launch.js` |
 | PUT | `/api/profiles/{param}` | `web/modules/launch.js` |
-| DELETE | `/api/tasks/{param}` | `web/modules/sidebar.js` |
+| POST | `/api/tasks` | `web/modules/tasks.js` |
+| GET | `/api/tasks?modelId={param}` | `web/modules/tasks.js` |
+| DELETE | `/api/tasks/{param}` | `web/modules/sidebar.js`, `web/modules/tasks.js` |
+| GET | `/api/tasks/{param}` | `web/modules/tasks.js` |
 | GET | `/api/tasks/{param}/result` | `web/modules/tasks.js` |
 | GET | `/api/voices` | `web/audio-picker.js`, `web/voice-select.js`, `web/voices-panel.js` |
 | POST | `/api/voices` | `web/voices-panel.js` |
