@@ -105,13 +105,10 @@ func main() {
 		log.Printf("警告: 工作目录下没有 web/ 目录，静态页面不可用（请从项目根目录启动）")
 	}
 
-	mux := http.NewServeMux()
-	hub.registerRoutes(mux)
-
 	// 显式 http.Server：设 ReadHeaderTimeout/IdleTimeout 防慢头攻击；
 	// 不设 WriteTimeout——TTS/SSE 流式响应时长不可预估，写超时会切断长流。
 	srv := &http.Server{
-		Handler:           csrfProtect(mux),
+		Handler:           hub.newHandler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}

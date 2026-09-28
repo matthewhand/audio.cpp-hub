@@ -17,6 +17,10 @@ const (
 	// 内部（非代理）HTTP 错误响应体读取上限，防止异常大响应撑爆内存。
 	maxErrorBodyBytes = 1 << 20
 
+	// 静态资源缓存时长（秒）：web/ 无构建步骤、文件名不带内容 hash，
+	// 没法用 immutable 长缓存，故取有界的 1 小时；HTML 入口强制 no-cache 每次回源。
+	staticAssetMaxAge = 3600
+
 	// 下载：单分段最小字节数，小于该值不分段。
 	dlSegmentMin = 32 * 1024 * 1024
 )
