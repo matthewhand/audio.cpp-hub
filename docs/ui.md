@@ -3,7 +3,7 @@
 > 由 `npm run ui:inventory` 从 `web/index.html` 与 `web/*.js`、`web/modules/*.js` 自动生成，请勿手改。
 > 漂移检查：`npm run ui:inventory:check`（CI 会跑）。
 
-来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/file-browser.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/legacy-globals.js`、`web/modules/api.js`、`web/modules/async-ui.js`、`web/modules/command-palette.js`、`web/modules/dom.js`、`web/modules/downloads.js`、`web/modules/events.js`、`web/modules/i18n-bridge.js`、`web/modules/instances.js`、`web/modules/launch.js`、`web/modules/models.js`、`web/modules/panels.js`、`web/modules/pickers.js`、`web/modules/results.js`、`web/modules/routing.js`、`web/modules/settings.js`、`web/modules/shell.js`、`web/modules/sidebar.js`、`web/modules/state.js`、`web/modules/tasks.js`、`web/modules/ui.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/voices-panel.js`、`web/wav.js`
+来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/file-browser.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/legacy-globals.js`、`web/modules/async-ui.js`、`web/modules/command-palette.js`、`web/modules/dom.js`、`web/modules/downloads.js`、`web/modules/instances.js`、`web/modules/launch.js`、`web/modules/models.js`、`web/modules/panels.js`、`web/modules/routing.js`、`web/modules/settings.js`、`web/modules/shell.js`、`web/modules/sidebar.js`、`web/modules/state.js`、`web/modules/tasks.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/voices-panel.js`、`web/wav.js`
 
 ## 面板地图
 
@@ -120,15 +120,15 @@
 | --- | --- | --- |
 | ` ` | 等值 | `web/audio-picker.js` |
 | ` ` | 等值 | `web/file-browser.js` |
+| `ArrowDown` | 等值 | `web/modules/async-ui.js` |
 | `ArrowDown` | 等值 | `web/modules/command-palette.js` |
-| `ArrowDown` | 等值 | `web/modules/ui.js` |
 | `ArrowLeft` | 等值 | `web/audio-picker.js` |
 | `ArrowRight` | 等值 | `web/audio-picker.js` |
+| `ArrowUp` | 等值 | `web/modules/async-ui.js` |
 | `ArrowUp` | 等值 | `web/modules/command-palette.js` |
-| `ArrowUp` | 等值 | `web/modules/ui.js` |
 | `Delete` | 等值 | `web/audio-picker.js` |
 | `End` | 等值 | `web/audio-picker.js` |
-| `End` | 等值 | `web/modules/ui.js` |
+| `End` | 等值 | `web/modules/async-ui.js` |
 | `Enter` | 等值 | `web/audio-picker.js` |
 | `Enter` | 等值 | `web/file-browser.js` |
 | `Enter` | 等值 | `web/modules/command-palette.js` |
@@ -139,7 +139,7 @@
 | `Escape` | 等值 | `web/modules/models.js` |
 | `Escape` | 等值 | `web/modules/sidebar.js` |
 | `Home` | 等值 | `web/audio-picker.js` |
-| `Home` | 等值 | `web/modules/ui.js` |
+| `Home` | 等值 | `web/modules/async-ui.js` |
 | `k` | 等值 | `web/modules/command-palette.js` |
 | `K` | 等值 | `web/modules/command-palette.js` |
 | `Tab` | 非 (guard) | `web/app.js` |
@@ -184,7 +184,7 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | DELETE | `/api/profiles/{param}` | `web/modules/launch.js` |
 | PUT | `/api/profiles/{param}` | `web/modules/launch.js` |
 | DELETE | `/api/tasks/{param}` | `web/modules/sidebar.js` |
-| GET | `/api/tasks/{param}/result` | `web/modules/results.js`, `web/modules/tasks.js` |
+| GET | `/api/tasks/{param}/result` | `web/modules/tasks.js` |
 | GET | `/api/voices` | `web/audio-picker.js`, `web/voice-select.js`, `web/voices-panel.js` |
 | POST | `/api/voices` | `web/voices-panel.js` |
 | DELETE | `/api/voices/{param}` | `web/voices-panel.js` |

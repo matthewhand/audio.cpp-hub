@@ -6,18 +6,15 @@
  * 选中模型的两条入口（点击卡片 / 路由 #/model/<id>）都落到 selectModelById，
  * URL 由 routing.js 统一改写，这里只落状态并重画。 */
 
-import { Api } from "./api.js";
-import { renderEmptyState, renderStateError, showSkeleton } from "./async-ui.js";
-import { $, esc, safeHttpUrl } from "./dom.js";
+import { bindMenuKeys, renderEmptyState, renderStateError, showSkeleton } from "./async-ui.js";
+import { $, Api, esc, safeHttpUrl, t } from "./dom.js";
 import { openModelDlModal } from "./downloads.js";
-import { t } from "./i18n-bridge.js";
 import { refreshInstances } from "./instances.js";
 import { restoreWeightsPath } from "./launch.js";
 import { renderWorkspace } from "./panels.js";
 import { getPendingModelId, go, modelRoute, parseRoute, setPendingModelId } from "./routing.js";
 import { closeDrawer } from "./shell.js";
 import { modelConfigured, models, selectedModel, selectedModelId, setModels, setSelectedModelId } from "./state.js";
-import { bindMenuKeys } from "./ui.js";
 
 export const CATEGORY_ORDER = ["tts", "asr", "sep", "music", "other"];
 export function categoryName(cat) {

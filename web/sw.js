@@ -29,8 +29,9 @@ const RUNTIME_CACHE = `acpp-runtime-${CACHE_VERSION}`;
 const OFFLINE_URL = "/offline.html";
 
 /* 应用外壳：安装时预缓存。逐项 allSettled，个别资源缺失不会让整次安装失败。
-   列表必须与 web/index.html 的实际 script/link 引用保持一致——漏一项不会
-   让 install 失败，但离线首屏会在该脚本处断掉。改动前端入口时请同步这里。 */
+   列表必须与 web/index.html 的实际 script/link 引用、以及 index.html <head> 里的
+   modulepreload 清单保持一致——漏一项不会让 install 失败，但离线首屏会在该脚本处断掉。
+   改动前端入口时请同步这里；scripts/perf-budget.mjs 会校验三方一致。 */
 const PRECACHE_URLS = [
   "/",
   "/index.html",
@@ -50,26 +51,20 @@ const PRECACHE_URLS = [
   "/pwa.js",
   "/voices-panel.js",
   "/app.js",
-  "/modules/api.js",
-  "/modules/async-ui.js",
-  "/modules/command-palette.js",
   "/modules/dom.js",
-  "/modules/downloads.js",
-  "/modules/events.js",
-  "/modules/i18n-bridge.js",
-  "/modules/instances.js",
-  "/modules/launch.js",
-  "/modules/models.js",
-  "/modules/panels.js",
-  "/modules/pickers.js",
-  "/modules/results.js",
-  "/modules/routing.js",
-  "/modules/settings.js",
-  "/modules/shell.js",
-  "/modules/sidebar.js",
+  "/modules/async-ui.js",
   "/modules/state.js",
+  "/modules/routing.js",
+  "/modules/command-palette.js",
+  "/modules/shell.js",
+  "/modules/models.js",
+  "/modules/settings.js",
+  "/modules/launch.js",
+  "/modules/instances.js",
+  "/modules/downloads.js",
   "/modules/tasks.js",
-  "/modules/ui.js",
+  "/modules/sidebar.js",
+  "/modules/panels.js",
   "/style.css",
   "/icons/icon-192.png",
   "/icons/icon-512.png",

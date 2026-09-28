@@ -1664,12 +1664,19 @@ footer { padding: 4px 24px 18px; }
 .load-error button { flex: none; }
 
 /* ---------- 统一异步状态：骨架 / 空态 / 错误态 ---------- */
-/* 骨架屏：列表拉取期间占位，避免空白闪烁（aria-busy 由 JS 标注在容器上） */
+/* 骨架屏（#87 令牌版与 #88 列表三态版此前各定义了一份 .skeleton，已合并为下面这一份，
+   视觉结果不变）：既作 async-ui.js showSkeleton 的列容器（内含 .skeleton-card），
+   也作单条占位条（styleguide.html 的 .skeleton / .skeleton-line）。 */
 .skeleton {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 2px 0;
+  min-height: 14px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--wave-bg) 25%, var(--ring) 37%, var(--wave-bg) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s var(--ease-in-out) infinite;
 }
 .skeleton-card {
   height: 58px;
@@ -1681,9 +1688,10 @@ footer { padding: 4px 24px 18px; }
 }
 #model-list .skeleton-card { height: 46px; }
 #dl-list .skeleton-card { height: 72px; }
+.skeleton-line { height: 12px; margin: var(--space-2) 0; }
 @keyframes skeleton-shimmer {
-  from { background-position: 100% 0; }
-  to { background-position: 0 0; }
+  from { background-position: 100% 50%; }
+  to { background-position: 0 50%; }
 }
 
 /* 空态 / 错误态统一的提示盒 */
@@ -1865,20 +1873,6 @@ footer { padding: 4px 24px 18px; }
   z-index: var(--z-menu);
 }
 .tooltip:hover::after, .tooltip:focus-visible::after { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-/* 骨架屏：列表 / 卡片加载占位 */
-.skeleton {
-  min-height: 14px;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(90deg, var(--wave-bg) 25%, var(--ring) 37%, var(--wave-bg) 63%);
-  background-size: 400% 100%;
-  animation: skeleton-shimmer 1.4s var(--ease-in-out) infinite;
-}
-@keyframes skeleton-shimmer {
-  from { background-position: 100% 50%; }
-  to { background-position: 0 50%; }
-}
-.skeleton-line { height: 12px; margin: var(--space-2) 0; }
 
 /* ============================ L5: UTILITIES ============================ */
 

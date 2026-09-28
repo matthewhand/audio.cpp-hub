@@ -4,13 +4,10 @@
  * 「按模型下载」弹窗（下载源 / 包 / token / 覆盖）。下载任务状态只服务本面板，
  * 因此 download 列表与按模型弹窗状态都留在本模块。 */
 
-import { Api } from "./api.js";
-import { isOpen, renderEmptyState, renderStateError, showSkeleton, showToast } from "./async-ui.js";
-import { $, el, esc, markRowEnter } from "./dom.js";
-import { t } from "./i18n-bridge.js";
+import { focusDialog, isOpen, renderEmptyState, renderStateError, restoreDialogFocus, showSkeleton, showToast } from "./async-ui.js";
+import { $, Api, el, esc, markRowEnter, t } from "./dom.js";
 import { go, goPanel } from "./routing.js";
 import { models, selectedModelId } from "./state.js";
-import { focusDialog, restoreDialogFocus } from "./ui.js";
 
 /* ---------- 下载管理（任务列表 + 模型下载弹窗） ---------- */
 export let downloads = [];

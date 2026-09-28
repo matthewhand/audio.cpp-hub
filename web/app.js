@@ -16,11 +16,10 @@
  *
  * 模块地图与每层的边界见 web/README.md。 */
 
-import { parseApiError, renderEmptyState, renderStateError, showToast } from "./modules/async-ui.js";
+import { FOCUSABLE_SEL, focusDialog, parseApiError, renderEmptyState, renderStateError, restoreDialogFocus, showToast, startEventsPolling, topmostOverlay } from "./modules/async-ui.js";
 import { closeCommandPalette } from "./modules/command-palette.js";
 import { $ } from "./modules/dom.js";
 import { closeDownloadsModal, closeModelDlModal, mdlPackages, renderDownloadList, renderMdlPackages, startDownloadsPolling } from "./modules/downloads.js";
-import { startEventsPolling } from "./modules/events.js";
 import { closeInstanceDetail, renderInstanceList, startInstancePolling, updateInstanceBar } from "./modules/instances.js";
 import { closeLaunchModal, loadProfiles, renderLaunchProfiles } from "./modules/launch.js";
 import { loadModels, renderModelList, updateQuickLaunchTitle } from "./modules/models.js";
@@ -30,12 +29,11 @@ import { closeSettingsModal, lastCertStatus, loadExecutables, renderCertStatus, 
 import { applyLangBtn, applyThemeIcon, closeDrawer } from "./modules/shell.js";
 import { closeHistoryPanel } from "./modules/sidebar.js";
 import { models, selectedModel } from "./modules/state.js";
-import { FOCUSABLE_SEL, focusDialog, restoreDialogFocus, topmostOverlay } from "./modules/ui.js";
 
 /* 回填经典脚本侧的转发器：audio-picker.js 的 toast、voices-panel.js 的弹窗焦点管理
    在模块求值前就已拿到 window.showToast / window.focusDialog / window.restoreDialogFocus，
    以及 #88 的三态原语 window.parseApiError / renderStateError / renderEmptyState；
-   真实实现在 async-ui.js 与 ui.js（桥接见 web/legacy-globals.js）。 */
+   真实实现在 async-ui.js（桥接见 web/legacy-globals.js）。 */
 Object.assign(window.AudioCppHubApp, {
   showToast, focusDialog, restoreDialogFocus, parseApiError, renderStateError, renderEmptyState
 });

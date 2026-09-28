@@ -4,15 +4,13 @@
  * 启动配置（Profile：选择 / 回填 / 保存 / 动态更新）与最终的启动请求。
  * 启动成功后刷新实例列表。 */
 
-import { showToast } from "./async-ui.js";
-import { $ } from "./dom.js";
-import { t } from "./i18n-bridge.js";
+import { focusDialog, restoreDialogFocus, showToast } from "./async-ui.js";
+import { $, t } from "./dom.js";
 import { refreshInstances } from "./instances.js";
 import { renderModelList } from "./models.js";
 import { go, setPendingSettingsSection } from "./routing.js";
 import { deviceCache, editingExecId, envToText, loadExecutables, parseEnvText, parseSessionOptionsText, resetExecForm } from "./settings.js";
 import { executables, models, profiles, selectedModelId, setProfiles } from "./state.js";
-import { focusDialog, restoreDialogFocus } from "./ui.js";
 
 /* ---------- 启动模型 modal ---------- */
 export const launchModal = $("launch-modal");

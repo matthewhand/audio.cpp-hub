@@ -14,6 +14,14 @@ Go 服务把 `web/` 当普通静态目录直接从磁盘提供（见 `api.go:152
 （`audio-picker.js` / `voices-panel.js` 等）不受影响；反向的经典脚本 → 模块调用由
 `web/legacy-globals.js` 显式桥接（见下文「经典脚本与模块如何共存」）。
 
+**模块图要预载**：没有打包器时，浏览器只能顺着 `app.js` 的 import 图一个个取模块。
+因此 `index.html` 的 `<head>` 里对**每一个** `web/modules/*.js` 都写了一条
+`<link rel="modulepreload">`（`web/index.html:23` 起），让浏览器在解析 head 时就并行
+取完并预解析整张图，而不是等 `app.js` 执行后再一层层串行往返。`web/sw.js` 的
+`PRECACHE_URLS` 必须覆盖同一组文件（离线冷启动同样要求一次拿全）。
+**`npm run perf:budget` 会校验「模块图 ⊆ modulepreload ⊆ 预缓存」三方一致**——
+漏一条不会让页面报错，只会让首屏悄悄退回串行取模块，因此用检查挡住这种漂移。
+
 Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需要随发行版分发。请勿在源码里依赖任何构建期产物。
 
 ---
@@ -22,9 +30,11 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 
 ### 1. 硬约束
 
-- **无构建、无框架**：一个 `index.html`（497 行）+ 12 个经典 `<script>`（共享全局作用域）
-  + 1 个 `<script type="module">` 入口及其 20 个 `web/modules/*.js`。**模块不做任何转译**——
+- **无构建、无框架**：一个 `index.html`（518 行）+ 13 个经典 `<script>`（共享全局作用域）
+  + 1 个 `<script type="module">` 入口及其 14 个 `web/modules/*.js`。**模块不做任何转译**——
   浏览器原生支持 ES 模块，所以「拆模块」不需要打包器。
+  模块数量是**首屏请求数**（浏览器一个文件一个请求，见首屏的 `modulepreload` 约定）：
+  别把它拆成一堆十几行的「微模块」——`npm run perf:budget` 的请求数预算就是拿它挡着的。
 - **运行时零 Node**：改完 JS/CSS 刷新浏览器即可，不存在 watch/build 流程。
 - **严格 CSP**：`default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'`（`web/index.html:7`）。
   因此：不允许内联脚本、内联事件属性（`onclick=`）、内联 `style` 属性或外部 CDN。主题 / 语言在页面绘制前由 `boot.js` 从 `localStorage` 恢复。
@@ -37,12 +47,12 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 
 - **服务侧**：`api.go:152` 的 `staticHandler` 用 `http.Dir("web")` 提供服务，目录请求只回 `index.html`（禁用目录列表），`index.html` 不缓存、其余资源缓存 1 小时（`api.go:189`、`api.go:191`）。
   工作目录由 `main.go:68` 的 `ensureWorkDir` 自动定位（当前目录没有 `web/` 时尝试上级与 exe 目录）。
-- **前端侧**：没有路由库、没有状态管理库。`web/app.js` 是 119 行的**引导层**（导入模块、跨模块重画、
-  最上层弹窗的 Esc / Tab 焦点锁定、启动顺序），业务逻辑按职责拆进 `web/modules/*.js`（20 个模块）；
+- **前端侧**：没有路由库、没有状态管理库。`web/app.js` 是 117 行的**引导层**（导入模块、跨模块重画、
+  最上层弹窗的 Esc / Tab 焦点锁定、启动顺序），业务逻辑按职责拆进 `web/modules/*.js`（14 个模块）；
   其余经典脚本是自包含组件（IIFE 或挂到 `window` 的 class），只暴露构造器 / 方法。
 - **数据流是手写的单向流**：DOM 事件 → `Api.*`（`web/api-client.js`）→ 更新模块级 `let` 状态 → 重新渲染相关 DOM。没有响应式绑定，改了 state 必须手动调用对应 render 函数。
-- **HTTP 只有唯一出口**：`web/modules/api.js` 绑定 `window.AudioCppHub.api`，各模块一律
-  `import { Api } from "./api.js"`。`api-client.js` 集中了 `fetch`、错误信封（`ApiError` 带
+- **HTTP 只有唯一出口**：`web/modules/dom.js:27` 绑定 `window.AudioCppHub.api`，各模块一律
+  `import { Api } from "./dom.js"`。`api-client.js` 集中了 `fetch`、错误信封（`ApiError` 带
   `code`/`params`）、`AbortController` 超时与中断、可见性感知轮询（`Api.poll`）。
   **新增请求一律走 `Api.*`，不要再直接写 `fetch`。**
 
@@ -52,12 +62,12 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 
 | 文件（行数） | 职责 | 入口 / 主要 API | 关键位置 |
 | --- | --- | --- | --- |
-| `index.html`（497） | 全部静态 DOM（面板、弹窗、表单）、CSP、manifest、脚本加载顺序 | 页面骨架 | CSP `web/index.html:7`，脚本区 `web/index.html:466`–`495` |
+| `index.html`（518） | 全部静态 DOM（面板、弹窗、表单）、CSP、manifest、`modulepreload` 清单、脚本加载顺序 | 页面骨架 | CSP `web/index.html:7`，预载清单 `web/index.html:23`–`36`，脚本区 `web/index.html:487`–`516` |
 | `boot.js`（58） | 绘制前恢复主题与语言，避免首屏闪烁（CSP 要求独立文件） | 顶层立即执行，暴露 `window.HubTheme`（三态 system/light/dark） | `web/boot.js:53` |
 | `i18n.zh.js`（597） | 中文词典（`window.I18N_ZH`），564 个键 | 纯数据 | `web/i18n.zh.js:5` |
 | `i18n.en.js`（598） | 英文词典（`window.I18N_EN`），与中文逐键对齐 | 纯数据 | `web/i18n.en.js:5` |
-| `i18n.js`（155） | 运行时 `I18N` API（不含任何文案） | `I18N.t` / `plural` / `num` / `date` / `bytes` / `percent` / `setLang` / `applyI18n` / `onChange` / `errText` / `pick` | `window.I18N` `web/i18n.js:10`，`plural` `:59`，`date` `:78`，`bytes` `:86`，`percent` `:101` |
-| `api-client.js`（459） | 唯一 HTTP 出口：错误信封、超时/中断、数组形状守卫、可见性感知轮询 | `window.AudioCppHub.api`（`Api.request/get/post/put/del/list/poll/stopAllPollers`） | `web/api-client.js:442` |
+| `i18n.js`（155） | 运行时 `I18N` API（不含任何文案） | `I18N.t` / `plural` / `num` / `date` / `bytes` / `percent` / `setLang` / `applyI18n` / `onChange` / `errText` / `pick` | `window.I18N` `web/i18n.js:10`，`plural` `:59`，`date` `:78`，`bytes` `:86`，`percent` `:101`，`applyI18n` `:106` |
+| `api-client.js`（459） | 唯一 HTTP 出口：错误信封、超时/中断、数组形状守卫、可见性感知轮询 | `window.AudioCppHub.api`（`Api.request/get/post/put/del/list/poll/stopAllPollers`） | `web/api-client.js:443`，`Api.poll` `:372` |
 | `legacy-globals.js`（51） | 经典脚本 ↔ ES 模块的桥（见 3.4） | 顶层立即执行，定义 `window.$` / `el` + 六个转发器 | `web/legacy-globals.js:22`、`:30`、`:41` |
 | `wav.js`（95） | 音频工具：解码、PCM16 单声道 WAV 编码、时长/体积格式化、输出设备预热 | `window.WavUtil` | `web/wav.js:2` |
 | `file-browser.js`（431） | 服务器端文件 / 目录选择弹窗（选权重路径等），动态创建 overlay | `window.FileBrowser.open` | `web/file-browser.js:9` |
@@ -65,10 +75,10 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 | `voice-select.js`（180） | 音色下拉：从音色库直选，选中即生效，返回服务器路径 | `window.VoiceSelect` / `window.refreshVoiceSelects` | class `web/voice-select.js:10`，`refreshVoiceSelects` `web/voice-select.js:177` |
 | `motion.js`（64） | 纯 UI 动效触发器：复制确认、主题切换、实例状态翻转 | `window.hubMotion` | `web/motion.js:30` |
 | `pwa.js`（102） | 注册 `/sw.js`、新版本提示条、`theme-color` 跟随主题 | 顶层立即执行 | `web/pwa.js:84` |
-| `voices-panel.js`（230） | 音色库管理面板（页头 🎙）：列表 / 试听 / 行内编辑 / 删除 / 添加 | `window.openVoicesPanel` / `closeVoicesPanel` | `web/voices-panel.js:9`、`:26` |
-| `sw.js`（196） | Service Worker：`/api/*` 与 `/v1/*` 绝不缓存；导航 network-first；静态资源 cache-first + 后台再验证 | Service Worker 全局 | 预缓存清单 `web/sw.js:34`，API 豁免 `web/sw.js:147` |
-| `style.css`（2099） | 设计系统 L1–L6：令牌 / 基础 / 布局 / 组件 / 工具 / 可访问性 + 动效与 PWA 补充 | — | 令牌 `web/style.css:19` |
-| `styleguide.html`（320） | 组件样式指南页（浏览器直接打开） | — | — |
+| `voices-panel.js`（230） | 音色库管理面板（页头 🎙）：列表 / 试听 / 行内编辑 / 删除 / 添加 | `window.openVoicesPanel` / `closeVoicesPanel` | `web/voices-panel.js:9`、`:21` |
+| `sw.js`（212） | Service Worker：`/api/*` 与 `/v1/*` 绝不缓存；导航 network-first；静态资源 cache-first + 后台再验证 | Service Worker 全局 | 预缓存清单 `web/sw.js:35`，API 豁免 `web/sw.js:142` |
+| `style.css`（2093） | 设计系统 L1–L6：令牌 / 基础 / 布局 / 组件 / 工具 / 可访问性 + 动效与 PWA 补充 | — | 令牌 `web/style.css:16` |
+| `styleguide.html`（320） | 组件样式指南页（浏览器直接打开） | — | 骨架屏示例 `web/styleguide.html:219` |
 | `offline.html`（19） | Service Worker 断网兜底页 | — | — |
 | `manifest.webmanifest`（40） | PWA 清单：图标、standalone、主题色 | — | — |
 | `icons/*.png` | 192/512 普通图标 + 192/512 maskable + 180 apple-touch | — | 由 `scripts/gen-icons.cjs` 生成 |
@@ -76,31 +86,25 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 #### 3.2 ES 模块（`web/app.js` + `web/modules/*.js`）
 
 `app.js` 是**引导层**：导入各模块、承担跨模块的重画（`rerenderAll`）与最上层弹窗的 Esc / Tab
-焦点锁定，然后按原顺序建立轮询、首屏加载并应用初始 hash。业务逻辑按职责拆成 20 个模块：
+焦点锁定，然后按原顺序建立轮询、首屏加载并应用初始 hash。业务逻辑按职责拆成 14 个模块：
 
 | 模块（行数） | 负责 | 关键位置 |
 | --- | --- | --- |
-| `app.js`（119） | 引导层：回填 `window.AudioCppHubApp`、`rerenderAll`、`closeTopmostOverlay`、Esc / Tab 全局键盘绑定、启动顺序 | 回填 `web/app.js:39`，`rerenderAll` `:45`，`closeTopmostOverlay` `:64`，启动 `:102`–`119` |
-| `modules/dom.js`（43） | `$` / `el`（绑定自 `legacy-globals.js`）、`esc`、`safeHttpUrl`、行进入动画、`renderListError` 薄封装 | `$` `web/modules/dom.js:15`，`esc` `:19` |
-| `modules/i18n-bridge.js`（7） | 绑定经典脚本 `window.I18N` 的 `t()`，各模块统一入口 | — |
-| `modules/api.js`（8） | 绑定经典脚本 `window.AudioCppHub.api`，**不重复实现** | — |
-| `modules/state.js`（30） | 跨模块共享的可变状态：模型清单 / 可执行文件 / 启动配置 / 当前选中模型 / 当前实例 + 各自的 `setXxx()` | — |
-| `modules/async-ui.js`（138） | #88 统一异步状态：`notify` / `showToast`、`parseApiError`、列表三态（`showSkeleton` / `renderEmptyState` / `renderStateError`）、`setButtonBusy`、`isOpen` | `showToast` `web/modules/async-ui.js:46`，`parseApiError` `:51`，`showSkeleton` `:79`，`setButtonBusy` `:124` |
-| `modules/ui.js`（112） | 弹窗可见性栈、焦点栈 + 背景 `inert`、`bindMenuKeys` 弹出菜单键盘导航、toast 滑出动画、busy 遮罩（接线已注释） | `OVERLAY_IDS` `web/modules/ui.js:17`，`focusDialog` `:46`，`dismissToast` `:63`，`bindMenuKeys` `:72` |
+| `app.js`（117） | 引导层：回填 `window.AudioCppHubApp`、`rerenderAll`、`closeTopmostOverlay`、Esc / Tab 全局键盘绑定、启动顺序 | 回填 `web/app.js:37`，`rerenderAll` `:43`，`closeTopmostOverlay` `:62`，启动 `:110`–`117` |
+| `modules/dom.js`（48） | **基元层，零 import**：`$` / `el`（绑定自 `legacy-globals.js`）、`esc`、`safeHttpUrl`、行进入动画、`t`（绑定 `I18N.t`）、`Api`（绑定 `window.AudioCppHub.api`） | `$` `web/modules/dom.js:19`，`t` `:24`，`Api` `:27`，`esc` `:30`，`safeHttpUrl` `:36` |
+| `modules/async-ui.js`（291） | **跨功能复用的 UI 原语**：toast（`notify` / `showToast`）、列表三态（`showSkeleton` / `renderEmptyState` / `renderStateError` / `renderListError`）、`setButtonBusy`、`parseApiError`、`/api/events` → toast 轮询；弹窗栈（`OVERLAY_IDS` / `topmostOverlay`）、`focusDialog` / `restoreDialogFocus`（焦点栈 + 背景 `inert`）、`bindMenuKeys`、`dismissToast`、`showBusy` / `hideBusy` | `showToast` `web/modules/async-ui.js:57`，`parseApiError` `:62`，`showSkeleton` `:90`，`renderListError` `:136`，`setButtonBusy` `:142`，`startEventsPolling` `:188`，`OVERLAY_IDS` `:196`，`focusDialog` `:225`，`dismissToast` `:242`，`bindMenuKeys` `:251`，`showBusy` `:271` |
+| `modules/state.js`（30） | 跨模块共享的可变状态：模型清单 / 可执行文件 / 启动配置 / 当前选中模型 / 当前实例 + 各自的 `setXxx()` | `models` `web/modules/state.js:11`，`setModels` `:21` |
 | `modules/routing.js`（112） | #88 hash 路由：`parseRoute` / `go` / `goPanel` / `applyRoute` + 路由意图 `pendingModelId` / `pendingInstanceId` / `pendingSettingsSection` + `window.hub*` 钩子 | `ROUTE_VIEWS` `web/modules/routing.js:25`，`parseRoute` `:41`，`go` `:58`，`applyRoute` `:80` |
-| `modules/command-palette.js`（126） | #88 命令面板（Ctrl/Cmd-K）：候选项拼装、过滤、↑↓/Enter/Esc | `paletteSources` `web/modules/command-palette.js:23`，`renderPalette` `:40` |
-| `modules/shell.js`（46） | 主题三态循环（`window.HubTheme`）、语言切换、移动端抽屉 | — |
-| `modules/models.js`（167） | 模型列表（按 category 分组）、已配置黯淡态、空态、HF 仓库/镜像菜单（含 `role=menu` 键盘导航）、`selectModelById` | `loadModels` `web/modules/models.js:27`，`renderModelList` `:112`，`selectModelById` `:150` |
-| `modules/settings.js`（327） | 设置对话框分区导航、通用面板（含主题三态）、HTTPS 证书（按钮内联 loading）、可执行文件登记与设备探测 | `openSettingsModal` `web/modules/settings.js:25`，`renderExecList` `:193` |
-| `modules/launch.js`（449） | 启动模型弹窗：可执行文件选择、设备探测、权重路径、启动配置（Profile）、高级参数、启动请求 | `openLaunchModal` `web/modules/launch.js:19`，`restoreWeightsPath` `:208` |
-| `modules/instances.js`（234） | 实例列表、实例状态条、实例详情（`I18N.date`）、2s 轮询句柄 + 首屏骨架 | `startInstancePolling` `web/modules/instances.js:58`，`renderInstanceList` `:64`，`openInstanceDetail` `:167` |
-| `modules/downloads.js`（239） | 下载管理面板、页头角标、按模型的下载弹窗 | `startDownloadsPolling` `web/modules/downloads.js:48`，`openDownloadsModal` `:61`，`renderDownloadList` `:77` |
-| `modules/events.js`（38） | `/api/events` 轮询 → toast（失败静默） | `startEventsPolling` `web/modules/events.js:36` |
-| `modules/results.js`（151） | 推理结果落版：`renderTaskResult` 按类别分派 + ASR / 分离 / 音乐 / 其它结果 + 多轨音频行 | `renderTaskResult` `web/modules/results.js:12`，`renderAsrResult` `:70` |
-| `modules/tasks.js`（191） | 任务队列：提交、跟踪、取消、完成、`reattachTasks` 重挂、侧栏任务行 | `submitTask` `web/modules/tasks.js:25`，`trackTask` `:47`，`reattachTasks` `:100` |
-| `modules/sidebar.js`（638） | 操作历史侧栏：历史加载与渲染（含骨架屏 / 三态）、分组、分组菜单（键盘导航）、四要素详情、隐私模式、任务行与历史行的列表组装 | `openHistoryPanel` `web/modules/sidebar.js:21`，`loadHistory` `:81`，`renderSidebarList` `:130` |
-| `modules/panels.js`（833） | 工作区分发 + TTS / ASR / SEP / Music / Other 五类面板：`paramSchema` 渲染与收集、情感滑块、各面板提交 | `renderWorkspace` `web/modules/panels.js:38`，`renderTtsPanel` `:281`，`renderAsrPanel` `:613`，`buildEmotionSliders` `:503` |
-| `modules/pickers.js`（20） | 表单里挂载的 `VoiceSelect` / `AudioPicker` 实例（单一创建点） | — |
+| `modules/command-palette.js`（124） | #88 命令面板（Ctrl/Cmd-K）：候选项拼装、过滤、↑↓/Enter/Esc | `paletteSources` `web/modules/command-palette.js:21`，`renderPalette` `:38` |
+| `modules/shell.js`（45） | 主题三态循环（`window.HubTheme`）、语言切换、移动端抽屉 | — |
+| `modules/models.js`（164） | 模型列表（按 category 分组）、已配置黯淡态、空态、HF 仓库/镜像菜单（含 `role=menu` 键盘导航）、`selectModelById` | `loadModels` `web/modules/models.js:24`，`hfMirrorOf` `:55`，`renderModelList` `:109`，`selectModelById` `:147` |
+| `modules/settings.js`（325） | 设置对话框分区导航、通用面板（含主题三态）、HTTPS 证书（按钮内联 loading）、可执行文件登记与设备探测 | `openSettingsModal` `web/modules/settings.js:23`，`renderExecList` `:191`，`parseEnvText` `:272` |
+| `modules/launch.js`（447） | 启动模型弹窗：可执行文件选择、设备探测、权重路径、启动配置（Profile）、高级参数、启动请求 | `openLaunchModal` `web/modules/launch.js:17`，`restoreWeightsPath` `:206` |
+| `modules/instances.js`（231） | 实例列表、实例状态条、实例详情（`I18N.date`）、2s 轮询句柄 + 首屏骨架 | `startInstancePolling` `web/modules/instances.js:55`，`renderInstanceList` `:61`，`openInstanceDetail` `:164` |
+| `modules/downloads.js`（236） | 下载管理面板、页头角标、按模型的下载弹窗 | `fmtBytes` `web/modules/downloads.js:17`，`startDownloadsPolling` `:45`，`openDownloadsModal` `:58`，`renderDownloadList` `:74` |
+| `modules/tasks.js`（336） | 任务队列**与结果落版**：提交、跟踪、取消、完成、`reattachTasks` 重挂、侧栏任务行；`renderTaskResult` 按类别分派 + ASR / 分离 / 音乐 / 其它结果 + `clearResult` / `makeTrackRow` | `activePolls` `web/modules/tasks.js:21`，`submitTask` `:26`，`trackTask` `:48`，`reattachTasks` `:101`，`renderTaskResult` `:197`，`clearResult` `:247` |
+| `modules/sidebar.js`（638） | 操作历史侧栏：历史加载与渲染（含骨架屏 / 三态）、分组、分组菜单（键盘导航）、四要素详情、隐私模式、任务行与历史行的列表组装、「清空」批量删除（走全局等待遮罩） | `openHistoryPanel` `web/modules/sidebar.js:19`，`loadHistory` `:79`，`renderSidebarList` `:128`，`deleteFinishedTasks` `:584`，清空处理 `:595` |
+| `modules/panels.js`（845） | 工作区分发 + TTS / ASR / SEP / Music / Other 五类面板：`paramSchema` 渲染与收集、情感滑块、各面板提交；面板表单的 `VoiceSelect` / `AudioPicker` 实例在模块求值时一次性创建 | `voicePicker` `web/modules/panels.js:23`，`renderWorkspace` `:50`，`renderTtsPanel` `:293`，`buildEmotionSliders` `:515`，`renderAsrPanel` `:625` |
 
 #### 3.3 共享可变状态与 setter
 
@@ -119,18 +123,21 @@ ES 模块的 `import` 是**活绑定**（读永远看到最新值），但**不�
 
 | 名字 | 定义处 | 经典脚本用途 |
 | --- | --- | --- |
-| `window.$` / `window.el` | `legacy-globals.js`（唯一真实实现）；`modules/dom.js` 绑定并再导出 | `voices-panel.js` 在加载期就绑定按钮 |
-| `window.showToast` | `legacy-globals.js` 的转发器 → `modules/async-ui.js` | `audio-picker.js`、`voices-panel.js` |
-| `window.focusDialog` / `window.restoreDialogFocus` | 同上 → `modules/ui.js` | `voices-panel.js` 的弹窗焦点管理 |
-| `window.parseApiError` / `window.renderStateError` / `window.renderEmptyState` | 同上 → `modules/async-ui.js` | `voices-panel.js` 的 #88 三态原语 |
+| `window.$` / `window.el` | `legacy-globals.js`（唯一真实实现）；`modules/dom.js:19` 绑定并再导出 | `voices-panel.js` 在加载期就绑定按钮 |
+| `window.showToast` | `legacy-globals.js` 的转发器 → `modules/async-ui.js:57` | `audio-picker.js`、`voices-panel.js` |
+| `window.focusDialog` / `window.restoreDialogFocus` | 同上 → `modules/async-ui.js:225` 与 `modules/async-ui.js:235` | `voices-panel.js` 的弹窗焦点管理 |
+| `window.parseApiError` / `window.renderStateError` / `window.renderEmptyState` | 同上 → `modules/async-ui.js:62` 及同段 | `voices-panel.js` 的 #88 三态原语 |
 
 转发器在目标尚未就位时静默返回（等价于原来 `typeof window.showToast === "function"` 的保护）；
-真实实现由 `web/app.js:39` 在模块求值时回填到 `window.AudioCppHubApp`。
+真实实现由 `web/app.js:37` 在模块求值时回填到 `window.AudioCppHubApp`。
 
 主题与界面语言的首屏恢复由 `<head>` 里的 `web/boot.js` 在样式表之前完成，与模块化无关。
 模块改为 defer 之后，所有 `$(...)` DOM 取值都发生在解析完成之后，比原来的经典脚本更安全。
 
 #### 3.5 刻意的循环依赖
+
+`dom.js` 是**零 import 的叶子**（见 3.2），因此它不参与任何环；`async-ui.js` 只依赖
+`dom.js`，也不参与。剩下的环全部发生在「功能模块之间」，共 5 组：
 
 | 依赖 | 为什么无法单向 |
 | --- | --- |
@@ -146,17 +153,25 @@ ES 模块的 `import` 是**活绑定**（读永远看到最新值），但**不�
 ES 模块的函数声明提升 + 活绑定让这种形状安全，`no-use-before-define` / `import/no-cycle`
 这类规则在本仓库刻意不启用。
 
+> **为什么不去掉它们**：把 `models.js → launch.js` 变成单向的机械做法只有一种——把
+> `restoreWeightsPath` 挪进 `state.js` 再各自 import。但那会把「恢复权重路径」这种带 DOM
+> 副作用的业务语义塞进状态层，换来的是一次行为不变、结构变差的改动。**已评估、刻意保留。**
+> 唯一被真正消掉的是 `dom.js` ⇄ `async-ui.js`（原 `dom.js` 的 `renderListError` 薄封装
+> 需要回调 `renderStateError`）：把那个薄封装移进 `async-ui.js` 就断了，基元层从此无环。
+
 ### 4. 脚本加载顺序与初始化
 
 `index.html` 里的加载顺序（**顺序有语义**）：
 
 1. `<head>` 中先加载 `boot.js`（`web/index.html:14`），再挂 `style.css`（`web/index.html:15`）——主题 / 语言要在首次绘制前生效。
-2. `</body>` 前先是一串**经典脚本**（`web/index.html:472`–`492`）：
+2. 紧接着是 14 条 `<link rel="modulepreload">`（`web/index.html:23`–`36`）——模块图的并行预取与预解析，
+   放这里是为了在解析 body 之前就把它们发出去（见首屏「模块图要预载」一节）。
+3. `</body>` 前先是一串**经典脚本**（`web/index.html:493`–`511`）：
    `i18n.zh.js` → `i18n.en.js` → `i18n.js` → `api-client.js` → `wav.js` → `file-browser.js`
    → `legacy-globals.js` → `audio-picker.js` → `voice-select.js` → `voices-panel.js`
    → `motion.js` → `pwa.js`。
-3. 最后是**唯一的模块入口** `<script type="module" src="/app.js">`（`web/index.html:495`），
-   它按 `import` 图拉取 `web/modules/*.js`。
+4. 最后是**唯一的模块入口** `<script type="module" src="/app.js">`（`web/index.html:516`），
+   它按 `import` 图拉取 `web/modules/*.js`（此时已被 modulepreload 预取到，直接命中）。
 
 为什么是这个顺序：
 
@@ -164,56 +179,63 @@ ES 模块的函数声明提升 + 活绑定让这种形状安全，`no-use-before
 - `legacy-globals.js` 必须早于所有引用 `$` / `el` / `showToast` / `focusDialog` 的经典脚本
   （`audio-picker.js` / `voice-select.js` / `voices-panel.js`）——模块是 defer 的，
   真实实现在模块里才存在，桥必须先把 `window.$` 装好。
-- `pickers.js` 在模块求值时实例化 `VoiceSelect` / `AudioPicker`，因此这两个组件脚本必须先于模块入口。
+- `panels.js` 在模块求值时实例化 `VoiceSelect` / `AudioPicker`（`web/modules/panels.js:23`），因此这两个组件脚本必须先于模块入口。
 - `motion.js` 早于模块入口：它监听捕获阶段的点击与 `themechange`，先注册才能覆盖首屏交互。
 - `pwa.js` 早于模块入口：Service Worker 越早注册，越早接管后续静态资源；它自身不依赖 app 逻辑。
 - 模块入口天然最后：`<script type="module">` 隐式 defer，一定在所有普通脚本之后执行。
 - **新经典脚本要用 IIFE 包裹**，避免顶层 `const` 重名冲突（参考 `web/audio-picker.js:6`、`web/voice-select.js:7`、`web/motion.js:17`）；**新业务逻辑进 `web/modules/`**，不要往 `app.js` 里堆。
 - 脚本位于 `<body>` 末尾，DOM 已解析完毕，模块顶层可直接 `document.getElementById`。
 
-> **新增或删除前端脚本时，`web/sw.js` 的 `PRECACHE_URLS` 必须同步。** 漏一项不会让 SW 安装失败（`install` 用 `allSettled`），但离线冷启动会在该脚本处断掉。
+> **新增或删除前端脚本 / 模块时，三处清单必须同步**：`web/index.html`（`<script>` 与
+> `rel="modulepreload"`）、`web/sw.js` 的 `PRECACHE_URLS`、`web/README.md` 的模块地图。
+> 漏掉 SW 预缓存不会让安装失败（`install` 用 `allSettled`），但离线冷启动会在该脚本处断掉；
+> 漏掉 `modulepreload` 不会报错，只会让那个模块退回串行取。`npm run perf:budget` 会对
+> 「模块图 / modulepreload / 预缓存」做三方一致性校验。
 
-`rerenderAll`（`web/app.js:45`）是语言切换后的统一重渲染入口：它会重渲模型列表、实例、设置面板，并刷新所有已注册的 `AudioPicker` / `VoiceSelect` 文案。
+`rerenderAll`（`web/app.js:43`）是语言切换后的统一重渲染入口：它会重渲模型列表、实例、设置面板，并刷新所有已注册的 `AudioPicker` / `VoiceSelect` 文案。
 
 ### 5. 状态与事件流
 
 - **可变状态**按模块就近存放：跨模块共享的 5 个绑定在 `web/modules/state.js`（配 `setXxx()`），
   单一写方的状态留在自己的模块里（`downloads.js` 的 `downloads`、`instances.js` 的 `instances`、
   `routing.js` 的 `pending*`）。任务相关另有三张 Map：`activePolls` / `taskViews` / `taskDetails`
-  （`web/modules/tasks.js:20`–`22`）。
+  （`web/modules/tasks.js:21`–`23`）。
 - **localStorage 键**：`hub-theme`、`hub-lang`（`web/boot.js:14`、`web/boot.js:56`）、`hub-model`、`hub-privacy`、`hub-threads`，以及按模型持久化的权重路径 / 启动配置键。语言初值优先级（`localStorage` → `navigator.language`）见 `web/i18n.js:23`。
 - **轮询模型**：**不要再写 `setInterval`**。全部交给 `Api.poll`，它保证「上一轮结束才排下一轮（不叠加请求）、标签页隐藏时不发请求、重新可见立即补一次」，句柄 `stop()` 即可无残留收尾。
-  - 全局 2s 轮询：实例 + 事件 + 下载（`web/app.js:110`–`112`，各自的 `start*Polling` 在 `instances.js` / `events.js` / `downloads.js`）。
+  - 全局 2s 轮询：实例 + 事件 + 下载（`web/app.js:110`–`112`，各自的 `start*Polling` 在 `instances.js` / `async-ui.js` / `downloads.js`）。
   - 任务单独 2s 轮询：每个进行中的任务一个 `Api.poll` 句柄（`web/modules/tasks.js` 的 `trackTask`），到终态即 `stop()`。
-- **任务生命周期**：`submitTask`（`web/modules/tasks.js:25`）→ `trackTask`（`:47`，入侧栏并轮询）→ `finishTask` → 结果渲染（`web/modules/results.js:12`）。
-  TTS 结果直接用历史 wav URL（不处理 base64），其余类别再取 `/result` JSON。页面加载 / 切换模型时 `reattachTasks`（`web/modules/tasks.js:100`）经 `GET /api/tasks?modelId=` 重挂。
+- **任务生命周期**：`submitTask`（`web/modules/tasks.js:26`）→ `trackTask`（`:48`，入侧栏并轮询）→ `finishTask` → 结果渲染（`web/modules/tasks.js:197`）。
+  TTS 结果直接用历史 wav URL（不处理 base64），其余类别再取 `/result` JSON。页面加载 / 切换模型时 `reattachTasks`（`web/modules/tasks.js:101`）经 `GET /api/tasks?modelId=` 重挂。
 - **hash 路由（#88）**：`#/model/<id>` / `#/instance/<id>` / `#/history` / `#/voices` / `#/downloads` / `#/settings`。
   打开 / 关闭面板与选择模型统一经 `modules/routing.js` 的 `go()` 改 hash，`applyRoute()` 是唯一应用视图的地方，
   因此前进 / 后退可自然还原，深链接刷新后也能恢复面板与选中项。`pendingModelId` / `pendingInstanceId` /
   `pendingSettingsSection` 记录「目标数据还没到」的意图，等对应模块拿到数据再兑现。
-  `applyRoute()` 在首屏末尾由 `web/app.js:119` 调一次。
+  `applyRoute()` 在首屏末尾由 `web/app.js:117` 调一次。
 - **跨组件事件**：主题切换广播 `themechange`（`web/boot.js` 与 `web/modules/shell.js` 各自 dispatch），`motion.js` / `pwa.js` / 音频组件各自监听（重绘波形、切换过渡、刷新 `theme-color`）。
 - **关键 DOM 锚点**（`index.html`）：页头按钮 `#voices-btn` / `#history-btn` / `#downloads-btn` / `#lang-toggle` / `#settings-btn` / `#theme-toggle`；左栏 `#left` 内 `#instance-list`、`#model-list`；右栏 `#right > #workspace`；五类面板 `#panel-tts`、`#panel-asr`、`#panel-sep`、`#panel-music`、`#panel-other`；历史 `#history-panel > #history-list`；音色库 `#voices-panel > #voices-list`；命令面板 `#command-palette`；若干弹窗 `#launch-modal`、`#settings-modal`、`#model-dl-modal`、`#downloads-modal`、`#instance-detail-modal`、`#busy-overlay`；以及 `#toast-root`、`#drawer-overlay`。
 
 ### 6. 编码约定
 
 - **无框架、无构建**。新增交互优先复用现有模式（DOM 辅助 + 手写渲染），不要引入打包器或框架。
-- **所有请求走 `Api.*`**（`web/app.js:7`）。需要新的错误码语义时，扩展 `web/api-client.js` 的 `CODE`，不要在调用点自己 `try/catch fetch`。
-- **安全渲染**（防存储型 XSS）：任何服务端 / 用户可控字符串插入 HTML 前必须 `esc()`（`web/app.js:60`）；能 `textContent` 就别 `innerHTML`；拼 HTML 用 `el()`（`web/app.js:54`）；URL 属性用 `safeHttpUrl()`（`web/app.js:66`）或 `esc()`。**绝不把未转义数据塞进 `innerHTML`。**
+- **不要为了「分层」再拆出新模块**。没有打包器，模块数 = 首屏请求数；十几行的微模块会直接
+  顶高 `npm run perf:budget` 的请求数预算。新增代码优先并进职责最近、已存在的模块。
+- **所有请求走 `Api.*`**（`web/modules/dom.js:27`）。需要新的错误码语义时，扩展 `web/api-client.js` 的 `CODE`，不要在调用点自己 `try/catch fetch`。
+- **安全渲染**（防存储型 XSS）：任何服务端 / 用户可控字符串插入 HTML 前必须 `esc()`（`web/modules/dom.js:30`）；能 `textContent` 就别 `innerHTML`；拼 HTML 用 `el()`（`web/modules/dom.js:19`）；URL 属性用 `safeHttpUrl()`（`web/modules/dom.js:36`）或 `esc()`。**绝不把未转义数据塞进 `innerHTML`。**
 - **i18n**：
   - 新文案同时写入 `web/i18n.zh.js` 与 `web/i18n.en.js`（当前 564 键），并跑 `node scripts/check-i18n-parity.js` 校验对等。
-  - 动态文案用 `t()`（`web/app.js:3` 的 `I18N.t` 快捷方式）；静态 DOM 用 `data-i18n` / `data-i18n-placeholder` / `data-i18n-title` / `data-i18n-aria-label` 标注，由 `applyI18n()`（`web/i18n.js:106`）批量替换。
-  - 自定义组件实现 `refreshLabels()` 并注册到 `window.__audioPickers` / `window.__voiceSelects`，这样 `rerenderAll`（`web/app.js:45`）能统一刷新。
+  - 动态文案用 `t()`（`web/modules/dom.js:24`，即 `I18N.t` 的模块侧入口）；静态 DOM 用 `data-i18n` / `data-i18n-placeholder` / `data-i18n-title` / `data-i18n-aria-label` 标注，由 `applyI18n()`（`web/i18n.js:106`）批量替换。
+  - 自定义组件实现 `refreshLabels()` 并注册到 `window.__audioPickers` / `window.__voiceSelects`，这样 `rerenderAll`（`web/app.js:43`）能统一刷新。
   - 多语言字段用 `I18N.pick`（`web/i18n.js:146`）；后端错误用 `I18N.errText`（`web/i18n.js:131`）解析 `{"code","params"}`，
-    或在模块里用 `parseApiError`（`web/modules/async-ui.js:51`）拿到带 `code` / `params` 的 Error。
+    或在模块里用 `parseApiError`（`web/modules/async-ui.js:62`）拿到带 `code` / `params` 的 Error。
   - 列表 / 按钮的三态统一用 `web/modules/async-ui.js`：`showSkeleton` / `renderEmptyState` / `renderStateError` /
-    `setButtonBusy`，不要在调用点各拼一套。
+    `setButtonBusy`，不要在调用点各拼一套。**等待时间不可知的批量操作**才用全局遮罩 `showBusy` / `hideBusy`
+    （`web/modules/async-ui.js:271`），局部可知的操作一律用 `setButtonBusy`。
   - **数字 / 字节 / 日期 / 百分比一律走 `I18N.num` / `bytes` / `date` / `percent`**（`web/i18n.js:71`、`86`、`78`、`101`），它们基于 `Intl`，随语言变化。不要自己拼 `KB` / `MB` 或千分位。
-- **CSS**：设计系统分 L1–L6（`web/style.css:16`–`1924`）。主题变量 `--bg` / `--text` / `--accent` / `--card` 等分深色 `:root[data-theme="dark"]`（`web/style.css:85`）与浅色 `:root[data-theme="light"]`（`web/style.css:109`）；默认跟随系统（`web/boot.js:8` 的 `prefers-color-scheme`）。新颜色 / 阴影一律加变量，不硬编码。
-- **动效令牌**：时长 `--dur-1/2/3` + 缓动 `--ease-out` / `--ease-in-out`（`web/style.css:20`–`24`）；只动 `transform` / `opacity` 避免重排；**必须尊重 `prefers-reduced-motion`**（`web/style.css:1927`、`web/style.css:2082`）：装饰动画可停，加载 / 工作中等必要反馈保留。模式说明见 [`../docs/motion.md`](../docs/motion.md)。
+- **CSS**：设计系统分 L1–L6（`web/style.css:16`–`1918`）。主题变量 `--bg` / `--text` / `--accent` / `--card` 等分深色 `:root[data-theme="dark"]`（`web/style.css:85`）与浅色 `:root[data-theme="light"]`（`web/style.css:109`）；默认跟随系统（`web/boot.js:4` 的 `prefers-color-scheme`）。新颜色 / 阴影一律加变量，不硬编码。**同类选择器只允许存在一处定义**——骨架屏曾因 #87 / #88 两版各写一份 `.skeleton` 而互相覆盖（现已合并为 `web/style.css:1670` 一份）。
+- **动效令牌**：时长 `--dur-1/2/3` + 缓动 `--ease-out` / `--ease-in-out`（`web/style.css:20`–`24`）；只动 `transform` / `opacity` 避免重排；**必须尊重 `prefers-reduced-motion`**（`web/style.css:1921` 与 `web/style.css:2075`）：装饰动画可停，加载 / 工作中等必要反馈保留。模式说明见 [`../docs/motion.md`](../docs/motion.md)。
 - **中文注释**：代码注释用中文（与 Go 侧一致），标识符、API 字段、CSS 变量用英文。
 - **CSP**：不写内联脚本、`on*` 事件属性、内联 `style` 属性，不引外部源；`index.html:7` 的 CSP 必须保持 `script-src 'self'`。
-- **Service Worker**：`/api/*` 与 `/v1/*` **绝不缓存**（`web/sw.js:147` 直接 `return`，不调 `respondWith`）；导航走 network-first，避免 `index.html` 读到旧版本；任何被服务端标记 `Cache-Control: no-store/no-cache` 的响应也不落缓存（`web/sw.js:85` 的 `noStore`）。详见 [`../docs/pwa.md`](../docs/pwa.md)。
+- **Service Worker**：`/api/*` 与 `/v1/*` **绝不缓存**（`web/sw.js:142` 直接 `return`，不调 `respondWith`）；导航走 network-first，避免 `index.html` 读到旧版本；任何被服务端标记 `Cache-Control: no-store/no-cache` 的响应也不落缓存（`web/sw.js:80` 的 `noStore`）。详见 [`../docs/pwa.md`](../docs/pwa.md)。
 
 ### 7. 无构建地运行与调试
 
@@ -249,7 +271,7 @@ go build -o audio.cpp-hub . && ./audio.cpp-hub
 | `npm run test:e2e` | Playwright e2e（headless Chromium + mock 后端） |
 | `npm run ui:inventory` | 生成 `ui_inventory.json` 与 `docs/ui.md` |
 | `npm run ui:inventory:check` | 校验两者与源码一致（CI 防漂移） |
-| `npm run perf:budget` | 首屏 JS/CSS raw+gzip 体积与请求数预算检查 |
+| `npm run perf:budget` | 首屏 JS/CSS raw+gzip 体积与请求数预算检查，并校验「模块图 / modulepreload / SW 预缓存」三方一致 |
 
 `check:types` 用 `noEmit` 保证**不产出任何 JS**：`tsc` 在这里只是检查器，输出目录为空，
 不可能被误当成构建产物进入发行包。
@@ -282,7 +304,6 @@ go build -o audio.cpp-hub . && ./audio.cpp-hub
    它们是全站最底层的 DOM 取值入口（实现定义在 `legacy-globals.js`，模块侧只绑定再导出），
    上千个调用点会立刻访问 `.value` / `.checked` / `.dataset` / `.onclick` 等「只有具体标签才声明」的成员。
    逐点加断言等于重写，因此显式放宽。
-
 3. **`Element` / `EventTarget` 增补了 4 个成员**（`dataset`、`title`、`onclick`、`value`、
    `closest`）。`document.querySelectorAll(".tab")` 这类通用选择器无法推断标签，TypeScript 只能
    给回 `Element`，而 `Element` 按规范不声明这些成员——运行时它们确实都在。代价是
@@ -332,8 +353,9 @@ npm run format         # 仅当 format:check 失败时（注意范围不含 web/
 `eslint.config.js` 的 `languageOptions.globals`（供 `no-undef`），并保证 `index.html`
 底部的 `<script>` 顺序满足依赖关系。新增经典脚本要走 `web/legacy-globals.js` 桥接，
 新增业务逻辑进 `web/modules/*.js`（`tsconfig.json` 的 `include` 已含该目录）。改动 `index.html`
-的脚本清单或模块图时，记得同步 `web/sw.js` 的 `PRECACHE_URLS` 与 `scripts/ui-inventory.mjs` /
-`scripts/perf-budget.mjs`（后两者已改为从 `index.html` 反推，无需手改）。
+的脚本清单或模块图时，记得同步 `index.html` 的 `modulepreload` 清单与 `web/sw.js` 的
+`PRECACHE_URLS`，并重跑 `npm run ui:inventory` 提交产物（`scripts/ui-inventory.mjs` /
+`scripts/perf-budget.mjs` 都从 `index.html` 反推资源清单，无需手改）。
 
 ---
 
@@ -361,8 +383,10 @@ npm run format         # 仅当 format:check 失败时（注意范围不含 web/
 - [ ] 为新增交互补自动化测试（`npm run test:unit` / `test:e2e`），并重跑 `npm run ui:inventory` 提交产物。
 - [ ] 保持 CSP `script-src 'self'`：无内联脚本、无 `on*` 属性、无内联样式、无外部 CDN；模块 `import` 只用同源相对路径。
 - [ ] 新颜色 / 阴影 / 时长走 CSS 变量与动效令牌，并确认 `prefers-reduced-motion` 下仍可用。
-- [ ] 新业务逻辑进 `web/modules/*.js`（跨文件用 `import` / `export`，不要新增隐式全局）；
-      新经典脚本用 IIFE 包裹防全局名冲突、位置在模块入口之前，需要 `$` / `showToast` 等先过 `legacy-globals.js`。
-- [ ] 同步 `web/sw.js` 的 `PRECACHE_URLS`（新增经典脚本与新增模块都要登记）。
+- [ ] 新业务逻辑并进职责最近的**已有**模块（没有打包器，模块数 = 首屏请求数；新模块要有实打实的分量）；
+      跨文件用 `import` / `export`，不要新增隐式全局。新经典脚本用 IIFE 包裹防全局名冲突、
+      位置在模块入口之前，需要 `$` / `showToast` 等先过 `legacy-globals.js`。
+- [ ] 同步三处清单：`index.html` 的 `<script>` 与 `<link rel="modulepreload">`、`web/sw.js` 的
+      `PRECACHE_URLS`、本文件的模块地图；`npm run perf:budget` 通过即证明前三者一致。
 - [ ] 改动 Service Worker 时确认 `/api/*` 与 `/v1/*` 仍未被缓存。
 - [ ] 运行 `npm run check` 与 `npm run test:unit`，`go vet ./...` / `go build ./...`，并手动过一遍受影响页面（含中英切换与深浅主题）。

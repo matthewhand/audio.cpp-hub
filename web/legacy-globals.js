@@ -10,7 +10,7 @@
  *   - $ / el：定义在这里（实现只有这一份），web/modules/dom.js 只是绑定并再导出；
  *   - showToast / focusDialog / restoreDialogFocus / parseApiError /
  *     renderStateError / renderEmptyState：这里只装转发器，真实实现在
- *     web/modules/async-ui.js 与 web/modules/ui.js，由 web/app.js 在模块求值时回填到
+ *     web/modules/async-ui.js，由 web/app.js 在模块求值时回填到
  *     window.AudioCppHubApp。转发器在目标尚未就位时静默返回，语义与原来
  *     audio-picker.js 里的 `typeof window.showToast === "function"` 保护一致。
  *

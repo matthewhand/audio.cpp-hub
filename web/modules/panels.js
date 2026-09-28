@@ -6,16 +6,29 @@
  * YuE2 busy 超时等）。面板自身的表单状态（ttsVariant / emotionMode / speakerPickers…）
  * 都在本模块，因为只有本模块写。
  *
+ * 五类面板里所有参考音频 / 说话人入口的 VoiceSelect 与 AudioPicker 实例也在本模块
+ * 求值时一次性创建：它们是面板表单的部件，历史「载入」要回填的也正是这批实例，
+ * 放在这里才能保证「重渲染后统一刷新标签」只有一个挂载点。
+ * 组件本身仍是经典脚本（web/voice-select.js、web/audio-picker.js），本模块不重新实现。
+ *
  * 同 sidebar.js：工作区重画要刷新侧栏历史，侧栏的「载入」要回填本模块的 TTS 表单，
  * 两模块之间是一处刻意的循环依赖（只在运行期回调里互相调用）。 */
 
-import { $, el, esc } from "./dom.js";
-import { t } from "./i18n-bridge.js";
-import { asrAudioPicker, emotionPicker, otherAudioPicker, otherVoicePicker, sepAudioPicker, voicePicker } from "./pickers.js";
-import { clearResult } from "./results.js";
+import { $, el, esc, t } from "./dom.js";
 import { historyRefPath, loadHistory } from "./sidebar.js";
 import { activeInstanceId, selectedModel } from "./state.js";
-import { reattachTasks, submitTask, trackTask } from "./tasks.js";
+import { clearResult, reattachTasks, submitTask, trackTask } from "./tasks.js";
+
+/* ---------- 表单选择器实例（模块求值时创建一次，仅本模块使用） ---------- */
+/* ---------- 表单选择器实例（模块求值时创建一次，仅本模块使用） ---------- */
+const voicePicker = new VoiceSelect($("voice-picker"), "picker.speakerRef", {
+  onChange: (v) => { const rt = $("tts-reference-text"); if (v && v.text && rt) rt.value = v.text; }
+});
+const emotionPicker = new VoiceSelect($("emotion-picker"), "picker.emotionRef");
+const asrAudioPicker = new AudioPicker($("asr-audio-picker"), "picker.inputRequired");
+const sepAudioPicker = new AudioPicker($("sep-audio-picker"), "picker.inputRequired");
+const otherAudioPicker = new AudioPicker($("other-audio-picker"), "picker.input");
+const otherVoicePicker = new VoiceSelect($("other-voice-picker"), "picker.voiceRef");
 
 export const RESERVED_KEYS = new Set([
   "emotionModes", "emotionLabels", "emotion_alpha",

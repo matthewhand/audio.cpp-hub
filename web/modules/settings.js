@@ -4,14 +4,12 @@
  * 可执行文件同时供启动弹窗使用（renderExecList / startEditExec / parseEnvText /
  * parseSessionOptionsText / updateLaunchExec 都在这里，由 launch 模块导入）。 */
 
-import { setButtonBusy, showToast } from "./async-ui.js";
-import { $, esc, renderListError } from "./dom.js";
-import { t } from "./i18n-bridge.js";
+import { focusDialog, renderListError, restoreDialogFocus, setButtonBusy, showToast } from "./async-ui.js";
+import { $, esc, t } from "./dom.js";
 import { renderModelList } from "./models.js";
 import { go, goPanel, setPendingSettingsSection } from "./routing.js";
 import { applyThemeIcon } from "./shell.js";
 import { executables, models, setExecutables } from "./state.js";
-import { focusDialog, restoreDialogFocus } from "./ui.js";
 
 /* 每个可执行文件的探测结果缓存（id → devices 数组）；可执行文件增删改时整体清空。
    缓存随可执行文件登记一起失效，因此归本模块；写入方（--list-devices 探测）在 launch.js。 */
