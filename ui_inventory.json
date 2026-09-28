@@ -853,6 +853,7 @@
     { "method": "POST", "path": "/api/audio/upload", "sources": ["web/audio-picker.js"] },
     { "method": "POST", "path": "/api/cert/generate", "sources": ["web/modules/settings.js"] },
     { "method": "GET", "path": "/api/cert/status", "sources": ["web/modules/settings.js"] },
+    { "method": "GET", "path": "/api/downloads", "sources": ["web/modules/downloads.js"] },
     { "method": "POST", "path": "/api/downloads", "sources": ["web/modules/downloads.js"] },
     {
       "method": "DELETE",
@@ -864,6 +865,7 @@
       "path": "/api/downloads/{param}/{param}",
       "sources": ["web/modules/downloads.js"]
     },
+    { "method": "GET", "path": "/api/events", "sources": ["web/modules/async-ui.js"] },
     { "method": "GET", "path": "/api/executables", "sources": ["web/modules/settings.js"] },
     { "method": "POST", "path": "/api/executables", "sources": ["web/modules/launch.js"] },
     {
@@ -918,12 +920,14 @@
       "sources": ["web/modules/sidebar.js"]
     },
     { "method": "POST", "path": "/api/https/config", "sources": ["web/modules/settings.js"] },
+    { "method": "GET", "path": "/api/instances", "sources": ["web/modules/instances.js"] },
     { "method": "POST", "path": "/api/instances", "sources": ["web/modules/launch.js"] },
     {
       "method": "DELETE",
       "path": "/api/instances/{param}",
       "sources": ["web/modules/instances.js"]
     },
+    { "method": "GET", "path": "/api/models", "sources": ["web/modules/models.js"] },
     {
       "method": "GET",
       "path": "/api/models/{param}/packages",
@@ -933,7 +937,14 @@
     { "method": "POST", "path": "/api/profiles", "sources": ["web/modules/launch.js"] },
     { "method": "DELETE", "path": "/api/profiles/{param}", "sources": ["web/modules/launch.js"] },
     { "method": "PUT", "path": "/api/profiles/{param}", "sources": ["web/modules/launch.js"] },
-    { "method": "DELETE", "path": "/api/tasks/{param}", "sources": ["web/modules/sidebar.js"] },
+    { "method": "POST", "path": "/api/tasks", "sources": ["web/modules/tasks.js"] },
+    { "method": "GET", "path": "/api/tasks?modelId={param}", "sources": ["web/modules/tasks.js"] },
+    {
+      "method": "DELETE",
+      "path": "/api/tasks/{param}",
+      "sources": ["web/modules/sidebar.js", "web/modules/tasks.js"]
+    },
+    { "method": "GET", "path": "/api/tasks/{param}", "sources": ["web/modules/tasks.js"] },
     { "method": "GET", "path": "/api/tasks/{param}/result", "sources": ["web/modules/tasks.js"] },
     {
       "method": "GET",
