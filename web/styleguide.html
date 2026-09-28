@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<!-- 设计系统演示页（开发用）：不链接自应用、不在任何导航中出现。
+     仅用于人工核对 /style.css 的令牌与组件外观；允许内联 <style>/<script>，因为本页不受 app CSP 约束。 -->
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>audio.cpp-hub · Styleguide</title>
+  <script src="/boot.js"></script>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    /* 覆盖应用布局，让本页可滚动、块级排布 */
+    body { overflow: auto; height: auto; display: block; }
+    .sg-main { max-width: 1080px; margin: 0 auto; padding: 24px; }
+    .sg-lead { color: var(--text-dim); font-size: var(--text-sm); margin: 0 0 20px; }
+    .sg-section { margin: 0 0 40px; }
+    .sg-section > h2 { border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    .sg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .sg-swatch { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+    .sg-swatch .chip { height: 56px; border-bottom: 1px solid var(--border); }
+    .sg-swatch .meta { padding: 6px 8px; font-size: var(--text-xs); color: var(--text-dim); }
+    .sg-swatch .meta code { color: var(--text); }
+    .sg-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 10px 0; }
+    .sg-stack { display: flex; flex-direction: column; gap: 10px; max-width: 420px; }
+    .sg-bar { display: flex; align-items: center; gap: 10px; font-size: var(--text-xs); color: var(--text-dim); }
+    .sg-bar .block { background: var(--accent); height: 14px; border-radius: 3px; flex: none; }
+    .sg-radius { width: 64px; height: 64px; background: var(--ring); border: 1px solid var(--accent); }
+    .sg-shadow { width: 120px; height: 72px; border-radius: var(--radius-lg); background: var(--card); }
+    /* 让固定定位的浮层在本页中以静态方式展示 */
+    .sg-inline-menu.menu { position: static; opacity: 1; transform: none; pointer-events: auto; display: inline-flex; }
+    .sg-dialog-stage { position: relative; height: 300px; border: 1px dashed var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+    .sg-dialog-stage .dialog-overlay { position: absolute; }
+    .sg-mode-btn.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="logo">audio.cpp-hub</span>
+      <span class="subtitle">设计系统演示 · Styleguide（开发页）</span>
+    </div>
+    <div class="header-actions">
+      <button class="btn-ghost sg-mode-btn" data-sg-mode="system">跟随系统</button>
+      <button class="btn-ghost sg-mode-btn" data-sg-mode="light">浅色</button>
+      <button class="btn-ghost sg-mode-btn" data-sg-mode="dark">深色</button>
+    </div>
+  </header>
+
+  <main class="sg-main">
+    <p class="sg-lead">本页仅引用 <code>/style.css</code>，令牌值与组件样式与应用完全一致。当前状态：<code id="sg-theme-state"></code></p>
+
+    <section class="sg-section">
+      <h2>颜色令牌</h2>
+      <div class="sg-grid" id="sg-colors"></div>
+    </section>
+
+    <section class="sg-section">
+      <h2>间距令牌</h2>
+      <div id="sg-spacing"></div>
+    </section>
+
+    <section class="sg-section">
+      <h2>圆角令牌</h2>
+      <div class="sg-row" id="sg-radius"></div>
+    </section>
+
+    <section class="sg-section">
+      <h2>阴影令牌</h2>
+      <div class="sg-row" id="sg-shadow"></div>
+    </section>
+
+    <section class="sg-section">
+      <h2>字号 / 排版</h2>
+      <div class="sg-stack" id="sg-type"></div>
+    </section>
+
+    <section class="sg-section">
+      <h2>层级与动效令牌</h2>
+      <div class="sg-stack" id="sg-misc"></div>
+    </section>
+
+    <section class="sg-section">
+      <h2>按钮 Button</h2>
+      <div class="sg-row">
+        <button class="btn">主按钮</button>
+        <button class="btn btn-primary">.btn-primary</button>
+        <button class="btn-ghost">幽灵按钮</button>
+        <button class="btn-danger">危险按钮</button>
+        <button class="stop-btn">.stop-btn 别名</button>
+      </div>
+      <div class="sg-row">
+        <button class="btn btn-sm">小号 .btn-sm</button>
+        <button class="btn btn-lg">大号 .btn-lg</button>
+        <button class="btn" disabled>禁用 disabled</button>
+        <button class="btn is-loading">加载中 .is-loading</button>
+        <button class="btn-ghost is-loading">加载中</button>
+        <button class="theme-btn tooltip" data-tip="圆形图标按钮">⚙️</button>
+      </div>
+    </section>
+
+    <section class="sg-section">
+      <h2>表单字段 Field</h2>
+      <div class="sg-stack">
+        <label class="field">
+          <span class="field-label">普通字段</span>
+          <input type="text" placeholder="请输入内容">
+          <span class="field-help">帮助文本：说明该字段的用途</span>
+        </label>
+        <label class="field">
+          <span class="field-label">错误字段</span>
+          <input type="text" class="input-error" value="非法值">
+          <span class="field-error">错误提示：请输入有效的值</span>
+        </label>
+        <label class="field">
+          <span class="field-label">下拉选择</span>
+          <select><option>选项一</option><option>选项二</option></select>
+        </label>
+        <label class="field">
+          <span class="field-label">多行文本</span>
+          <textarea rows="2" placeholder="多行输入"></textarea>
+        </label>
+        <label class="checkbox-label"><input type="checkbox" checked> 复选框</label>
+        <div class="switch"><input type="checkbox" checked><span class="switch-slider"></span></div>
+      </div>
+    </section>
+
+    <section class="sg-section">
+      <h2>卡片 Card</h2>
+      <div class="sg-grid">
+        <div class="card">
+          <div class="card-title">卡片标题</div>
+          <div class="card-family">家族 / 分类</div>
+          <div class="card-desc">卡片描述文本。</div>
+          <div class="card-actions"><button class="btn btn-sm">操作</button><button class="btn-ghost btn-sm">次要</button></div>
+        </div>
+        <div class="card selected">
+          <div class="card-title">选中状态 .selected</div>
+          <div class="card-desc">边框高亮。</div>
+        </div>
+        <div class="card unconfigured">
+          <div class="card-title">不可用 .unconfigured</div>
+          <div class="card-desc">整体弱化。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sg-section">
+      <h2>对话框 Dialog / Modal</h2>
+      <div class="sg-dialog-stage">
+        <div class="dialog-overlay">
+          <div class="dialog">
+            <div class="modal-header">
+              <span class="modal-title">对话框标题</span>
+              <button class="modal-close" aria-label="关闭">×</button>
+            </div>
+            <div class="hint">对话框内容区，样式与 .modal 完全一致。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sg-section">
+      <h2>Tabs 分段控件</h2>
+      <div class="tabs">
+        <button class="tab active">选中</button>
+        <button class="tab">默认</button>
+        <button class="tab">默认</button>
+      </div>
+    </section>
+
+    <section class="sg-section">
+      <h2>Toast 通知</h2>
+      <div class="sg-stack">
+        <div class="toast"><span class="toast-text">普通通知信息</span><button class="toast-close">×</button></div>
+        <div class="toast error"><span class="toast-text">错误通知信息</span><button class="toast-close">×</button></div>
+      </div>
+    </section>
+
+    <section class="sg-section">
+      <h2>徽标 / Pill</h2>
+      <div class="sg-row">
+        <span class="badge ready">ready</span>
+        <span class="badge starting">starting</span>
+        <span class="badge error">error</span>
+        <span class="badge stopped">stopped</span>
+        <span class="badge working">working</span>
+        <span class="pill ok">就绪</span>
+        <span class="pill warn">未就绪</span>
+      </div>
+    </section>
+
+    <section class="sg-section">
+      <h2>进度条 Progress</h2>
+      <div class="sg-stack">
+        <div class="progress"><div class="progress-fill" style="width: 62%"></div></div>
+        <div class="progress"><div class="progress-fill indeterminate"></div></div>
+      </div>
+    </section>
+
+    <section class="sg-section">
+      <h2>工具提示 Tooltip</h2>
+      <div class="sg-row">
+        <button class="btn tooltip" data-tip="这是工具提示文本">悬停 / 聚焦查看</button>
+      </div>
+    </section>
+
+    <section class="sg-section">
+      <h2>菜单 Menu</h2>
+      <div class="menu sg-inline-menu">
+        <a class="menu-item" href="#">菜单项一 <span class="hf-menu-ext">↗</span></a>
+        <a class="menu-item" href="#">菜单项二</a>
+        <button class="menu-item" type="button">菜单项三</button>
+      </div>
+    </section>
+
+    <section class="sg-section">
+      <h2>骨架屏 Skeleton</h2>
+      <div class="sg-stack">
+        <div class="skeleton skeleton-line" style="width: 80%"></div>
+        <div class="skeleton skeleton-line" style="width: 60%"></div>
+        <div class="skeleton" style="height: 72px"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    /* 令牌 / 组件演示页脚本：读取 /style.css 计算值渲染色板，并驱动三态主题切换 */
+    (function () {
+      const root = document.documentElement;
+      const cssVar = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+
+      const icons = { system: "🖥️", light: "☀️", dark: "🌙" };
+      const colorTokens = [
+        "--bg", "--bg-elevated", "--card", "--card-border", "--header-bg", "--input-bg",
+        "--text", "--text-dim", "--accent", "--accent-2", "--accent-contrast", "--gradient",
+        "--border", "--ring", "--ok", "--warn", "--err", "--wave-bg", "--wave-dim", "--scrollbar"
+      ];
+      const spaceTokens = ["--space-1", "--space-2", "--space-3", "--space-4", "--space-5", "--space-6", "--space-8", "--space-10"];
+      const radiusTokens = ["--radius-sm", "--radius-md", "--radius-lg", "--radius-xl", "--radius-full"];
+      const typeTokens = ["--text-xs", "--text-sm", "--text-base", "--text-md", "--text-lg", "--text-xl"];
+      const miscTokens = ["--z-header", "--z-toast", "--z-drawer", "--z-modal", "--z-menu",
+        "--dur-1", "--dur-2", "--dur-3", "--ease-out", "--ease-in-out"];
+
+      function renderColors() {
+        document.getElementById("sg-colors").innerHTML = colorTokens.map((tok) => `
+          <div class="sg-swatch">
+            <div class="chip" style="background: var(${tok})"></div>
+            <div class="meta"><code>${tok}</code><br>${cssVar(tok) || "—"}</div>
+          </div>`).join("");
+      }
+
+      function renderSpacing() {
+        document.getElementById("sg-spacing").innerHTML = spaceTokens.map((tok) => `
+          <div class="sg-bar">
+            <code style="width:72px;flex:none">${tok}</code>
+            <span class="block" style="width: ${cssVar(tok)}"></span>
+            <span>${cssVar(tok)}</span>
+          </div>`).join("");
+      }
+
+      function renderRadius() {
+        document.getElementById("sg-radius").innerHTML = radiusTokens.map((tok) => `
+          <div style="text-align:center">
+            <div class="sg-radius" style="border-radius: var(${tok})"></div>
+            <div class="sg-bar"><code>${tok}</code></div>
+          </div>`).join("");
+      }
+
+      function renderShadow() {
+        document.getElementById("sg-shadow").innerHTML = ["--shadow", "--shadow-hover"].map((tok) => `
+          <div style="text-align:center">
+            <div class="sg-shadow" style="box-shadow: var(${tok})"></div>
+            <div class="sg-bar"><code>${tok}</code></div>
+          </div>`).join("");
+      }
+
+      function renderType() {
+        document.getElementById("sg-type").innerHTML = typeTokens.map((tok) => `
+          <div style="font-size: var(${tok})">${tok} · 音频工作台 Audio</div>`).join("");
+      }
+
+      function renderMisc() {
+        document.getElementById("sg-misc").innerHTML = miscTokens.map((tok) => `
+          <div class="sg-bar"><code style="width:120px;flex:none">${tok}</code><span>${cssVar(tok) || "—"}</span></div>`).join("");
+      }
+
+      function renderThemeState() {
+        document.documentElement.dataset.themeMode = HubTheme.mode();
+        document.querySelectorAll("[data-sg-mode]").forEach((b) => {
+          const on = b.dataset.sgMode === HubTheme.mode();
+          b.classList.toggle("active", on);
+          b.textContent = icons[b.dataset.sgMode] + " " + b.textContent.replace(/^[^ ]+ /, "");
+        });
+        document.getElementById("sg-theme-state").textContent =
+          "mode=" + HubTheme.mode() + " → data-theme=" + document.documentElement.dataset.theme;
+      }
+
+      function renderAll() {
+        renderColors();
+        renderSpacing();
+        renderRadius();
+        renderShadow();
+        renderType();
+        renderMisc();
+        renderThemeState();
+      }
+
+      document.querySelectorAll("[data-sg-mode]").forEach((b) => {
+        b.onclick = () => { HubTheme.setMode(b.dataset.sgMode); renderAll(); };
+      });
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      const onSystem = () => { if (HubTheme.mode() === "system") renderAll(); };
+      if (media.addEventListener) media.addEventListener("change", onSystem);
+      else if (media.addListener) media.addListener(onSystem);
+
+      renderAll();
+    })();
+  </script>
+</body>
+</html>

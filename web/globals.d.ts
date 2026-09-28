@@ -32,6 +32,23 @@ declare interface Window {
   I18N: I18NApi;
 }
 
+/* ---- boot.js → window.HubTheme ----
+ * boot.js 在 <head> 内同步执行（首次绘制前写入 <html data-theme> 防闪烁），
+ * 并把主题模式解析逻辑挂到 window 供 app.js 复用，避免两处重复实现。 */
+interface HubThemeApi {
+  /** 读取持久化的主题模式："system" | "light" | "dark"（非法值回退 system） */
+  mode(): "system" | "light" | "dark";
+  /** 把模式解析为实际主题：system 跟随 prefers-color-scheme，其余原样返回 */
+  resolve(m: string): "light" | "dark";
+  /** 写入 data-theme（实际主题）与 data-theme-mode（原始模式），不落盘 */
+  apply(m: string): void;
+  /** 持久化并应用模式；返回归一化后的模式 */
+  setMode(m: string): "system" | "light" | "dark";
+}
+declare interface Window {
+  HubTheme: HubThemeApi;
+}
+
 /* ---- wav.js → window.WavUtil ---- */
 interface WavUtilApi {
   decodeToAudioBuffer(data: ArrayBuffer): Promise<AudioBuffer>;
