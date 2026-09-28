@@ -406,10 +406,20 @@ window.FileBrowser = (() => {
     const up = $(".fb-up");
     up.textContent = t("fb.up");
     up.title = t("fb.upTitle");
-    $(".fb-path").placeholder = t("fb.pathPlaceholder");
+    up.setAttribute("aria-label", t("fb.upTitle"));
+    $(".fb-close").setAttribute("aria-label", t("history.closeTitle"));
+    const pathInput = $(".fb-path");
+    pathInput.placeholder = t("fb.pathPlaceholder");
+    pathInput.setAttribute("aria-label", t("fb.pathPlaceholder"));
     $(".fb-go").textContent = t("fb.go");
-    $(".fb-refresh").title = t("fb.refreshTitle");
-    $(".fb-search").placeholder = t("fb.searchPlaceholder");
+    const refresh = $(".fb-refresh");
+    refresh.title = t("fb.refreshTitle");
+    refresh.setAttribute("aria-label", t("fb.refreshTitle"));
+    const search = $(".fb-search");
+    search.placeholder = t("fb.searchPlaceholder");
+    search.setAttribute("aria-label", t("fb.searchPlaceholder"));
+    $(".fb-ext").setAttribute("aria-label", t("fb.extLabel"));
+    $(".fb-list").setAttribute("aria-label", t("fb.listLabel"));
     const hiddenLabel = $(".fb-hidden-toggle");
     hiddenLabel.childNodes.forEach(n => {
       if (n.nodeType === Node.TEXT_NODE) n.textContent = " " + t("fb.showHidden");
