@@ -229,8 +229,20 @@ The `/api/fs/*` endpoints intentionally expose server-local filesystem browsing 
 
 Build steps, code style and pre-commit checks are in [`CONTRIBUTING.md`](CONTRIBUTING.md); see [`CHANGELOG.md`](CHANGELOG.md) for the change history.
 
+## Frontend (web/)
+
+The Web UI is plain HTML/CSS/JS in `web/`: **no framework, no build step, and no Node.js at runtime** — the Go server
+serves the static files straight from disk, so a browser refresh is all it takes. Any Node/npm tooling (if introduced)
+is dev/CI-only and does not ship.
+
+See [`web/README.md`](web/README.md) for the module map, state and polling model, coding conventions and contribution
+checklist. Architecture/sequence/state diagrams live in [`docs/diagrams/`](docs/diagrams/); demo GIFs in
+[`docs/assets/`](docs/assets/); the API contract the frontend calls is in [`docs/API.md`](docs/API.md);
+e2e/unit tests and the performance budget in [`TESTING.md`](TESTING.md); offline & installability (PWA) in
+[`docs/pwa.md`](docs/pwa.md) and the motion system in [`docs/motion.md`](docs/motion.md).
+
 ## Tech Stack & Provenance
 
 - Go 1.27, native single binary; the only dependencies are `github.com/getlantern/systray` (Windows tray) and `golang.org/x/sys`
-- Frontend: plain HTML/CSS/JS, with bilingual strings in `web/i18n.js`
+- Frontend: plain HTML/CSS/JS, with bilingual strings in `web/i18n.zh.js` / `web/i18n.en.js` and a single HTTP entry point in `web/api-client.js`
 - This project is a companion management panel for [audio.cpp](https://github.com/0xShug0/audio.cpp) (fork maintained at <https://github.com/matthewhand/audio.cpp-hub>); it does not bundle upstream binaries — models and inference come from the upstream project
