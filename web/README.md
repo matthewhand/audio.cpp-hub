@@ -116,6 +116,7 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 | `modules/downloads.js`（233） | 下载管理面板、页头角标、按模型的下载弹窗 | `fmtBytes` `web/modules/downloads.js:17`，`startDownloadsPolling` `:45`，`openDownloadsModal` `:58`，`renderDownloadList` `:74`，`loadMdlPackages` `:165` |
 | `modules/tasks.js`（331） | 任务队列**与结果落版**：提交、跟踪、取消、完成、`reattachTasks` 重挂、侧栏任务行；`renderTaskResult` 按类别分派 + ASR / 分离 / 音乐 / 其它结果 + `clearResult` / `makeTrackRow` | `activePolls` `web/modules/tasks.js:21`，`submitTask` `:26`，`trackTask` `:48`，`reattachTasks` `:101`，`renderTaskResult` `:194`，`clearResult` `:242` |
 | `modules/sidebar.js`（632） | 操作历史侧栏：历史加载与渲染（含骨架屏 / 三态）、分组、分组菜单（键盘导航）、四要素详情、隐私模式、任务行与历史行的列表组装、「清空」批量删除（走全局等待遮罩） | `openHistoryPanel` `web/modules/sidebar.js:19`，`loadHistory` `:79`，`renderSidebarList` `:125`，`deleteFinishedTasks` `:578`，清空处理 `:593` |
+| `modules/stats.js`（157） | 用量与性能看板（`#/stats`，页头 📊）：拉取 `GET /api/stats`，渲染总量卡片 + 每模型卡片（任务数 / 成功率 / 音频时长 / 输出体积 / 排队与执行 P50-P95 / 实时率 RTF） | `openStatsPanel` `web/modules/stats.js:26`，`loadStats` `:40`，`renderStats` `:52` |
 | `modules/panels.js`（866） | 工作区分发 + TTS / ASR / SEP / Music / Other 五类面板：`paramSchema` 渲染与收集、情感滑块、各面板提交；面板表单的 `VoiceSelect` / `AudioPicker` 实例在模块求值时一次性创建 | `voicePicker` `web/modules/panels.js:24`，`renderWorkspace` `:51`，`renderTtsPanel` `:294`，`buildEmotionSliders` `:536`，`renderAsrPanel` `:646` |
 
 #### 3.3 共享可变状态与 setter
@@ -225,7 +226,7 @@ ES 模块的函数声明提升 + 活绑定让这种形状安全，`no-use-before
   - `web/` 里还剩两处 `setInterval`，都**不是**服务器轮询，只是本地 UI 时钟，不要误改：录音计时（`web/audio-picker.js` 的 `recTimer`）与全局等待遮罩的耗时显示（`web/modules/async-ui.js` 的 `busyTimer`）。
 - **任务生命周期**：`submitTask`（`web/modules/tasks.js:26`）→ `trackTask`（`:48`，入侧栏并轮询）→ `finishTask` → 结果渲染（`web/modules/tasks.js:194`）。
   TTS 结果直接用历史 wav URL（不处理 base64），其余类别再取 `/result` JSON。页面加载 / 切换模型时 `reattachTasks`（`web/modules/tasks.js:101`）经 `GET /api/tasks?modelId=` 重挂。
-- **hash 路由（#88）**：`#/model/<id>` / `#/instance/<id>` / `#/history` / `#/voices` / `#/downloads` / `#/settings`。
+- **hash 路由（#88）**：`#/model/<id>` / `#/instance/<id>` / `#/history` / `#/voices` / `#/downloads` / `#/stats` / `#/settings`。
   打开 / 关闭面板与选择模型统一经 `modules/routing.js` 的 `go()` 改 hash，`applyRoute()` 是唯一应用视图的地方，
   因此前进 / 后退可自然还原，深链接刷新后也能恢复面板与选中项。`pendingModelId` / `pendingInstanceId` /
   `pendingSettingsSection` 记录「目标数据还没到」的意图，等对应模块拿到数据再兑现。

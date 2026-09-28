@@ -349,6 +349,35 @@ footer { flex: none; }
 .tts-card { padding: 20px 22px; }
 .tts-card h2 { margin-top: 0; }
 
+/* ---- 用量与性能看板（#/stats） ---- */
+.stats-body { padding: var(--space-4) var(--space-5); overflow-y: auto; }
+.stats-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+.stats-total {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+}
+.stats-total-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stats-total-label { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.stats-models { display: flex; flex-direction: column; gap: var(--space-3); }
+.stats-model-head { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.stats-model-title { font-weight: 600; font-size: 14px; }
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-3);
+}
+.stats-cell { display: flex; flex-direction: column; gap: 2px; }
+.stats-cell-label { font-size: 12px; color: var(--text-dim); }
+.stats-cell-value { font-size: 15px; font-variant-numeric: tabular-nums; }
+.stats-note { margin-top: var(--space-3); }
+
 /* 模型列表：紧凑展示（标题 + 家族徽标一行，描述单行省略） */
 #model-list { gap: 6px; }
 #model-list .card { padding: 8px 12px; border-radius: 10px; }

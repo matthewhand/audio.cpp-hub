@@ -64,6 +64,7 @@ const PRECACHE_URLS = [
   "/modules/downloads.js",
   "/modules/tasks.js",
   "/modules/sidebar.js",
+  "/modules/stats.js",
   "/modules/panels.js",
   "/style.css",
   "/icons/icon-192.png",

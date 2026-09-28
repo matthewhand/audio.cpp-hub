@@ -196,7 +196,7 @@ export function startEventsPolling() {
    命令面板（#88）、文件浏览器与全局等待遮罩（#89）共用同一套焦点陷阱与 inert 机制。 */
 export const OVERLAY_IDS = ["instance-detail-modal", "launch-modal", "downloads-modal",
   "model-dl-modal", "settings-modal", "command-palette", "history-panel", "voices-panel",
-  "fb-overlay", "busy-overlay"];
+  "stats-panel", "fb-overlay", "busy-overlay"];
 export const FOCUSABLE_SEL = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 /* 弹窗返回焦点的栈：支持嵌套弹窗（如启动弹窗里打开文件浏览器）逐层还原 */
 const dialogFocusStack = [];

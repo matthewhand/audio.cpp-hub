@@ -20,9 +20,10 @@ import { closeInstanceDetail, instances, openInstanceDetail } from "./instances.
 import { selectModelById } from "./models.js";
 import { closeSettingsModal, openSettingsModal } from "./settings.js";
 import { closeHistoryPanel, openHistoryPanel } from "./sidebar.js";
+import { closeStatsPanel, openStatsPanel } from "./stats.js";
 import { selectedModelId } from "./state.js";
 
-export const ROUTE_VIEWS = ["history", "voices", "downloads", "settings"];
+export const ROUTE_VIEWS = ["history", "voices", "downloads", "stats", "settings"];
 
 let applyingRoute = false; // applyRoute 执行中：关闭函数不得再改 hash（防递归）
 
@@ -86,6 +87,7 @@ export function applyRoute() {
     if (r.view !== "history" && isOpen("history-panel")) closeHistoryPanel();
     if (r.view !== "voices" && isOpen("voices-panel") && window.closeVoicesPanel) window.closeVoicesPanel();
     if (r.view !== "downloads" && isOpen("downloads-modal")) closeDownloadsModal();
+    if (r.view !== "stats" && isOpen("stats-panel")) closeStatsPanel();
     if (r.view !== "settings" && isOpen("settings-modal")) closeSettingsModal();
     if (r.view !== "instance") {
       pendingInstanceId = null;
@@ -95,6 +97,7 @@ export function applyRoute() {
     if (r.view === "history") openHistoryPanel();
     else if (r.view === "voices") { if (window.openVoicesPanel) window.openVoicesPanel(); }
     else if (r.view === "downloads") openDownloadsModal();
+    else if (r.view === "stats") openStatsPanel();
     else if (r.view === "settings") {
       openSettingsModal(pendingSettingsSection || "general");
       pendingSettingsSection = null;
