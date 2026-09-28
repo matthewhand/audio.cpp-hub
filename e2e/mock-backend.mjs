@@ -205,10 +205,12 @@ export class MockBackend {
 
     // ---------- 事件 / 证书 ----------
     if (method === "GET" && p === "/api/events") return this.json(route, this.events);
-    if (method === "GET" && p === "/api/cert/status")
+    if (method === "GET" && p === "/api/cert/status") {
       return this.json(route, { ok: true, data: { enabled: false, exists: false } });
-    if (method === "GET" && p === "/api/https/config")
+    }
+    if (method === "GET" && p === "/api/https/config") {
       return this.json(route, { ok: true, enabled: false });
+    }
     if (method === "POST" && p === "/api/cert/generate") return this.json(route, { ok: true });
 
     // ---------- 音频 ----------
@@ -242,8 +244,9 @@ export class MockBackend {
       if (method === "GET") return this.json(route, this.voices);
       if (method === "POST") {
         const name = (body.name || "").trim();
-        if (this.voices.some((v) => v.name === name))
+        if (this.voices.some((v) => v.name === name)) {
           return this.err(route, "VOICE_NAME_EXISTS", "音色名称已存在");
+        }
         const v = { vid: "v" + this.nextId(), name, text: body.text || "", durationSec: 1.5 };
         this.voices.push(v);
         return this.json(route, v);
@@ -258,8 +261,9 @@ export class MockBackend {
       if (method === "PUT") {
         const v = this.voices.find((x) => x.vid === m[1]);
         if (!v) return this.json(route, { ok: false, error: "not found" }, 404);
-        if (body.name && this.voices.some((x) => x.vid !== m[1] && x.name === body.name))
+        if (body.name && this.voices.some((x) => x.vid !== m[1] && x.name === body.name)) {
           return this.err(route, "VOICE_NAME_EXISTS", "音色名称已存在");
+        }
         Object.assign(v, { name: body.name ?? v.name, text: body.text ?? v.text });
         return this.json(route, v);
       }
@@ -331,8 +335,9 @@ export class MockBackend {
       const list = this.groups[modelId] || (this.groups[modelId] = []);
       if (method === "GET") return this.json(route, list);
       if (method === "POST") {
-        if (list.some((g) => g.name === body.name))
+        if (list.some((g) => g.name === body.name)) {
           return this.err(route, "GROUP_EXISTS", "分组已存在");
+        }
         const g = { id: "g" + this.nextId(), name: body.name };
         list.push(g);
         return this.json(route, g);
@@ -389,10 +394,12 @@ export class MockBackend {
     }
 
     // ---------- 文件浏览 ----------
-    if (method === "GET" && p === "/api/fs/roots")
+    if (method === "GET" && p === "/api/fs/roots") {
       return this.json(route, { roots: [{ name: "/", path: "/" }] });
-    if (method === "GET" && p === "/api/fs/list")
+    }
+    if (method === "GET" && p === "/api/fs/list") {
       return this.json(route, { path: url.searchParams.get("path") || "/", entries: [] });
+    }
 
     // ---------- OpenAI 代理（前端未用，占位） ----------
     if (p.startsWith("/v1/")) return this.json(route, { data: [] });
@@ -405,8 +412,9 @@ export class MockBackend {
   }
 
   defaultResult(category, req) {
-    if (category === "asr")
+    if (category === "asr") {
       return { text: "mock transcript: hello from audio.cpp-hub", language: "en" };
+    }
     return { text: req.text || "mock result" };
   }
 }

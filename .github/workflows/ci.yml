@@ -62,7 +62,7 @@ jobs:
         run: python3 scripts/check-diagrams.py docs/diagrams
 
   web-toolchain:
-    name: 前端 / 类型 · Lint · 格式（开发期工具链）
+    name: 前端 / 类型 · Lint · 格式 · i18n（开发期工具链）
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -76,8 +76,9 @@ jobs:
           node-version: 22
           cache: npm
 
-      # 本 job 只跑 tsc / ESLint / Prettier，不需要浏览器二进制；@playwright/test
-      # 同在 devDependencies 里，跳过其 postinstall 下载（浏览器由 frontend job 装）。
+      # 本 job 只跑 tsc / ESLint / Prettier / i18n parity，不需要浏览器二进制；
+      # @playwright/test 同在 devDependencies 里，它的 postinstall 会拉约 150MB 浏览器，
+      # 在这个 job 里纯属浪费，跳过（浏览器由 frontend job 安装，axe 审计复用那一份）。
       - name: 安装工具链依赖（仅 devDependencies，运行期零构建）
         run: npm ci
         env:
@@ -95,8 +96,14 @@ jobs:
       - name: 格式检查（Prettier，范围见 .prettierignore）
         run: npm run format:check
 
+      # 同样是硬闸门（ratchet）：web/i18n.zh.js 与 web/i18n.en.js 的键必须一一对应，
+      # 占位符也必须一致。漏翻译的键在页面上表现为裸 key 或 "undefined"，
+      # tsc / ESLint / Prettier 三者都看不出来，只有这个脚本能看见。
+      - name: i18n 中英键对齐（zh/en parity）
+        run: npm run check:i18n
+
   frontend:
-    name: 前端（单元 / e2e / 清单 / 预算）
+    name: 前端（单元 / e2e / 清单 / 预算 / 无障碍）
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -126,6 +133,16 @@ jobs:
 
       - name: 安装 Chromium
         run: npx playwright install --with-deps chromium
+
+      # 无障碍审计（axe-core + WCAG 2.0/2.1 A+AA）走真实 headless Chromium。
+      # 放在浏览器安装之后：脚本本身不下载浏览器，只用上面已装好的那一份；
+      # 若希望复用缓存，设置 PLAYWRIGHT_BROWSERS_PATH 指向已有的 ms-playwright 目录即可。
+      # 闸门是棘轮式的：新增规则 / 违规节点数变多才失败（存量欠账登记在
+      # scripts/axe-audit.js 的 KNOWN_VIOLATIONS），修好一条即下调基线。
+      - name: 无障碍审计（axe-core，WCAG A/AA）
+        run: npm run a11y:audit
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
 
       - name: e2e（headless，mock 后端）
         run: npm run test:e2e
