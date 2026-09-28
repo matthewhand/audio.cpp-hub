@@ -13,8 +13,13 @@ hub.config.json
 executables.json
 release_notes.md
 
-# 前端开发期工具链（tsc/ESLint/Prettier）的依赖，运行期零构建、不需要 node
+# 前端开发期工具链（tsc/ESLint/Prettier/Playwright）的依赖与产物，
+# 运行期零构建、不需要 node
 node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
 
 # 容器内使用的默认配置（端口 18080），需纳入版本控制
 !docker/hub.config.json
+
