@@ -96,19 +96,24 @@ jobs:
             local zip_name="$2"
             zip -r -9 -X "dist/$zip_name" "$root_name"
           }
+          # 每个平台包都必须附带许可与第三方声明（LICENSE 要求随二进制分发）
+          copy_common_files() {
+            local root_name="$1"
+            cp README.md LICENSE THIRD_PARTY_NOTICES "$root_name/"
+          }
           # Windows amd64
           WIN_ROOT="audio.cpp-hub-${VERSION}-windows-amd64"
           mkdir -p "$WIN_ROOT"
           cp audio.cpp-hub.exe "$WIN_ROOT/"
           cp -r web "$WIN_ROOT/web"
-          cp README.md "$WIN_ROOT/"
+          copy_common_files "$WIN_ROOT"
           make_zip "$WIN_ROOT" "audio.cpp-hub-${VERSION}-windows-amd64.zip"
           # Linux amd64
           LINUX_AMD64_ROOT="audio.cpp-hub-${VERSION}-linux-amd64"
           mkdir -p "$LINUX_AMD64_ROOT"
           cp audio.cpp-hub-linux-amd64 "$LINUX_AMD64_ROOT/audio.cpp-hub"
           cp -r web "$LINUX_AMD64_ROOT/web"
-          cp README.md "$LINUX_AMD64_ROOT/"
+          copy_common_files "$LINUX_AMD64_ROOT"
           chmod +x "$LINUX_AMD64_ROOT/audio.cpp-hub"
           make_zip "$LINUX_AMD64_ROOT" "audio.cpp-hub-${VERSION}-linux-amd64.zip"
           # Linux arm64
@@ -116,7 +121,7 @@ jobs:
           mkdir -p "$LINUX_ARM64_ROOT"
           cp audio.cpp-hub-linux-arm64 "$LINUX_ARM64_ROOT/audio.cpp-hub"
           cp -r web "$LINUX_ARM64_ROOT/web"
-          cp README.md "$LINUX_ARM64_ROOT/"
+          copy_common_files "$LINUX_ARM64_ROOT"
           chmod +x "$LINUX_ARM64_ROOT/audio.cpp-hub"
           make_zip "$LINUX_ARM64_ROOT" "audio.cpp-hub-${VERSION}-linux-arm64.zip"
           # macOS arm64
@@ -124,7 +129,7 @@ jobs:
           mkdir -p "$DARWIN_ARM64_ROOT"
           cp audio.cpp-hub-darwin-arm64 "$DARWIN_ARM64_ROOT/audio.cpp-hub"
           cp -r web "$DARWIN_ARM64_ROOT/web"
-          cp README.md "$DARWIN_ARM64_ROOT/"
+          copy_common_files "$DARWIN_ARM64_ROOT"
           chmod +x "$DARWIN_ARM64_ROOT/audio.cpp-hub"
           make_zip "$DARWIN_ARM64_ROOT" "audio.cpp-hub-${VERSION}-darwin-arm64.zip"
           ls -lh dist/
