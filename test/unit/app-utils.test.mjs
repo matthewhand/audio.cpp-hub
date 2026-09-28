@@ -1,13 +1,25 @@
-/* #72 单元测试：app.js 中的纯工具函数（转义、URL 白名单、镜像改写、字节格式化、key=value 解析）。
-   这些函数不可导入，通过 vm 抽取源码函数体测试，不修改前端。 */
+/* #72 单元测试：web/ 里的纯工具函数（转义、URL 白名单、镜像改写、字节格式化、key=value 解析）。
+   这些函数不可导入，通过 vm 抽取源码函数体测试，不修改前端。
+   #100 把 app.js 拆成 ES 模块后，这些函数分散在 web/modules/*.js，
+   因此这里按「谁拥有这个函数」逐个指定源文件。 */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readWeb, extractFunction, makeFunction, makeI18nStub } from "./helpers/vm.mjs";
 
-const appSrc = readWeb("app.js");
+/* 函数 → 现在拥有它的文件（相对 web/） */
+const SRC = {
+  esc: "modules/dom.js",
+  safeHttpUrl: "modules/dom.js",
+  hfMirrorOf: "modules/models.js",
+  fmtBytes: "modules/downloads.js",
+  parseEnvText: "modules/settings.js",
+  parseSessionOptionsText: "modules/settings.js"
+};
 
 function load(name, deps = {}) {
-  return makeFunction(extractFunction(appSrc, name), deps);
+  const file = SRC[name];
+  if (!file) throw new Error(`no source file declared for ${name}`);
+  return makeFunction(extractFunction(readWeb(file), name), deps);
 }
 
 const t = (k, p) => (p ? k.replace(/\{(\w+)\}/g, (_m, n) => String(p[n] ?? _m)) : k);

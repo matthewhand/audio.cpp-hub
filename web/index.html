@@ -463,20 +463,35 @@
     </div>
   </div>
 
+  <!-- 经典脚本区：普通 <script> 在解析期同步执行，彼此按顺序共享 window 作用域。
+       这些脚本仍各自维护 window.* 全局（I18N / WavUtil / FileBrowser / AudioPicker /
+       VoiceSelect / openVoicesPanel / hubTheme / hubMotion），没有改成 ES 模块。
+       顺序有硬约束：词典必须先于 i18n.js，legacy-globals.js 必须先于所有引用
+       $ / el / showToast / focusDialog 的经典脚本。 -->
+  <!-- 两份词典（纯数据，写入 window.I18N_ZH / I18N_EN）必须先于 i18n.js -->
   <script src="/i18n.zh.js"></script>
   <script src="/i18n.en.js"></script>
   <script src="/i18n.js"></script>
-  <!-- API 客户端：集中 fetch / 错误信封 / 轮询，须在 i18n.js 之后、app.js 之前 -->
+  <!-- API 客户端：集中 fetch / 错误信封 / 轮询，须在 i18n.js 之后 -->
   <script src="/api-client.js"></script>
   <script src="/wav.js"></script>
   <script src="/file-browser.js"></script>
+  <!-- 经典脚本 ↔ ES 模块的桥：把 window.$ / el 定义在这里（唯一实现），
+       并把 showToast / focusDialog / restoreDialogFocus / parseApiError /
+       renderStateError / renderEmptyState 装成转发器（真实实现在 web/modules/*，
+       由下面的 app.js 模块求值时回填）。必须早于所有经典组件脚本。 -->
+  <script src="/legacy-globals.js"></script>
   <script src="/audio-picker.js"></script>
   <script src="/voice-select.js"></script>
+  <script src="/voices-panel.js"></script>
   <!-- 动效系统：注册在 app.js 之前，保证首屏渲染即可用；只做纯 UI 反馈，不含业务逻辑 -->
   <script src="/motion.js"></script>
   <!-- PWA：注册 /sw.js + 更新提示。须在 i18n.js 之后，且不依赖 app.js -->
   <script src="/pwa.js"></script>
-  <script src="/app.js"></script>
-  <script src="/voices-panel.js"></script>
+  <!-- 应用引导（ES 模块入口，隐式 defer）：导入 web/modules/*.js 并启动。
+       模块脚本默认在整份文档解析完成后才执行，因此模块里的所有 DOM 取值都安全，
+       也因此它必然晚于上面所有普通脚本。经典脚本与模块入口可以共存：
+       前者继续用 window.* 通信，后者用 import/export。 -->
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

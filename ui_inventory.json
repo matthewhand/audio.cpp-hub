@@ -10,6 +10,27 @@
       "web/i18n.en.js",
       "web/i18n.js",
       "web/i18n.zh.js",
+      "web/legacy-globals.js",
+      "web/modules/api.js",
+      "web/modules/async-ui.js",
+      "web/modules/command-palette.js",
+      "web/modules/dom.js",
+      "web/modules/downloads.js",
+      "web/modules/events.js",
+      "web/modules/i18n-bridge.js",
+      "web/modules/instances.js",
+      "web/modules/launch.js",
+      "web/modules/models.js",
+      "web/modules/panels.js",
+      "web/modules/pickers.js",
+      "web/modules/results.js",
+      "web/modules/routing.js",
+      "web/modules/settings.js",
+      "web/modules/shell.js",
+      "web/modules/sidebar.js",
+      "web/modules/state.js",
+      "web/modules/tasks.js",
+      "web/modules/ui.js",
       "web/motion.js",
       "web/pwa.js",
       "web/voice-select.js",
@@ -291,14 +312,14 @@
       "tag": "button",
       "type": null,
       "i18n": ["asr.copy"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/panels.js"] }]
     },
     {
       "id": "asr-submit",
       "tag": "button",
       "type": null,
       "i18n": ["asr.submit"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/panels.js"] }]
     },
     {
       "id": "command-palette-input",
@@ -306,8 +327,8 @@
       "type": "text",
       "i18n": ["palette.placeholder", "palette.title"],
       "handlers": [
-        { "event": "input", "sources": ["web/app.js"] },
-        { "event": "keydown", "sources": ["web/app.js"] }
+        { "event": "input", "sources": ["web/modules/command-palette.js"] },
+        { "event": "keydown", "sources": ["web/modules/command-palette.js"] }
       ]
     },
     {
@@ -315,35 +336,37 @@
       "tag": "button",
       "type": null,
       "i18n": ["dl.managerTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/downloads.js"] }]
     },
     {
       "id": "downloads-modal-close",
       "tag": "button",
       "type": null,
       "i18n": ["history.closeTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/downloads.js"] }]
     },
     {
       "id": "exec-add-btn",
       "tag": "button",
       "type": null,
       "i18n": ["exec.add"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [
+        { "event": "click", "sources": ["web/modules/launch.js", "web/modules/settings.js"] }
+      ]
     },
     {
       "id": "exec-browse-btn",
       "tag": "button",
       "type": null,
       "i18n": ["launch.browse"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/launch.js"] }]
     },
     {
       "id": "exec-cancel-edit-btn",
       "tag": "button",
       "type": null,
       "i18n": ["exec.cancel"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/settings.js"] }]
     },
     {
       "id": "exec-env",
@@ -357,7 +380,7 @@
       "tag": "button",
       "type": null,
       "i18n": ["launch.execGoto"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/settings.js"] }]
     },
     {
       "id": "exec-name",
@@ -371,7 +394,7 @@
       "tag": "button",
       "type": null,
       "i18n": ["exec.new"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/settings.js"] }]
     },
     { "id": "exec-note", "tag": "input", "type": "text", "i18n": [], "handlers": [] },
     {
@@ -386,70 +409,70 @@
       "tag": "button",
       "type": null,
       "i18n": ["history.title"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/sidebar.js"] }]
     },
     {
       "id": "history-clear",
       "tag": "button",
       "type": null,
       "i18n": ["history.clear"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/sidebar.js"] }]
     },
     {
       "id": "history-close",
       "tag": "button",
       "type": null,
       "i18n": ["history.closeTitle", "history.closeTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/sidebar.js"] }]
     },
     {
       "id": "history-group-new",
       "tag": "button",
       "type": null,
       "i18n": ["history.groupNew"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/sidebar.js"] }]
     },
     {
       "id": "history-privacy",
       "tag": "button",
       "type": null,
       "i18n": ["history.privacyBtn"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/sidebar.js"] }]
     },
     {
       "id": "history-refresh",
       "tag": "button",
       "type": null,
       "i18n": ["history.refresh"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/sidebar.js"] }]
     },
     {
       "id": "https-download-ca",
       "tag": "button",
       "type": null,
       "i18n": ["https.downloadCa"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/settings.js"] }]
     },
     {
       "id": "https-download-keystore",
       "tag": "button",
       "type": null,
       "i18n": ["https.downloadKeystore"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/settings.js"] }]
     },
     {
       "id": "https-enabled",
       "tag": "input",
       "type": "checkbox",
       "i18n": ["https.enableLabel"],
-      "handlers": [{ "event": "change", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "change", "sources": ["web/modules/settings.js"] }]
     },
     {
       "id": "https-generate-btn",
       "tag": "button",
       "type": null,
       "i18n": ["https.generate"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/settings.js"] }]
     },
     { "id": "https-hostnames", "tag": "textarea", "type": null, "i18n": [], "handlers": [] },
     { "id": "https-ips", "tag": "textarea", "type": null, "i18n": [], "handlers": [] },
@@ -467,35 +490,35 @@
       "tag": "button",
       "type": null,
       "i18n": ["instance.detail"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/instances.js"] }]
     },
     {
       "id": "instance-detail-close",
       "tag": "button",
       "type": null,
       "i18n": ["history.closeTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/instances.js"] }]
     },
     {
       "id": "instance-select",
       "tag": "select",
       "type": null,
       "i18n": ["instance.barLabel"],
-      "handlers": [{ "event": "change", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "change", "sources": ["web/modules/instances.js"] }]
     },
     {
       "id": "instance-stop",
       "tag": "button",
       "type": null,
       "i18n": ["instance.stopCurrent"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/instances.js"] }]
     },
     {
       "id": "lang-toggle",
       "tag": "button",
       "type": null,
       "i18n": ["header.langTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/shell.js"] }]
     },
     { "id": "launch-adv-options", "tag": "textarea", "type": null, "i18n": [], "handlers": [] },
     { "id": "launch-backend", "tag": "select", "type": null, "i18n": [], "handlers": [] },
@@ -504,14 +527,14 @@
       "tag": "button",
       "type": null,
       "i18n": ["launch.submit"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/launch.js"] }]
     },
     {
       "id": "launch-device",
       "tag": "select",
       "type": null,
       "i18n": [],
-      "handlers": [{ "event": "change", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "change", "sources": ["web/modules/launch.js"] }]
     },
     {
       "id": "launch-exec",
@@ -519,8 +542,8 @@
       "type": null,
       "i18n": [],
       "handlers": [
-        { "event": "change", "sources": ["web/app.js"] },
-        { "event": "mousedown", "sources": ["web/app.js"] }
+        { "event": "change", "sources": ["web/modules/launch.js"] },
+        { "event": "mousedown", "sources": ["web/modules/launch.js"] }
       ]
     },
     {
@@ -528,7 +551,7 @@
       "tag": "button",
       "type": null,
       "i18n": ["history.closeTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/launch.js"] }]
     },
     {
       "id": "launch-name",
@@ -542,7 +565,7 @@
       "tag": "button",
       "type": null,
       "i18n": ["instance.create"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/launch.js"] }]
     },
     {
       "id": "launch-port",
@@ -556,21 +579,21 @@
       "tag": "select",
       "type": null,
       "i18n": [],
-      "handlers": [{ "event": "change", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "change", "sources": ["web/modules/launch.js"] }]
     },
     {
       "id": "launch-threads",
       "tag": "input",
       "type": "number",
       "i18n": ["launch.threadsPlaceholder"],
-      "handlers": [{ "event": "input", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "input", "sources": ["web/modules/launch.js"] }]
     },
     {
       "id": "launch-weights",
       "tag": "input",
       "type": "text",
       "i18n": ["launch.weightsPlaceholder"],
-      "handlers": [{ "event": "input", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "input", "sources": ["web/modules/launch.js"] }]
     },
     { "id": "mdl-endpoint", "tag": "select", "type": null, "i18n": [], "handlers": [] },
     { "id": "mdl-overwrite", "tag": "input", "type": "checkbox", "i18n": [], "handlers": [] },
@@ -579,7 +602,7 @@
       "tag": "button",
       "type": null,
       "i18n": ["dl.start"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/downloads.js"] }]
     },
     {
       "id": "mdl-token",
@@ -593,14 +616,14 @@
       "tag": "button",
       "type": null,
       "i18n": ["a11y.openMenu", "a11y.openMenu"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/shell.js"] }]
     },
     {
       "id": "model-dl-modal-close",
       "tag": "button",
       "type": null,
       "i18n": ["history.closeTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/downloads.js"] }]
     },
     {
       "id": "music-abc",
@@ -636,7 +659,7 @@
       "tag": "button",
       "type": null,
       "i18n": ["music.submit"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/panels.js"] }]
     },
     { "id": "other-extra", "tag": "textarea", "type": null, "i18n": [], "handlers": [] },
     {
@@ -644,42 +667,42 @@
       "tag": "button",
       "type": null,
       "i18n": ["other.submit"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/panels.js"] }]
     },
     {
       "id": "profile-del-btn",
       "tag": "button",
       "type": null,
       "i18n": ["launch.profileDelete"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/launch.js"] }]
     },
     {
       "id": "profile-save-btn",
       "tag": "button",
       "type": null,
       "i18n": ["launch.profileSave"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/launch.js"] }]
     },
     {
       "id": "sep-submit",
       "tag": "button",
       "type": null,
       "i18n": ["sep.submit"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/panels.js"] }]
     },
     {
       "id": "settings-btn",
       "tag": "button",
       "type": null,
       "i18n": ["header.settingsTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/settings.js"] }]
     },
     {
       "id": "settings-modal-close",
       "tag": "button",
       "type": null,
       "i18n": ["history.closeTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/settings.js"] }]
     },
     {
       "id": "skip-to-content",
@@ -693,7 +716,7 @@
       "tag": "button",
       "type": null,
       "i18n": ["header.themeTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/shell.js"] }]
     },
     { "id": "tts-download", "tag": "a", "type": null, "i18n": ["tts.download"], "handlers": [] },
     {
@@ -701,7 +724,7 @@
       "tag": "input",
       "type": "range",
       "i18n": ["emotion.alphaLabel"],
-      "handlers": [{ "event": "input", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "input", "sources": ["web/modules/panels.js"] }]
     },
     {
       "id": "tts-emotion-text",
@@ -715,14 +738,14 @@
       "tag": "button",
       "type": null,
       "i18n": ["tts.speakerAdd"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/panels.js"] }]
     },
     {
       "id": "tts-submit",
       "tag": "button",
       "type": null,
       "i18n": ["tts.submit"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/panels.js"] }]
     },
     {
       "id": "tts-text",
@@ -736,14 +759,14 @@
       "tag": "select",
       "type": null,
       "i18n": ["settings.general.language"],
-      "handlers": [{ "event": "change", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "change", "sources": ["web/modules/settings.js"] }]
     },
     {
       "id": "ui-theme",
       "tag": "select",
       "type": null,
       "i18n": ["settings.general.theme"],
-      "handlers": [{ "event": "change", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "change", "sources": ["web/modules/settings.js"] }]
     },
     {
       "id": "voice-add-btn",
@@ -785,14 +808,14 @@
       "tag": "button",
       "type": null,
       "i18n": ["launch.browseDir"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/launch.js"] }]
     },
     {
       "id": "weights-gguf-btn",
       "tag": "button",
       "type": null,
       "i18n": ["launch.browseGguf"],
-      "handlers": [{ "event": "click", "sources": ["web/app.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/launch.js"] }]
     }
   ],
   "dataHooks": [
@@ -807,65 +830,121 @@
   "shortcuts": [
     { "key": " ", "negated": false, "source": "web/audio-picker.js" },
     { "key": " ", "negated": false, "source": "web/file-browser.js" },
-    { "key": "ArrowDown", "negated": false, "source": "web/app.js" },
+    { "key": "ArrowDown", "negated": false, "source": "web/modules/command-palette.js" },
+    { "key": "ArrowDown", "negated": false, "source": "web/modules/ui.js" },
     { "key": "ArrowLeft", "negated": false, "source": "web/audio-picker.js" },
     { "key": "ArrowRight", "negated": false, "source": "web/audio-picker.js" },
-    { "key": "ArrowUp", "negated": false, "source": "web/app.js" },
+    { "key": "ArrowUp", "negated": false, "source": "web/modules/command-palette.js" },
+    { "key": "ArrowUp", "negated": false, "source": "web/modules/ui.js" },
     { "key": "Delete", "negated": false, "source": "web/audio-picker.js" },
-    { "key": "End", "negated": false, "source": "web/app.js" },
     { "key": "End", "negated": false, "source": "web/audio-picker.js" },
-    { "key": "Enter", "negated": false, "source": "web/app.js" },
+    { "key": "End", "negated": false, "source": "web/modules/ui.js" },
     { "key": "Enter", "negated": false, "source": "web/audio-picker.js" },
     { "key": "Enter", "negated": false, "source": "web/file-browser.js" },
-    { "key": "Escape", "negated": false, "source": "web/app.js" },
+    { "key": "Enter", "negated": false, "source": "web/modules/command-palette.js" },
     { "key": "Escape", "negated": true, "source": "web/app.js" },
     { "key": "Escape", "negated": false, "source": "web/audio-picker.js" },
     { "key": "Escape", "negated": false, "source": "web/file-browser.js" },
-    { "key": "Home", "negated": false, "source": "web/app.js" },
+    { "key": "Escape", "negated": false, "source": "web/modules/command-palette.js" },
+    { "key": "Escape", "negated": false, "source": "web/modules/models.js" },
+    { "key": "Escape", "negated": false, "source": "web/modules/sidebar.js" },
     { "key": "Home", "negated": false, "source": "web/audio-picker.js" },
-    { "key": "k", "negated": false, "source": "web/app.js" },
-    { "key": "K", "negated": false, "source": "web/app.js" },
+    { "key": "Home", "negated": false, "source": "web/modules/ui.js" },
+    { "key": "k", "negated": false, "source": "web/modules/command-palette.js" },
+    { "key": "K", "negated": false, "source": "web/modules/command-palette.js" },
     { "key": "Tab", "negated": true, "source": "web/app.js" }
   ],
   "endpoints": [
     { "method": "POST", "path": "/api/audio/info", "sources": ["web/audio-picker.js"] },
     { "method": "POST", "path": "/api/audio/upload", "sources": ["web/audio-picker.js"] },
-    { "method": "POST", "path": "/api/cert/generate", "sources": ["web/app.js"] },
-    { "method": "GET", "path": "/api/cert/status", "sources": ["web/app.js"] },
-    { "method": "POST", "path": "/api/downloads", "sources": ["web/app.js"] },
-    { "method": "DELETE", "path": "/api/downloads/{param}?purge=true", "sources": ["web/app.js"] },
-    { "method": "POST", "path": "/api/downloads/{param}/{param}", "sources": ["web/app.js"] },
-    { "method": "GET", "path": "/api/executables", "sources": ["web/app.js"] },
-    { "method": "POST", "path": "/api/executables", "sources": ["web/app.js"] },
-    { "method": "DELETE", "path": "/api/executables/{param}", "sources": ["web/app.js"] },
-    { "method": "PUT", "path": "/api/executables/{param}", "sources": ["web/app.js"] },
-    { "method": "GET", "path": "/api/executables/{param}/devices", "sources": ["web/app.js"] },
+    { "method": "POST", "path": "/api/cert/generate", "sources": ["web/modules/settings.js"] },
+    { "method": "GET", "path": "/api/cert/status", "sources": ["web/modules/settings.js"] },
+    { "method": "POST", "path": "/api/downloads", "sources": ["web/modules/downloads.js"] },
+    {
+      "method": "DELETE",
+      "path": "/api/downloads/{param}?purge=true",
+      "sources": ["web/modules/downloads.js"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/downloads/{param}/{param}",
+      "sources": ["web/modules/downloads.js"]
+    },
+    { "method": "GET", "path": "/api/executables", "sources": ["web/modules/settings.js"] },
+    { "method": "POST", "path": "/api/executables", "sources": ["web/modules/launch.js"] },
+    {
+      "method": "DELETE",
+      "path": "/api/executables/{param}",
+      "sources": ["web/modules/settings.js"]
+    },
+    { "method": "PUT", "path": "/api/executables/{param}", "sources": ["web/modules/launch.js"] },
+    {
+      "method": "GET",
+      "path": "/api/executables/{param}/devices",
+      "sources": ["web/modules/launch.js"]
+    },
     { "method": "GET", "path": "/api/fs/list?path={param}", "sources": ["web/file-browser.js"] },
     { "method": "POST", "path": "/api/fs/mkdir", "sources": ["web/file-browser.js"] },
     { "method": "GET", "path": "/api/fs/roots", "sources": ["web/file-browser.js"] },
-    { "method": "DELETE", "path": "/api/history/{param}", "sources": ["web/app.js"] },
-    { "method": "GET", "path": "/api/history/{param}", "sources": ["web/app.js"] },
-    { "method": "DELETE", "path": "/api/history/{param}/{param}", "sources": ["web/app.js"] },
-    { "method": "GET", "path": "/api/history/{param}/{param}", "sources": ["web/app.js"] },
-    { "method": "PUT", "path": "/api/history/{param}/{param}/group", "sources": ["web/app.js"] },
-    { "method": "GET", "path": "/api/history/{param}/groups", "sources": ["web/app.js"] },
-    { "method": "POST", "path": "/api/history/{param}/groups", "sources": ["web/app.js"] },
+    { "method": "DELETE", "path": "/api/history/{param}", "sources": ["web/modules/sidebar.js"] },
+    { "method": "GET", "path": "/api/history/{param}", "sources": ["web/modules/sidebar.js"] },
+    {
+      "method": "DELETE",
+      "path": "/api/history/{param}/{param}",
+      "sources": ["web/modules/sidebar.js"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/history/{param}/{param}",
+      "sources": ["web/modules/sidebar.js"]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/history/{param}/{param}/group",
+      "sources": ["web/modules/sidebar.js"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/history/{param}/groups",
+      "sources": ["web/modules/sidebar.js"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/history/{param}/groups",
+      "sources": ["web/modules/sidebar.js"]
+    },
     {
       "method": "DELETE",
       "path": "/api/history/{param}/groups/{param}",
-      "sources": ["web/app.js"]
+      "sources": ["web/modules/sidebar.js"]
     },
-    { "method": "PUT", "path": "/api/history/{param}/groups/{param}", "sources": ["web/app.js"] },
-    { "method": "POST", "path": "/api/https/config", "sources": ["web/app.js"] },
-    { "method": "POST", "path": "/api/instances", "sources": ["web/app.js"] },
-    { "method": "DELETE", "path": "/api/instances/{param}", "sources": ["web/app.js"] },
-    { "method": "GET", "path": "/api/models/{param}/packages", "sources": ["web/app.js"] },
-    { "method": "GET", "path": "/api/profiles", "sources": ["web/app.js"] },
-    { "method": "POST", "path": "/api/profiles", "sources": ["web/app.js"] },
-    { "method": "DELETE", "path": "/api/profiles/{param}", "sources": ["web/app.js"] },
-    { "method": "PUT", "path": "/api/profiles/{param}", "sources": ["web/app.js"] },
-    { "method": "DELETE", "path": "/api/tasks/{param}", "sources": ["web/app.js"] },
-    { "method": "GET", "path": "/api/tasks/{param}/result", "sources": ["web/app.js"] },
+    {
+      "method": "PUT",
+      "path": "/api/history/{param}/groups/{param}",
+      "sources": ["web/modules/sidebar.js"]
+    },
+    { "method": "POST", "path": "/api/https/config", "sources": ["web/modules/settings.js"] },
+    { "method": "POST", "path": "/api/instances", "sources": ["web/modules/launch.js"] },
+    {
+      "method": "DELETE",
+      "path": "/api/instances/{param}",
+      "sources": ["web/modules/instances.js"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/models/{param}/packages",
+      "sources": ["web/modules/downloads.js"]
+    },
+    { "method": "GET", "path": "/api/profiles", "sources": ["web/modules/launch.js"] },
+    { "method": "POST", "path": "/api/profiles", "sources": ["web/modules/launch.js"] },
+    { "method": "DELETE", "path": "/api/profiles/{param}", "sources": ["web/modules/launch.js"] },
+    { "method": "PUT", "path": "/api/profiles/{param}", "sources": ["web/modules/launch.js"] },
+    { "method": "DELETE", "path": "/api/tasks/{param}", "sources": ["web/modules/sidebar.js"] },
+    {
+      "method": "GET",
+      "path": "/api/tasks/{param}/result",
+      "sources": ["web/modules/results.js", "web/modules/tasks.js"]
+    },
     {
       "method": "GET",
       "path": "/api/voices",

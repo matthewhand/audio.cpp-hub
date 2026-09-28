@@ -1,8 +1,12 @@
 /* audio.cpp-hub 前端：开发期类型声明（纯类型，无运行期文件）。
  *
- * web/ 下的脚本是经典脚本（classic script），按 web/index.html 底部的 <script src>
- * 顺序加载，并把公开接口挂到 `window.*`。TypeScript 的 checkJs 不会把「某个脚本里的
- * `window.X = ...` 赋值」推断成其它脚本可见的全局标识符，因此这里补一份环境声明。
+ * web/ 下的脚本分两类：
+ *   - 经典脚本（classic script）：按 web/index.html 的 <script src> 顺序执行，
+ *     把公开接口挂到 `window.*`；
+ *   - ES 模块（web/app.js + web/modules/*.js）：跨文件走 import/export。
+ * TypeScript 的 checkJs 不会把「某个脚本里的 `window.X = ...` 赋值」推断成其它脚本
+ * 可见的全局标识符，因此这里只给**经典脚本**补一份 window 环境声明；
+ * 模块之间的接口由 import/export 自行校验，不在这里登记。
  *
  * 只声明各模块**被其它文件实际用到的公开成员**，内部实现一律留 any：
  * 既能捕获调用侧的拼写错误 / 参数个数错误，又不需要随实现同步维护一份类型副本。
@@ -40,7 +44,7 @@ interface I18NApi {
   setLang(next: string): void;
   /** 批量替换 data-i18n / -placeholder / -title / -aria-label 标注 */
   applyI18n(root?: ParentNode): void;
-  /** 注册语言切换回调（app.js / AudioPicker / FileBrowser / VoicesPanel） */
+  /** 注册语言切换回调（web/app.js 的 rerenderAll / AudioPicker / FileBrowser / VoicesPanel） */
   onChange(cb: () => void): void;
   /** 解析后端 {"code","params"} 错误体并翻译，无匹配 code 时原样返回 */
   errText(text: string): string;
@@ -56,7 +60,8 @@ declare interface Window {
 
 /* ---- boot.js → window.HubTheme ----
  * boot.js 在 <head> 内同步执行（首次绘制前写入 <html data-theme> 防闪烁），
- * 并把主题模式解析逻辑挂到 window 供 app.js 复用，避免两处重复实现。 */
+ * 并把主题模式解析逻辑挂到 window 供 web/modules/shell.js 与 settings.js 复用，
+ * 避免两处重复实现。 */
 interface HubThemeApi {
   /** 读取持久化的主题模式："system" | "light" | "dark"（非法值回退 system） */
   mode(): "system" | "light" | "dark";
@@ -189,7 +194,7 @@ declare interface EventTarget {
 }
 
 /* ---- hub 错误信封：{"ok":false,"code","params","error"} ---- */
-/** app.js 的 parseApiError() 给 Error 挂 code/params（供 I18N 按 err.<code> 映射），
+/** modules/async-ui.js 的 parseApiError() 给 Error 挂 code/params（供 I18N 按 err.<code> 映射），
  *  api() 抛出的 ApiError 则另带 status。见 api-client.js 的 ApiErrorOptions。 */
 type HubHttpError = Error & {
   status?: number;
@@ -201,8 +206,8 @@ type HubHttpError = Error & {
 
 /* ---- api-client.js → window.AudioCppHub.api ----
  * 类型实现体在 web/api-client.js 顶部（@typedef RequestOptions/PollOptions/
- * ApiErrorOptions）。这里只声明 app.js 实际用到的成员，够用即可。
- * app.js 通过 const Api = window.AudioCppHub.api 一次性取用。 */
+ * ApiErrorOptions）。这里只声明 web/ 实际用到的成员，够用即可。
+ * web/modules/api.js 通过 const Api = window.AudioCppHub.api 一次性绑定。 */
 interface AudioCppHubRoot {
   api: {
     request(path: string, opts?: Record<string, unknown>): Promise<any>;
@@ -243,10 +248,10 @@ declare interface Window {
   AudioCppHub: AudioCppHubRoot;
 }
 
-/* ---- app.js → window.hub* 路由 / 面板钩子 ----
- * app.js 是 hash 路由的唯一应用方（applyRoute）；下列钩子供晚于它加载的
- * voices-panel.js 等在按钮点击 / 关闭时与路由保持同步（#/voices 深链接、
- * 面板再次点击收起）。内部实现（go/applyRoute/parseRoute…）不导出。 */
+/* ---- modules/routing.js → window.hub* 路由 / 面板钩子 ----
+ * web/modules/routing.js 是 hash 路由的唯一应用方（applyRoute）；下列钩子供晚于它
+ * 加载的 voices-panel.js 等在按钮点击 / 关闭时与路由保持同步（#/voices 深链接、
+ * 面板再次点击收起）。go / goPanel / parseRoute 等只在模块之间用 import 传递。 */
 declare interface Window {
   /** 改 hash 触发 hashchange → applyRoute；同 hash 时直接重放（用于重试） */
   hubNavigate(hash: string): void;
@@ -300,4 +305,48 @@ interface HubServiceWorkerScope {
   addEventListener(type: "install" | "activate", listener: (e: HubExtendableEvent) => void): void;
   addEventListener(type: "message", listener: (e: HubMessageEvent) => void): void;
   addEventListener(type: "fetch", listener: (e: HubFetchEvent) => void): void;
+}
+
+/* ---- legacy-globals.js → window.$ / el 与 #88 三态原语的转发器 ----
+ *
+ * app.js 改成 ES 模块后，经典脚本里原本靠「同域顶层 const/function 自动成为全局」拿到的
+ * $ / showToast / focusDialog / restoreDialogFocus 不再自动可见。web/legacy-globals.js
+ * 是显式的桥：$/el 是真实实现（web/modules/dom.js 只绑定并再导出），另三个是转发器，
+ * 真实实现在 web/modules/async-ui.js（showToast）与 web/modules/ui.js
+ * （focusDialog / restoreDialogFocus），由 web/app.js 求值时回填到 window.AudioCppHubApp。
+ *
+ * 仍然直接用到它们的地方：audio-picker.js（window.showToast）、
+ * voices-panel.js（$ / el / showToast / window.focusDialog / window.restoreDialogFocus，
+ * 以及 #88 的 parseApiError / renderStateError / renderEmptyState）。 */
+declare function $(id: string): any;
+declare function el(html: string): any;
+declare function showToast(level: string, message: string): void;
+declare function focusDialog(overlay: any): void;
+declare function restoreDialogFocus(): void;
+declare function parseApiError(text: string): HubHttpError;
+declare function renderStateError(
+  container: any,
+  error: unknown,
+  retry?: () => void,
+  raw?: boolean
+): void;
+declare function renderEmptyState(container: any, message: string, cta?: unknown): void;
+declare interface Window {
+  $(id: string): any;
+  el(html: string): any;
+  showToast(level: string, message: string): void;
+  focusDialog(overlay: any): void;
+  restoreDialogFocus(): void;
+  parseApiError(text: string): HubHttpError;
+  renderStateError(container: any, error: unknown, retry?: () => void, raw?: boolean): void;
+  renderEmptyState(container: any, message: string, cta?: unknown): void;
+  /** legacy-globals.js 先建空壳，web/app.js 在模块求值时回填真实实现 */
+  AudioCppHubApp: {
+    showToast?: (level: string, message: string) => void;
+    focusDialog?: (overlay: any) => void;
+    restoreDialogFocus?: () => void;
+    parseApiError?: (text: string) => HubHttpError;
+    renderStateError?: (container: any, error: unknown, retry?: () => void, raw?: boolean) => void;
+    renderEmptyState?: (container: any, message: string, cta?: unknown) => void;
+  };
 }

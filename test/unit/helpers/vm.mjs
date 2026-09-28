@@ -26,10 +26,11 @@ export function runClassic(source, sandbox = {}, filename = "classic.js") {
 
 /**
  * 从源码中抽取顶层/嵌套的 `function NAME(...) { ... }` 声明（含花括号配平），
- * 并以表达式形式在 sandbox 中求值，返回函数引用。用于测试 app.js 里不可导入的纯函数。
+ * 并以表达式形式在 sandbox 中求值，返回函数引用。用于测试 web/ 里不可导入的纯函数。
+ * `export ` 前缀是可选的：web/modules/*.js 的顶层绑定都带 export。
  */
 export function extractFunction(source, name) {
-  const re = new RegExp(`(?:^|\\n)[ \\t]*(function\\s+${name}\\s*\\()`);
+  const re = new RegExp(`(?:^|\\n)[ \\t]*(?:export\\s+)?(function\\s+${name}\\s*\\()`);
   const m = re.exec(source);
   if (!m) throw new Error(`function ${name} not found`);
   const start = m.index + m[0].indexOf("function");

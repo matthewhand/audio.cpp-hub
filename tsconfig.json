@@ -28,5 +28,5 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": ["web/*.js", "web/*.d.ts"]
+  "include": ["web/*.js", "web/*.d.ts", "web/modules/*.js"]
 }

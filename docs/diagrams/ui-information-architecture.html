@@ -84,7 +84,7 @@
     <!-- a11y: <title> is the FIRST child of <svg>; IDs are prefixed with the file slug -->
     <svg role="img" aria-labelledby="ui-information-architecture-title ui-information-architecture-desc" viewBox="0 0 1160 780">
       <title id="ui-information-architecture-title">audio.cpp-hub Web UI 信息架构树</title>
-      <desc id="ui-information-architecture-desc">树形结构：根为 web/ 单页应用，下分页头操作、模型工作区、任务与操作侧栏、全屏面板四组；全屏面板再含操作历史与分组、音色库、下载管理、文件浏览与设备探测。中英双语 i18n 层覆盖全部面板。依据 web/index.html、web/app.js、web/i18n.js。</desc>
+      <desc id="ui-information-architecture-desc">树形结构：根为 web/ 单页应用，下分页头操作、模型工作区、任务与操作侧栏、全屏面板四组；全屏面板再含操作历史与分组、音色库、下载管理、文件浏览与设备探测。中英双语 i18n 层覆盖全部面板。依据 web/index.html、web/app.js 与 web/modules/*.js、web/i18n.js。</desc>
       <defs>
         <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
           <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
@@ -198,7 +198,7 @@
     <div class="card">
       <p class="eyebrow">SOURCE</p>
       <h3><span class="dot soft"></span>依据</h3>
-      <ul><li>web/index.html · 页头 / 侧栏 / 弹窗</li><li>web/app.js · 渲染与面板装配</li><li>web/i18n.js · zh / en 字典</li></ul>
+      <ul><li>web/index.html · 页头 / 侧栏 / 弹窗</li><li>web/app.js + modules/*.js · 渲染与面板装配</li><li>web/i18n.js · zh / en 字典</li></ul>
     </div>
   </section>
 
