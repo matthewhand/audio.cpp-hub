@@ -49,6 +49,7 @@ func (h *Hub) registerRoutes(mux *http.ServeMux) {
 		{"POST", "/api/instances", h.handleInstanceStart},
 		{"DELETE", "/api/instances/{id}", h.handleInstanceStop},
 		{"GET", "/api/events", h.handleEvents},
+		{"GET", "/api/stats", h.handleStats},
 		{"GET", "/api/executables", h.handleExecList},
 		{"POST", "/api/executables", h.handleExecAdd},
 		{"PUT", "/api/executables/{id}", h.handleExecUpdate},
