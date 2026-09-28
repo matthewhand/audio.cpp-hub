@@ -398,7 +398,16 @@ window.FileBrowser = (() => {
     }
   }
 
-  /* ---------- 语言切换：重设所有静态文案（由 app.js 统一调用） ---------- */
+  /* ---------- 语言切换：重设所有静态文案（由 app.js 统一调用） ----------
+     注册在 rerenderAll（web/app.js）里，与 __audioPickers / __voiceSelects 的
+     refreshLabels() 并列。FileBrowser 是模块级单例（overlay 只在首次 open 时建），
+     因此这里直接按单例调用，不需要 __audioPickers 那样的实例登记表。
+
+     现状：页头语言按钮在 <header> 里，fb-overlay 打开时会被 syncInert 设成 inert，
+     设置弹窗又排在 fb-overlay 之下，所以当前 UI 没有「弹窗开着还能切语言」的入口——
+     它是防御性路径，不是活 bug。保留的成本是几十行，收益是任何新增的语言切换入口
+     （快捷键、命令面板项、嵌套开设置）都不会让已打开的弹窗退回旧语言文案。
+     test/unit/file-browser.test.mjs 会锁住这条注册关系。 */
   function relocalize() {
     if (!overlay) return;
     opts = opts || {};
