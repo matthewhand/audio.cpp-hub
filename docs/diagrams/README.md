@@ -1,110 +1,82 @@
-# Visual documentation — audio.cpp-hub
+# Architecture & operations diagrams
 
-A coherent diagram set derived from the actual repository (Go implementation,
-`main`). Each diagram is a single self-contained HTML file with inline SVG, so
-it renders in any browser and is directly editable.
+A coherent visual documentation set for **audio.cpp-hub** (Go rewrite), derived from the repository at
+`feat/go-magpie-tts`. Every diagram is hand-authored SVG in a **single self-contained HTML file** — open it in
+a browser, no build step. PNG previews (light + dark) are in [`assets/`](assets).
 
-**Start here:** [`INVENTORY.md`](INVENTORY.md) records every diagram's type,
-audience, the question it answers, the source files it was built from,
-confidence level, and any assumptions.
+> Content is sourced from the actual code. Anything inferred is flagged as an assumption in
+> [`INVENTORY.md`](INVENTORY.md). The set follows the `diagram-design` skill with a project **monochrome
+> skin** ([`style-guide.md`](style-guide.md)) derived from the app's own UI.
 
-> Ground rule used throughout: nothing is invented. Every component, port,
-> path, constant, and state name traces to a source file (cited in the
-> inventory and in each `<desc>`). Anything inferred is marked in
-> `INVENTORY.md`.
+![Overall architecture](assets/hero-overview.png)
 
 ## Index
 
-| File | Type | Audience | Answers |
+| Diagram | Type | Audience | Answers |
 |---|---|---|---|
-| [`01-hero.html`](01-hero.html) | Architecture (hero) | README / newcomers | What is this, for whom, what does it wrap? |
-| [`02-system-architecture.html`](02-system-architecture.html) | Architecture | Developers | What are the runtime components, stores, boundaries? |
-| [`03-deployment.html`](03-deployment.html) | Deployment | Operators | Where does it run (native vs Docker), ports, mounts, devices? |
-| [`04-integration.html`](04-integration.html) | Integration / dependency | Developers, operators | What external systems and protocols are involved? |
-| [`05-data-flow.html`](05-data-flow.html) | Data flow | Developers | How does payload data enter, transform, persist, expire? |
-| [`06-security-boundaries.html`](06-security-boundaries.html) | Layer stack / trust zones | Operators, security | What are the trust zones, credentials, unauthenticated surfaces? |
-| [`07-seq-http-api.html`](07-seq-http-api.html) | Sequence | Developers | Normal API request (and why there is no authn step) |
-| [`08-seq-core-tts.html`](08-seq-core-tts.html) | Sequence | Developers | Core op: TTS end-to-end with history extraction |
-| [`09-seq-proxy.html`](09-seq-proxy.html) | Sequence | Developers / integrators | OpenAI-compatible `/v1/*` routing by `model` |
-| [`10-seq-download.html`](10-seq-download.html) | Sequence | Operators | Weight download: probe → segments → resume |
-| [`11-seq-failure.html`](11-seq-failure.html) | Sequence | Developers, ops | Failure / retry / timeout / recovery paths |
-| [`12-operations.html`](12-operations.html) | Process / runbook | Operators | Startup, shutdown, health, backup, diagnosis |
-| [`13-state-instance-task.html`](13-state-instance-task.html) | State machine | Developers | Instance and task lifecycles |
-| [`14-data-model.html`](14-data-model.html) | ER / data model | Developers | On-disk entities and their relationships |
+| [hero-overview](hero-overview.html) · [png](assets/hero-overview.png) | Architecture | everyone | What the project is; clients, boundary, engine, weights |
+| [system-architecture](system-architecture.html) · [png](assets/system-architecture.png) | Architecture | dev / contributor | The hub's runtime components and how they connect |
+| [deployment-docker](deployment-docker.html) · [png](assets/deployment-docker.png) | Deployment | operator | Host vs container: devices, ports, volumes, artifacts |
+| [deployment-modes](deployment-modes.html) · [png](assets/deployment-modes.png) | Deployment | operator | Native/systemd vs Docker bridge vs LXC host-network |
+| [seq-tts-task](seq-tts-task.html) · [png](assets/seq-tts-task.png) | Sequence | dev / operator | Async TTS task, queue → engine → history |
+| [seq-openai-proxy](seq-openai-proxy.html) · [png](assets/seq-openai-proxy.png) | Sequence | integrator | `/v1/*` transparent proxy path |
+| [seq-instance-lifecycle](seq-instance-lifecycle.html) · [png](assets/seq-instance-lifecycle.png) | Sequence | operator | Starting and stopping a model child process |
+| [seq-download](seq-download.html) · [png](assets/seq-download.png) | Sequence | operator | Segmented weight download with resume |
+| [seq-auth](seq-auth.html) · [png](assets/seq-auth.png) | Sequence | security | AuthN/AuthZ — **there is none, by design** |
+| [seq-failure-recovery](seq-failure-recovery.html) · [png](assets/seq-failure-recovery.png) | Sequence | operator | Timeouts, cancel, restart replay |
+| [integration-external](integration-external.html) · [png](assets/integration-external.png) | DP integration | integrator | HF / mirrors / ModelScope / engine / clients |
+| [data-flow](data-flow.html) · [png](assets/data-flow.png) | Data flow | dev / operator | How data enters, transforms, persists, exits |
+| [security-boundaries](security-boundaries.html) · [png](assets/security-boundaries.png) | Architecture (secure paved road) | security | Trust zones, permitted vs forbidden ingress |
+| [ops-startup-shutdown-health](ops-startup-shutdown-health.html) · [png](assets/ops-startup-shutdown-health.png) | Process | operator | Boot, health, warm-up, graceful stop, logs |
+| [state-machines](state-machines.html) · [png](assets/state-machines.png) | State machine | dev / operator | Instance and task state lifecycles |
+| [data-model](data-model.html) · [png](assets/data-model.png) | ER | dev | Persisted artifacts and their relationships |
+| [dependency-graph](dependency-graph.html) · [png](assets/dependency-graph.png) | Dependency | dev | Go package/module dependencies |
+| [ui-information-architecture](ui-information-architecture.html) · [png](assets/ui-information-architecture.png) | Tree | user / contributor | Web UI structure and i18n coverage |
+| [ci-release-pipeline](ci-release-pipeline.html) · [png](assets/ci-release-pipeline.png) | Process | maintainer | CI gates and the tag release pipeline |
 
-## Design system
+## Conventions
 
-Diagrams use the Diagram Design editorial skin at its **shipped default**
-(neutral white-smoke paper, jet-black ink, atomic-tangerine accent, blue-slate
-muted). Typography: Instrument Serif (titles), Geist (human-readable labels),
-Geist Mono (ports, paths, constants — technical content only).
+- **Skin:** monochrome, derived from `web/style.css`. Colors are CSS custom properties; the accent is ink
+  (focal = solid ink fill). No link-blue — HTTP is signalled by a dashed arrow + protocol label.
+- **Status colors** (`--ok` / `--warn` / `--err`) appear only in `state-machines` and ops outcomes.
+- **Light/dark:** every file renders both via `@media (prefers-color-scheme: dark)`. The static frame is the
+  source of truth; no JavaScript is required to read any diagram.
+- **Accessibility:** every `<svg>` is `role="img"` with a prefixed `<title>`/`<desc>`; labels are text, not
+  paths.
+- **Geometry:** 4px grid, orthogonal `r=8` connectors, masked arrow labels with a visible gap, ≥12px between
+  attach points on a shared edge. Budget: ≤9 nodes / ≤12 arrows / ≤2 focal elements per diagram.
+- **Language:** Chinese-first labels with English/Geist-Mono technical sublabels.
 
-Conventions held across the set:
+## Editing & regenerating
 
-- **Colour roles** — `accent` (coral) marks at most 1–2 focal elements per
-  diagram; `link`-blue is external HTTP/API; muted is internal; dashed is
-  return / async / passive.
-- **Node shapes** — white + ink stroke = hub component; ink-wash = store/state;
-  3% wash + 30% stroke = external; dashed-accent = security/optional.
-- **Boundaries** — dashed zone rects with a mono uppercase eyebrow on a
-  paper-coloured mask.
-- **Connectors** — rounded orthogonal elbows only (no diagonal slants);
-  every arrow label sits 6–10px clear of its stroke on an opaque mask; no
-  overlapping strokes; distinct attach points when several lines share an edge.
-- **Accessibility** — every SVG is `role="img"` with a prefixed `<title>` and
-  a content-describing `<desc>`, per the skill's accessible-SVG contract.
-
-Light theme is the default. The skill also supports a dark variant per diagram
-(`*-dark.html`); these were not generated — see *Recommended future diagrams*.
-
-## Regenerating / editing
-
-Edit the HTML files directly; the inline `<svg>` is the source of truth.
-
-```bash
-# Validate every diagram (self-check contract + connector geometry) — needs Python 3 only
-scripts/render-diagrams.sh validate
-
-# Export diagram-only PNGs / SVGs into docs/diagrams/previews/
-scripts/render-diagrams.sh png
-scripts/render-diagrams.sh svg
-
-# Review locally
-scripts/render-diagrams.sh serve        # http://127.0.0.1:8099
-```
-
-`validate` uses the Diagram Design skill scripts. It auto-discovers them; if
-they live elsewhere, set `DIAGRAM_DESIGN_SCRIPTS=/path/to/skill/scripts`.
-PNG/SVG export needs a headless Chromium; validation does not.
+1. Open a diagram's `.html` and edit the inline SVG. Start from [`_scaffold.html`](_scaffold.html) for a new
+   one; see [`CONTRIBUTING.md`](CONTRIBUTING.md) for the class reference and rules.
+2. Validate the a11y / single-file contract:
+   ```bash
+   python3 ~/.config/opencode/skills/diagram-design/scripts/self_check.py <slug>.html
+   ```
+3. Re-render the PNG previews (light + dark, diagram only):
+   ```bash
+   cd docs/diagrams
+   npm i -D playwright            # once
+   PLAYWRIGHT_BROWSERS_PATH=<browser-cache> node render.mjs
+   ```
+   `render.mjs` writes `assets/<slug>.png` and `assets/<slug>-dark.png` at 2× scale.
 
 ## Source references
 
-Every diagram is cross-checked against:
+Each diagram cites its source files in the summary cards next to the SVG and in
+[`INVENTORY.md`](INVENTORY.md). Key sources: `main.go`, `api.go`, `instance.go`, `task.go`, `download.go`,
+`history.go`, `voices.go`, `proxy.go`, `registry.go`, `packages.go`, `models.go`, `internal/*`,
+`Dockerfile.amd`, `compose.amd.yaml`, `docker/start-*.sh`, `.github/workflows/*`, `web/*`.
 
-`main.go` · `api.go` · `instance.go` · `task.go` · `history.go` · `voices.go` ·
-`download.go` · `packages.go` · `proxy.go` · `registry.go` · `audio.go` ·
-`fs.go` · `constants.go` · `util.go` · `internal/wav` · `internal/idvalidate` ·
-`web/` (frontend) · `docs/API.md` · `SECURITY.md` · `DOCKER.md` ·
-`compose.yaml` · `compose.amd.yaml` · `Dockerfile.amd` ·
-`docker/start-hub.sh` · `docker/start-instance.sh` · `hub.config.example.json` ·
-`executables.json.example` · `README.md` · `.github/workflows/`.
+## Assumptions & limitations
 
-## Assumptions and limitations
-
-- **Style = default skin.** The user chose the shipped default palette over a
-  brand match; switch to a saved profile if a client skin is wanted.
-- **No dark variants generated.** The skill supports them; add per need.
-- **macOS release** is documented in `README.md` but was not verified against a
-  workflow file in this pass — marked `[inferred]` in diagram 3.
-- **Windows tray** is shown only as a host behaviour, not as architecture.
-- **`internal/wav`** is grouped into one node in the data-flow diagram.
-- Diagrams describe the **system as coded**, not a deployment instance; the
-  concrete ports shown (8080/18080, 18090+) come from the example config.
-
-## Recommended future diagrams
-
-- **Dark-theme variants** of each diagram (`*-dark.html`) for slide decks.
-- **Per-category model matrix** (ER/table) if `models.json` keeps growing.
-- **Compose sequence** for the container `start-instance.sh` warm-up path.
-- **Threat-model detail** for the `/api/fs/*` + `/api/executables*` write
-  surface, if the hub ever gains optional auth.
+- The set documents the **Go** implementation only; the retired Java version is intentionally absent.
+- Deployment diagrams describe the maintainer's representative AMD/Vulkan and LXC topologies; per-host
+  values (device index, GIDs, host paths) come from `.env`/`compose` and may differ.
+- `security-boundaries` applies the skill's "secure paved road" pattern to the code's actual controls; it is
+  **not** a formal threat model. The product has **no authentication** — see `SECURITY.md`.
+- Data-model and dependency diagrams use logical groupings to respect the node budget; they are not exhaustive.
+- Diagrams are documentation, not tests — they will drift if the code changes. Update them with the same PR
+  that changes the behavior they describe.

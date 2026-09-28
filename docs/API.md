@@ -9,6 +9,8 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 - 失败统一为 `{"ok": false, "code": "错误码", "params": {...}, "error": "人类可读信息"}`（HTTP 状态码随语义变化）
 - `/v1/*` 例外，错误体为 OpenAI 风格 `{"error": {"message": "...", "type": "..."}}`
 
+> Web UI 侧的错误信封由 [`web/api-client.js`](../web/api-client.js) 归一化为 `ApiError`（`code` / `params` / `message`），见文末「[前端 API 客户端](#前端-api-客户端webapi-clientjs)」。
+
 > English: this file is Chinese-first. Method and path are language-neutral; see the comments in `api.go` for exact handler semantics.
 
 ## 路由索引
@@ -412,3 +414,21 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 > **已知限制**：`multipart/form-data` 无法提取 `model`（extractor 只认 JSON），例如 multipart 的 `POST /v1/audio/transcriptions` 会返回 `400 Missing required parameter: model`。请改用 JSON body 或 Web UI 的 ASR 流程。
 
 其它方法（非 GET/POST/PUT）返回 `405`。
+
+---
+
+## 前端 API 客户端（`web/api-client.js`）
+
+上面的两种错误体在浏览器侧的归一化由 `web/api-client.js` 完成，它是 `web/` 唯一的 HTTP 出口（无构建、无依赖的经典脚本，全局 `window.AudioCppHub.api`，下称 `Api`；完整契约见该文件头部注释）。
+
+| 能力 | 用法 |
+| --- | --- |
+| 原语 | `Api.request(path, { method, body, query, params, headers, signal, timeout, raw })` → `Promise<data>` |
+| 方法糖 | `Api.get` / `Api.post` / `Api.put` / `Api.del`；`body` 传普通对象自动 JSON 编码 |
+| 列表守卫 | `Api.list(path)` → 返回体非数组时 reject `CLIENT_BAD_SHAPE` |
+| 错误 | 统一 reject `ApiError`：`status` / `code` / `params` / `type` / `detail` / `envelope` / `isAbort` / `isTimeout` / `isNetwork`；`message` 已本地化（走 `I18N.errText`） |
+| 客户端错误码 | `CLIENT_TIMEOUT` / `CLIENT_ABORTED` / `CLIENT_NETWORK` / `CLIENT_BAD_JSON` / `CLIENT_BAD_SHAPE` / `CLIENT_HTTP_ERROR` |
+| 中断 | 每次请求默认 20s 超时（`timeout: 0` 关闭）；`signal` 可与外部 `AbortController` 联动 |
+| 轮询 | `Api.poll(path, handler, { interval, list, onError, visibility })` → `{ stop(), refresh() }`：自调度不叠加请求、单飞、标签页隐藏时暂停且恢复后立即补一次、`stop()` 清定时器并中断在途请求 |
+
+已迁移的调用方（见 `web/app.js`）：模型清单首次加载、`/api/instances`、`/api/events`、`/api/downloads` 三条 2s 轮询、任务轮询 `/api/tasks/{id}`（含 `stop()` 语义）、`POST /api/tasks`、`DELETE /api/tasks/{id}`、`GET /api/tasks?modelId=`。其余 `fetch` 调用（证书、executables、profiles、history、任务结果等）暂未迁移，`web/api-client.js` 头部「迁移约定」一节列出了后续顺序。

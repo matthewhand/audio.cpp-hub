@@ -357,6 +357,7 @@
                 <div class="settings-row-desc" data-i18n="settings.general.themeDesc">切换深色 / 浅色外观，立即生效</div>
               </div>
               <select id="ui-theme" class="settings-select">
+                <option value="system" data-i18n="settings.theme.system">跟随系统</option>
                 <option value="dark" data-i18n="settings.theme.dark">深色</option>
                 <option value="light" data-i18n="settings.theme.light">浅色</option>
               </select>
@@ -446,6 +447,8 @@
   </div>
 
   <script src="/i18n.js"></script>
+  <!-- API 客户端：集中 fetch / 错误信封 / 轮询，须在 i18n.js 之后、app.js 之前 -->
+  <script src="/api-client.js"></script>
   <script src="/wav.js"></script>
   <script src="/file-browser.js"></script>
   <script src="/audio-picker.js"></script>

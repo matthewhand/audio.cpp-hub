@@ -1,0 +1,46 @@
+# Prettier 不动的路径。每一段都写明原因——本文件是「刻意降级」清单，不是随手忽略。
+
+# ---- 1. web/ 下手写的运行期资产：刻意的样式例外 ----
+# web/*.js 是手写排版的经典浏览器脚本，风格包含 Prettier 无法复现的两点：
+#   1) IIFE 函数体不缩进（`() => {` 后的代码顶格，见 audio-picker.js / voices-panel.js）；
+#   2) 行尾注释按列对齐（`this.value = null;          // 当前音频的服务器绝对路径`）。
+# 用 Prettier 统一排版需要重排约 2500 行 / 6100 行（实测 printWidth=120 + arrowParens=avoid
+# 已是最小）的纯空白改动，且无法人工审阅，收益仅为风格统一、无任何缺陷发现能力。
+# 结论：web/*.js 的排版由 ESLint 的排版类规则承担（见 eslint.config.js「排版」段），
+# Prettier 的格式 ratchet 不覆盖 web/。
+web/**/*.js
+web/**/*.css
+web/**/*.html
+web/*.md
+
+# ---- 2. 手写图表 HTML：绝对定位坐标 + 内联样式，重排会破坏可访问性契约 ----
+# scripts/check-diagrams.py 校验 role=img / aria-* / 无远程依赖（见 .github/workflows/ci.yml）。
+docs/diagrams/**
+
+# ---- 3. 散文文档：换行/列表标记属于文档约定，不属于代码质量 ratchet ----
+*.md
+docs/**
+
+# ---- 4. 由 audio.cpp 的 model_specs 转换而来，仓库内不再手工排版 ----
+models.json
+model-packages.json
+
+# ---- 5. 依赖与生成物 ----
+node_modules/
+package-lock.json
+dist/
+build/
+releases/
+/audio.cpp-hub
+/audio.cpp-hub.exe
+*.ico
+
+# ---- 6. 运行时数据目录（.gitignore 已排除，Prettier 也跳过） ----
+logs/
+run/
+data/
+models/
+ssl/
+executables.json
+hub.config.json
+release_notes.md

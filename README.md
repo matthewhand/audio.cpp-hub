@@ -29,6 +29,12 @@
 
 ![hub-downloads](docs/assets/hub-downloads.gif)
 
+## 架构图
+
+架构、部署、时序、数据与运维图示（可编辑 HTML 源 + 明暗 PNG 预览）：[`docs/diagrams/`](docs/diagrams/README.md)。
+
+![整体架构](docs/diagrams/assets/hero-overview.png)
+
 ## 功能特性
 
 - **多实例管理**：为每个模型实例生成 `server.json` 并以子进程拉起 `audiocpp_server`，自动分配端口（绑定 127.0.0.1）、轮询健康状态（最多 120s）、查看日志、一键停止

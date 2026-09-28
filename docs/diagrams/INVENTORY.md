@@ -1,73 +1,106 @@
-# Diagram inventory — audio.cpp-hub
+# Diagram inventory
 
-Visual documentation derived from the actual repository (main @ `698e0f4`).
-Every label, port, path, and constant below is traceable to a source file.
-Anything not directly stated in code is marked **[inferred]**.
+All diagrams are derived from the `feat/go-magpie-tts` tree (base commit `37341bf`). Source citations refer
+to repository files. **Confidence** is the author's confidence that the diagram matches the implementation;
+any inferred behavior is listed under **Assumptions**.
 
-## Source map used
-
-| Concern | Source |
-|---|---|
-| Entry / wiring / config / shutdown | `main.go`, `hub.config.example.json` |
-| Instance lifecycle, port reservation, health poll, `server.json` | `instance.go`, `constants.go` |
-| Async task queue, serial executor, TTS finalize, result files | `task.go`, `constants.go` |
-| `/v1/*` OpenAI-compatible proxy, model extraction | `proxy.go` |
-| Model weight downloader, SSRF guard, segments, resume | `download.go`, `packages.go`, `model-packages.json` |
-| TTS history, groups, reference snapshots | `history.go` |
-| Voice library | `voices.go` |
-| Executable + Profile registries | `registry.go` |
-| Route table, CSRF guard, static serving | `api.go` |
-| API contract | `docs/API.md` |
-| Threat model / deployment | `SECURITY.md`, `DOCKER.md`, `compose.amd.yaml`, `Dockerfile.amd`, `docker/start-hub.sh`, `docker/start-instance.sh` |
-| Frontend | `web/` (`app.js`, `index.html`, `i18n.js`) |
-| CI / build / release | `.github/workflows/`, `README.md` |
-| External engine contract | `audiocpp_server --config server.json`, `GET /health`, `POST /v1/tasks/run`, `--list-devices` |
-
-## Key facts pinned during discovery
-
-- Hub default port **8080** (`hub.config.example.json`), dev copy **18080**; instances from **18090** up, bound to `127.0.0.1` (`instance.go:520` `"host":"127.0.0.1"`).
-- Health poll: `GET http://127.0.0.1:<port>/health` every 1s, max **120s** (`instance.go:402`, `healthTimeoutSeconds = 120`).
-- Instance state is register-only-while-alive: only `STARTING` / `READY` exist in the manager (`instance.go:24`).
-- Task states: `QUEUED / RUNNING / DONE / FAILED / CANCELLED` (`task.go:29`); per-instance serial queue, `taskQueueSize = 100`, `finishedKeep = 100`.
-- TTS path = history path: `modelId`/`taskId` key → `data/history/<modelId>/`; `audio` base64 extracted streaming from response JSON (`task.go:591 extractAudio`).
-- Non-TTS path: response stored `data/tasks/<id>.result.json`, served via `/api/tasks/{id}/result`.
-- `/v1/*`: body streamed to `run/proxy-cache/<id>.req`, top-level `"model"` scanned byte-wise, route to READY instance by `instanceName`; `ResponseHeaderTimeout: 60s`, no overall timeout; multipart unsupported (`proxy.go:20`, `proxy.go:68`).
-- Downloads: Range segments + `os.File.WriteAt`, `<file>.part` then rename; SSRF guard blocks loopback/private/link-local/CGNAT/metadata ranges; allowed hosts `huggingface.co`, `hf-mirror.com`, `modelscope.cn`, `www.modelscope.cn` + configured `hfEndpoint` (`download.go:169`, `download.go:188`).
-- CSRF: mutating `/api/*` rejected when `Sec-Fetch-Site: cross-site` or `Origin` host ≠ `Host`; missing headers allowed (curl) (`api.go:197`).
-- **No authentication, no TLS** — hub binds all interfaces by default; explicitly stated in `SECURITY.md`. Trust boundary is the loopback/instance link plus same-origin CSRF only.
-- Executables registry accepts arbitrary paths ⇒ "access to the hub ≈ arbitrary code execution as the hub user" (`SECURITY.md`).
-- Static UI served from `web/` on disk (no `go:embed`), dir listings disabled (`api.go:150`).
-- Deployment: native single binary (Win/Linux/macOS) with Windows tray, **and** Go-native Docker/Compose (generic + AMD Vulkan) with bind-mounted `data/ logs/ run/` (`DOCKER.md`).
-
-## Proposed diagrams
-
-| # | File | Type | Audience | Question answered | Confidence | Assumptions |
+| # | File | Type | Audience | Question it answers | Primary sources | Confidence |
 |---|---|---|---|---|---|---|
-| 1 | `01-hero.html` | Architecture (hero) | README / new contributors | What is this, for whom, and what does it wrap? | High | — |
-| 2 | `02-system-architecture.html` | Architecture | Developers | What are the runtime components, stores and boundaries? | High | — |
-| 3 | `03-deployment.html` | Deployment | Operators | Where does it run: native vs Docker, ports, mounts, devices? | High | Docker paths from `DOCKER.md`/`compose.amd.yaml` |
-| 4 | `04-integration.html` | Dependency / integration | Developers, operators | What external systems and protocols are involved? | High | — |
-| 5 | `05-data-flow.html` | Data flow | Developers | How does payload data enter, transform, persist, expire? | High | — |
-| 6 | `06-security-boundaries.html` | Layer stack (trust zones) | Operators, security | What are the trust zones, credentials, and unauthenticated surfaces? | High | — |
-| 7 | `07-seq-http-api.html` | Sequence | Developers | Normal authenticated-less request to a model instance | High | Auth = CSRF/same-origin only (no authn exists) |
-| 8 | `08-seq-core-tts.html` | Sequence | Developers | Core business op: TTS end-to-end with history extraction | High | — |
-| 9 | `09-seq-proxy.html` | Sequence | Developers / integrators | OpenAI-compatible `/v1/*` routing by `model` | High | — |
-| 10 | `10-seq-download.html` | Sequence | Operators | Weight download: probe → segments → resume | High | — |
-| 11 | `11-seq-failure.html` | Sequence | Developers, ops | Failure/retry/recovery paths (health timeout, task replay, segment retry) | High | Combined recap; each leg traced to code |
-| 12 | `12-operations.html` | Process / swimlane | Operators | Startup, shutdown, health, backup, rollback, diagnosis | High | Backup = copy `data/` (stated in `SECURITY.md`) |
-| 13 | `13-state-instance-task.html` | State machine | Developers | Instance and task state lifecycles | High | — |
-| 14 | `14-data-model.html` | ER / nested | Developers | On-disk entities and their relationships | High | Optional — included for completeness |
+| 1 | `hero-overview.html` | Architecture (hero) | all | What is audio.cpp-hub, and what sits around it? | README.md, AGENTS.md, compose.amd.yaml | High |
+| 2 | `system-architecture.html` | Architecture | dev / contributor | Which components run inside the hub, and how do they connect? | main.go, api.go, instance.go, task.go, proxy.go | High |
+| 3 | `deployment-docker.html` | Deployment | operator | How is it deployed on an AMD host — devices, ports, volumes? | Dockerfile.amd, compose.amd.yaml, docker/*, DOCKER.md | High |
+| 4 | `deployment-modes.html` | Deployment | operator | Native/systemd vs Docker bridge vs LXC host-network? | DOCKER.md, compose*.yaml, *.service | Medium |
+| 5 | `seq-tts-task.html` | Sequence | dev / operator | How does an async TTS task run end-to-end? | api.go, task.go, history.go, web/app.js | High |
+| 6 | `seq-openai-proxy.html` | Sequence | integrator | How does an OpenAI-compatible `/v1/*` request traverse the hub? | proxy.go, api.go | High |
+| 7 | `seq-instance-lifecycle.html` | Sequence | operator | How is a model child process started and stopped? | instance.go, api.go | High |
+| 8 | `seq-download.html` | Sequence | operator | How are model weights downloaded with resume? | download.go, packages.go | High |
+| 9 | `seq-auth.html` | Sequence | security | How are requests authenticated and authorized? | util.go, api.go, SECURITY.md | High (finding: not at all) |
+| 10 | `seq-failure-recovery.html` | Sequence | operator | What happens on timeout, cancel, or restart? | instance.go, task.go, download.go, main.go | Medium |
+| 11 | `integration-external.html` | DP integration | integrator | Which external systems are integrated, over what protocols/auth? | download.go, packages.go, proxy.go, models.go | High |
+| 12 | `data-flow.html` | Data flow | dev / operator | How does data enter, transform, persist, and leave? | history.go, voices.go, download.go, task.go, audio.go | High |
+| 13 | `security-boundaries.html` | Architecture (secure paved road) | security | Which routes cross a trust boundary, and what is forbidden? | api.go, util.go, fs.go, download.go, SECURITY.md | Medium (inferred) |
+| 14 | `ops-startup-shutdown-health.html` | Process / flow | operator | How does the deployment boot, become healthy, and stop gracefully? | docker/start-hub.sh, docker/start-instance.sh, main.go, instance.go | High |
+| 15 | `state-machines.html` | State machine | dev / operator | What are the instance and task state lifecycles? | instance.go, task.go | High |
+| 16 | `data-model.html` | ER | dev | What artifacts are persisted, and how do they relate? | registry.go, voices.go, history.go, download.go, task.go | High |
+| 17 | `dependency-graph.html` | Dependency | dev | How do Go packages/files depend on each other? | main.go, api.go, internal/*, go.mod | High |
+| 18 | `ui-information-architecture.html` | Nested / tree | user / contributor | How is the Web UI organized, and how does i18n apply? | web/index.html, web/app.js, web/i18n.js | Medium |
+| 19 | `ci-release-pipeline.html` | Process / flow | maintainer | What does CI do on PR and on tag — gates, artifacts, release? | .github/workflows/*.yml | High |
 
-**Sizes:** all diagrams authored at a doc-inline/wide preset (`viewBox` width 1000), light theme default with the shipped palette (paper `#f5f5f5`, ink `#2d3142`, accent `#eb6c36`).
+## Notes per diagram
 
-**Deliberately omitted (would be filler):**
-- A radar/quadrant/treemap of model categories — a table already answers it.
-- An org chart — no human/agent ownership model in this repo.
-- A Gantt of CI stages — the workflow file is the source of truth.
-- Per-model sequence diagrams — the engine contract is uniform; one TTS diagram covers it, differences live in `models.json`.
+**1 hero-overview** — Product boundary is the hub process; clients are the Web UI and any OpenAI-compatible
+client. The engine (`audiocpp_server`) is an external process the user supplies. *Assumption:* the diagram
+shows the common single-host LAN deployment, not every supported topology.
 
-## Unresolved / uncertain
+**2 system-architecture** — Managers (`InstanceManager`, `TaskManager`, `DownloadManager`, `HistoryManager`,
+voice library, `ExecutableRegistry`, `ProfileRegistry`) plus the HTTP mux and `/v1` proxy. *Assumption:* the
+flat `package main` is treated as one runtime; internal seams (`internal/wav`, `internal/idvalidate`) are noted
+but not separate services.
 
-- **Windows tray specifics** (`tray_windows.go`) are not depicted beyond "tray host" because they are OS-UI behavior, not architecture.
-- **macOS release** is claimed in `README.md`; the deposited workflow file list was not fully inspected in this pass — marked [inferred] in diagram 3.
-- **`internal/wav`** is a small helper package; grouped as one node in the data-flow diagram, not expanded.
+**3 deployment-docker** — Artifact chips carry the image tags; paths/ports come from `compose.amd.yaml`.
+*Assumption:* the AMD/Vulkan host is representative; the generic `Dockerfile`/`compose.yaml` is the CPU path.
+
+**4 deployment-modes** — Three placements: native binary + systemd (dev/non-GPU), Docker bridge (prod AMD),
+Compose `network_mode: host` (LXC). *Assumption:* LXC mode taken from `.env.lxc100`/DOCKER.md.
+
+**5 seq-tts-task** — Web UI `POST /api/tasks` → per-instance serial queue → engine `/v1/tasks/run` → response
+spooled → `history.go` extracts `"audio"` to `data/history/<modelId>/<taskId>.wav` → 2s poll renders the
+player. *Assumption:* TTS is the primary path; non-TTS results take `forwardToFile`.
+
+**6 seq-openai-proxy** — Body is streamed to `run/proxy-cache/`, top-level `"model"` is extracted byte-by-byte,
+then routed by service name to the READY instance; response status/type streamed back. *Known limit:*
+multipart bodies cannot yield a model → 400.
+
+**7 seq-instance-lifecycle** — `POST /api/instances` → write `run/<id>/server.json` → `os/exec` child →
+`/health` poll (≤120s) → READY; stop via `DELETE`. Health polling is the readiness gate.
+
+**8 seq-download** — Parallel HEAD probes → segmented Range download via `WriteAt` to `.part` → verify →
+rename; pause/resume uses context cancel; hub restart resumes from segment offsets.
+
+**9 seq-auth** — **There is no authentication or authorization.** Every `/api/*` and `/v1/*` request from the
+network is treated as trusted; the security model is "local/LAN only". The diagram makes the trust boundary
+and the compensating controls (loopback children, path validation, CSRF/Content-Type checks) explicit rather
+than implying an auth layer that does not exist.
+
+**10 seq-failure-recovery** — Covers start timeout (120s), task cancel on RUNNING (hub-side only; engine runs
+on), download pause/restart resume, proxy header timeout, and hub restart replay (RUNNING→CANCELLED).
+*Assumption:* exact recovery text taken from code comments and is summarized.
+
+**11 integration-external** — Hugging Face (default), `hfEndpoint` mirrors, ModelScope (`source:"modelscope"`),
+the audio.cpp engine interface, and OpenAI-compatible clients. Auth is a bearer token for gated HF repos
+(stored 0600 in the download task state).
+
+**12 data-flow** — Inputs (WAV upload, `voice_ref`, prompts, model packages) → hub transforms → outputs
+(result WAV under `data/history`, non-TTS JSON under `data/tasks`, model weights under `models/`). Retention:
+history has **no eviction**; task state is replayed on restart.
+
+**13 security-boundaries** — *Inferred:* the "secure paved road" pattern is applied from the code's actual
+controls, not a formal threat model. Included from the post-uplift code: CSRF/Origin + `Content-Type`
+enforcement, `internal/idvalidate` path validation, SSRF/private-range blocking in `download.go`, CSP meta,
+and signed-off warnings in SECURITY.md.
+
+**14 ops-startup-shutdown-health** — `start-hub.sh` starts the Go binary, `start-instance.sh` waits for
+`/api/models`, starts and warms an instance, exits non-zero on failure; `SIGTERM` drains via `srv.Shutdown`.
+
+**15 state-machines** — Instance: `STARTING → READY → STOPPED / FAILED`. Task: `QUEUED → RUNNING →
+DONE / FAILED / CANCELLED`. *Assumption:* terminal-state names follow the API docs.
+
+**16 data-model** — Registry/config JSON (`executables.json`, `data/profiles.json`), voice index, history
+`index.jsonl` + `groups.json` + WAV snapshots, `data/downloads/<id>/task.json`, `data/tasks/<id>.task.json`,
+embedded `models.json`/`model-packages.json`.
+
+**17 dependency-graph** — `main.go` wires managers; `api.go` is the hub; managers depend on `util.go` and the
+`internal/` helpers; `models.json`/`model-packages.json` are `go:embed`ed.
+
+**18 ui-information-architecture** — Page header actions (history 🕘, voices 🎙, downloads ⬇), the model
+workspace, and the launch/settings/task flows; `web/i18n.js` provides zh/en for all UI strings.
+*Assumption:* panel grouping reflects the current app.js structure.
+
+**19 ci-release-pipeline** — `ci.yml` runs gofmt/vet/race tests on PRs; `build-and-release.yml` builds
+windows/linux/arm64, generates `SHA256SUMS`, runs a startup smoke test, and publishes on tags.
+
+## Recommended future diagrams
+
+- A per-model parameter matrix (models.json `inputs` → UI form) — better as a table than a diagram.
+- A WebSocket/SSE streaming sequence if streaming mode returns to the Go line.
+- An incident runbook flowchart keyed to `/api/events` levels.

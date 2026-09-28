@@ -135,7 +135,7 @@ window.FileBrowser = (() => {
   async function loadRoots() {
     const bar = $(".fb-roots");
     bar.innerHTML = "";
-    let roots = [];
+    let roots;
     try {
       const res = await fetch("/api/fs/roots");
       roots = await res.json();

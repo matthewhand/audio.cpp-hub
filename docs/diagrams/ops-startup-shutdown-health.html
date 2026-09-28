@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>启动 · 健康检查 · 优雅关闭 · audio.cpp-hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.err{background:var(--err)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .n.ok{stroke:var(--ok)}
+  .n.warn{stroke:var(--warn)}
+  .n.err{stroke:var(--err)}
+  .name.ok{fill:var(--ok)} .name.warn{fill:var(--warn)} .name.err{fill:var(--err)} .name.soft{fill:var(--soft)}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+  .dot-start{fill:var(--ink)}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">OPS · BOOT / HEALTH / SHUTDOWN</p>
+    <h1>启动、健康检查与优雅关闭</h1>
+    <p class="subtitle">容器入口 <code>start-hub.sh</code> 启动 Go 单二进制，随后 <code>start-instance.sh</code> 驱动的实例创建、健康轮询（≤120s）与预热校验构成启动闸门；<code>SIGTERM</code> 触发排空后停实例、暂停下载。任一启动步骤失败即非零退出。</p>
+  </header>
+
+  <figure class="diagram">
+    <!-- a11y: <title> is the FIRST child of <svg>; IDs are prefixed with the file slug -->
+    <svg role="img" aria-labelledby="ops-startup-shutdown-health-title ops-startup-shutdown-health-desc" viewBox="0 0 1160 760">
+      <title id="ops-startup-shutdown-health-title">audio.cpp-hub 启动、健康检查与优雅关闭流程</title>
+      <desc id="ops-startup-shutdown-health-desc">启动链路：start-hub.sh 启动 Go hub 二进制，start-instance.sh 轮询 GET /api/models 等待 hub，POST /api/instances 创建实例，GET /health 轮询最多 120 秒，POST /v1/audio/speech 预热并校验 RIFF，成功后 READY；超时或失败则非零退出。容器 healthcheck 使用 GET /v1/models。关闭链路：SIGTERM 调用 srv.Shutdown(ctx,15s) 排空请求，再停止全部实例并暂停下载。依据 docker/start-hub.sh、docker/start-instance.sh、main.go、instance.go、compose.amd.yaml。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+
+      <rect class="bg" width="1160" height="760"/>
+
+      <!-- zones first (bg → zones → arrows → labels → nodes) -->
+      <rect class="zone" x="40" y="56" width="1080" height="372" rx="8"/>
+      <rect class="zone-mask" x="52" y="48" width="140" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="122" y="57" text-anchor="middle">BOOT · start-hub.sh</text>
+      <rect class="zone" x="40" y="468" width="1080" height="180" rx="8"/>
+      <rect class="zone-mask" x="52" y="460" width="140" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="122" y="469" text-anchor="middle">SHUTDOWN · main.go</text>
+
+      <!-- healthcheck annotation leader + boot transitions (before boxes) -->
+      <path class="data dash" d="M 390,152 V 170"/>
+      <rect class="mask" x="286" y="174" width="208" height="14" rx="2"/>
+      <text class="sub" x="390" y="184" text-anchor="middle">healthcheck GET /v1/models · 10s</text>
+
+      <path class="data" d="M 244,124 H 292" marker-end="url(#arrow)"/>
+      <rect class="mask" x="252" y="106" width="40" height="12" rx="2"/>
+      <text class="alabel" x="272" y="115" text-anchor="middle">exec</text>
+      <path class="data" d="M 480,124 H 532" marker-end="url(#arrow)"/>
+      <rect class="mask" x="488" y="106" width="40" height="12" rx="2"/>
+      <text class="alabel" x="508" y="115" text-anchor="middle">HTTP</text>
+      <path class="data" d="M 720,124 H 772" marker-end="url(#arrow)"/>
+      <rect class="mask" x="730" y="106" width="40" height="12" rx="2"/>
+      <text class="alabel" x="750" y="115" text-anchor="middle">POST</text>
+      <path class="data" d="M 870,152 V 216" marker-end="url(#arrow)"/>
+      <rect class="mask" x="878" y="176" width="96" height="12" rx="2"/>
+      <text class="alabel" x="884" y="185">poll /health</text>
+      <path class="data" d="M 780,252 H 728" marker-end="url(#arrow)"/>
+      <rect class="mask" x="730" y="234" width="48" height="12" rx="2"/>
+      <text class="alabel" x="754" y="243" text-anchor="middle">READY</text>
+      <path class="data" d="M 540,252 H 488" marker-end="url(#arrow)"/>
+      <rect class="mask" x="490" y="234" width="48" height="12" rx="2"/>
+      <text class="alabel" x="514" y="243" text-anchor="middle">warm-up</text>
+      <path class="data" d="M 870,280 V 344" marker-end="url(#arrow)"/>
+      <rect class="mask" x="878" y="300" width="100" height="12" rx="2"/>
+      <text class="alabel" x="884" y="309">timeout 120s</text>
+
+      <!-- shutdown entry + transition -->
+      <circle class="dot-start" cx="80" cy="556" r="6"/>
+      <path class="data" d="M 88,556 H 152" marker-end="url(#arrow)"/>
+      <rect class="mask" x="92" y="538" width="64" height="12" rx="2"/>
+      <text class="alabel" x="124" y="547" text-anchor="middle">SIGTERM</text>
+
+      <!-- boot nodes -->
+      <rect class="mask" x="64" y="96" width="180" height="56" rx="6"/>
+      <rect class="n" x="64" y="96" width="180" height="56" rx="6"/>
+      <text class="name" x="154" y="120" text-anchor="middle">容器入口</text>
+      <text class="sub" x="154" y="138" text-anchor="middle">start-hub.sh · exec HUB_BIN</text>
+
+      <rect class="mask" x="300" y="96" width="180" height="56" rx="6"/>
+      <rect class="n focal" x="300" y="96" width="180" height="56" rx="6"/>
+      <text class="name" x="390" y="120" text-anchor="middle">Go hub 进程</text>
+      <text class="sub" x="390" y="138" text-anchor="middle">audio.cpp-hub :18080</text>
+
+      <rect class="mask" x="540" y="96" width="180" height="56" rx="6"/>
+      <rect class="n async" x="540" y="96" width="180" height="56" rx="6"/>
+      <text class="name" x="630" y="120" text-anchor="middle">等待 hub API</text>
+      <text class="sub" x="630" y="138" text-anchor="middle">GET /api/models ≤60s</text>
+
+      <rect class="mask" x="780" y="96" width="180" height="56" rx="6"/>
+      <rect class="n" x="780" y="96" width="180" height="56" rx="6"/>
+      <text class="name" x="870" y="120" text-anchor="middle">创建实例</text>
+      <text class="sub" x="870" y="138" text-anchor="middle">POST /api/instances</text>
+
+      <rect class="mask" x="780" y="224" width="180" height="56" rx="6"/>
+      <rect class="n async" x="780" y="224" width="180" height="56" rx="6"/>
+      <text class="name" x="870" y="248" text-anchor="middle">健康轮询</text>
+      <text class="sub" x="870" y="266" text-anchor="middle">GET /health · ≤120s</text>
+
+      <rect class="mask" x="540" y="224" width="180" height="56" rx="6"/>
+      <rect class="n" x="540" y="224" width="180" height="56" rx="6"/>
+      <text class="name" x="630" y="248" text-anchor="middle">预热请求</text>
+      <text class="sub" x="630" y="266" text-anchor="middle">POST /v1/audio/speech</text>
+
+      <rect class="mask" x="300" y="224" width="180" height="56" rx="6"/>
+      <rect class="n ok" x="300" y="224" width="180" height="56" rx="6"/>
+      <text class="name ok" x="390" y="248" text-anchor="middle">就绪</text>
+      <text class="sub" x="390" y="266" text-anchor="middle">READY · RIFF 校验通过</text>
+
+      <rect class="mask" x="780" y="352" width="180" height="56" rx="6"/>
+      <rect class="n err" x="780" y="352" width="180" height="56" rx="6"/>
+      <text class="name err" x="870" y="376" text-anchor="middle">启动失败</text>
+      <text class="sub" x="870" y="394" text-anchor="middle">exit 1 · 容器退出</text>
+
+      <!-- shutdown node -->
+      <rect class="mask" x="160" y="520" width="560" height="72" rx="6"/>
+      <rect class="n" x="160" y="520" width="560" height="72" rx="6"/>
+      <text class="name" x="184" y="548">优雅关闭 graceful shutdown</text>
+      <text class="sub" x="184" y="568">srv.Shutdown(ctx, 15s) → instances.stopAll() + downloads.Shutdown()</text>
+      <text class="sub" x="184" y="586">先排空在途请求，再停实例、暂停下载落盘</text>
+      <text class="sub" x="1100" y="596" text-anchor="end">compose stop_grace_period: 30s</text>
+
+      <!-- logs + legend strip -->
+      <text class="sub" x="40" y="676">日志：docker logs audio-cpp-hub · logs/hub.log（Windows 托盘 tee） · run/&lt;id&gt;/server.log（实例）</text>
+      <line class="divider" x1="40" y1="700" x2="1120" y2="700"/>
+      <text class="eyebrow-svg" x="40" y="724">LEGEND</text>
+      <rect class="n focal" x="150" y="714" width="16" height="12" rx="2"/>
+      <text class="sub" x="174" y="725">焦点 focal</text>
+      <rect class="n" x="340" y="714" width="16" height="12" rx="2"/>
+      <text class="sub" x="364" y="725">组件 component</text>
+      <rect class="n async" x="560" y="714" width="16" height="12" rx="2"/>
+      <text class="sub" x="584" y="725">async 等待</text>
+      <rect class="n ok" x="800" y="714" width="16" height="12" rx="2"/>
+      <text class="sub" x="824" y="725">ok 就绪</text>
+      <rect class="n err" x="980" y="714" width="16" height="12" rx="2"/>
+      <text class="sub" x="1004" y="725">err 失败</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">KEY POINT</p>
+      <h3><span class="dot ink"></span>两道独立闸门</h3>
+      <p>hub 端口先绑定再进托盘（启动失败立即暴露）；实例另经 <code>/health</code> 与预热两道闸门才 <code>READY</code>。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">BOUNDARY</p>
+      <h3><span class="dot warn"></span>失败即非零退出</h3>
+      <p><code>AUDIOCPP_WEIGHTS</code> 已设置时，实例创建 / 轮询 / 预热任一失败，<code>start-hub.sh</code> 停止 hub 并 <code>exit 1</code>。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE</p>
+      <h3><span class="dot soft"></span>依据</h3>
+      <ul><li>docker/start-hub.sh · start-instance.sh</li><li>main.go · signal + srv.Shutdown</li><li>instance.go · awaitReady / server.log</li><li>compose*.yaml · healthcheck GET /v1/models</li></ul>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · diagram-design monochrome skin · status colors only in state/ops diagrams · 4px grid</footer>
+</main>
+</body>
+</html>

@@ -6,7 +6,7 @@ permissions:
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
   workflow_dispatch:
 
 jobs:
@@ -162,7 +162,7 @@ jobs:
 
            ### 📦 原生单二进制（无需 Java/JRE）
           - 自本版起 hub 改为 Go 原生实现，解压即跑，无需安装任何运行环境
-          - 原 Java 版已归档到源码仓库的 `legacy/` 目录，不再维护
+          - 原 Java 版已停止维护，完整备份见本仓库的 `java-main-archive` 分支
 
           ### 🧩 audio.cpp 说明
           - 发布包不包含 audio.cpp 二进制，请自行从 audio.cpp 项目的 Release 下载后放入 `audiocpp/` 目录（最新版本发布页：https://github.com/0xShug0/audio.cpp/releases/latest），并在 Web UI 中登记可执行文件

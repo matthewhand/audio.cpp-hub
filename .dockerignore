@@ -11,6 +11,14 @@ run
 models
 ssl
 releases
+# 前端开发期工具链（tsc/ESLint/Prettier）：运行期零构建，镜像与 Go 编译都不需要
+node_modules
+package.json
+package-lock.json
+tsconfig.json
+eslint.config.js
+.prettierrc
+.prettierignore
 *.gguf
 *.wav
 audio.cpp-hub

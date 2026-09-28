@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TTS 异步任务序列图</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── audio.cpp-hub monochrome skin — see style-guide.md ───────────────── */
+  :root{
+    --paper:#f6f6f7; --paper-2:#ffffff; --ink:#17181c; --muted:#6d6d75; --soft:#9a9aa4;
+    --rule:rgba(23,24,28,.12); --rule-solid:#e0e0e4;
+    --accent:#17181c; --accent-contrast:#ffffff; --accent-tint:rgba(23,24,28,.06);
+    --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0c0c0e; --paper-2:#141416; --ink:#ededf0; --muted:#8e8e96; --soft:#5f5f68;
+      --rule:rgba(255,255,255,.14); --rule-solid:#2a2a2e;
+      --accent:#ededf0; --accent-contrast:#111114; --accent-tint:rgba(237,237,240,.10);
+      --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+  .page{max-width:1240px;margin:0 auto;padding:40px 24px 56px}
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);margin:0 0 8px}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 8px}
+  .subtitle{color:var(--muted);font-size:14px;margin:0 0 28px;max-width:70ch}
+  .diagram{background:var(--paper-2);border:1px solid var(--rule);border-radius:8px;
+    padding:20px;overflow-x:auto;margin:0}
+  svg{display:block;width:100%;height:auto}
+  .cards{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:16px;margin:28px 0 0}
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+  .card h3{margin:8px 0 8px;font-size:15px}
+  .card p,.card li{color:var(--muted);font-size:13px;margin:0}
+  .card ul{margin:8px 0 0;padding-left:18px}
+  .card .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:8px}
+  .dot.ink{background:var(--ink)} .dot.muted{background:var(--muted)} .dot.soft{background:var(--soft)}
+  .colophon{font-family:'Geist Mono',monospace;font-size:11px;color:var(--soft);
+    border-top:1px solid var(--rule);margin-top:32px;padding-top:12px}
+  /* ── SVG semantic classes ─────────────────────────────────────────────── */
+  .bg{fill:var(--paper)}
+  .mask{fill:var(--paper)}
+  .zone{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:.8}
+  .zone-mask{fill:var(--paper)}
+  .n{fill:var(--paper-2);stroke:var(--ink);stroke-width:1}
+  .n.focal{fill:var(--accent);stroke:var(--accent)}
+  .n.store{fill:var(--ink);fill-opacity:.05;stroke:var(--muted)}
+  .n.ext{fill:var(--ink);fill-opacity:.03;stroke:var(--ink);stroke-opacity:.30}
+  .n.input{fill:var(--muted);fill-opacity:.10;stroke:var(--soft)}
+  .n.async{fill:var(--ink);fill-opacity:.02;stroke:var(--ink);stroke-opacity:.20;stroke-dasharray:4,3}
+  .tag{fill:none;stroke:var(--rule-solid);stroke-width:.8}
+  .eyebrow-svg{fill:var(--soft);font-family:'Geist Mono',monospace;font-size:7px;
+    letter-spacing:.14em;text-transform:uppercase}
+  .name{fill:var(--ink);font-family:'Geist','Noto Sans SC',sans-serif;font-size:12px;font-weight:600}
+  .sub{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:9px}
+  .focal .name{fill:var(--accent-contrast)}
+  .focal .sub{fill:var(--accent-contrast);opacity:.8}
+  .alabel{fill:var(--muted);font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.06em}
+  .data{stroke:var(--muted);stroke-width:1.2;fill:none}
+  .data.dash{stroke-dasharray:5,4;stroke-width:1}
+  .data.accent{stroke:var(--accent)}
+  .divider{stroke:var(--rule-solid);stroke-width:1}
+  .lifeline{stroke:var(--ink);stroke-opacity:.20;stroke-width:1;stroke-dasharray:3,3}
+  .act{fill:var(--ink);fill-opacity:.06;stroke:var(--muted);stroke-width:.8}
+  .frame{fill:var(--ink);fill-opacity:.02;stroke:var(--rule);stroke-width:1}
+  .mk{fill:var(--muted)} .mk-a{fill:var(--accent)}
+  .mk-open{fill:none;stroke:var(--muted);stroke-width:1.2}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <p class="eyebrow">SEQUENCE · TTS 异步任务</p>
+    <h1>TTS 异步任务链路</h1>
+    <p class="subtitle">Web UI 提交 → 每实例串行队列 → audiocpp_server 生成 → 音频写入历史 → 2s 轮询播放。</p>
+  </header>
+
+  <figure class="diagram">
+    <!-- a11y: <title> is the FIRST child of <svg>; IDs are prefixed with the file slug -->
+    <svg role="img" aria-labelledby="seq-tts-task-title seq-tts-task-desc" viewBox="0 0 1160 820">
+      <title id="seq-tts-task-title">TTS 异步任务序列图</title>
+      <desc id="seq-tts-task-desc">序列图展示浏览器提交 POST /api/tasks 后，hub 的每实例串行队列如何调用 audiocpp_server 生成语音，把结果音频提取写入 data/history，并通过 /api/history 轮询播放。</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon class="mk-a" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polyline class="mk-open" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+
+      <rect class="bg" width="1160" height="820"/>
+
+      <!-- zones first (bg → zones → lifelines → activation → arrows → labels → nodes) -->
+      <rect class="zone" x="260" y="56" width="680" height="672" rx="8"/>
+      <rect class="zone-mask" x="272" y="48" width="64" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="304" y="57" text-anchor="middle">HUB PROCESS</text>
+
+      <!-- lifelines -->
+      <line class="lifeline" x1="120" y1="136" x2="120" y2="736"/>
+      <line class="lifeline" x1="360" y1="136" x2="360" y2="736"/>
+      <line class="lifeline" x1="600" y1="136" x2="600" y2="736"/>
+      <line class="lifeline" x1="820" y1="136" x2="820" y2="736"/>
+      <line class="lifeline" x1="1040" y1="136" x2="1040" y2="736"/>
+
+      <!-- activation bars -->
+      <rect class="act" x="116" y="176" width="8" height="160"/>
+      <rect class="act" x="116" y="544" width="8" height="160"/>
+      <rect class="act" x="356" y="176" width="8" height="160"/>
+      <rect class="act" x="356" y="544" width="8" height="160"/>
+      <rect class="act" x="596" y="224" width="8" height="272"/>
+      <rect class="act" x="816" y="480" width="8" height="16"/>
+      <rect class="act" x="816" y="592" width="8" height="64"/>
+      <rect class="act" x="1036" y="384" width="8" height="64"/>
+
+      <!-- arrows -->
+      <path class="data" d="M124,184 H356" marker-end="url(#arrow)"/>
+      <path class="data" d="M364,232 H596" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M596,280 H364" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M356,328 H124" marker-end="url(#arrow)"/>
+      <path class="data" d="M604,392 H1036" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M1036,440 H604" marker-end="url(#arrow)"/>
+      <path class="data" d="M604,488 H816" marker-end="url(#arrow)"/>
+      <path class="data" d="M124,552 H356" marker-end="url(#arrow)"/>
+      <path class="data" d="M364,600 H816" marker-end="url(#arrow)"/>
+      <path class="data dash" d="M816,648 H364" marker-end="url(#arrow)"/>
+      <path class="data accent" d="M356,696 H124" marker-end="url(#arrow-accent)"/>
+
+      <!-- arrow labels: opaque mask + 8px gap above stroke -->
+      <rect class="mask" x="196" y="164" width="88" height="12" rx="2"/>
+      <text class="alabel" x="240" y="173" text-anchor="middle">POST /api/tasks</text>
+      <rect class="mask" x="452" y="212" width="56" height="12" rx="2"/>
+      <text class="alabel" x="480" y="221" text-anchor="middle">enqueue()</text>
+      <rect class="mask" x="444" y="260" width="72" height="12" rx="2"/>
+      <text class="alabel" x="480" y="269" text-anchor="middle">QUEUED + pos</text>
+      <rect class="mask" x="204" y="308" width="72" height="12" rx="2"/>
+      <text class="alabel" x="240" y="317" text-anchor="middle">202 Accepted</text>
+      <rect class="mask" x="768" y="372" width="104" height="12" rx="2"/>
+      <text class="alabel" x="820" y="381" text-anchor="middle">POST /v1/tasks/run</text>
+      <rect class="mask" x="772" y="420" width="96" height="12" rx="2"/>
+      <text class="alabel" x="820" y="429" text-anchor="middle">200 JSON (audio)</text>
+      <rect class="mask" x="670" y="468" width="80" height="12" rx="2"/>
+      <text class="alabel" x="710" y="477" text-anchor="middle">extractAudio()</text>
+      <rect class="mask" x="202" y="532" width="76" height="12" rx="2"/>
+      <text class="alabel" x="240" y="541" text-anchor="middle">GET .../audio</text>
+      <rect class="mask" x="558" y="580" width="64" height="12" rx="2"/>
+      <text class="alabel" x="590" y="589" text-anchor="middle">AudioPath()</text>
+      <rect class="mask" x="558" y="628" width="64" height="12" rx="2"/>
+      <text class="alabel" x="590" y="637" text-anchor="middle">WAV stream</text>
+      <rect class="mask" x="202" y="676" width="76" height="12" rx="2"/>
+      <text class="alabel" x="240" y="685" text-anchor="middle">200 audio/wav</text>
+
+      <!-- actor nodes -->
+      <rect class="mask" x="40" y="64" width="160" height="72" rx="6"/>
+      <rect class="n input" x="40" y="64" width="160" height="72" rx="6"/>
+      <rect class="tag" x="48" y="72" width="32" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="64" y="81" text-anchor="middle">WEB</text>
+      <text class="name" x="120" y="108" text-anchor="middle">Web UI（浏览器）</text>
+      <text class="sub" x="120" y="124" text-anchor="middle">fetch /api/* · 2s 轮询</text>
+
+      <g class="focal">
+        <rect class="mask" x="280" y="64" width="160" height="72" rx="6"/>
+        <rect class="n focal" x="280" y="64" width="160" height="72" rx="6"/>
+        <rect class="tag" x="288" y="72" width="28" height="12" rx="2"/>
+        <text class="eyebrow-svg" x="302" y="81" text-anchor="middle">API</text>
+        <text class="name" x="360" y="108" text-anchor="middle">Hub API</text>
+        <text class="sub" x="360" y="124" text-anchor="middle">api.go · :18080</text>
+      </g>
+
+      <g class="focal">
+        <rect class="mask" x="500" y="64" width="200" height="72" rx="6"/>
+        <rect class="n focal" x="500" y="64" width="200" height="72" rx="6"/>
+        <rect class="tag" x="508" y="72" width="40" height="12" rx="2"/>
+        <text class="eyebrow-svg" x="528" y="81" text-anchor="middle">QUEUE</text>
+        <text class="name" x="600" y="108" text-anchor="middle">TaskManager 串行队列</text>
+        <text class="sub" x="600" y="124" text-anchor="middle">task.go · 每实例 1 worker</text>
+      </g>
+
+      <rect class="mask" x="740" y="64" width="160" height="72" rx="6"/>
+      <rect class="n store" x="740" y="64" width="160" height="72" rx="6"/>
+      <rect class="tag" x="748" y="72" width="40" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="768" y="81" text-anchor="middle">STORE</text>
+      <text class="name" x="820" y="108" text-anchor="middle">History</text>
+      <text class="sub" x="820" y="124" text-anchor="middle">history.go · index.jsonl</text>
+
+      <rect class="mask" x="952" y="64" width="176" height="72" rx="6"/>
+      <rect class="n ext" x="952" y="64" width="176" height="72" rx="6"/>
+      <rect class="tag" x="960" y="72" width="44" height="12" rx="2"/>
+      <text class="eyebrow-svg" x="982" y="81" text-anchor="middle">ENGINE</text>
+      <text class="name" x="1040" y="108" text-anchor="middle">audiocpp_server</text>
+      <text class="sub" x="1040" y="124" text-anchor="middle">子进程 · 127.0.0.1:port</text>
+
+      <!-- legend strip -->
+      <line class="divider" x1="40" y1="776" x2="1120" y2="776"/>
+      <text class="eyebrow-svg" x="40" y="796">LEGEND</text>
+      <line class="lifeline" x1="150" y1="784" x2="150" y2="804"/>
+      <text class="sub" x="164" y="796">lifeline</text>
+      <path class="data" d="M260,794 H292" marker-end="url(#arrow)"/>
+      <text class="sub" x="300" y="796">call</text>
+      <path class="data dash" d="M380,794 H412" marker-end="url(#arrow)"/>
+      <text class="sub" x="420" y="796">return</text>
+      <rect class="n focal" x="520" y="784" width="16" height="12" rx="2"/>
+      <text class="sub" x="544" y="796">focal</text>
+      <rect class="n store" x="640" y="784" width="16" height="12" rx="2"/>
+      <text class="sub" x="664" y="796">store</text>
+    </svg>
+  </figure>
+
+  <section class="cards">
+    <div class="card">
+      <p class="eyebrow">KEY POINT</p>
+      <h3><span class="dot ink"></span>每实例串行、异步不阻塞</h3>
+      <p>POST /api/tasks 立即返回 202 与排队位置；TaskManager 为每个实例起一个单线程 executor，同实例任务串行执行，无执行时长上限。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">DATA PATH</p>
+      <h3><span class="dot muted"></span>TTS taskId = 历史 id</h3>
+      <p>引擎响应流式落盘后由 extractAudio 提取顶层 "audio" 写成 data/history/&lt;modelId&gt;/&lt;taskId&gt;.wav，并追加 index.jsonl；前端用 /api/history/.../audio 播放。</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">SOURCE</p>
+      <h3><span class="dot soft"></span>依据</h3>
+      <ul><li>api.go · handleTaskCreate</li><li>task.go · Submit/runTTS</li><li>history.go · RecordTTS</li><li>web/app.js · 2s 轮询</li></ul>
+    </div>
+  </section>
+
+  <footer class="colophon">audio.cpp-hub · diagram-design monochrome skin · edit the SVG above, keep 4px grid</footer>
+</main>
+</body>
+</html>
