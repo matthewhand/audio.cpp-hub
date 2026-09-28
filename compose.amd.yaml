@@ -45,8 +45,8 @@ services:
       - /dev/dri:/dev/dri
       - /dev/kfd:/dev/kfd
     group_add:
-      - "${GPU_GID_VIDEO:-44}"    # video 组 GID（host 相关，写进 .env）
-      - "${GPU_GID_RENDER:-993}"  # render 组 GID（host 相关，写进 .env）
+      - "${GPU_GID_VIDEO:-44}" # video 组 GID（host 相关，写进 .env）
+      - "${GPU_GID_RENDER:-993}" # render 组 GID（host 相关，写进 .env）
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs

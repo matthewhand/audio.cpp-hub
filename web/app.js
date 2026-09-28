@@ -39,7 +39,14 @@ let otherLanguageSel = null;
 let speakerPickers = [];
 const VIBEVOICE_MAX_SPEAKERS = 4;
 
+/* $ / el 是全文件最底层的 DOM 取值入口，调用点会立刻访问 .value / .checked / .dataset /
+   .onclick 等「只有具体标签才声明」的成员。在不重写为 TS、不给 3000+ 调用点逐个加断言的
+   前提下，这里用 JSDoc 显式声明返回 any：换掉无法收敛的 HTMLElement|Element 噪声，
+   让 tsc 专注检查真实缺陷（未定义标识符、参数个数、死代码、switch 贯穿等）。
+   运行期行为完全不变。 */
+/** @type {(id: string) => any} */
 const $ = (id) => document.getElementById(id);
+/** @type {(html: string) => any} */
 const el = (html) => {
   const t = document.createElement("template");
   t.innerHTML = html.trim();
@@ -224,7 +231,7 @@ function openHfMenu(anchor, m) {
     { label: t("model.hfMenu.hf"), url: safeHttpUrl(m.hfUrl) },
     { label: t("model.hfMenu.mirror"), url: safeHttpUrl(hfMirrorOf(m.hfUrl)) },
     { label: t("model.hfMenu.gguf"), url: safeHttpUrl(m.ggufUrl) },
-    { label: t("model.hfMenu.ggufMirror"), url: safeHttpUrl(hfMirrorOf(m.ggufUrl)) },
+    { label: t("model.hfMenu.ggufMirror"), url: safeHttpUrl(hfMirrorOf(m.ggufUrl)) }
   ].filter(x => x.url);
   hfMenuEl.innerHTML = items.map(x => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}<span class="hf-menu-ext">↗</span></a>`).join("");
   closeHfMenu();
@@ -426,7 +433,7 @@ $("https-generate-btn").onclick = async () => {
   const btn = $("https-generate-btn");
   btn.disabled = true;
   btn.textContent = t("https.generating");
-  const start = showBusy(t("https.busy"));
+  showBusy(t("https.busy"));
   try {
     const res = await fetch("/api/cert/generate", {
       method: "POST",
@@ -1589,7 +1596,7 @@ async function fetchTask(taskId) {
   const res = await fetch("/api/tasks/" + taskId);
   const text = await res.text();
   if (!res.ok) {
-    const err = new Error(I18N.errText(text));
+    const err = /** @type {HubHttpError} */ (new Error(I18N.errText(text)));
     err.status = res.status;
     throw err;
   }
@@ -2221,7 +2228,8 @@ document.querySelectorAll("#tts-emotion-block .tab").forEach(tab => {
 function buildEmotionSliders() {
   const container = $("emotion-sliders");
   container.innerHTML = "";
-  t("emotion.labels").forEach((label, i) => {
+  /* emotion.labels 是数组型字典值：I18N.t() 对它返回字符串数组（局部 t() 包装只标了 string） */
+  I18N.t("emotion.labels").forEach((label, i) => {
     const row = document.createElement("div");
     row.className = "slider-row";
     row.innerHTML = `<span class="slider-label">${esc(label)}</span>
@@ -2278,7 +2286,7 @@ async function loadHistory() {
     renderSidebarList();
     return;
   }
-  let items, groups = [];
+  let items, groups;
   try {
     const [res, gres] = await Promise.all([
       fetch("/api/history/" + modelId),
