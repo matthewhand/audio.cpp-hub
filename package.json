@@ -2,17 +2,24 @@
   "name": "audio-cpp-hub-web",
   "version": "0.0.0",
   "private": true,
-  "description": "audio.cpp-hub 前端开发期工具链（仅开发/CI 使用，运行期零构建）",
+  "description": "audio.cpp-hub 前端开发期工具链（仅开发/CI 使用，运行期零构建）：tsc --checkJs / ESLint / Prettier 静态闸门 + Playwright e2e / node:test 单元测试 / UI 清单与性能预算",
   "type": "module",
   "scripts": {
     "check:types": "tsc -p tsconfig.json",
     "lint": "eslint web",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
-    "check": "npm run check:types && npm run lint && npm run format:check"
+    "check": "npm run check:types && npm run lint && npm run format:check",
+    "test:unit": "node --test \"test/unit/**/*.test.mjs\"",
+    "test:e2e": "playwright test --config e2e/playwright.config.mjs",
+    "test": "npm run test:unit && npm run test:e2e",
+    "ui:inventory": "node scripts/ui-inventory.mjs",
+    "ui:inventory:check": "node scripts/ui-inventory-check.mjs",
+    "perf:budget": "node scripts/perf-budget.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
     "eslint": "10.11.0",
     "globals": "17.12.0",
     "prettier": "3.9.9",
