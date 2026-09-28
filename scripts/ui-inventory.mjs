@@ -1,4 +1,4 @@
-/* #73 UI 清单生成器（仅开发期）：解析 web/index.html + web/*.js，产出
+/* #73 UI 清单生成器（仅开发期）：解析 web/index.html + web/*.js + web/modules/*.js，产出
    - ui_inventory.json （机器可读，供漂移检查）
    - docs/ui.md       （人类可读：面板地图 / 控件表 / 快捷键 / 端点表）
    确定性输出：所有数组排序、固定 key 顺序、2 空格 JSON，
@@ -18,9 +18,37 @@ const OUT_MD = path.join(ROOT, "docs", "ui.md");
 
 /* 分析范围从 index.html 的实际 <script src> 反推，不再维护手写清单：
    漏项会让清单悄悄漏掉某个前端模块（i18n 拆分后新增的 i18n.zh.js /
-   i18n.en.js、api-client.js、motion.js、pwa.js 都不在旧清单里）。 */
-const SCRIPTS = [...fs.readFileSync(INDEX_HTML, "utf8").matchAll(/<script\b[^>]*src="\/([^"]+)"/g)]
-  .map((m) => m[1])
+   i18n.en.js、api-client.js、motion.js、pwa.js 都不在旧清单里）。
+   app.js 改成 ES 模块后业务逻辑住进 web/modules/*.js，index.html 只写了入口，
+   因此再顺着入口的 import 图把模块一并纳入（否则事件绑定会整体漏登记）。 */
+const MODULE_ENTRY = /<script\b[^>]*type="module"[^>]*src="\/([^"]+)"/;
+const classicScripts = [
+  ...fs
+    .readFileSync(INDEX_HTML, "utf8")
+    .matchAll(/<script\b(?![^>]*type="module")[^>]*src="\/([^"]+)"/g)
+].map((m) => m[1]);
+
+/** 从模块入口出发，按 import 的相对路径递归收集全部模块文件。 */
+function collectModules(entry) {
+  const seen = new Set();
+  const queue = [entry];
+  while (queue.length) {
+    const file = queue.shift();
+    if (seen.has(file)) continue;
+    const abs = path.join(WEB_DIR, file);
+    if (!fs.existsSync(abs)) continue;
+    seen.add(file);
+    const src = fs.readFileSync(abs, "utf8");
+    for (const m of src.matchAll(/\bfrom\s+"\.\/?([^"]+)"|\bimport\s+"\.\/?([^"]+)"/g)) {
+      const spec = m[1] || m[2];
+      if (spec) queue.push(path.join(path.dirname(file), spec));
+    }
+  }
+  return [...seen];
+}
+
+const entry = fs.readFileSync(INDEX_HTML, "utf8").match(MODULE_ENTRY);
+const SCRIPTS = [...new Set([...classicScripts, ...(entry ? collectModules(entry[1]) : [])])]
   .filter((name) => name !== "sw.js")
   .sort();
 
@@ -372,7 +400,9 @@ export function renderMarkdown(inv) {
   const L = [];
   L.push("# Web UI 清单");
   L.push("");
-  L.push("> 由 `npm run ui:inventory` 从 `web/index.html` 与 `web/*.js` 自动生成，请勿手改。");
+  L.push(
+    "> 由 `npm run ui:inventory` 从 `web/index.html` 与 `web/*.js`、`web/modules/*.js` 自动生成，请勿手改。"
+  );
   L.push("> 漂移检查：`npm run ui:inventory:check`（CI 会跑）。");
   L.push("");
   L.push(

@@ -15,18 +15,46 @@ const KIB = 1024;
  * ⚠ 2026-09 重新标定：#87（设计令牌）/ #88（异步态）/ #89（i18n 拆分，
  * 多出 i18n.zh.js + i18n.en.js 两个请求）/ #98（api-client.js）合入后，
  * 首屏实际体积已越过旧预算，而 #90（PWA：motion.js + pwa.js）再叠加
- * 约 5.8 KiB raw / 2.9 KiB gzip / 2 个请求。此处的预算是按「实际初载资源」
- * 重新标定的快照，属有意放宽，不是悄悄关掉检查——后续仍按同一口径棘轮收紧。 */
+ * 约 5.8 KiB raw / 2.9 KiB gzip / 2 个请求。
+ *
+ * ⚠ 2026-09 再次重新标定：#100 把 `app.js` 拆成 ES 模块后，浏览器不再只取一个
+ * app.js，而是顺着 import 图逐个取 web/modules/*.js（20 个文件）。体积只多了
+ * import/export 与文件头的开销（约 +18 KiB raw / +17.5 KiB gzip，raw 反而略降——
+ * 拆文件去掉了重复的文件级注释），但**首屏请求数从 15 涨到 35**。
+ * 这是「无构建 + 原生 ES 模块」的固有代价：合并成一个请求就必须引入打包器，
+ * 与本项目的硬约束冲突。缓解手段是 web/sw.js 预缓存全部模块（回访命中缓存），
+ * 以及这些请求全部同源、HTTP/1.1 keep-alive 下并行发出。
+ * 这里的预算是按「实际初载资源」重新标定的快照，属有意放宽，不是悄悄关掉检查——
+ * 后续仍按同一口径棘轮收紧。 */
 export const BUDGETS = {
-  jsRawKiB: 340, // 初始 JS 未压缩合计（实测 306.3）
-  jsGzipKiB: 108, // 初始 JS gzip 传输合计（实测 97.9）
+  jsRawKiB: 348, // 初始 JS 未压缩合计（实测 324.5）
+  jsGzipKiB: 127, // 初始 JS gzip 传输合计（实测 115.4）
   cssRawKiB: 72, // 初始 CSS 未压缩（实测 64.9）
   cssGzipKiB: 19, // 初始 CSS gzip 传输（实测 16.6）
-  totalGzipKiB: 126, // JS + CSS gzip 合计（实测 114.5，不含 HTML，HTML 很小）
-  subresourceRequests: 16, // 初始 <script src> + <link stylesheet> 数量（实测 14）
+  totalGzipKiB: 146, // JS + CSS gzip 合计（实测 132.0，不含 HTML，HTML 很小）
+  subresourceRequests: 40, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 35）
   ttiTargetMs: 1500 // 目标 TTI（本地/局域网，中端笔电）——浏览器指标，本脚本不测量
 };
 const CSS = ["style.css"];
+
+/** 从模块入口出发，按 import 的相对路径递归收集全部模块文件。 */
+function collectModules(entry) {
+  const seen = new Set();
+  const queue = [entry];
+  while (queue.length) {
+    const file = queue.shift();
+    if (seen.has(file)) continue;
+    const abs = path.join(WEB, file);
+    if (!fs.existsSync(abs)) continue;
+    seen.add(file);
+    const src = fs.readFileSync(abs, "utf8");
+    for (const m of src.matchAll(/\bfrom\s+"\.\/?([^"]+)"|\bimport\s+"\.\/?([^"]+)"/g)) {
+      const spec = m[1] || m[2];
+      if (spec) queue.push(path.join(path.dirname(file), spec));
+    }
+  }
+  return [...seen].sort();
+}
 
 function bytes(file) {
   const p = path.join(WEB, file);
@@ -50,8 +78,16 @@ export function measure() {
   const html = fs.readFileSync(path.join(WEB, "index.html"), "utf8");
   /* 初载资源一律从 index.html 反推，不再维护一份手写文件名清单：
      清单一旦漏项（例如 i18n 拆分出的 i18n.zh.js / i18n.en.js、api-client.js、
-     motion.js、pwa.js）就会静默低估预算基线，让检查形同虚设。 */
-  const scripts = [...html.matchAll(/<script\b[^>]*\bsrc="\/?([^"]+)"/g)].map((m) => m[1]);
+     motion.js、pwa.js）就会静默低估预算基线，让检查形同虚设。
+     ES 模块化后还要顺 app.js 的 import 图把 web/modules/*.js 计入首屏——
+     浏览器不会把它们合并成一个请求。 */
+  const scripts = [
+    ...[...html.matchAll(/<script\b(?![^>]*type="module")[^>]*src="\/?([^"]+)"/g)].map((m) => m[1])
+  ];
+  /* app.js 是 <script type="module">，浏览器按 import 图逐个取 web/modules/*.js，
+     这些请求同样发生在首屏，因此必须计入体积与请求数预算。 */
+  const moduleEntry = html.match(/<script\b[^>]*type="module"[^>]*src="\/?([^"]+)"/);
+  if (moduleEntry) scripts.push(...collectModules(moduleEntry[1]));
   const styles = [...html.matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*href="\/?([^"]+)"/g)].map(
     (m) => m[1]
   );
@@ -105,7 +141,7 @@ if (isMain) {
     `明细：JS raw ${kib(measured.jsRaw)} KiB / gzip ${kib(measured.jsGzip)} KiB；CSS raw ${kib(measured.cssRaw)} KiB / gzip ${kib(measured.cssGzip)} KiB。`
   );
   console.log(
-    `初载资源（${measured.initialFiles.length} 个，取自 index.html）：${measured.initialFiles.join(" ")}`
+    `初载资源（${measured.initialFiles.length} 个，取自 index.html 与 app.js 的 import 图）：${measured.initialFiles.join(" ")}`
   );
 
   const failed = results.filter((r) => !r.ok);

@@ -1,9 +1,9 @@
 # Web UI 清单
 
-> 由 `npm run ui:inventory` 从 `web/index.html` 与 `web/*.js` 自动生成，请勿手改。
+> 由 `npm run ui:inventory` 从 `web/index.html` 与 `web/*.js`、`web/modules/*.js` 自动生成，请勿手改。
 > 漂移检查：`npm run ui:inventory:check`（CI 会跑）。
 
-来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/file-browser.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/voices-panel.js`、`web/wav.js`
+来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/file-browser.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/legacy-globals.js`、`web/modules/api.js`、`web/modules/async-ui.js`、`web/modules/command-palette.js`、`web/modules/dom.js`、`web/modules/downloads.js`、`web/modules/events.js`、`web/modules/i18n-bridge.js`、`web/modules/instances.js`、`web/modules/launch.js`、`web/modules/models.js`、`web/modules/panels.js`、`web/modules/pickers.js`、`web/modules/results.js`、`web/modules/routing.js`、`web/modules/settings.js`、`web/modules/shell.js`、`web/modules/sidebar.js`、`web/modules/state.js`、`web/modules/tasks.js`、`web/modules/ui.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/voices-panel.js`、`web/wav.js`
 
 ## 面板地图
 
@@ -120,24 +120,28 @@
 | --- | --- | --- |
 | ` ` | 等值 | `web/audio-picker.js` |
 | ` ` | 等值 | `web/file-browser.js` |
-| `ArrowDown` | 等值 | `web/app.js` |
+| `ArrowDown` | 等值 | `web/modules/command-palette.js` |
+| `ArrowDown` | 等值 | `web/modules/ui.js` |
 | `ArrowLeft` | 等值 | `web/audio-picker.js` |
 | `ArrowRight` | 等值 | `web/audio-picker.js` |
-| `ArrowUp` | 等值 | `web/app.js` |
+| `ArrowUp` | 等值 | `web/modules/command-palette.js` |
+| `ArrowUp` | 等值 | `web/modules/ui.js` |
 | `Delete` | 等值 | `web/audio-picker.js` |
-| `End` | 等值 | `web/app.js` |
 | `End` | 等值 | `web/audio-picker.js` |
-| `Enter` | 等值 | `web/app.js` |
+| `End` | 等值 | `web/modules/ui.js` |
 | `Enter` | 等值 | `web/audio-picker.js` |
 | `Enter` | 等值 | `web/file-browser.js` |
-| `Escape` | 等值 | `web/app.js` |
+| `Enter` | 等值 | `web/modules/command-palette.js` |
 | `Escape` | 非 (guard) | `web/app.js` |
 | `Escape` | 等值 | `web/audio-picker.js` |
 | `Escape` | 等值 | `web/file-browser.js` |
-| `Home` | 等值 | `web/app.js` |
+| `Escape` | 等值 | `web/modules/command-palette.js` |
+| `Escape` | 等值 | `web/modules/models.js` |
+| `Escape` | 等值 | `web/modules/sidebar.js` |
 | `Home` | 等值 | `web/audio-picker.js` |
-| `k` | 等值 | `web/app.js` |
-| `K` | 等值 | `web/app.js` |
+| `Home` | 等值 | `web/modules/ui.js` |
+| `k` | 等值 | `web/modules/command-palette.js` |
+| `K` | 等值 | `web/modules/command-palette.js` |
 | `Tab` | 非 (guard) | `web/app.js` |
 
 说明：上表由源码中的 `e.key === "..."` 判定推导；Escape 用于关闭最上层弹窗 / 菜单，
@@ -149,38 +153,38 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | --- | --- | --- |
 | POST | `/api/audio/info` | `web/audio-picker.js` |
 | POST | `/api/audio/upload` | `web/audio-picker.js` |
-| POST | `/api/cert/generate` | `web/app.js` |
-| GET | `/api/cert/status` | `web/app.js` |
-| POST | `/api/downloads` | `web/app.js` |
-| DELETE | `/api/downloads/{param}?purge=true` | `web/app.js` |
-| POST | `/api/downloads/{param}/{param}` | `web/app.js` |
-| GET | `/api/executables` | `web/app.js` |
-| POST | `/api/executables` | `web/app.js` |
-| DELETE | `/api/executables/{param}` | `web/app.js` |
-| PUT | `/api/executables/{param}` | `web/app.js` |
-| GET | `/api/executables/{param}/devices` | `web/app.js` |
+| POST | `/api/cert/generate` | `web/modules/settings.js` |
+| GET | `/api/cert/status` | `web/modules/settings.js` |
+| POST | `/api/downloads` | `web/modules/downloads.js` |
+| DELETE | `/api/downloads/{param}?purge=true` | `web/modules/downloads.js` |
+| POST | `/api/downloads/{param}/{param}` | `web/modules/downloads.js` |
+| GET | `/api/executables` | `web/modules/settings.js` |
+| POST | `/api/executables` | `web/modules/launch.js` |
+| DELETE | `/api/executables/{param}` | `web/modules/settings.js` |
+| PUT | `/api/executables/{param}` | `web/modules/launch.js` |
+| GET | `/api/executables/{param}/devices` | `web/modules/launch.js` |
 | GET | `/api/fs/list?path={param}` | `web/file-browser.js` |
 | POST | `/api/fs/mkdir` | `web/file-browser.js` |
 | GET | `/api/fs/roots` | `web/file-browser.js` |
-| DELETE | `/api/history/{param}` | `web/app.js` |
-| GET | `/api/history/{param}` | `web/app.js` |
-| DELETE | `/api/history/{param}/{param}` | `web/app.js` |
-| GET | `/api/history/{param}/{param}` | `web/app.js` |
-| PUT | `/api/history/{param}/{param}/group` | `web/app.js` |
-| GET | `/api/history/{param}/groups` | `web/app.js` |
-| POST | `/api/history/{param}/groups` | `web/app.js` |
-| DELETE | `/api/history/{param}/groups/{param}` | `web/app.js` |
-| PUT | `/api/history/{param}/groups/{param}` | `web/app.js` |
-| POST | `/api/https/config` | `web/app.js` |
-| POST | `/api/instances` | `web/app.js` |
-| DELETE | `/api/instances/{param}` | `web/app.js` |
-| GET | `/api/models/{param}/packages` | `web/app.js` |
-| GET | `/api/profiles` | `web/app.js` |
-| POST | `/api/profiles` | `web/app.js` |
-| DELETE | `/api/profiles/{param}` | `web/app.js` |
-| PUT | `/api/profiles/{param}` | `web/app.js` |
-| DELETE | `/api/tasks/{param}` | `web/app.js` |
-| GET | `/api/tasks/{param}/result` | `web/app.js` |
+| DELETE | `/api/history/{param}` | `web/modules/sidebar.js` |
+| GET | `/api/history/{param}` | `web/modules/sidebar.js` |
+| DELETE | `/api/history/{param}/{param}` | `web/modules/sidebar.js` |
+| GET | `/api/history/{param}/{param}` | `web/modules/sidebar.js` |
+| PUT | `/api/history/{param}/{param}/group` | `web/modules/sidebar.js` |
+| GET | `/api/history/{param}/groups` | `web/modules/sidebar.js` |
+| POST | `/api/history/{param}/groups` | `web/modules/sidebar.js` |
+| DELETE | `/api/history/{param}/groups/{param}` | `web/modules/sidebar.js` |
+| PUT | `/api/history/{param}/groups/{param}` | `web/modules/sidebar.js` |
+| POST | `/api/https/config` | `web/modules/settings.js` |
+| POST | `/api/instances` | `web/modules/launch.js` |
+| DELETE | `/api/instances/{param}` | `web/modules/instances.js` |
+| GET | `/api/models/{param}/packages` | `web/modules/downloads.js` |
+| GET | `/api/profiles` | `web/modules/launch.js` |
+| POST | `/api/profiles` | `web/modules/launch.js` |
+| DELETE | `/api/profiles/{param}` | `web/modules/launch.js` |
+| PUT | `/api/profiles/{param}` | `web/modules/launch.js` |
+| DELETE | `/api/tasks/{param}` | `web/modules/sidebar.js` |
+| GET | `/api/tasks/{param}/result` | `web/modules/results.js`, `web/modules/tasks.js` |
 | GET | `/api/voices` | `web/audio-picker.js`, `web/voice-select.js`, `web/voices-panel.js` |
 | POST | `/api/voices` | `web/voices-panel.js` |
 | DELETE | `/api/voices/{param}` | `web/voices-panel.js` |
