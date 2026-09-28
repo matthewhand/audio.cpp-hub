@@ -265,3 +265,39 @@ declare interface Window {
   openVoicesPanel(): void;
   closeVoicesPanel(): void;
 }
+
+/* ---- motion.js → window.hubMotion ----
+ * 纯 UI 动效触发器（复制确认 / 主题切换 / 实例状态翻转），不做任何业务判断。 */
+interface HubMotionApi {
+  /** 给节点加一次性动效类，ms 毫秒后移除；已开启 reduce 时直接跳过 */
+  flash(node: Element | null | undefined, cls: string, ms?: number): void;
+  /** 当前是否处于 prefers-reduced-motion: reduce */
+  prefersReduced(): boolean;
+}
+declare interface Window {
+  hubMotion: HubMotionApi;
+}
+
+/* ---- sw.js → Service Worker realm ----
+ * sw.js 运行在 ServiceWorkerGlobalScope（独立 realm），既不是 window 也不是 Worker。
+ * 本项目 tsconfig 的 lib 只含 ES2022/DOM；加 lib.webworker 会与 lib.dom 在同一
+ * program 内重复声明 self/fetch/caches 等符号，所以按本文件开头的原则「只声明
+ * 各模块被实际用到的成员」手写一份最小类型，由 sw.js 就地 cast 后使用。 */
+interface HubExtendableEvent {
+  waitUntil(promise: Promise<unknown>): void;
+}
+interface HubFetchEvent extends HubExtendableEvent {
+  readonly request: Request;
+  respondWith(response: Response | Promise<Response>): void;
+}
+interface HubMessageEvent {
+  readonly data: { type?: string } | null;
+}
+interface HubServiceWorkerScope {
+  readonly location: Location;
+  readonly clients: { claim(): Promise<void> };
+  skipWaiting(): Promise<void>;
+  addEventListener(type: "install" | "activate", listener: (e: HubExtendableEvent) => void): void;
+  addEventListener(type: "message", listener: (e: HubMessageEvent) => void): void;
+  addEventListener(type: "fetch", listener: (e: HubFetchEvent) => void): void;
+}
