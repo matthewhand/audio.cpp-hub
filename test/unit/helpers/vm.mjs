@@ -123,6 +123,33 @@ export function makeFunction(fnSource, deps = {}) {
 }
 
 /**
+ * 加载 web/modules/*.js 里的 ES 模块：剥掉 import 语句与 export 关键字后当 classic
+ * script 在 sandbox 里求值，等价于浏览器加载该模块后的顶层效果，并把它的导出收进
+ * sandbox.__module 返回。
+ *
+ * 为什么需要：web/ 无构建，模块是浏览器原生 ES module，node 无法直接 import
+ * （它们 import 的是浏览器全局与彼此，循环依赖靠活绑定闭环）。测试只关心纯逻辑，
+ * 于是把这些引用做成 sandbox 里的桩。不修改任何前端源码。
+ */
+export function loadEsModule(name, sandbox = {}) {
+  const source = readWeb(name);
+  const exported = new Set();
+  for (const m of source.matchAll(
+    /^export\s+(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm
+  )) {
+    exported.add(m[1]);
+  }
+  const body = source
+    .replace(/^import\s[\s\S]*?from\s*["'][^"']*["'];?[ \t]*$/gm, "")
+    .replace(/^export\s+(?=(?:async\s+)?(?:const|let|var|function|class)\b)/gm, "");
+  const context = vm.createContext(sandbox);
+  new vm.Script(`${body}\n;globalThis.__module = { ${[...exported].join(", ")} };`, {
+    filename: name
+  }).runInContext(context);
+  return sandbox.__module;
+}
+
+/**
  * 按 web/index.html 的实际顺序加载 i18n 三件套：先两份词典（写入
  * window.I18N_ZH / window.I18N_EN），再运行时 i18n.js。顺序反了 i18n.js 会读到
  * 空字典（t() 全部回落成 key 本身），所以这里必须与页面保持一致。
