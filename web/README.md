@@ -1,17 +1,153 @@
-# web/ — 前端资产与开发期工具链
+# web/ — 前端贡献指南与开发期工具链
 
-本目录是 **运行期零构建** 的前端资产：`index.html` 由 Go 的 `http.FileServer` 直接提供，
-8 个 `.js` 以经典脚本（classic script）方式按 `index.html` 底部的 `<script src>` 顺序加载，
-彼此通过 `window.*` 通信。**没有打包器、没有转译、没有模块解析步骤。**
+本目录是 audio.cpp-hub 的 Web UI：**纯原生 HTML / CSS / JS，无框架、无构建步骤，运行时不需要 Node.js**。
+Go 服务把 `web/` 当普通静态目录直接从磁盘提供（见 `api.go:152` 的 `staticHandler`），
+浏览器直接执行这里的源文件——没有打包、压缩或转译环节。发布包里就是这些源文件本身。
 
-## 运行期不依赖 Node
+Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需要随发行版分发。请勿在源码里依赖任何构建期产物。
 
-下载发行 zip、解压、`./audio.cpp-hub` 即可运行。不需要 `npm install`，没有 `dist/`，
-仓库里的 `.js` 就是浏览器直接执行的 `.js`。
+---
 
-## 开发期工具链（仅本地 / CI）
+## 第一部分 · 硬约束与架构
 
-`npm install` 后可用四个脚本（见根目录 `package.json`）：
+### 1. 硬约束
+
+- **无构建、无框架**：一个 `index.html`（482 行）+ 若干经典 `<script>`（非 ES module），共享全局作用域。
+- **运行时零 Node**：改完 JS/CSS 刷新浏览器即可，不存在 watch/build 流程。
+- **严格 CSP**：`default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'`（`web/index.html:7`）。
+  因此：不允许内联脚本、内联事件属性（`onclick=`）、内联 `style` 属性或外部 CDN。主题 / 语言在页面绘制前由 `boot.js` 从 `localStorage` 恢复。
+  `worker-src` 未单独声明，回落到 `script-src 'self'`，因此同源 `/sw.js` 的 Service Worker 注册是允许的。
+- **中英双语**：所有用户可见文案同时提供中文与英文，词典集中在 `i18n.zh.js` / `i18n.en.js`，不得硬编码在业务脚本里。
+- **离线/PWA 是增强而非依赖**：Service Worker 注册失败、非安全上下文、浏览器不支持，都必须静默降级、主应用照常工作（`web/pwa.js` 已如此实现）。
+
+### 2. 架构总览
+
+- **服务侧**：`api.go:152` 的 `staticHandler` 用 `http.Dir("web")` 提供服务，目录请求只回 `index.html`（禁用目录列表），`index.html` 不缓存、其余资源缓存 1 小时（`api.go:189`、`api.go:191`）。
+  工作目录由 `main.go:68` 的 `ensureWorkDir` 自动定位（当前目录没有 `web/` 时尝试上级与 exe 目录）。
+- **前端侧**：没有路由库、没有状态管理库。`app.js` 持有全部可变状态与渲染逻辑；其余文件是自包含组件（IIFE 或挂到 `window` 的 class），只暴露构造器 / 方法。
+- **数据流是手写的单向流**：DOM 事件 → `Api.*`（`web/api-client.js`）→ 更新模块级 `let` 状态 → 重新渲染相关 DOM。没有响应式绑定，改了 state 必须手动调用对应 render 函数。
+- **HTTP 只有唯一出口**：`app.js` 顶部 `const Api = window.AudioCppHub.api;`（`web/app.js:7`）。集中了 `fetch`、错误信封（`ApiError` 带 `code`/`params`）、`AbortController` 超时与中断、可见性感知轮询（`Api.poll`）。
+  **新增请求一律走 `Api.*`，不要再直接写 `fetch`。**
+
+### 3. 模块地图
+
+| 文件（行数） | 职责 | 入口 / 主要 API | 关键位置 |
+| --- | --- | --- | --- |
+| `index.html`（482） | 全部静态 DOM（面板、弹窗、表单）、CSP、manifest、脚本加载顺序 | 页面骨架 | 脚本标签 `web/index.html:466`–`480` |
+| `boot.js`（58） | 绘制前恢复主题与语言，避免首屏闪烁（CSP 要求独立文件） | 顶层立即执行，暴露 `window.HubTheme` | `web/boot.js:53` |
+| `i18n.zh.js`（597） | 中文词典（`window.I18N_ZH`），564 个键 | 纯数据 | `web/i18n.zh.js:5` |
+| `i18n.en.js`（598） | 英文词典（`window.I18N_EN`），与中文逐键对齐 | 纯数据 | `web/i18n.en.js:5` |
+| `i18n.js`（155） | 运行时 `I18N` API（不含任何文案） | `I18N.t` / `plural` / `num` / `date` / `bytes` / `percent` / `setLang` / `applyI18n` / `onChange` / `errText` / `pick` | `window.I18N` `web/i18n.js:10`，`t` `web/i18n.js:48` |
+| `api-client.js`（459） | 唯一 HTTP 出口：错误信封、超时/中断、数组形状守卫、可见性感知轮询 | `window.AudioCppHub.api`（`Api.request/get/post/put/del/list/poll/stopAllPollers`） | `web/api-client.js:442` |
+| `app.js`（3728） | 应用主逻辑：状态、渲染、事件接线、轮询、任务队列、hash 路由、命令面板 | 见下方「app.js 内部分区」 | `web/app.js:1` |
+| `wav.js`（95） | 音频工具：解码、PCM16 单声道 WAV 编码、时长/体积格式化、输出设备预热 | `window.WavUtil` | `web/wav.js:2` |
+| `file-browser.js`（431） | 服务器端文件 / 目录选择弹窗（选权重路径等），动态创建 overlay | `window.FileBrowser.open` | `web/file-browser.js:9` |
+| `audio-picker.js`（664） | 音频选择组件：上传 / 录制 / 裁剪，含波形、播放，含本地路径页签 | `window.AudioPicker` | class `web/audio-picker.js:9` |
+| `voice-select.js`（180） | 音色下拉：从音色库直选，选中即生效，返回服务器路径 | `window.VoiceSelect` / `window.refreshVoiceSelects` | class `web/voice-select.js:10`，`refreshVoiceSelects` `web/voice-select.js:177` |
+| `motion.js`（64） | 纯 UI 动效触发器：复制确认、主题切换、实例状态翻转 | `window.hubMotion` | `web/motion.js:30` |
+| `pwa.js`（102） | 注册 `/sw.js`、新版本提示条、`theme-color` 跟随主题 | 顶层立即执行 | `web/pwa.js:85` |
+| `voices-panel.js`（230） | 音色库管理面板（页头 🎙）：列表 / 试听 / 行内编辑 / 删除 / 添加 | `window.openVoicesPanel` / `closeVoicesPanel` | `web/voices-panel.js:9`、`web/voices-panel.js:26` |
+| `sw.js`（196） | Service Worker：`/api/*` 与 `/v1/*` 绝不缓存；导航 network-first；静态资源 cache-first + 后台再验证 | Service Worker 全局 | 缓存策略 `web/sw.js:4`，API 豁免 `web/sw.js:126` |
+| `style.css`（2099） | 设计系统 L1–L6：令牌 / 基础 / 布局 / 组件 / 工具 / 可访问性 + 动效与 PWA 补充 | — | 令牌 `web/style.css:16`，动效令牌 `web/style.css:20`–`24` |
+| `styleguide.html`（320） | 组件样式指南页（浏览器直接打开） | — | — |
+| `offline.html`（19） | Service Worker 断网兜底页 | — | — |
+| `manifest.webmanifest`（40） | PWA 清单：图标、standalone、主题色 | — | — |
+| `icons/*.png` | 192/512 普通图标 + 192/512 maskable + 180 apple-touch | — | 由 `scripts/gen-icons.cjs` 生成 |
+
+### app.js 内部分区
+
+| 区域 | 说明 | 关键位置 |
+| --- | --- | --- |
+| 常量与工具 | `t()` 快捷取词、状态/分类文案、`Api` 绑定 | `web/app.js:3`–`7` |
+| DOM 辅助 | `$()` / `el()` / `esc()` / `safeHttpUrl()` / `showToast()` | `web/app.js:52`–`66`、`web/app.js:114` |
+| 弹窗与焦点陷阱 | overlay 登记、焦点锁定、Esc 逐层关闭（供 command-palette / 面板 / 忙遮罩共用） | `web/app.js:760`–`833` |
+| hash 路由 | `parseRoute` / `applyRoute` / `go`，以及 `hubNavigate` 等 `window.*` 钩子 | `web/app.js:270`、`web/app.js:284`、`web/app.js:317`、`web/app.js:293`–`297` |
+| 历史面板开关与隐私 | `openHistoryPanel` / `closeHistoryPanel` / `applyHistoryPrivacy` | `web/app.js:351`、`web/app.js:360`、`web/app.js:375` |
+| 主题 / 语言 / 全局重渲染 | 切换按钮、`rerenderAll` 统一重渲染 | `web/app.js:227` |
+| 模型列表 | 拉取 `/api/models`、分组卡片、HF 菜单 | `loadModels` `web/app.js:398`，`renderModelList` `web/app.js:504` |
+| 设置 / 启动弹窗 + Profile | 通用 / 可执行文件 / HTTPS 三个分栏；权重 / 设备 / 高级参数、启动配置存取 | `web/app.js` 中段 |
+| 实例 | 列表刷新、状态条、详情弹窗 | `refreshInstances` `web/app.js:1404`，`renderInstanceList` `web/app.js:1409` |
+| 下载 | 下载管理面板、模型下载弹窗 | `refreshDownloads` `web/app.js:1608`，`renderDownloadList` `web/app.js:1637` |
+| 任务队列前端 | 提交、轮询、终态收尾、结果渲染 | `submitTask` `web/app.js:1844`，`trackTask` `web/app.js:1869`，`finishTask` `web/app.js:1902` |
+| 工作区分发 | 按模型类别显示对应面板 | `renderWorkspace` `web/app.js:2021` |
+| 五类任务面板 | TTS / ASR / SEP / Music / Other 各自的表单与结果渲染 | `renderTtsPanel` `web/app.js:2267`、`renderAsrPanel` `web/app.js:3281`、`renderSepPanel` `web/app.js:3345`、`renderMusicPanel` `web/app.js:3391`、`renderOtherPanel` `web/app.js:3473` |
+| 历史侧栏 | 任务 + 历史合并渲染、分组、行内详情 | `loadHistory` `web/app.js:2538`，`renderSidebarList` `web/app.js:2591` |
+| 命令面板 | `paletteSources` / 过滤 / 键盘上下选择 / `closeCommandPalette` | `web/app.js:3593`、`web/app.js:3661` |
+| 初始化 + 全局轮询 | 组件实例化、`I18N.onChange` / `applyI18n`、2s 轮询（实例 / 事件 / 下载）、首屏拉取、应用初始 hash | 组件 `web/app.js:3701`、i18n `web/app.js:3710`、轮询 `web/app.js:3720`、首屏 `web/app.js:3724`–`3728` |
+
+### 4. 脚本加载顺序与初始化
+
+`index.html` 里的加载顺序（经典脚本，非 module，**顺序有语义**）：
+
+1. `<head>` 中先加载 `boot.js`（`web/index.html:14`），再挂 `style.css`（`web/index.html:15`）——主题 / 语言要在首次绘制前生效。
+2. `</body>` 前依次加载（`web/index.html:466`–`480`）：
+   `i18n.zh.js` → `i18n.en.js` → `i18n.js` → `api-client.js` → `wav.js` → `file-browser.js` → `audio-picker.js` → `voice-select.js` → `motion.js` → `pwa.js` → `app.js` → `voices-panel.js`。
+
+为什么是这个顺序：
+
+- **词典先于运行时**：`i18n.js` 在初始化时读 `window.I18N_ZH` / `window.I18N_EN`（`web/i18n.js:13`–`14`），词典没到位就会得到空字典、`t()` 全部回落成 key 本身。**改动 i18n 时永远先加词典文件。**
+- `app.js` 末尾会实例化 `VoiceSelect` / `AudioPicker`（`web/app.js:2221` 等），所以这两个组件脚本必须先于 `app.js` 加载。
+- `motion.js` 早于 `app.js`：它监听捕获阶段的点击与 `themechange`，先注册才能覆盖首屏交互。
+- `pwa.js` 早于 `app.js`：Service Worker 越早注册，越早接管后续静态资源；它自身不依赖 `app.js`。
+- `voices-panel.js` 最后：它要读 `app.js` 挂出的 `hubApplyRoute` / `hubPanelClosed`（`web/app.js:293`–`297`）。
+- 所有脚本都是经典脚本、共享全局作用域，因此**新脚本要用 IIFE 包裹**，避免顶层 `const` 重名冲突（参考 `web/audio-picker.js:6`、`web/voice-select.js:7`、`web/motion.js:17`）。
+- 脚本位于 `<body>` 末尾，DOM 已解析完毕，`app.js` 顶层可直接 `document.getElementById`。
+
+> **新增或删除前端脚本时，`web/sw.js` 的 `PRECACHE_URLS` 必须同步。** 漏一项不会让 SW 安装失败（`install` 用 `allSettled`），但离线冷启动会在该脚本处断掉。
+
+`rerenderAll`（`web/app.js:227`）是语言切换后的统一重渲染入口：它会重渲模型列表、实例、设置面板，并刷新所有已注册的 `AudioPicker` / `VoiceSelect` 文案。
+
+### 5. 状态与事件流
+
+- **可变状态**集中为 `app.js` 顶部的模块级 `let`，任务相关另有三张 Map：`activePolls` / `taskViews` / `taskDetails`（`web/app.js:1839`–`1841`）。
+- **localStorage 键**：`hub-theme`、`hub-lang`（`web/boot.js:14`、`web/boot.js:56`）、`hub-model`、`hub-privacy`、`hub-threads`，以及按模型持久化的权重路径 / 启动配置键。语言初值优先级（`localStorage` → `navigator.language`）见 `web/i18n.js:23`。
+- **轮询模型**：**不要再写 `setInterval`**。全部交给 `Api.poll`，它保证「上一轮结束才排下一轮（不叠加请求）、标签页隐藏时不发请求、重新可见立即补一次」，句柄 `stop()` 即可无残留收尾。
+  - 全局 2s 轮询：实例 + 事件 + 下载（`web/app.js:3720`–`3722`）。
+  - 任务单独 2s 轮询：每个进行中的任务一个 `Api.poll` 句柄（`web/app.js:1876`），到终态即 `stop()`。
+- **任务生命周期**：`submitTask`（`web/app.js:1844`）→ `trackTask`（`web/app.js:1869`，入侧栏并轮询）→ `finishTask`（`web/app.js:1902`）→ 结果渲染。
+  TTS 结果直接用历史 wav URL（不处理 base64），其余类别再取 `/result` JSON。页面加载 / 切换模型时 `reattachTasks`（`web/app.js:1948`）经 `GET /api/tasks?modelId=` 重挂。
+- **跨组件事件**：主题切换广播 `themechange`（`web/boot.js` 与 `app.js` 各自 dispatch），`motion.js` / `pwa.js` / 音频组件各自监听（重绘波形、切换过渡、刷新 `theme-color`）。
+- **关键 DOM 锚点**（`index.html`）：页头按钮 `#voices-btn` / `#history-btn` / `#downloads-btn` / `#lang-toggle` / `#settings-btn` / `#theme-toggle`；左栏 `#left` 内 `#instance-list`、`#model-list`；右栏 `#right > #workspace`；五类面板 `#panel-tts`、`#panel-asr`、`#panel-sep`、`#panel-music`、`#panel-other`；历史 `#history-panel > #history-list`；音色库 `#voices-panel > #voices-list`；命令面板 `#command-palette`；若干弹窗 `#launch-modal`、`#settings-modal`、`#model-dl-modal`、`#downloads-modal`、`#instance-detail-modal`、`#busy-overlay`；以及 `#toast-root`、`#drawer-overlay`。
+
+### 6. 编码约定
+
+- **无框架、无构建**。新增交互优先复用现有模式（DOM 辅助 + 手写渲染），不要引入打包器或框架。
+- **所有请求走 `Api.*`**（`web/app.js:7`）。需要新的错误码语义时，扩展 `web/api-client.js` 的 `CODE`，不要在调用点自己 `try/catch fetch`。
+- **安全渲染**（防存储型 XSS）：任何服务端 / 用户可控字符串插入 HTML 前必须 `esc()`（`web/app.js:60`）；能 `textContent` 就别 `innerHTML`；拼 HTML 用 `el()`（`web/app.js:54`）；URL 属性用 `safeHttpUrl()`（`web/app.js:66`）或 `esc()`。**绝不把未转义数据塞进 `innerHTML`。**
+- **i18n**：
+  - 新文案同时写入 `web/i18n.zh.js` 与 `web/i18n.en.js`（当前 564 键），并跑 `node scripts/check-i18n-parity.js` 校验对等。
+  - 动态文案用 `t()`（`web/app.js:3` 的 `I18N.t` 快捷方式）；静态 DOM 用 `data-i18n` / `data-i18n-placeholder` / `data-i18n-title` / `data-i18n-aria-label` 标注，由 `applyI18n()`（`web/i18n.js:106`）批量替换。
+  - 自定义组件实现 `refreshLabels()` 并注册到 `window.__audioPickers` / `window.__voiceSelects`，这样 `rerenderAll` 能统一刷新。
+  - 多语言字段用 `I18N.pick`（`web/i18n.js:146`）；后端错误用 `I18N.errText`（`web/i18n.js:131`）解析 `{"code","params"}`。
+  - **数字 / 字节 / 日期 / 百分比一律走 `I18N.num` / `bytes` / `date` / `percent`**（`web/i18n.js:71`、`86`、`78`、`101`），它们基于 `Intl`，随语言变化。不要自己拼 `KB` / `MB` 或千分位。
+- **CSS**：设计系统分 L1–L6（`web/style.css:16`–`1924`）。主题变量 `--bg` / `--text` / `--accent` / `--card` 等分深色 `:root[data-theme="dark"]`（`web/style.css:85`）与浅色 `:root[data-theme="light"]`（`web/style.css:109`）；默认跟随系统（`web/boot.js:8` 的 `prefers-color-scheme`）。新颜色 / 阴影一律加变量，不硬编码。
+- **动效令牌**：时长 `--dur-1/2/3` + 缓动 `--ease-out` / `--ease-in-out`（`web/style.css:20`–`24`）；只动 `transform` / `opacity` 避免重排；**必须尊重 `prefers-reduced-motion`**（`web/style.css:1927`、`web/style.css:2082`）：装饰动画可停，加载 / 工作中等必要反馈保留。模式说明见 [`../docs/motion.md`](../docs/motion.md)。
+- **中文注释**：代码注释用中文（与 Go 侧一致），标识符、API 字段、CSS 变量用英文。
+- **CSP**：不写内联脚本、`on*` 事件属性、内联 `style` 属性，不引外部源；`index.html:7` 的 CSP 必须保持 `script-src 'self'`。
+- **Service Worker**：`/api/*` 与 `/v1/*` **绝不缓存**（`web/sw.js:126` 直接 `return`，不调 `respondWith`）；导航走 network-first，避免 `index.html` 读到旧版本；任何被服务端标记 `Cache-Control: no-store/no-cache` 的响应也不落缓存（`web/sw.js:64` 的 `noStore`）。详见 [`../docs/pwa.md`](../docs/pwa.md)。
+
+### 7. 无构建地运行与调试
+
+完整功能（推荐）：
+
+```bash
+# 仓库根目录
+go run .            # 默认 http://127.0.0.1:8080（见 hub.config.example.json）
+# 或
+go build -o audio.cpp-hub . && ./audio.cpp-hub
+```
+
+`ensureWorkDir`（`main.go:68`）会自动定位含 `web/` 的工作目录，因此从子目录启动一般也能找到前端。改完 `web/` 下的 JS/CSS 直接刷新浏览器即可：`index.html` 不缓存，其余资源 1 小时缓存（必要时硬刷新）。
+
+只调 UI（不启后端，适合调样式 / 布局）：在 `web/` 目录起任意静态服务器，例如 `python3 -m http.server 8000`。此时 `/api/*` 全部 404，列表与任务为空字段，仅用于查看静态外观。注意 Service Worker 只在 `http:` / `https:` 下注册，`file://` 下不会生效——调试 PWA 请用静态服务器而不是直接双击 `index.html`。
+
+服务端如何提供文件：`api.go:152` 的 `staticHandler`——目录请求只回 `index.html`、禁用目录列表，`index.html` 设 `Cache-Control: no-cache`（`api.go:189`），其余 `max-age=3600`（`api.go:191`）。
+
+---
+
+## 第二部分 · 开发期工具链（仅本地 / CI）
+
+`npm install` 后可用以下脚本（见根目录 `package.json`）：
 
 | 脚本 | 作用 |
 | --- | --- |
@@ -20,11 +156,16 @@
 | `npm run format:check` | Prettier 校验（**范围见 `.prettierignore`，有意排除 `web/`**，见下） |
 | `npm run format` | Prettier 重写（同样遵循 `.prettierignore`） |
 | `npm run check` | 依次跑上面三项，CI 用的就是这个 |
+| `npm run test:unit` | `node:test` 单元测试（纯函数，无需浏览器） |
+| `npm run test:e2e` | Playwright e2e（headless Chromium + mock 后端） |
+| `npm run ui:inventory` | 生成 `ui_inventory.json` 与 `docs/ui.md` |
+| `npm run ui:inventory:check` | 校验两者与源码一致（CI 防漂移） |
+| `npm run perf:budget` | 首屏 JS/CSS raw+gzip 体积与请求数预算检查 |
 
 `check:types` 用 `noEmit` 保证**不产出任何 JS**：`tsc` 在这里只是检查器，输出目录为空，
 不可能被误当成构建产物进入发行包。
 
-## 工具能查出什么
+### 工具能查出什么
 
 - **tsc**：未定义的标识符、参数个数不符、拼错的跨文件公开接口、死代码（未使用的局部变量）、
   `switch` 贯穿、`async` 误用。
@@ -34,9 +175,9 @@
   引号（双引号）、分号、无尾逗号、对象花括号空格、键/运算符/关键字空格、
   文件末尾换行、行尾无空格、空行上限、具名函数不留空格而匿名函数留空格。
 - **Prettier**：只覆盖 `.prettierignore` 范围外的文件——根目录 JSON 清单、
-  CI workflow、工具链自身的 `.js`/`.d.ts`。
+  CI workflow、`e2e/` / `test/` / `scripts/` 下的 `.mjs`、工具链自身的配置。
 
-## 已知降级（显式声明，非静默关闭）
+### 已知降级（显式声明，非静默关闭）
 
 `web/globals.d.ts` 与 `.prettierignore` 里逐条写明了原因，这里汇总：
 
@@ -48,7 +189,7 @@
 
 2. **`app.js` 的 `$()` / `el()` 用 JSDoc 标注返回 `any`。**
    它们是全文件最底层的 DOM 取值入口，约 3000 个调用点会立刻访问 `.value` / `.checked` /
-   `.dataset` / `.onclick` 等「只有具体标签才声明」的成员。逐点加断言等于重写，因此显式放宽。
+   `dataset` / `.onclick` 等「只有具体标签才声明」的成员。逐点加断言等于重写，因此显式放宽。
 
 3. **`Element` / `EventTarget` 增补了 4 个成员**（`dataset`、`title`、`onclick`、`value`、
    `closest`）。`document.querySelectorAll(".tab")` 这类通用选择器无法推断标签，TypeScript 只能
@@ -63,21 +204,28 @@
    改由 ESLint 的排版类规则承担约束（见上）。`docs/diagrams/**` 同样排除：那是绝对定位
    坐标 + 内联样式的手写 HTML，重排会破坏 `scripts/check-diagrams.py` 校验的可访问性契约。
 
+5. **`web/sw.js` 的 Service Worker realm 类型手写最小声明。**
+   Service Worker 跑在 `ServiceWorkerGlobalScope`，既不是 `window` 也不是 `Worker`。
+   `tsconfig.json` 的 `lib` 只含 `ES2022/DOM`；加 `lib.webworker` 会与 `lib.dom` 在同一
+   program 内重复声明 `self` / `fetch` / `caches` 等符号，因此按 `globals.d.ts` 开头的原则
+   「只声明各模块被实际用到的公开成员」手写 `HubServiceWorkerScope` 等，由 `sw.js` 就地 cast。
+   文件内的业务逻辑仍受 tsc 正常检查。
+
 降级**不会静默漂移**：新增的跨文件公开接口若在 `globals.d.ts` 里没声明，tsc 会立刻报
 `Cannot find name`；新增的数组型字典键若没在 `I18NApi.t` 补重载，调用侧会报
 `.forEach is not a function`。两者都是硬失败。
 
-## 已知副作用：`go list ./...` 会走进 `node_modules`
+### 已知副作用：`go list ./...` 会走进 `node_modules`
 
 Go 的 `./...` 包匹配会跳过 `.`/`_` 前缀与 `testdata` 目录，但**不跳过 `node_modules`**。
 执行过 `npm install` 后，`go list ./...` / `go test ./...` 会多列出一个
 `…/node_modules/flatted/golang/pkg/flatted`（某个依赖恰好附带 Go 源码）。
 
 这是无害的：该包能正常编译，`go vet` / `go test` / `gofmt -l .` 结果均不受影响。
-CI 也不受影响——`quality` job 从不执行 `npm ci`，`web-toolchain` job 不执行任何 Go 命令，
-两者不会同时存在 `node_modules`。仅提示本地看到该多余条目时不必意外。
+CI 也不受影响——`quality` job 从不执行 `npm ci`，`web-toolchain` / `frontend` job 不执行任何
+Go 命令，两者不会同时存在 `node_modules`。仅提示本地看到该多余条目时不必意外。
 
-## 改动本目录后
+### 改动本目录后
 
 ```bash
 npm install
@@ -90,4 +238,36 @@ npm run format         # 仅当 format:check 失败时（注意范围不含 web/
 
 改动 `window.*` 的公开接口时，**同时**更新 `web/globals.d.ts`（供 tsc）与
 `eslint.config.js` 的 `languageOptions.globals`（供 `no-undef`），并保证 `index.html`
-底部的 `<script>` 顺序满足依赖关系。
+底部的 `<script>` 顺序满足依赖关系。改动 `index.html` 的脚本清单时，记得同步
+`web/sw.js` 的 `PRECACHE_URLS` 与 `scripts/ui-inventory.mjs` / `scripts/perf-budget.mjs`
+（后两者已改为从 `index.html` 反推，无需手改）。
+
+---
+
+## 相关文档与设计资产
+
+| 文档 | 内容 |
+| --- | --- |
+| [`../TESTING.md`](../TESTING.md) | 前端 e2e / 单元测试 / 性能预算与本地运行方式 |
+| [`styleguide.html`](styleguide.html) | 组件样式指南页（在浏览器中打开） |
+| [`../docs/ui.md`](../docs/ui.md) | UI 清单：界面 / 控件逐项登记（由 `npm run ui:inventory` 生成） |
+| [`../docs/motion.md`](../docs/motion.md) | 动效系统：令牌、模式、reduced-motion 降级 |
+| [`../docs/pwa.md`](../docs/pwa.md) | PWA：Service Worker 缓存策略、更新流程、图标生成 |
+| [`../docs/media/README.md`](../docs/media/README.md) | 演示 GIF 录制流程（`scripts/record-demos.cjs`） |
+| [`../docs/diagrams/`](../docs/diagrams/) | 视觉文档：14 张架构 / 时序 / 状态图 + `previews/`，入口见 `README.md`、`INVENTORY.md` |
+| [`../docs/API.md`](../docs/API.md) | 前端调用的 `/api/*` 接口契约 |
+| [`../docs/assets/`](../docs/assets/) | README 演示 GIF |
+| [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | 通用贡献流程与代码约定 |
+| [`../SECURITY.md`](../SECURITY.md) | 威胁模型与漏洞上报渠道 |
+
+## 贡献检查清单
+
+- [ ] 新文案同时加入 `web/i18n.zh.js` 与 `web/i18n.en.js`；`node scripts/check-i18n-parity.js` 通过。动态用 `t()`，静态用 `data-i18n*`。
+- [ ] 所有请求走 `Api.*` 而不是裸 `fetch`；所有服务端 / 用户数据进 HTML 前 `esc()`；URL 用 `safeHttpUrl()`。
+- [ ] 数字 / 字节 / 日期 / 百分比走 `I18N.num` / `bytes` / `date` / `percent`，不手拼单位。
+- [ ] 为新增交互补自动化测试（`npm run test:unit` / `test:e2e`），并重跑 `npm run ui:inventory` 提交产物。
+- [ ] 保持 CSP `script-src 'self'`：无内联脚本、无 `on*` 属性、无内联样式、无外部 CDN。
+- [ ] 新颜色 / 阴影 / 时长走 CSS 变量与动效令牌，并确认 `prefers-reduced-motion` 下仍可用。
+- [ ] 新脚本用 IIFE 包裹防全局名冲突，位置在 `app.js` 之前；同步 `web/sw.js` 的 `PRECACHE_URLS`。
+- [ ] 改动 Service Worker 时确认 `/api/*` 与 `/v1/*` 仍未被缓存。
+- [ ] 运行 `npm run check` 与 `npm run test:unit`，`go vet ./...` / `go build ./...`，并手动过一遍受影响页面（含中英切换与深浅主题）。
