@@ -22,6 +22,8 @@
   const DISMISS_KEY = "hub-pwa-update-dismissed";
   let waitingWorker = null;
   let reloading = false;
+  /* 载入时是否已受控：首次安装的 clients.claim() 不是版本更新，reload 会吞掉此刻的交互 */
+  const wasControlled = Boolean(navigator.serviceWorker.controller);
 
   function showUpdate(worker) {
     waitingWorker = worker;
@@ -75,7 +77,7 @@
   window.addEventListener("themechange", syncThemeColor);
 
   navigator.serviceWorker.addEventListener("controllerchange", function () {
-    if (reloading) return;
+    if (!wasControlled || reloading) return;
     reloading = true;
     window.location.reload();
   });
