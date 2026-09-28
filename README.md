@@ -39,6 +39,8 @@
 
 - **多实例管理**：为每个模型实例生成 `server.json` 并以子进程拉起 `audiocpp_server`，自动分配端口（绑定 127.0.0.1）、轮询健康状态（最多 120s）、查看日志、一键停止
 - **Web UI**：纯原生 HTML/JS 界面（无构建步骤），中英双语，支持模型选择、参数表单、任务提交
+- **界面能力**：hash 路由与深链接（`#/model/<id>`、`#/history` 等，前进 / 后退可还原）、`Ctrl/Cmd-K` 命令面板、深浅色与跟随系统主题、列表骨架 / 空态 / 错误态统一、键盘可达与 WCAG AA 对比度（动效遵循 `prefers-reduced-motion`）
+- **可安装 / 离线**：`manifest.webmanifest` + Service Worker，导航 network-first、静态资源 cache-first；`/api/*` 与 `/v1/*` 绝不缓存，断网有兜底页，注册失败静默降级
 - **异步任务队列**：`POST /api/tasks` 创建后立即返回，按实例单线程串行执行；任务状态落盘，刷新 / 重启 hub 后自动回放，结果可稍后取回
 - **TTS 操作历史**：按模型隔离保存合成记录与结果音频（不自动淘汰，仅手动删除），历史面板可回听、分组、行内展开四要素
 - **音色库（参考音频）**：全局资源，`data/voices/` 下集中管理，名称唯一，支持改名 / 改参考文本 / 试听
@@ -197,6 +199,10 @@ voices.go / audio.go    # 音色库；WAV 上传与头解析
 download.go / packages.go # 权重下载器；model-packages.json 清单
 fs.go / models.go / util.go # 文件浏览；模型清单；通用工具
 web/                    # 前端静态文件（无构建步骤）
+├── app.js + modules/   # ES 模块引导层 + 20 个业务模块
+└── i18n.zh.js / i18n.en.js  # 中英词典（i18n.js 只是运行时）；api-client.js 统一 HTTP 出口
+docs/                   # 文档：API.md、diagrams/（19 张架构 / 时序 / 状态图）、ui.md、motion.md、pwa.md
+test/ / e2e/            # 前端单元测试（node:test）与 e2e（Playwright + mock 后端）
 models.json             # 模型清单（go:embed 嵌入二进制）
 model-packages.json     # 下载包清单（go:embed 嵌入二进制）
 run/                    # 运行时：实例 server.json / server.log / 代理缓存
@@ -232,7 +238,14 @@ logs/                   # 运行时：Windows GUI 模式下的 logs/hub.log
 ## 前端（web/）
 
 Web UI 是纯原生 HTML/CSS/JS（`web/`），**无框架、无构建步骤，运行时不需要 Node.js**——Go 服务直接从磁盘提供
-静态文件，改完刷新浏览器即可。Node / npm 等工具（若引入）只用于开发与 CI，不随发行版分发。
+静态文件，改完刷新浏览器即可。Node / npm 工具链**只用于开发与 CI**（`tsc` 类型检查、ESLint、Prettier、
+Playwright e2e、node:test 单元测试），不随发行版分发；`web/` 里的文件就是发布物本身，没有打包产物。
+
+结构上分两层：经典脚本（挂 `window.*`，按 `index.html` 底部的 `<script>` 顺序加载）+ `web/app.js` 引导的
+`web/modules/*` 20 个原生 ES 模块（不打包、不转译，浏览器直接按 URL 解析）。i18n 拆成纯数据词典
+`web/i18n.zh.js` / `web/i18n.en.js` 与运行时 `web/i18n.js`；所有 HTTP 请求统一走 `web/api-client.js`
+（`window.AudioCppHub.api`，含错误信封、超时中断、可见性感知轮询）；`web/boot.js` 在首次绘制前恢复主题与
+界面语言，`web/styleguide.html` 是组件样式指南页。
 
 前端结构、模块地图、状态与轮询模型、编码约定与贡献检查清单见 [`web/README.md`](web/README.md)。
 架构 / 时序 / 状态图见 [`docs/diagrams/`](docs/diagrams/)；界面演示 GIF 见 [`docs/assets/`](docs/assets/)；
@@ -242,5 +255,6 @@ Web UI 是纯原生 HTML/CSS/JS（`web/`），**无框架、无构建步骤，�
 ## 技术栈与来源
 
 - Go 1.27，原生单二进制；依赖仅 `github.com/getlantern/systray`（Windows 托盘）与 `golang.org/x/sys`
-- 前端：原生 HTML/CSS/JS，中英双语文案在 `web/i18n.zh.js` / `web/i18n.en.js`，HTTP 出口统一在 `web/api-client.js`
+- 前端：原生 HTML/CSS/JS，无框架无构建；经典脚本 + `web/modules/*` 20 个 ES 模块，中英双语文案在 `web/i18n.zh.js` / `web/i18n.en.js`，HTTP 出口统一在 `web/api-client.js`，PWA 用 `web/sw.js` + `web/manifest.webmanifest`
+- 开发期工具链（不进发行包）：TypeScript `checkJs`、ESLint、Prettier、Playwright、node:test；无打包器
 - 本项目是 [audio.cpp](https://github.com/0xShug0/audio.cpp) 的配套管理面板（fork 维护版：<https://github.com/matthewhand/audio.cpp-hub>）；不捆绑上游二进制，模型与推理能力来自上游项目
