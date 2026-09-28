@@ -13,6 +13,27 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png">
   <script src="/boot.js"></script>
   <link rel="stylesheet" href="/style.css">
+  <!-- 模块图预载：web/app.js 是 type="module"，没有打包器，浏览器只能等它执行完之后
+       再顺着 import 图去取 web/modules/*.js——模块的解析与首屏可用时间被串在后面。
+       这里把整张静态模块图逐条声明成 modulepreload：浏览器在解析 head 时就并行发起
+       这 14 个请求并预解析，app.js 执行时直接命中已就位的模块（不额外产生请求，
+       也因此**不减少**请求条数——条数只由模块数量决定）。
+       清单必须与 app.js 的 import 图、以及 web/sw.js 的 PRECACHE_URLS 三方一致，
+       scripts/perf-budget.mjs 会校验这一点。 -->
+  <link rel="modulepreload" href="/modules/dom.js">
+  <link rel="modulepreload" href="/modules/async-ui.js">
+  <link rel="modulepreload" href="/modules/state.js">
+  <link rel="modulepreload" href="/modules/routing.js">
+  <link rel="modulepreload" href="/modules/command-palette.js">
+  <link rel="modulepreload" href="/modules/shell.js">
+  <link rel="modulepreload" href="/modules/models.js">
+  <link rel="modulepreload" href="/modules/settings.js">
+  <link rel="modulepreload" href="/modules/launch.js">
+  <link rel="modulepreload" href="/modules/instances.js">
+  <link rel="modulepreload" href="/modules/downloads.js">
+  <link rel="modulepreload" href="/modules/tasks.js">
+  <link rel="modulepreload" href="/modules/sidebar.js">
+  <link rel="modulepreload" href="/modules/panels.js">
 </head>
 <body>
   <a id="skip-to-content" class="skip-link" href="#main-content" data-i18n="a11y.skipToContent">跳到主要内容</a>

@@ -3,14 +3,11 @@
  * 左栏实例列表、顶部实例状态条（选择 / 停止 / 详情）、实例详情弹窗，
  * 以及 2s 轮询的建立与复用（Api.poll 句柄在模块内保存，单飞 + 可见性语义不变）。 */
 
-import { Api } from "./api.js";
-import { renderEmptyState, showSkeleton } from "./async-ui.js";
-import { $, esc, renderListError } from "./dom.js";
-import { t } from "./i18n-bridge.js";
+import { focusDialog, renderEmptyState, renderListError, restoreDialogFocus, showSkeleton } from "./async-ui.js";
+import { $, Api, esc, t } from "./dom.js";
 import { openLaunchModal } from "./launch.js";
 import { getPendingInstanceId, go, setPendingInstanceId } from "./routing.js";
 import { activeInstanceId, models, selectedModelId, setActiveInstanceId } from "./state.js";
-import { focusDialog, restoreDialogFocus } from "./ui.js";
 
 export const STATUS_CLASS = { STARTING: "starting", READY: "ready", ERROR: "error", STOPPED: "stopped" };
 export function statusText(s) {

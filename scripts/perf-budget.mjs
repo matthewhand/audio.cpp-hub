@@ -12,27 +12,48 @@ const KIB = 1024;
 
 /* 预算（单位 KiB / 次数 / ms）。依据 2026-09 现状留出合理增长余量。
  *
- * ⚠ 2026-09 重新标定：#87（设计令牌）/ #88（异步态）/ #89（i18n 拆分，
- * 多出 i18n.zh.js + i18n.en.js 两个请求）/ #98（api-client.js）合入后，
- * 首屏实际体积已越过旧预算，而 #90（PWA：motion.js + pwa.js）再叠加
- * 约 5.8 KiB raw / 2.9 KiB gzip / 2 个请求。
+ * ⚠ 2026-09 两次重新标定的历史：#87（设计令牌）/ #88（异步态）/ #89（i18n 拆分，
+ * 多出 i18n.zh.js + i18n.en.js 两个请求）/ #98（api-client.js）/ #90（PWA：motion.js +
+ * pwa.js）先后把首屏体积推过旧预算；#100 又把 `app.js` 拆成 ES 模块，浏览器不再只取一个
+ * app.js，而是顺着 import 图逐个取 web/modules/*.js，首屏请求数从 15 涨到 35。
  *
- * ⚠ 2026-09 再次重新标定：#100 把 `app.js` 拆成 ES 模块后，浏览器不再只取一个
- * app.js，而是顺着 import 图逐个取 web/modules/*.js（20 个文件）。体积只多了
- * import/export 与文件头的开销（约 +18 KiB raw / +17.5 KiB gzip，raw 反而略降——
- * 拆文件去掉了重复的文件级注释），但**首屏请求数从 15 涨到 35**。
- * 这是「无构建 + 原生 ES 模块」的固有代价：合并成一个请求就必须引入打包器，
- * 与本项目的硬约束冲突。缓解手段是 web/sw.js 预缓存全部模块（回访命中缓存），
- * 以及这些请求全部同源、HTTP/1.1 keep-alive 下并行发出。
- * 这里的预算是按「实际初载资源」重新标定的快照，属有意放宽，不是悄悄关掉检查——
- * 后续仍按同一口径棘轮收紧。 */
+ * ✅ 2026-09 本 PR 修掉了 #100 留下的这个坑（实测 before → after，命令 `npm run perf:budget`）：
+ *
+ *   | 指标            | 拆分后（before） | 修复后（after） | 变化          |
+ *   | ---------------- | --------------- | -------------- | ------------- |
+ *   | 初始子资源请求数 | 35              | 29             | **−6 (−17%)** |
+ *   | 初始 JS raw      | 324.5 KiB       | 323.4 KiB      | −1.1 KiB      |
+ *   | 初始 JS gzip     | 115.4 KiB       | 113.4 KiB      | −2.0 KiB      |
+ *   | 初始 CSS raw     | 64.9 KiB        | 65.0 KiB       | +0.1 KiB      |
+ *   | 初始 CSS gzip    | 16.6 KiB        | 16.7 KiB       | +0.1 KiB      |
+ *   | JS+CSS gzip 合计 | 132.0 KiB       | 130.1 KiB      | −1.9 KiB      |
+ *   | 模块文件数       | 20              | 14             | −6            |
+ *
+ * CSS 略增 0.1 KiB：合并骨架屏的两份实现时多写了两行说明注释（gzip 下约 +0.1 KiB）。
+ *
+ * 两个动作，效果不同，必须分开说：
+ *
+ * 1) `<link rel="modulepreload">`（见 web/index.html <head>）——**不减少请求数**，
+ *    15 个模块的字节还是要传。改的是**时序**：浏览器在解析 head 时就并行发起整张模块图
+ *    并预解析，而不是等 app.js 执行后再一层层顺着 import 图串行往返。
+ *    本脚本按请求条数计量，因此看不到这一项的收益（它体现在真实浏览器的 TTI 上，
+ *    由下方 ttiTargetMs 目标间接约束）。
+ * 2) 合并过细的模块（20 → 14 个）——这才是请求数 35 → 29 的来源：
+ *    `api.js` + `i18n-bridge.js` 并入 `dom.js`（三个纯 window 绑定 + 转义，同属基元层），
+ *    `ui.js`（弹窗焦点栈）+ `events.js`（事件→toast）并入 `async-ui.js`（跨功能 UI 原语），
+ *    `results.js`（结果落版）并入 `tasks.js`（任务生命周期的终点），
+ *    `pickers.js`（表单选择器实例）并入 `panels.js`（它们就是面板表单的部件）。
+ *    合并后没有引入打包器，仍是无构建的原生 ES 模块。
+ *
+ * 下面的预算是**按修复后的实测值重新标定的快照**（刻意收得比实测略紧一点留增长余量），
+ * 不是上一版为迁就 35 个请求而放宽的数字。后续仍按同一口径棘轮收紧。 */
 export const BUDGETS = {
-  jsRawKiB: 348, // 初始 JS 未压缩合计（实测 324.5）
-  jsGzipKiB: 127, // 初始 JS gzip 传输合计（实测 115.4）
-  cssRawKiB: 72, // 初始 CSS 未压缩（实测 64.9）
-  cssGzipKiB: 19, // 初始 CSS gzip 传输（实测 16.6）
-  totalGzipKiB: 146, // JS + CSS gzip 合计（实测 132.0，不含 HTML，HTML 很小）
-  subresourceRequests: 40, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 35）
+  jsRawKiB: 330, // 初始 JS 未压缩合计（实测 323.4）
+  jsGzipKiB: 118, // 初始 JS gzip 传输合计（实测 113.4）
+  cssRawKiB: 68, // 初始 CSS 未压缩（实测 65.0）
+  cssGzipKiB: 18, // 初始 CSS gzip 传输（实测 16.7）
+  totalGzipKiB: 135, // JS + CSS gzip 合计（实测 130.1，不含 HTML，HTML 很小）
+  subresourceRequests: 30, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 29）
   ttiTargetMs: 1500 // 目标 TTI（本地/局域网，中端笔电）——浏览器指标，本脚本不测量
 };
 const CSS = ["style.css"];
@@ -54,6 +75,29 @@ function collectModules(entry) {
     }
   }
   return [...seen].sort();
+}
+
+/* web/index.html <head> 里的 <link rel="modulepreload"> 清单：浏览器并行预取模块图的依据。
+   必须覆盖整张模块图——漏一个，那个模块就退回「app.js 执行后再串行往返」的老路。 */
+export function modulepreloads() {
+  const html = fs.readFileSync(path.join(WEB, "index.html"), "utf8");
+  return [
+    ...new Set(
+      [...html.matchAll(/<link\b[^>]*\brel="modulepreload"[^>]*href="\/?([^"]+)"/g)].map(
+        (m) => "/" + m[1]
+      )
+    )
+  ].sort();
+}
+
+/* web/sw.js 的 PRECACHE_URLS：离线冷启动的可用性依据，同样必须覆盖整张模块图。 */
+export function precached() {
+  const sw = fs.readFileSync(path.join(WEB, "sw.js"), "utf8");
+  const block = sw.match(/const PRECACHE_URLS = \[([\s\S]*?)\];/);
+  if (!block) return [];
+  return [
+    ...new Set([...block[1].matchAll(/"([^"]+)"/g)].map((m) => "/" + m[1].replace(/^\//, "")))
+  ].sort();
 }
 
 function bytes(file) {
@@ -80,14 +124,18 @@ export function measure() {
      清单一旦漏项（例如 i18n 拆分出的 i18n.zh.js / i18n.en.js、api-client.js、
      motion.js、pwa.js）就会静默低估预算基线，让检查形同虚设。
      ES 模块化后还要顺 app.js 的 import 图把 web/modules/*.js 计入首屏——
-     浏览器不会把它们合并成一个请求。 */
+     浏览器不会把它们合并成一个请求（modulepreload 只改时序，不改条数）。 */
   const scripts = [
     ...[...html.matchAll(/<script\b(?![^>]*type="module")[^>]*src="\/?([^"]+)"/g)].map((m) => m[1])
   ];
   /* app.js 是 <script type="module">，浏览器按 import 图逐个取 web/modules/*.js，
      这些请求同样发生在首屏，因此必须计入体积与请求数预算。 */
   const moduleEntry = html.match(/<script\b[^>]*type="module"[^>]*src="\/?([^"]+)"/);
-  if (moduleEntry) scripts.push(...collectModules(moduleEntry[1]));
+  const modules = moduleEntry ? collectModules(moduleEntry[1]) : [];
+  /* app.js 本身由 <script type="module"> 拉取，不需要 modulepreload；
+     它仍需进 sw.js 预缓存（离线首屏要靠它启动整个模块图）。 */
+  const moduleDeps = moduleEntry ? modules.filter((f) => f !== moduleEntry[1]) : [];
+  scripts.push(...modules);
   const styles = [...html.matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*href="\/?([^"]+)"/g)].map(
     (m) => m[1]
   );
@@ -100,7 +148,30 @@ export function measure() {
     cssRaw: sum(CSS_HIT, bytes),
     cssGzip: sum(CSS_HIT, gzipBytes),
     subresourceRequests: scripts.length + styles.length,
-    initialFiles: [...jsFiles, ...CSS_HIT]
+    initialFiles: [...jsFiles, ...CSS_HIT],
+    modules,
+    moduleDeps,
+    preloads: modulepreloads(),
+    precache: precached()
+  };
+}
+
+/* 三方一致性：模块图（app.js 的 import 图，不含 app.js 自身）⊆ index.html 的
+   modulepreload，模块图 + app.js ⊆ sw.js 预缓存。
+   任一处漏项都不会让页面报错，只会让首屏悄悄退回串行取模块 / 离线首屏缺件——
+   这正是要在这里显式挡住的漂移。 */
+function graphDrift(m) {
+  const inPreload = new Set(m.preloads);
+  const inPrecache = new Set(m.precache);
+  return {
+    missingPreload: m.moduleDeps.filter((f) => !inPreload.has("/" + f)),
+    stalePreload: m.preloads.filter(
+      (f) => f.startsWith("/modules/") && !m.modules.includes(f.slice(1))
+    ),
+    missingPrecache: m.modules.filter((f) => !inPrecache.has("/" + f)),
+    stalePrecache: m.precache.filter(
+      (f) => f.startsWith("/modules/") && !m.modules.includes(f.slice(1))
+    )
   };
 }
 
@@ -112,20 +183,22 @@ export function check(measured = measure()) {
     ["初始 CSS gzip", measured.cssGzip / KIB, BUDGETS.cssGzipKiB, "KiB"],
     ["JS+CSS gzip 合计", (measured.jsGzip + measured.cssGzip) / KIB, BUDGETS.totalGzipKiB, "KiB"],
     ["初始子资源请求数", measured.subresourceRequests, BUDGETS.subresourceRequests, "个"]
-  ];
-  return results.map(([label, actual, budget, unit]) => ({
+  ].map(([label, actual, budget, unit]) => ({
     label,
     actual,
     budget,
     unit,
     ok: actual <= budget
   }));
+  const drift = graphDrift(measured);
+  const total = Object.values(drift).reduce((a, l) => a + l.length, 0);
+  return { results, drift, ok: results.every((r) => r.ok) && total === 0 };
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   const measured = measure();
-  const results = check(measured);
+  const { results, drift } = check(measured);
   console.log("性能预算检查（首屏关键资源，web/）");
   console.log("| 指标 | 实测 | 预算 | 结果 |");
   console.log("| --- | --- | --- | --- |");
@@ -143,11 +216,28 @@ if (isMain) {
   console.log(
     `初载资源（${measured.initialFiles.length} 个，取自 index.html 与 app.js 的 import 图）：${measured.initialFiles.join(" ")}`
   );
+  console.log(
+    `模块图：app.js + ${measured.moduleDeps.length} 个依赖模块，已由 index.html 的 ${measured.preloads.length} 条 modulepreload 与 sw.js 的 ${measured.precache.length} 条预缓存覆盖。`
+  );
 
   const failed = results.filter((r) => !r.ok);
   if (failed.length) {
     console.error(`\n✗ ${failed.length} 项超出预算：${failed.map((r) => r.label).join("、")}`);
+  }
+  const driftLines = [
+    ["模块图缺少 modulepreload", drift.missingPreload],
+    ["modulepreload 指向已删除/不存在的模块", drift.stalePreload],
+    ["模块图缺少 sw.js 预缓存", drift.missingPrecache],
+    ["sw.js 预缓存指向已删除/不存在的模块", drift.stalePrecache]
+  ].filter(([, list]) => list.length);
+  for (const [label, list] of driftLines) {
+    console.error(`\n✗ ${label}（${list.length}）：${list.join(" ")}`);
+  }
+  if (failed.length || driftLines.length) {
+    console.error(
+      "\n请同步 web/index.html 的 modulepreload 清单与 web/sw.js 的 PRECACHE_URLS（见 web/README.md 4 节）。"
+    );
     process.exit(1);
   }
-  console.log("\n✓ 全部在预算内");
+  console.log("\n✓ 全部在预算内，且模块图 / modulepreload / 预缓存三方一致");
 }

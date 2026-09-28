@@ -8,14 +8,12 @@
  * 同 tasks.js：任务行需要本模块的队列接口，本模块的任务行又需要队列，
  * 两模块之间是一处刻意的循环依赖（只在运行期回调里互相调用）。 */
 
-import { parseApiError, renderEmptyState, renderStateError, showSkeleton, showToast } from "./async-ui.js";
-import { $, el, markRowEnter } from "./dom.js";
-import { t } from "./i18n-bridge.js";
+import { bindMenuKeys, focusDialog, hideBusy, parseApiError, renderEmptyState, renderStateError, restoreDialogFocus, showBusy, showSkeleton, showToast } from "./async-ui.js";
+import { $, el, markRowEnter, t } from "./dom.js";
 import { fillTtsForm } from "./panels.js";
 import { goPanel } from "./routing.js";
 import { selectedModel, selectedModelId } from "./state.js";
 import { makeTaskRow, taskDetails, taskViews } from "./tasks.js";
-import { bindMenuKeys, focusDialog, restoreDialogFocus } from "./ui.js";
 
 /* ---------- 历史全屏面板：页头 🕘 打开；遮罩点击 / × / Esc 关闭 ---------- */
 export function openHistoryPanel() {
@@ -598,23 +596,25 @@ $("history-clear").onclick = async () => {
   const modelId = historyModelId();
   const m = selectedModel();
   if (!modelId || !m || !window.confirm(t("history.confirmClear"))) return;
-  if (m.category !== "tts") {
-    // 非 TTS 无落盘历史：只删该模型已结束的任务记录
-    try {
+  /* 清空是不可中断的批量操作：非 TTS 要逐条 DELETE 已结束任务（条数事先不可知），
+     TTS 还要先整体删历史索引。全局等待遮罩挡住其余交互并显示实时耗时，
+     避免用户在「看起来什么都没发生」的空档里重复提交或再点一次清空。 */
+  showBusy(t("busy.label"));
+  try {
+    if (m.category !== "tts") {
+      // 非 TTS 无落盘历史：只删该模型已结束的任务记录
       await deleteFinishedTasks(modelId);
       renderSidebarList();
-    } catch (e) {
-      showToast("error", t("history.clearFailed") + t("common.colon") + e.message);
+      return;
     }
-    return;
-  }
-  try {
     const res = await fetch("/api/history/" + modelId, { method: "DELETE" });
     if (!res.ok) throw new Error(I18N.errText(await res.text()));
     await deleteFinishedTasks(modelId);
     loadHistory();
   } catch (e) {
     showToast("error", t("history.clearFailed") + t("common.colon") + e.message);
+  } finally {
+    hideBusy();
   }
 };
 

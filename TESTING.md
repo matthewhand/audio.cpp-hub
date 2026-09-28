@@ -8,7 +8,7 @@
 | `npm run test:e2e` | Playwright e2e（headless Chromium + mock 后端，无需 Go/GPU/模型） |
 | `npm run ui:inventory` | 生成 `ui_inventory.json` 与 `docs/ui.md` |
 | `npm run ui:inventory:check` | 校验两者与源码一致（CI 防漂移） |
-| `npm run perf:budget` | 首屏 JS/CSS raw+gzip 体积与请求数预算检查 |
+| `npm run perf:budget` | 首屏 JS/CSS raw+gzip 体积与请求数预算检查，并校验「模块图 / modulepreload / SW 预缓存」三方一致 |
 
 前置：Node ≥ 22（本仓库使用 v22）、`npm ci` 装 devDependencies（仅 `@playwright/test`）。首次跑 e2e 前如本机无浏览器：`npx playwright install chromium`。
 
@@ -94,29 +94,91 @@
 
 `npm run perf:budget` 直接读 `web/` 文件与 `index.html` 引用，计算 raw+gzip 与初始子资源请求数。初载资源清单同样从 `index.html` 反推（手写清单会漏项并静默低估基线）：
 
-| 指标 | 预算 | 当前 |
+| 指标 | 预算 | 当前实测 |
 | --- | --- | --- |
-| 初始 JS raw | 340 KiB | 306.3 KiB |
-| 初始 JS gzip | 108 KiB | 97.9 KiB |
-| 初始 CSS raw | 72 KiB | 64.9 KiB |
-| 初始 CSS gzip | 19 KiB | 16.6 KiB |
-| JS+CSS gzip 合计 | 126 KiB | 114.5 KiB |
-| 初始子资源请求数 | 16 | 14 |
+| 初始 JS raw | 330 KiB | 323.4 KiB |
+| 初始 JS gzip | 118 KiB | 113.4 KiB |
+| 初始 CSS raw | 68 KiB | 65.0 KiB |
+| 初始 CSS gzip | 18 KiB | 16.7 KiB |
+| JS+CSS gzip 合计 | 135 KiB | 130.1 KiB |
+| 初始子资源请求数 | 30 | 29 |
 | TTI 目标 | ≤ 1500 ms（本地/局域网，中端笔电） | 由真实浏览器测量，不在本脚本校验 |
 
 预算定义在 `scripts/perf-budget.mjs` 的 `BUDGETS`（单一来源）。超标退出 1。
 
-> **2026-09 重新标定说明**：原预算（280/80/56/14 KiB、12 个请求）是在更早的树形上按一份**手写 8 文件清单**测出来的，实际首载早已不止 8 个脚本。#87（设计令牌）、#88（异步态）、#89（i18n 拆成 `i18n.zh.js` + `i18n.en.js`，多 2 个请求）、#98（`api-client.js`）合入后已越线；#90（PWA 的 `motion.js` + `pwa.js`）再叠加约 5.8 KiB raw / 2.9 KiB gzip / 2 个请求。本次先把测量口径修正为「从 index.html 反推」（原脚本只测 8/13 个脚本，指标本身是失真的），再按实测值 + 余量重新标定预算，并在此显式记录，而非悄悄放宽。后续继续按同一口径棘轮收紧。
+### 首屏请求数：ES 模块化之后（2026-09，#100 拆分 → 本次修复）
+
+`app.js` 拆成原生 ES 模块后，浏览器不再只取一个 `app.js`，而是顺着 import 图逐个取
+`web/modules/*.js`——没有打包器就没有合并，首屏请求数因此暴涨。上表是**修复后**的数字，
+下表是同口径的 before → after（`npm run perf:budget` 两次实测）：
+
+| 指标 | 拆分后（before） | 修复后（after） | 变化 |
+| --- | --- | --- | --- |
+| 初始子资源请求数 | 35 | **29** | −6（−17%） |
+| 初始 JS raw | 324.5 KiB | 323.4 KiB | −1.1 KiB |
+| 初始 JS gzip | 115.4 KiB | 113.4 KiB | −2.0 KiB |
+| 初始 CSS raw | 64.9 KiB | 65.0 KiB | +0.1 KiB（合并骨架屏时多两行注释） |
+| 初始 CSS gzip | 16.6 KiB | 16.7 KiB | +0.1 KiB |
+| JS+CSS gzip 合计 | 132.0 KiB | 130.1 KiB | −1.9 KiB |
+| 模块文件数 | 20 | **14** | −6 |
+
+两个动作，效果不同，必须分开说：
+
+1. **`<link rel="modulepreload">`（`web/index.html:23`–`36`）——不减少请求数**，模块的字节
+   还是要传。改的是**时序**：浏览器在解析 head 时就并行发起整张模块图并预解析，而不是等
+   `app.js` 执行后再顺着 import 图走。本脚本按请求条数计量，因此看不到这一项的收益。
+   Playwright 实测（本地静态服务器、无节流，各 3 次，取模块图首条请求的 `startTime` 与
+   全部下载完的 `responseEnd`）：
+
+   | | 模块图首个请求发起 | 模块图全部下载完 |
+   | --- | --- | --- |
+   | 有 `modulepreload` | 18–24 ms | 81–110 ms |
+   | 无 `modulepreload` | 83–89 ms | 99–101 ms |
+
+   即**提前约 65 ms 发起**，且 14 个模块各只请求一次（无重复回源）。
+2. **合并过细的模块（20 → 14）——这才是 35 → 29 的来源**。`npm run perf:budget` 的请求数
+   预算从 40 收到 30，**不是**继续沿用上一版为迁就 35 个请求而放宽的 40。
+
+| 原模块 | 并入 | 为什么是一家人 |
+| --- | --- | --- |
+| `api.js`（8 行）+ `i18n-bridge.js`（7 行） | `dom.js` | 三段都是**纯 window 绑定的再导出**（`Api` / `t` / `$`+`el`）+ 转义出口，同属「基元层」；合并后 `dom.js` 零 import，成为依赖图里唯一的叶子 |
+| `ui.js`（112 行，弹窗焦点栈）+ `events.js`（38 行，事件→toast） | `async-ui.js` | 事件流的**唯一产物就是 toast**，而焦点栈 / `dismissToast` 本来就被 toast 那边单向引用；两处合并正好把原来 `dom.js ⇄ async-ui.js` 的环也一起断掉 |
+| `results.js`（151 行，结果落版） | `tasks.js` | 任务生命周期的终点就是「把结果画到面板上」，中间没有别的模块参与 |
+| `pickers.js`（20 行，选择器实例） | `panels.js` | `VoiceSelect` / `AudioPicker` 就是面板表单的部件，且**只有 `panels.js` import 它** |
+
+### 新增的漂移闸门
+
+`npm run perf:budget` 现在还会校验三方一致（任一处漏项都退出 1）：
+
+```
+模块图（app.js 的 import 图，不含 app.js 自身）⊆ index.html 的 <link rel="modulepreload">
+模块图 + app.js               ⊆ web/sw.js 的 PRECACHE_URLS
+```
+
+漏掉 `modulepreload` 不会让页面报错，只会让那个模块悄悄退回串行取；漏掉 SW 预缓存不会让
+安装失败（`install` 用 `allSettled`），但离线冷启动会在该脚本处断掉。两者都必须靠检查挡住。
+
+### 历次重新标定说明
+
+> **更早的两轮**（数字取自当时的树形，保留以便对照）：原预算（280/80/56/14 KiB、12 个请求）
+> 是在更早的树形上按一份**手写 8 文件清单**测出来的，实际首载早已不止 8 个脚本。#87（设计令牌）、
+> #88（异步态）、#89（i18n 拆成 `i18n.zh.js` + `i18n.en.js`，多 2 个请求）、#98（`api-client.js`）
+> 合入后已越线；#90（PWA 的 `motion.js` + `pwa.js`）再叠加约 5.8 KiB raw / 2.9 KiB gzip / 2 个请求。
+> 那次先把测量口径修正为「从 index.html 反推」（原脚本只测 8/13 个脚本，指标本身是失真的），
+> 再按实测值 + 余量重新标定预算，并显式记录而非悄悄放宽。
+>
+> **#100 模块拆分那一轮**把预算按 35 个请求的现状标成了 40，属于**为迁就退化而放宽**。本次
+> 修掉退化后，预算按修复后的实测值重新收紧（请求数 40 → 30），并在上文留下 before/after 全量对照。
 
 ### 懒加载评估
 
 结论：**当前不实现，留有依据的推荐**。原因：
 
-1. 前端至今仍是 `<script src>` classic script（`web/i18n.zh.js` / `i18n.en.js` / `api-client.js` 等均为 classic script + `window.*`），没有构建步骤；`app.js` 在初始化时就 `new AudioPicker(...)` / `new VoiceSelect(...)`，因此 `audio-picker.js`、`voice-select.js` 属首屏必需，无法后置。
-2. 动态 `import()` 只对 **ES module** 生效；要懒加载 `voices-panel.js` / `file-browser.js` 需先把它们改为 ESM 并调整 `window.*` 暴露方式、`CSP script-src 'self'` 下的模块加载，以及 `#voices-btn` 的绑定时机——这是一次结构性改造。
+1. 业务逻辑已是 ES 模块，但 `app.js` 之外仍是 classic script + `window.*`（`web/i18n.zh.js` / `i18n.en.js` / `api-client.js` 等），且 `panels.js` 在模块求值时就 `new VoiceSelect(...)` / `new AudioPicker(...)`，因此 `audio-picker.js`、`voice-select.js` 属首屏必需，无法后置。
+2. 动态 `import()` 只对 ES module 生效；要懒加载 `voices-panel.js` / `file-browser.js` 需先把它们改为 ESM 并调整 `window.*` 暴露方式、`CSP script-src 'self'` 下的模块加载，以及 `#voices-btn` 的绑定时机——这是一次结构性改造。
 3. `motion.js` / `pwa.js` 都很小（2.3 / 3.5 KiB raw），且 `pwa.js` 需要在 `app.js` 之前注册 Service Worker 才能覆盖首屏资源，收益不足以换取顺序上的脆弱性。
 
-推荐（待模块拆分落地后）：把非关键面板 `voices-panel.js`、`file-browser.js`（以及仅动画需要的 `wav.js` 播放预热）改为 ESM，在首次打开对应面板时 `await import()`，app.js 绑定按钮时先尝试动态导入、失败回退同步加载；届时同步下调本预算的「初始 JS gzip」并把懒加载模块计入新的按需预算。
+推荐（待懒加载落地时）：把非关键面板 `voices-panel.js`、`file-browser.js`（以及仅动画需要的 `wav.js` 播放预热）改为 ESM，在首次打开对应面板时 `await import()`，`app.js` 绑定按钮时先尝试动态导入、失败回退同步加载；届时同步下调本预算的「初始 JS gzip」并把懒加载模块计入新的按需预算，同时**把动态 `import()` 的目标从 `modulepreload` 清单里移除**（否则预载会把懒加载的收益全部抵消）。
 
 ---
 

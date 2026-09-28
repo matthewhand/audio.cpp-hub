@@ -5,8 +5,7 @@
  * 三者都只改 window.HubTheme / localStorage 并刷新自己的按钮，
  * 真正的「重画全站」由 web/app.js 的 rerenderAll 统一触发。 */
 
-import { $ } from "./dom.js";
-import { t } from "./i18n-bridge.js";
+import { $, t } from "./dom.js";
 
 export const themeBtn = $("theme-toggle");
 /* 页头按钮在「跟随系统 / 浅色 / 深色」之间循环；图标与 title 都取自当前模式（#87） */
