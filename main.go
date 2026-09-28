@@ -1,4 +1,4 @@
-// audio.cpp-hub：audio.cpp 的 Web 管理面板（Go 实现，原 Java 版已归档 legacy/）。
+// audio.cpp-hub：audio.cpp 的 Web 管理面板（Go 实现；原 Java 版见 java-main-archive 分支）。
 // HTTP 服务 + audiocpp_server 实例进程管理 + 异步推理任务队列 + TTS 历史 +
 // 模型权重下载 + /v1/* OpenAI 兼容代理。
 // 工作目录约定：hub.config.json / executables.json / data/ / run/ / web/。
