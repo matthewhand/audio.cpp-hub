@@ -8,6 +8,8 @@
         用户取消时返回 null。 */
 window.FileBrowser = (() => {
   const t = (k, p) => I18N.t(k, p);
+  /* 唯一的 HTTP 出口（web/index.html 里 api-client.js 早于本脚本求值，经典脚本按序执行） */
+  const Api = window.AudioCppHub.api;
 
   let overlay = null;
   let resolvePromise = null;
@@ -142,8 +144,7 @@ window.FileBrowser = (() => {
     bar.innerHTML = "";
     let roots;
     try {
-      const res = await fetch("/api/fs/roots");
-      roots = await res.json();
+      roots = await Api.list("/api/fs/roots");
     } catch (e) {
       return;
     }
@@ -179,19 +180,7 @@ window.FileBrowser = (() => {
     if (!path) { showRoots(); return; }
     setStatus(t("fb.loading"));
     try {
-      const res = await fetch("/api/fs/list?path=" + encodeURIComponent(path));
-      const text = await res.text();
-      if (!res.ok) {
-        // 输入的是文件路径：跳到其父目录并选中该文件
-        const parent = parentOf(path);
-        if (parent && parent !== path) {
-          await navigateInto(parent, path);
-          return;
-        }
-        setStatus(t("fb.cannotOpen", { msg: I18N.errText(text) }));
-        return;
-      }
-      const data = JSON.parse(text);
+      const data = await Api.get("/api/fs/list", { query: { path } });
       cwd = data.path;
       cwdParent = data.parent || "";
       entries = data.entries || [];
@@ -200,16 +189,29 @@ window.FileBrowser = (() => {
       renderList();
       setStatus("");
     } catch (e) {
-      setStatus(t("fb.loadFailed", { msg: e.message || e }));
+      // 服务端已回应但拒绝：输入的是文件路径 → 跳到其父目录并选中该文件
+      if (e && e.status) {
+        const parent = parentOf(path);
+        if (parent && parent !== path) {
+          await navigateInto(parent, path);
+          return;
+        }
+      }
+      setStatus(t(e && e.status ? "fb.cannotOpen" : "fb.loadFailed", { msg: e.message || e }));
     }
   }
 
   /* 进入目录并选中指定条目（用于“输入完整文件路径后跳转”） */
   async function navigateInto(dirPath, selectPath) {
-    const res = await fetch("/api/fs/list?path=" + encodeURIComponent(dirPath));
-    const text = await res.text();
-    if (!res.ok) { setStatus(t("fb.cannotOpen", { msg: I18N.errText(text) })); return; }
-    const data = JSON.parse(text);
+    let data;
+    try {
+      data = await Api.get("/api/fs/list", { query: { path: dirPath } });
+    } catch (e) {
+      // 网络 / 超时错误上抛，交调用方 navigate 统一提示；服务端拒绝则就地提示
+      if (e && !e.status) throw e;
+      setStatus(t("fb.cannotOpen", { msg: e.message || e }));
+      return;
+    }
     cwd = data.path;
     cwdParent = data.parent || "";
     entries = data.entries || [];
@@ -341,13 +343,7 @@ window.FileBrowser = (() => {
     const name = window.prompt(t("fb.mkdirPrompt"));
     if (name == null) return;
     try {
-      const res = await fetch("/api/fs/mkdir", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parent: cwd, name: name.trim() })
-      });
-      const text = await res.text();
-      if (!res.ok) { setStatus(t("fb.mkdirFailed", { msg: I18N.errText(text) })); return; }
+      await Api.post("/api/fs/mkdir", { parent: cwd, name: name.trim() });
       navigate(cwd);
     } catch (e) {
       setStatus(t("fb.mkdirFailed", { msg: e.message || e }));

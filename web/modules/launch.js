@@ -5,7 +5,7 @@
  * 启动成功后刷新实例列表。 */
 
 import { focusDialog, restoreDialogFocus, showToast } from "./async-ui.js";
-import { $, t } from "./dom.js";
+import { $, Api, t } from "./dom.js";
 import { refreshInstances } from "./instances.js";
 import { renderModelList } from "./models.js";
 import { go, setPendingSettingsSection } from "./routing.js";
@@ -98,10 +98,8 @@ export async function probeDevices(execId) {
   }
   renderDeviceOptions(null);
   try {
-    const res = await fetch("/api/executables/" + execId + "/devices");
-    const text = await res.text();
-    if (!res.ok) throw new Error(I18N.errText(text));
-    const devices = JSON.parse(text).devices || [];
+    const data = await Api.get("/api/executables/{execId}/devices", { params: { execId } });
+    const devices = data.devices || [];
     deviceCache[execId] = devices;
     // 探测期间用户可能已切换程序：仅当仍是当前选择时才渲染
     if ($("launch-exec").value === execId) renderDeviceOptions(devices);
@@ -183,16 +181,12 @@ $("exec-add-btn").onclick = async () => {
   };
   const editing = editingExecId !== null;
   try {
-    const res = await fetch(editing ? "/api/executables/" + editingExecId : "/api/executables", {
+    // 新增 / 编辑同一段代码：method 决定 URL 与动词
+    await Api.request(editing ? "/api/executables/{id}" : "/api/executables", {
       method: editing ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
+      body,
+      params: editing ? { id: editingExecId } : undefined
     });
-    const text = await res.text();
-    if (!res.ok) {
-      msg.textContent = t(editing ? "exec.saveFailed" : "exec.addFailed") + t("common.colon") + I18N.errText(text);
-      return;
-    }
     resetExecForm();
     loadExecutables();
   } catch (e) {
@@ -219,10 +213,7 @@ $("launch-threads").addEventListener("input", (e) => {
 /* ---------- 启动配置（Profile）：持久化到后端 data/profiles.json ---------- */
 export async function loadProfiles() {
   try {
-    const res = await fetch("/api/profiles");
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
-    const data = await res.json();
-    setProfiles(Array.isArray(data) ? data : []);
+    setProfiles(await Api.list("/api/profiles"));
   } catch (e) {
     setProfiles([]);
     return;
@@ -322,18 +313,14 @@ export function collectProfileFields(name) {
   return fields;
 }
 
-export async function saveProfile(url, method, fields, failKey) {
+/* 保存启动配置：existingId 为空表示新建，否则原地更新。失败信息写入弹窗并返回 false */
+export async function saveProfile(existingId, fields, failKey) {
   const msg = $("launch-msg");
   msg.textContent = "";
   if (!fields.weightsPath) { msg.textContent = t("launch.weightsRequired"); return false; }
   try {
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(fields)
-    });
-    const text = await res.text();
-    if (!res.ok) { msg.textContent = t(failKey) + t("common.colon") + I18N.errText(text); return false; }
+    if (existingId) await Api.put("/api/profiles/{id}", fields, { params: { id: existingId } });
+    else await Api.post("/api/profiles", fields);
     return true;
   } catch (e) {
     msg.textContent = t(failKey) + t("common.colon") + e.message;
@@ -351,7 +338,7 @@ $("profile-save-btn").onclick = async () => {
     $("launch-msg").textContent = e.message;
     return;
   }
-  if (await saveProfile("/api/profiles", "POST", fields, "profile.saveFailed")) {
+  if (await saveProfile(null, fields, "profile.saveFailed")) {
     await loadProfiles();
     const saved = profiles.find(p => p.modelId === selectedModelId && p.name === name);
     if (saved) {
@@ -369,11 +356,11 @@ export async function autoSaveProfile() {
     const existing = selectedProfile() || profiles.find(p => p.modelId === selectedModelId);
     const fields = collectProfileFields(existing ? existing.name : t("profile.autoName"));
     if (!fields.weightsPath) return;
-    await fetch(existing ? "/api/profiles/" + existing.id : "/api/profiles", {
-      method: existing ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(fields)
-    });
+    // 保存失败不影响启动结果（显式吞掉错误，配置列表仍按服务端现状刷新）
+    try {
+      if (existing) await Api.put("/api/profiles/{id}", fields, { params: { id: existing.id } });
+      else await Api.post("/api/profiles", fields);
+    } catch (e) { /* 动态保存失败不影响启动结果 */ }
     await loadProfiles();
     // 记住本次启动实际使用的配置：下次打开弹窗自动选中并回填，无需再手动切换
     const saved = existing
@@ -391,7 +378,8 @@ $("profile-del-btn").onclick = async () => {
   const p = selectedProfile();
   if (!p || !window.confirm(t("profile.confirmDelete", { name: p.name }))) return;
   try {
-    await fetch("/api/profiles/" + p.id, { method: "DELETE" });
+    // 删除失败不单独提示：配置列表以下一次 loadProfiles 的结果为准（显式吞掉错误）
+    await Api.del("/api/profiles/{id}", { params: { id: p.id } }).catch(() => {});
     await loadProfiles();
     showToast("info", t("profile.deleted", { name: p.name }));
   } catch (e) {
@@ -426,16 +414,7 @@ $("launch-btn").onclick = async () => {
   }
   if (Object.keys(sessionOptions).length) body.sessionOptions = sessionOptions;
   try {
-    const res = await fetch("/api/instances", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      msg.textContent = t("launch.failed") + t("common.colon") + I18N.errText(text);
-      return;
-    }
+    await Api.post("/api/instances", body);
     closeLaunchModal();
     showToast("info", t("launch.started"));
     refreshInstances();

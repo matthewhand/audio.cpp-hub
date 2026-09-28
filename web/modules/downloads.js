@@ -111,8 +111,13 @@ export function renderDownloadList() {
     row.innerHTML = html;
     for (const btn of row.querySelectorAll(".dl-act")) {
       btn.onclick = async () => {
-        const res = await fetch(`/api/downloads/${d.id}/${btn.dataset.act}`, { method: "POST" });
-        if (!res.ok) showToast("error", I18N.errText(await res.text()));
+        try {
+          await Api.post("/api/downloads/{id}/{act}", undefined, {
+            params: { id: d.id, act: btn.dataset.act }
+          });
+        } catch (e) {
+          showToast("error", e.message);
+        }
         refreshDownloads();
       };
     }
@@ -127,8 +132,11 @@ export function renderDownloadList() {
     }
     row.querySelector(".dl-del").onclick = async () => {
       if (!window.confirm(t("dl.confirmDelete"))) return;
-      const res = await fetch(`/api/downloads/${d.id}?purge=true`, { method: "DELETE" });
-      if (!res.ok) showToast("error", I18N.errText(await res.text()));
+      try {
+        await Api.del("/api/downloads/{id}", { params: { id: d.id }, query: { purge: "true" } });
+      } catch (e) {
+        showToast("error", e.message);
+      }
       refreshDownloads();
     };
     markRowEnter(row, "d:" + d.id);
@@ -156,10 +164,8 @@ $("model-dl-modal").onclick = (e) => { if (e.target === $("model-dl-modal")) clo
 
 export async function loadMdlPackages(m) {
   try {
-    const res = await fetch(`/api/models/${m.id}/packages`);
-    const text = await res.text();
-    if (!res.ok) throw new Error(I18N.errText(text));
-    mdlPackages = JSON.parse(text);
+    // 包清单是对象（{packages:[...]}）而不是数组，用 get 而非 list
+    mdlPackages = await Api.get("/api/models/{id}/packages", { params: { id: m.id } });
     renderMdlPackages();
   } catch (e) {
     const box = el(`<div class="hint"></div>`);
@@ -214,16 +220,7 @@ $("mdl-start").onclick = async () => {
   const btn = $("mdl-start");
   btn.disabled = true;
   try {
-    const res = await fetch("/api/downloads", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      msg.textContent = t("dl.startFailed") + t("common.colon") + I18N.errText(text);
-      return;
-    }
+    await Api.post("/api/downloads", body);
     closeModelDlModal();
     showToast("info", t("dl.started"));
     await refreshDownloads();

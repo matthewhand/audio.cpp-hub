@@ -8,8 +8,8 @@
  * 同 tasks.js：任务行需要本模块的队列接口，本模块的任务行又需要队列，
  * 两模块之间是一处刻意的循环依赖（只在运行期回调里互相调用）。 */
 
-import { bindMenuKeys, focusDialog, hideBusy, parseApiError, renderEmptyState, renderStateError, restoreDialogFocus, showBusy, showSkeleton, showToast } from "./async-ui.js";
-import { $, el, markRowEnter, t } from "./dom.js";
+import { bindMenuKeys, focusDialog, hideBusy, renderEmptyState, renderStateError, restoreDialogFocus, showBusy, showSkeleton, showToast } from "./async-ui.js";
+import { $, Api, el, markRowEnter, t } from "./dom.js";
 import { fillTtsForm } from "./panels.js";
 import { goPanel } from "./routing.js";
 import { selectedModel, selectedModelId } from "./state.js";
@@ -93,14 +93,11 @@ export async function loadHistory() {
   // 尚无任何实际行（仅空态/错误态）时显示骨架；后续轮询/刷新复用已有节点，避免闪动
   if (!$("history-list").querySelector(".history-row, .history-group-header")) showSkeleton($("history-list"), 3);
   try {
-    const [res, gres] = await Promise.all([
-      fetch("/api/history/" + modelId),
-      fetch("/api/history/" + modelId + "/groups")
+    // 历史列表必须拿到数组（list 守卫非数组错误体），分组是附属信息：失败降级为空列表
+    [items, groups] = await Promise.all([
+      Api.list("/api/history/{modelId}", { params: { modelId } }),
+      Api.get("/api/history/{modelId}/groups", { params: { modelId } }).catch(() => [])
     ]);
-    const text = await res.text();
-    if (!res.ok) throw parseApiError(text);
-    items = JSON.parse(text);
-    groups = gres.ok ? await gres.json() : [];
   } catch (e) {
     // 等待响应期间用户可能已切换模型：过期响应直接丢弃，避免覆盖新模型的列表
     if (historyModelId() !== modelId) return;
@@ -241,11 +238,7 @@ $("history-group-new").onclick = async () => {
   const name = window.prompt(t("history.groupNamePrompt"));
   if (!name || !name.trim()) return;
   try {
-    const res = await fetch("/api/history/" + modelId + "/groups", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim() })
-    });
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    await Api.post("/api/history/{modelId}/groups", { name: name.trim() }, { params: { modelId } });
     loadHistory();
   } catch (e) {
     showToast("error", t("history.groupFailed") + t("common.colon") + e.message);
@@ -258,11 +251,7 @@ export async function renameGroup(gid, oldName) {
   const name = window.prompt(t("history.groupNamePrompt"), oldName);
   if (!name || !name.trim() || name.trim() === oldName) return;
   try {
-    const res = await fetch("/api/history/" + modelId + "/groups/" + gid, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim() })
-    });
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    await Api.put("/api/history/{modelId}/groups/{gid}", { name: name.trim() }, { params: { modelId, gid } });
     loadHistory();
   } catch (e) {
     showToast("error", t("history.groupFailed") + t("common.colon") + e.message);
@@ -274,8 +263,7 @@ export async function deleteGroup(gid, name) {
   const modelId = historyModelId();
   if (!modelId || !window.confirm(t("history.groupConfirmDelete", { name }))) return;
   try {
-    const res = await fetch("/api/history/" + modelId + "/groups/" + gid, { method: "DELETE" });
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    await Api.del("/api/history/{modelId}/groups/{gid}", { params: { modelId, gid } });
     groupCollapsed.delete(gid);
     loadHistory();
   } catch (e) {
@@ -287,11 +275,7 @@ export async function moveToGroup(taskId, groupId) {
   const modelId = historyModelId();
   if (!modelId) return;
   try {
-    const res = await fetch("/api/history/" + modelId + "/" + taskId + "/group", {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ groupId })
-    });
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    await Api.put("/api/history/{modelId}/{taskId}/group", { groupId }, { params: { modelId, taskId } });
     showToast("info", t("history.groupMoved"));
     loadHistory();
   } catch (e) {
@@ -365,10 +349,8 @@ export async function toggleHistoryDetail(item) {
     return;
   }
   try {
-    const res = await fetch("/api/history/" + modelId + "/" + item.taskId);
-    const text = await res.text();
-    if (!res.ok) throw new Error(I18N.errText(text));
-    historyDetails.set(item.taskId, JSON.parse(text));
+    const rec = await Api.get("/api/history/{modelId}/{taskId}", { params: { modelId, taskId: item.taskId } });
+    historyDetails.set(item.taskId, rec);
     renderSidebarList();
   } catch (e) {
     showToast("error", t("history.detailFailed") + t("common.colon") + e.message);
@@ -564,12 +546,14 @@ export async function deleteHistoryItem(taskId) {
   const modelId = historyModelId();
   if (!modelId) return;
   try {
-    const res = await fetch("/api/history/" + modelId + "/" + taskId, { method: "DELETE" });
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    await Api.del("/api/history/{modelId}/{taskId}", { params: { modelId, taskId } });
     // 对应的任务记录一并删除：否则侧栏去重失效，该行会以无按钮的「已完成」任务行复活
     //（旧 /api/run 同步链路的历史没有任务记录，404 属正常）
-    const taskRes = await fetch("/api/tasks/" + taskId, { method: "DELETE" });
-    if (!taskRes.ok && taskRes.status !== 404) throw new Error(I18N.errText(await taskRes.text()));
+    try {
+      await Api.del("/api/tasks/{id}", { params: { id: taskId } });
+    } catch (e) {
+      if (!e || e.status !== 404) throw e;
+    }
     taskViews.delete(taskId);
     taskDetails.delete(taskId);
     historyDetails.delete(taskId);
@@ -585,8 +569,12 @@ export async function deleteFinishedTasks(modelId) {
   const finished = [...taskViews.values()].filter(x =>
     x.modelId === modelId && x.status !== "QUEUED" && x.status !== "RUNNING");
   for (const task of finished) {
-    const res = await fetch("/api/tasks/" + task.id, { method: "DELETE" });
-    if (!res.ok && res.status !== 404) throw new Error(I18N.errText(await res.text()));
+    // 旧 /api/run 同步链路没有任务记录，404 属正常：跳过即可，其余错误上抛
+    try {
+      await Api.del("/api/tasks/{id}", { params: { id: task.id } });
+    } catch (e) {
+      if (!e || e.status !== 404) throw e;
+    }
     taskViews.delete(task.id);
     taskDetails.delete(task.id);
   }
@@ -607,8 +595,7 @@ $("history-clear").onclick = async () => {
       renderSidebarList();
       return;
     }
-    const res = await fetch("/api/history/" + modelId, { method: "DELETE" });
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    await Api.del("/api/history/{modelId}", { params: { modelId } });
     await deleteFinishedTasks(modelId);
     loadHistory();
   } catch (e) {
@@ -625,10 +612,7 @@ export async function loadHistoryRecord(taskId) {
   if (!modelId || !m) return;
   let rec;
   try {
-    const res = await fetch("/api/history/" + modelId + "/" + taskId);
-    const text = await res.text();
-    if (!res.ok) throw new Error(I18N.errText(text));
-    rec = JSON.parse(text);
+    rec = await Api.get("/api/history/{modelId}/{taskId}", { params: { modelId, taskId } });
   } catch (e) {
     showToast("error", t("history.loadFailed") + t("common.colon") + e.message);
     return;

@@ -3,6 +3,8 @@
    增删改成功后刷新所有 VoiceSelect（refreshVoiceSelects）。 */
 (() => {
 const t = (k, p) => I18N.t(k, p);
+/* 唯一的 HTTP 出口（web/index.html 里 api-client.js 早于本脚本求值，经典脚本按序执行） */
+const Api = window.AudioCppHub.api;
 let addPicker = null;   // 添加区的 AudioPicker（延迟到首次打开时创建）
 let voices = [];
 
@@ -37,13 +39,7 @@ $("voices-panel").addEventListener("mousedown", (e) => {
 /* ---------- 列表 ---------- */
 async function loadVoices() {
   try {
-    const res = await fetch("/api/voices");
-    if (!res.ok) {
-      const text = await res.text();
-      throw (window.parseApiError ? window.parseApiError(text) : new Error(I18N.errText(text)));
-    }
-    const data = await res.json();
-    voices = Array.isArray(data) ? data : [];
+    voices = await Api.list("/api/voices");
   } catch (e) {
     voices = [];
     if (window.renderStateError) { window.renderStateError($("voices-list"), e, loadVoices); return; }
@@ -155,12 +151,7 @@ function enterEdit(row, v) {
   saveBtn.onclick = async () => {
     msg.textContent = "";
     try {
-      const res = await fetch("/api/voices/" + v.vid, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: nameInput.value, text: textInput.value })
-      });
-      const text = await res.text();
-      if (!res.ok) throw new Error(I18N.errText(text));
+      await Api.put("/api/voices/{vid}", { name: nameInput.value, text: textInput.value }, { params: { vid: v.vid } });
       afterChange();
     } catch (e) {
       msg.textContent = e.message;
@@ -179,8 +170,7 @@ function enterEdit(row, v) {
 async function deleteVoice(v) {
   if (!window.confirm(t("voices.confirmDelete", { name: v.name }))) return;
   try {
-    const res = await fetch("/api/voices/" + v.vid, { method: "DELETE" });
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    await Api.del("/api/voices/{vid}", { params: { vid: v.vid } });
     afterChange();
   } catch (e) {
     showToast("error", t("voices.deleteFailed") + t("common.colon") + e.message);
@@ -202,12 +192,7 @@ $("voice-add-btn").onclick = async () => {
   if (addPicker.uploadId) body.uploadId = addPicker.uploadId;
   else body.path = path;
   try {
-    const res = await fetch("/api/voices", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    const text = await res.text();
-    if (!res.ok) throw new Error(I18N.errText(text));
+    await Api.post("/api/voices", body);
     nameEl.value = "";
     textEl.value = "";
     addPicker.clear();
