@@ -97,7 +97,8 @@ export function renderInstanceList() {
     const stopBtn = card.querySelector(".stop-btn");
     if (stopBtn) {
       stopBtn.onclick = async () => {
-        await fetch("/api/instances/" + inst.id, { method: "DELETE" });
+        // 停止请求的失败不单独提示：实例状态以下一轮 2s 轮询为准（显式吞掉错误）
+        await Api.del("/api/instances/{id}", { params: { id: inst.id } }).catch(() => {});
         refreshInstances();
       };
     }
@@ -154,7 +155,7 @@ $("instance-select").onchange = (e) => {
 $("instance-stop").onclick = async () => {
   if (!activeInstanceId) return;
   $("instance-stop").disabled = true;
-  await fetch("/api/instances/" + activeInstanceId, { method: "DELETE" });
+  await Api.del("/api/instances/{id}", { params: { id: activeInstanceId } }).catch(() => {});
   refreshInstances();
 };
 

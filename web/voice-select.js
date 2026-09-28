@@ -6,6 +6,8 @@
 /* 包在 IIFE 中：避免顶层 const 与 app.js 等其它脚本的同名声明冲突（经典脚本共享全局作用域） */
 (() => {
 const t = (k, p) => I18N.t(k, p);
+/* 唯一的 HTTP 出口（web/index.html 里 api-client.js 早于本脚本求值，经典脚本按序执行） */
+const Api = window.AudioCppHub.api;
 
 window.VoiceSelect = class VoiceSelect {
 
@@ -73,10 +75,7 @@ window.VoiceSelect = class VoiceSelect {
     const keep = this.sel.value;
     const oldVoices = this.voices;
     try {
-      const res = await fetch("/api/voices");
-      if (!res.ok) throw new Error(I18N.errText(await res.text()));
-      const data = await res.json();
-      this.voices = Array.isArray(data) ? data : [];
+      this.voices = await Api.list("/api/voices");
     } catch (e) {
       this.voices = [];
     }

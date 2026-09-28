@@ -176,10 +176,7 @@ export async function toggleTaskDetail(task) {
     return;
   }
   try {
-    const res = await fetch("/api/tasks/" + task.id + "/result");
-    const text = await res.text();
-    if (!res.ok) throw new Error(I18N.errText(text));
-    const json = JSON.parse(text);
+    const json = await Api.get("/api/tasks/{id}/result", { params: { id: task.id } });
     if (typeof json.text !== "string" || !json.text) {
       showToast("info", t("task.noDetail"));
       return;
@@ -205,10 +202,7 @@ export async function renderTaskResult(task) {
     return;
   }
   try {
-    const res = await fetch("/api/tasks/" + task.id + "/result");
-    const text = await res.text();
-    if (!res.ok) throw new Error(I18N.errText(text));
-    const json = JSON.parse(text);
+    const json = await Api.get("/api/tasks/{id}/result", { params: { id: task.id } });
     if (task.category === "asr") renderAsrResult(json);
     else if (task.category === "sep") renderSepResult(json);
     else if (task.category === "music") renderMusicResult(json);

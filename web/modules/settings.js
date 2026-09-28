@@ -5,7 +5,7 @@
  * parseSessionOptionsText / updateLaunchExec 都在这里，由 launch 模块导入）。 */
 
 import { focusDialog, renderListError, restoreDialogFocus, setButtonBusy, showToast } from "./async-ui.js";
-import { $, esc, t } from "./dom.js";
+import { $, Api, esc, t } from "./dom.js";
 import { renderModelList } from "./models.js";
 import { go, goPanel, setPendingSettingsSection } from "./routing.js";
 import { applyThemeIcon } from "./shell.js";
@@ -65,8 +65,7 @@ $("ui-theme").onchange = (e) => {
 /* ---------- HTTPS 证书面板 ---------- */
 export async function loadCertStatus() {
   try {
-    const res = await fetch("/api/cert/status");
-    const json = await res.json();
+    const json = await Api.get("/api/cert/status");
     if (json && json.data) renderCertStatus(json.data);
   } catch (e) { /* 状态拉取失败不影响面板其他操作 */ }
 }
@@ -91,14 +90,8 @@ export function renderCertStatus(data) {
 $("https-enabled").onchange = async (e) => {
   const enabled = e.target.checked;
   try {
-    const res = await fetch("/api/https/config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled })
-    });
-    const text = await res.text();
-    if (!res.ok) throw new Error(I18N.errText(text));
-    renderCertStatus(JSON.parse(text).data);
+    const json = await Api.post("/api/https/config", { enabled });
+    renderCertStatus(json.data);
     showToast("info", t("https.configSaved"));
   } catch (err) {
     e.target.checked = !enabled;
@@ -108,12 +101,8 @@ $("https-enabled").onchange = async (e) => {
 
 export async function downloadCert(url, fallbackName) {
   try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      const text = await res.text();
-      showToast("error", t("https.downloadFailed") + t("common.colon") + I18N.errText(text));
-      return;
-    }
+    // 需要原始 Response：读 blob 与 Content-Disposition 文件名
+    const res = await Api.get(url, { raw: true });
     const blob = await res.blob();
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -146,17 +135,7 @@ $("https-generate-btn").onclick = async () => {
   // 证书生成是本地化的长任务：按钮内联 loading 即可，无需全局遮罩
   setButtonBusy(btn, true, t("https.generating"));
   try {
-    const res = await fetch("/api/cert/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      msg.textContent = t("https.generateFailed") + t("common.colon") + I18N.errText(text);
-      return;
-    }
-    const data = JSON.parse(text).data;
+    const data = (await Api.post("/api/cert/generate", body)).data;
     result.textContent = t("https.generateDone", {
       path: data.path, ca: data.caCertPath, password: data.password, expire: data.expireDate
     });
@@ -172,10 +151,7 @@ export async function loadExecutables() {
   // 可执行文件可能已增删改：设备探测缓存整体失效
   for (const k of Object.keys(deviceCache)) delete deviceCache[k];
   try {
-    const res = await fetch("/api/executables");
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
-    const data = await res.json();
-    setExecutables(Array.isArray(data) ? data : []);
+    setExecutables(await Api.list("/api/executables"));
   } catch (e) {
     setExecutables([]);
     renderListError($("exec-list"), t("common.loadFailed") + t("common.colon") + e.message, loadExecutables);
@@ -211,7 +187,8 @@ export function renderExecList() {
     row.innerHTML = html;
     row.querySelector(".exec-edit").onclick = () => startEditExec(ex);
     row.querySelector(".exec-del").onclick = async () => {
-      await fetch("/api/executables/" + ex.id, { method: "DELETE" });
+      // 删除失败不单独提示：列表以下一次 loadExecutables 的结果为准（显式吞掉错误）
+      await Api.del("/api/executables/{id}", { params: { id: ex.id } }).catch(() => {});
       if (editingExecId === ex.id) resetExecForm();
       loadExecutables();
     };

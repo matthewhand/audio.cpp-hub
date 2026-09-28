@@ -5,6 +5,8 @@
 /* 包在 IIFE 中：避免顶层 const 与 app.js 等其它脚本的同名声明冲突（经典脚本共享全局作用域） */
 (() => {
 const t = (k, p) => I18N.t(k, p);
+/* 唯一的 HTTP 出口（web/index.html 里 api-client.js 早于本脚本求值，经典脚本按序执行） */
+const Api = window.AudioCppHub.api;
 
 window.AudioPicker = class AudioPicker {
 
@@ -313,10 +315,8 @@ window.AudioPicker = class AudioPicker {
   }
 
   async uploadWav(blob) {
-    const res = await fetch("/api/audio/upload", { method: "POST", body: blob });
-    const text = await res.text();
-    if (!res.ok) throw new Error(I18N.errText(text));
-    return JSON.parse(text);
+    // Blob 原样发送（客户端不补 Content-Type，与此前的裸 fetch 一致）
+    return Api.post("/api/audio/upload", blob);
   }
 
   /** 上传成功后展示公共区，并把当前值设为服务器路径。 */
@@ -517,10 +517,7 @@ window.AudioPicker = class AudioPicker {
   async loadVoices() {
     const select = this.$(".voice-select");
     try {
-      const res = await fetch("/api/voices");
-      if (!res.ok) throw new Error(I18N.errText(await res.text()));
-      const data = await res.json();
-      this.voices = Array.isArray(data) ? data : [];
+      this.voices = await Api.list("/api/voices");
     } catch (e) {
       this.voices = [];
     }
@@ -546,8 +543,8 @@ window.AudioPicker = class AudioPicker {
     const voice = this.selectedVoice();
     if (!voice) { this.toast("info", t("picker.errSelectVoice")); return; }
     try {
-      const res = await fetch("/api/voices/" + voice.vid + "/audio");
-      if (!res.ok) throw new Error(I18N.errText(await res.text()));
+      // 试听需要原始字节流：raw:true 仍会对非 2xx 抛 ApiError
+      const res = await Api.get("/api/voices/{vid}/audio", { params: { vid: voice.vid }, raw: true });
       const buffer = await WavUtil.decodeToAudioBuffer(await res.arrayBuffer());
       // 预览：显示公共区但不改变当前值，值由"选为当前"确认
       this.uploadId = null;
@@ -605,21 +602,7 @@ window.AudioPicker = class AudioPicker {
     infoEl.textContent = "";
     if (!path) { infoEl.textContent = t("picker.errNoPath"); return; }
     try {
-      const res = await fetch("/api/audio/info", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path })
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        // 非 WAV / 不存在：仍按原路径透传
-        this.value = path;
-        this.$(".picker-clear").classList.remove("hidden");
-        infoEl.textContent = t("picker.notWav", { msg: I18N.errText(text) });
-        this.setMsg(t("picker.currentAudio", { name: path }));
-        return;
-      }
-      const info = JSON.parse(text);
+      const info = await Api.post("/api/audio/info", { path });
       this.value = info.path || path;
       this.$(".picker-clear").classList.remove("hidden");
       infoEl.textContent = t("picker.wavInfo", {
@@ -631,6 +614,14 @@ window.AudioPicker = class AudioPicker {
       });
       this.setMsg(t("picker.currentAudio", { name: this.value }));
     } catch (e) {
+      if (e && e.status) {
+        // 服务端已回应但拒绝：非 WAV / 不存在，仍按原路径透传
+        this.value = path;
+        this.$(".picker-clear").classList.remove("hidden");
+        infoEl.textContent = t("picker.notWav", { msg: e.message });
+        this.setMsg(t("picker.currentAudio", { name: path }));
+        return;
+      }
       infoEl.textContent = t("picker.probeFailed", { msg: e.message || e });
     }
   }
