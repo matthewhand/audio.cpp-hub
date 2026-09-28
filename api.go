@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/matthewhand/audio.cpp-hub/internal/idvalidate"
@@ -21,6 +22,15 @@ type apiRoute struct {
 	method  string
 	pattern string
 	handler http.HandlerFunc
+}
+
+// newHandler 装配完整处理链：路由 mux + 跨站防护 + 响应头策略。
+// 顺序即由外到内的执行顺序：先写安全响应头与缓存策略（任何 handler 的早退路径都拿得到），
+// 再判跨站请求，最后进路由。单测通过它拿到与线上一致的整条链。
+func (h *Hub) newHandler() http.Handler {
+	mux := http.NewServeMux()
+	h.registerRoutes(mux)
+	return securityHeaders(csrfProtect(mux))
 }
 
 // registerRoutes 注册全部 API 路由与静态文件服务。
@@ -147,8 +157,11 @@ func matchRouteTemplate(template, req []string) bool {
 	return true
 }
 
-// staticHandler 提供 web/ 下静态文件：目录请求只回 index.html（禁用目录列表），
-// index 不缓存，其余资源缓存 1 小时（web/ 无构建步骤，文件名不带 hash）。
+// staticHandler 提供 web/ 下静态文件：目录请求只回 index.html（禁用目录列表）。
+// 缓存策略（与 headers.go 的 securityHeaders 协同）：
+// 中间件先统一设 no-store 作为「默认拒绝缓存」，这里在确认文件存在后显式放宽——
+// HTML 入口（index.html / offline.html 等）no-cache，其余资源有界缓存 staticAssetMaxAge；
+// 404 之类走不到这里的响应就保留中间件的 no-store，不会被缓存。
 func staticHandler() http.Handler {
 	root := http.Dir("web")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -185,10 +198,11 @@ func staticHandler() http.Handler {
 			}
 		}
 		defer f.Close()
-		if path.Base(p) == "index.html" {
+		// 任何 HTML 入口都要每次回源校验，新部署立刻可见（不只 index.html）
+		if strings.HasSuffix(p, ".html") {
 			w.Header().Set("Cache-Control", "no-cache")
 		} else {
-			w.Header().Set("Cache-Control", "public, max-age=3600")
+			w.Header().Set("Cache-Control", "public, max-age="+strconv.Itoa(staticAssetMaxAge))
 		}
 		http.ServeContent(w, r, path.Base(p), st.ModTime(), f)
 	})

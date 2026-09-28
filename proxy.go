@@ -241,6 +241,9 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 	// 回写非逐跳响应头（X-Request-Id/Retry-After/限流头等），Content-Length 按实际值设置
 	copyNonHopHeaders(w.Header(), resp.Header)
 	w.Header().Del("Content-Length")
+	// 缓存策略由 hub 统一决定（headers.go：/v1/* 一律 no-store，响应里有实例内的
+	// 推理结果与错误细节），丢掉上游可能自带的 Cache-Control，避免与策略叠加成多值。
+	w.Header().Del("Cache-Control")
 	if w.Header().Get("Content-Type") == "" {
 		w.Header().Set("Content-Type", "application/json")
 	}
