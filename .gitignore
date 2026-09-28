@@ -20,6 +20,21 @@ node_modules/
 /playwright-report/
 /blob-report/
 
+# 本机部署残留：绝不能进版本库（含 90MB+ 的 audiocpp 二进制与 Java 版构建产物）
+/target/
+/classpath
+/.project
+/.serena/
+/.settings/
+/audiocpp_server*
+/audiocpp_server-hip-rx6600
+HANDOFF.md
+LOAD_REPORT.md
+REVIEW_FOR_GROK.md
+/compose.test.yaml
+/.env.amd-go
+/*.service
+
 # 容器内使用的默认配置（端口 18080），需纳入版本控制
 !docker/hub.config.json
 
