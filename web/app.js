@@ -1,6 +1,10 @@
 /* audio.cpp-hub 前端逻辑：模型分组 / 实例管理 / 四类任务面板 / 主题切换 */
 
 const t = (k, p) => I18N.t(k, p);
+/* 唯一的 HTTP 出口（web/api-client.js）：集中 fetch、错误信封（ApiError 带
+   code/params）、AbortController 超时与中断、可见性感知轮询（Api.poll）。
+   新增请求一律走 Api，不要再直接 fetch。 */
+const Api = window.AudioCppHub.api;
 const STATUS_CLASS = { STARTING: "starting", READY: "ready", ERROR: "error", STOPPED: "stopped" };
 function statusText(s) {
   const v = t("instance.status." + s);
@@ -170,13 +174,11 @@ I18N.onChange(applyHistoryPrivacy);
 applyHistoryPrivacy();
 
 /* ---------- 模型列表（按 category 分组） ---------- */
+/* 首次加载：非 2xx 由 ApiError 统一抛出（code/params 已本地化到 message），
+   非数组返回体由 Api.list 拦成 CLIENT_BAD_SHAPE，两者都走同一处可见错误 + 重试。 */
 async function loadModels() {
   try {
-    const res = await fetch("/api/models");
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
-    const data = await res.json();
-    if (!Array.isArray(data)) throw new Error(t("common.loadFailed"));
-    models = data;
+    models = await Api.list("/api/models");
   } catch (e) {
     renderListError($("model-list"), t("common.loadFailed") + t("common.colon") + e.message, loadModels);
     return;
@@ -1115,21 +1117,22 @@ $("launch-btn").onclick = async () => {
 };
 
 /* ---------- 实例列表 + 状态条（每 2s 轮询） ---------- */
-async function refreshInstances() {
-  let data;
-  try {
-    const res = await fetch("/api/instances");
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
-    data = await res.json();
-    if (!Array.isArray(data)) throw new Error(t("common.loadFailed"));
-  } catch (e) {
-    // 轮询中的瞬时失败保留上次列表，仅在从未加载成功时显示错误/重试
-    if (instances.length === 0) renderListError($("instance-list"), t("common.loadFailed") + t("common.colon") + e.message, refreshInstances);
-    return;
-  }
+let instancePoller = null;
+/* 轮询数据回调：只在成功时更新视图；失败由 Api.poll 的 onError 处理 */
+function applyInstances(data) {
   instances = data;
   renderInstanceList();
   updateInstanceBar();
+}
+/* 轮询中的瞬时失败保留上次列表，仅在从未加载成功时显示错误/重试 */
+function onInstancesError(e) {
+  if (instances.length === 0) renderListError($("instance-list"), t("common.loadFailed") + t("common.colon") + e.message, refreshInstances);
+}
+/* 立即拉一次：复用轮询句柄（单飞 + 可见性语义不变），轮询未建立时直接请求一次。
+   返回 Promise，调用方可 await（如创建下载任务后等列表刷新再开面板）。 */
+function refreshInstances() {
+  if (instancePoller) return instancePoller.refresh();
+  return Api.list("/api/instances").then(applyInstances).catch(onInstancesError);
 }
 
 function renderInstanceList() {
@@ -1304,6 +1307,7 @@ instanceDetailModal.onclick = (e) => { if (e.target === instanceDetailModal) clo
 let downloads = [];
 let mdlPackages = null;
 let mdlModel = null;
+let downloadsPoller = null;
 
 function fmtBytes(n) {
   if (n == null || n < 0) return "?";
@@ -1315,19 +1319,17 @@ function fmtBytes(n) {
 
 const DL_STATUS_CLASS = { RUNNING: "starting", PENDING: "starting", PAUSED: "stopped", DONE: "ready", FAILED: "error" };
 
-async function refreshDownloads() {
-  let data;
-  try {
-    const res = await fetch("/api/downloads");
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
-    data = await res.json();
-    if (!Array.isArray(data)) throw new Error(t("common.loadFailed"));
-  } catch (e) {
-    return;
-  }
+function applyDownloads(data) {
   downloads = data;
   updateDlBadge();
   if (!$("downloads-modal").classList.contains("hidden")) renderDownloadList();
+}
+/* 失败静默：下载列表是 2s 轮询的附属信息，瞬时失败无需打扰用户（下轮自愈） */
+function onDownloadsError() { /* 静默 */ }
+/* 立即拉一次：复用轮询句柄（可 await），轮询未建立时直接请求一次 */
+function refreshDownloads() {
+  if (downloadsPoller) return downloadsPoller.refresh();
+  return Api.list("/api/downloads").then(applyDownloads).catch(onDownloadsError);
 }
 
 /* 页头角标：进行中的任务数 */
@@ -1518,21 +1520,13 @@ $("mdl-start").onclick = async () => {
 let eventsInitialized = false;
 const seenEvents = new Set();
 
-async function refreshEvents() {
-  let events;
-  try {
-    const res = await fetch("/api/events");
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    events = Array.isArray(data) ? data : [];
-  } catch (e) {
-    return;
-  }
+/* 轮询数据回调：把新事件转成 toast（首次拉取只建立基线，不弹历史事件） */
+function applyEvents(data) {
   // 事件窗口由服务端限制为最近 20 条：seenEvents 同步收缩，避免长期运行无界增长
-  const valid = new Set(events.map(ev => ev.time + "|" + ev.message));
+  const valid = new Set(data.map(ev => ev.time + "|" + ev.message));
   for (const k of seenEvents) if (!valid.has(k)) seenEvents.delete(k);
   const fresh = [];
-  for (const ev of events) {
+  for (const ev of data) {
     const key = ev.time + "|" + ev.message;
     if (!seenEvents.has(key)) {
       seenEvents.add(key);
@@ -1545,6 +1539,8 @@ async function refreshEvents() {
   }
   fresh.reverse().forEach(ev => showToast(ev.level, ev.message));
 }
+/* 失败静默：事件流是通知性数据，瞬时失败丢一轮即可（服务端窗口只保留最近 20 条） */
+function onEventsError() { /* 静默 */ }
 
 function showToast(level, message) {
   const root = $("toast-root");
@@ -1567,33 +1563,16 @@ function dismissToast(node) {
    提交后立即返回，同实例任务由后端串行执行，前端 2s 轮询状态。
    页面刷新/切换模型后经 GET /api/tasks?active=1&modelId= 重挂，
    任务生命周期不再绑定页面连接（旧 /api/run 同步链路保留兼容）。 */
-const activePolls = new Map(); // taskId → intervalId
+const activePolls = new Map(); // taskId → Api.poll 句柄（stop() 即无定时器/无在途请求）
 const taskViews = new Map(); // taskId → 已知任务（进行中 + 已完成保留展示），供侧栏渲染
 const taskDetails = new Map(); // taskId → 已展开的完整结果文本（侧栏「详情」缓存，随任务记录清除）
 const TASK_VERB = { tts: "tts.verb", asr: "asr.verb", sep: "sep.verb", music: "music.verb", other: "other.verb" };
 
 async function submitTask(req) {
-  const res = await fetch("/api/tasks", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ instanceId: activeInstanceId, request: req })
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(I18N.errText(text));
+  const task = await Api.post("/api/tasks", { instanceId: activeInstanceId, request: req });
   // 入队成功后立即刷新一次实例列表（不 await），卡片“工作中”徽标即时出现，不等 2s 轮询
   refreshInstances();
-  return JSON.parse(text);
-}
-
-async function fetchTask(taskId) {
-  const res = await fetch("/api/tasks/" + taskId);
-  const text = await res.text();
-  if (!res.ok) {
-    const err = new Error(I18N.errText(text));
-    err.status = res.status;
-    throw err;
-  }
-  return JSON.parse(text);
+  return task;
 }
 
 /* 任务耗时：优先用后端 startedAt→finishedAt，进行中算到当前时刻 */
@@ -1605,44 +1584,45 @@ function taskElapsed(task) {
 /* 取消任务：服务端置 CANCELLED，由轮询观察到终态后统一收尾（toast/侧栏刷新） */
 async function cancelTask(taskId) {
   try {
-    const res = await fetch("/api/tasks/" + taskId, { method: "DELETE" });
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    await Api.del("/api/tasks/{id}", { params: { id: taskId } });
   } catch (e) {
     showToast("error", t("task.cancelFailed") + t("common.colon") + e.message);
   }
 }
 
-/* 跟踪任务：入侧栏记录并启动轮询；到达终态时停轮询、渲染结果（记录保留在侧栏） */
+/* 跟踪任务：入侧栏记录并启动轮询；到达终态时停轮询、渲染结果（记录保留在侧栏）
+   轮询交给 Api.poll：自调度（不叠加请求）、标签页隐藏时暂停、stop() 会清定时器
+   并中断在途请求——任务记录被删/组件离开都不会留下悬挂轮询。 */
 function trackTask(task) {
   taskViews.set(task.id, task);
   renderSidebarList();
   if (activePolls.has(task.id)) return;
   if (task.status !== "QUEUED" && task.status !== "RUNNING") return;
-  const iv = setInterval(async () => {
-    if (document.hidden) return; // 标签页隐藏时暂停任务轮询
-    let cur;
-    try {
-      cur = await fetchTask(task.id);
-    } catch (e) {
+  const isRunning = (cur) => cur.status === "QUEUED" || cur.status === "RUNNING";
+  let handle = null; // 句柄在 poll() 返回后才有值；回调（微任务）触发时已赋值
+  handle = Api.poll("/api/tasks/{id}", (cur) => {
+    taskViews.set(cur.id, cur);
+    renderSidebarList();
+    if (!isRunning(cur)) {
+      activePolls.delete(task.id);
+      handle.stop();
+      finishTask(cur);
+    }
+  }, {
+    request: { params: { id: task.id } },
+    onError: (e) => {
       if (e.status === 404) {
         // 任务记录已被淘汰/删除：停止轮询并移出侧栏
-        clearInterval(iv);
+        handle.stop();
         activePolls.delete(task.id);
         taskViews.delete(task.id);
         taskDetails.delete(task.id);
         renderSidebarList();
       }
-      return; // 其余错误视为网络抖动，下轮再试
+      // 其余错误（网络抖动 / 5xx / 超时）视为瞬时，下轮再试
     }
-    taskViews.set(cur.id, cur);
-    renderSidebarList();
-    if (cur.status !== "QUEUED" && cur.status !== "RUNNING") {
-      clearInterval(iv);
-      activePolls.delete(cur.id);
-      finishTask(cur);
-    }
-  }, 2000);
-  activePolls.set(task.id, iv);
+  });
+  activePolls.set(task.id, handle);
 }
 
 /* 任务终态：toast 汇报；任务模型当前选中时渲染结果与最终状态行 */
@@ -1696,9 +1676,8 @@ async function reattachTasks() {
   const m = selectedModel();
   if (!m) return;
   try {
-    const res = await fetch("/api/tasks?modelId=" + encodeURIComponent(m.id));
-    if (!res.ok) return;
-    const tasks = JSON.parse(await res.text());
+    // 已有句柄的任务会被 trackTask 直接跳过，不会重复建轮询
+    const tasks = await Api.list("/api/tasks", { query: { modelId: m.id } });
     for (const task of tasks) trackTask(task);
   } catch (e) { /* 忽略：下次切换/轮询再试 */ }
 }
@@ -3331,29 +3310,14 @@ I18N.onChange(rerenderAll);
 I18N.applyI18n();
 applyLangBtn();
 buildEmotionSliders();
+
+/* 全局轮询（2s）：实例 / 事件 / 下载三条独立轮询，由 Api.poll 托管（list:true 带数组守卫）。
+   Api.poll 保证：上一轮结束才排下一轮（不叠加请求）、标签页隐藏时不发请求、
+   重新可见立即补一次；不需要时用句柄 stop() 即可无残留地收尾。 */
+instancePoller = Api.poll("/api/instances", applyInstances, { list: true, onError: onInstancesError });
+Api.poll("/api/events", applyEvents, { list: true, onError: onEventsError });
+downloadsPoller = Api.poll("/api/downloads", applyDownloads, { list: true, onError: onDownloadsError });
+
 loadModels();
 loadExecutables();
 loadProfiles();
-refreshInstances();
-refreshEvents();
-refreshDownloads();
-
-/* 全局轮询：标签页隐藏时停止，重新可见时立即刷新并恢复，省电省流量 */
-let pollTimer = null;
-function runPoll() {
-  refreshInstances();
-  refreshEvents();
-  refreshDownloads();
-}
-function startPolling() {
-  if (!pollTimer) pollTimer = setInterval(runPoll, 2000);
-}
-function stopPolling() {
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-}
-startPolling();
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) { stopPolling(); return; }
-  runPoll();
-  startPolling();
-});
