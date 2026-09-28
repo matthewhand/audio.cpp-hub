@@ -23,6 +23,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 | POST | `/api/instances` | 启动实例 |
 | DELETE | `/api/instances/{id}` | 停止实例 |
 | GET | `/api/events` | 实例事件日志 |
+| GET | `/api/stats` | 用量与性能统计（按模型聚合） |
 | GET | `/api/executables` | 可执行文件列表 |
 | POST | `/api/executables` | 添加可执行文件 |
 | PUT | `/api/executables/{id}` | 更新可执行文件 |
@@ -127,6 +128,40 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 ### `GET /api/events`
 
 实例事件数组，元素为 `{"time","level","message"}`。
+
+### `GET /api/stats`
+
+按模型聚合的用量与性能统计，纯派生读接口——不新增采集点、不改任务/历史结构。
+
+**口径说明（重要）：**
+
+- **用量**（`total` / `ok` / `failed` / `successRate` / `audioSeconds` / `outputBytes` / `lastAt`）
+  取自历史索引 `data/history/<modelId>/index.jsonl`。历史**无数量淘汰**，因此这是长期口径。
+  注意：仅 TTS 任务会写历史；ASR / 分离 / 音乐等类别不计入本统计。
+- **性能**（`queueMsP50` / `runMsP50` / `runMsP95` / `rtfP50` / `samplesForPerf`）
+  取自内存中的任务记录（带 `createdAt` / `startedAt` / `finishedAt` 与 `result.durationSec`）。
+  内存仅保留最近 `finishedKeep`（100）条已完成任务，因此性能样本是**近期窗口**，非全量。
+  `samplesForPerf` 为 0 表示尚无可用样本，看板此时不展示性能行。
+
+`rtfP50` 为实时率 = 执行秒数 ÷ 生成音频秒数，**越小越快**，小于 1 表示快于实时。
+`audioSeconds` 取自 WAV 解析结果，缺失结果的记录不计入。
+
+```json
+{
+  "generatedAt": 1756400000000,
+  "totals": { "models": 2, "total": 12, "ok": 11, "failed": 1, "successRate": 0.917,
+              "audioSeconds": 48.6, "outputBytes": 778240 },
+  "models": [
+    { "modelId": "breeze-tts", "instanceName": "breeze2tts", "category": "tts",
+      "total": 10, "ok": 10, "failed": 0, "successRate": 1, "audioSeconds": 40.2,
+      "outputBytes": 643200, "lastAt": 1756399000000,
+      "queueMsP50": 120, "runMsP50": 2100, "runMsP95": 3400, "rtfP50": 0.42,
+      "samplesForPerf": 10 }
+  ]
+}
+```
+
+模型数组按 `total` 降序、`lastAt` 次序。
 
 ---
 
@@ -441,7 +476,8 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 | --- | --- |
 | `GET /api/models` | `web/modules/models.js:30`（`Api.list`） |
 | `GET /api/instances` | `web/modules/instances.js:52` 首屏加载 + `web/modules/instances.js:60` 2s 轮询 |
-| `GET /api/events` | `web/modules/events.js:37` 2s 轮询（失败静默） |
+| `GET /api/events` | `web/modules/async-ui.js:189`（`startEventsPolling`）2s 轮询（失败静默） |
+| `GET /api/stats` | `web/modules/stats.js:40`（`loadStats`）打开 `#/stats` 时按需拉取，非轮询 |
 | `GET /api/downloads` | `web/modules/downloads.js:44` 首屏加载 + `web/modules/downloads.js:49` 2s 轮询 |
 | `POST /api/tasks` | `web/modules/tasks.js:26` |
 | `DELETE /api/tasks/{id}` | `web/modules/tasks.js:41` |

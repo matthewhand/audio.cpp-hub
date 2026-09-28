@@ -46,14 +46,20 @@ const KIB = 1024;
  *    合并后没有引入打包器，仍是无构建的原生 ES 模块。
  *
  * 下面的预算是**按修复后的实测值重新标定的快照**（刻意收得比实测略紧一点留增长余量），
- * 不是上一版为迁就 35 个请求而放宽的数字。后续仍按同一口径棘轮收紧。 */
+ * 不是上一版为迁就 35 个请求而放宽的数字。后续仍按同一口径棘轮收紧。
+ *
+ * 2026-09 再次重标定：新增 `modules/stats.js`（用量与性能看板，#/stats）。它被
+ * routing.js 静态 import，因此属于首屏模块图，请求数 29 → 30，初始 JS 随之增加
+ * （raw 323.4 → 336.6 KiB，gzip 113.4 → 119.9 KiB）。这是**用 5.4 KiB 换取一整个
+ * 看板视图**的自觉取舍，不是无声膨胀：数值按同一口径重标，并在下方注释里写明实测值。
+ * 若日后要压回旧水位，应把 stats.js 改为点击时动态 import() 懒加载，而不是继续抬预算。 */
 export const BUDGETS = {
-  jsRawKiB: 330, // 初始 JS 未压缩合计（实测 323.4）
-  jsGzipKiB: 118, // 初始 JS gzip 传输合计（实测 113.4）
-  cssRawKiB: 68, // 初始 CSS 未压缩（实测 65.0）
-  cssGzipKiB: 18, // 初始 CSS gzip 传输（实测 16.7）
-  totalGzipKiB: 135, // JS + CSS gzip 合计（实测 130.1，不含 HTML，HTML 很小）
-  subresourceRequests: 30, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 29）
+  jsRawKiB: 340, // 初始 JS 未压缩合计（实测 336.6）
+  jsGzipKiB: 121, // 初始 JS gzip 传输合计（实测 119.9）
+  cssRawKiB: 68, // 初始 CSS 未压缩（实测 66.2）
+  cssGzipKiB: 18, // 初始 CSS gzip 传输（实测 16.9）
+  totalGzipKiB: 138, // JS + CSS gzip 合计（实测 136.8，不含 HTML，HTML 很小）
+  subresourceRequests: 31, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 30）
   ttiTargetMs: 1500 // 目标 TTI（本地/局域网，中端笔电）——浏览器指标，本脚本不测量
 };
 const CSS = ["style.css"];

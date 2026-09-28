@@ -27,6 +27,7 @@ function makeRouting({ hash = "", instances = [], selectedModelId = null } = {})
   const history = panel("openHistoryPanel", "closeHistoryPanel", "history-panel");
   const voices = panel("openVoicesPanel", "closeVoicesPanel", "voices-panel");
   const downloads = panel("openDownloadsModal", "closeDownloadsModal", "downloads-modal");
+  const stats = panel("openStatsPanel", "closeStatsPanel", "stats-panel");
   const settings = panel("openSettingsModal", "closeSettingsModal", "settings-modal");
   const detail = panel("openInstanceDetail", "closeInstanceDetail", "instance-detail-modal");
   const sandbox = {
@@ -43,6 +44,8 @@ function makeRouting({ hash = "", instances = [], selectedModelId = null } = {})
     openHistoryPanel: history.open,
     closeDownloadsModal: downloads.close,
     openDownloadsModal: downloads.open,
+    closeStatsPanel: stats.close,
+    openStatsPanel: stats.open,
     closeSettingsModal: settings.close,
     openSettingsModal: settings.open,
     closeInstanceDetail: detail.close,
@@ -73,11 +76,12 @@ function makeRouting({ hash = "", instances = [], selectedModelId = null } = {})
 /* vm realm 造出来的对象/数组原型与测试 realm 不同，deepStrictEqual 会因原型不等而失败。
    跨 realm 的返回值统一先摊平成测试 realm 的普通值再断言。 */
 const plain = (v) => (Array.isArray(v) ? [...v] : { ...v });
-test("routing: ROUTE_VIEWS 列出四个面板路由（顺序即页头按钮顺序）", () => {
+test("routing: ROUTE_VIEWS 列出面板路由（顺序即页头按钮顺序）", () => {
   assert.deepEqual(plain(makeRouting().ROUTE_VIEWS), [
     "history",
     "voices",
     "downloads",
+    "stats",
     "settings"
   ]);
 });
@@ -89,10 +93,11 @@ test("routing: parseRoute 表驱动——模型 / 实例 / 面板 / 兜底", () 
     ["#/model/qwen3-tts", { view: "model", id: "qwen3-tts" }],
     ["#/model/qwen3_tts-0.6B", { view: "model", id: "qwen3_tts-0.6B" }],
     ["#/instance/ab12cd34", { view: "instance", id: "ab12cd34" }],
-    // 四个面板视图不带 id
+    // 面板视图不带 id
     ["#/history", { view: "history" }],
     ["#/voices", { view: "voices" }],
     ["#/downloads", { view: "downloads" }],
+    ["#/stats", { view: "stats" }],
     ["#/settings", { view: "settings" }],
     // 空 / 畸形 hash → home
     ["", { view: "home" }],
@@ -181,6 +186,7 @@ test("routing: applyRoute 按视图开面板 / 选模型（表驱动）", () => 
     ["#/history", ["openHistoryPanel"]],
     ["#/voices", ["openVoicesPanel"]],
     ["#/downloads", ["openDownloadsModal"]],
+    ["#/stats", ["openStatsPanel"]],
     ["#/settings", ["openSettingsModal"]],
     ["#/model/qwen3-tts", ["selectModelById"]],
     ["#/nope", []],

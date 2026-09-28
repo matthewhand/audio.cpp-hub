@@ -33,6 +33,7 @@
   <link rel="modulepreload" href="/modules/downloads.js">
   <link rel="modulepreload" href="/modules/tasks.js">
   <link rel="modulepreload" href="/modules/sidebar.js">
+  <link rel="modulepreload" href="/modules/stats.js">
   <link rel="modulepreload" href="/modules/panels.js">
 </head>
 <body>
@@ -47,6 +48,7 @@
       <button id="voices-btn" class="theme-btn" data-i18n-title="voices.title" data-i18n-aria-label="voices.title" title="音色库" aria-label="音色库">🎙</button>
       <button id="history-btn" class="theme-btn" data-i18n-title="history.title" data-i18n-aria-label="history.title" title="操作历史" aria-label="操作历史">🕘</button>
       <button id="downloads-btn" class="theme-btn" data-i18n-title="dl.managerTitle" data-i18n-aria-label="dl.managerTitle" title="下载管理" aria-label="下载管理">⬇️<span id="dl-badge" class="dl-badge hidden">0</span></button>
+      <button id="stats-btn" class="theme-btn" data-i18n-title="stats.title" data-i18n-aria-label="stats.title" title="用量与性能" aria-label="用量与性能">📊</button>
       <button id="lang-toggle" class="theme-btn" data-i18n-title="header.langTitle" data-i18n-aria-label="header.langTitle" title="切换语言 / Switch language" aria-label="切换语言 / Switch language">EN</button>
       <button id="settings-btn" class="theme-btn" data-i18n-title="header.settingsTitle" data-i18n-aria-label="header.settingsTitle" title="可执行文件设置" aria-label="可执行文件设置">⚙️</button>
       <button id="theme-toggle" class="theme-btn" data-i18n-title="header.themeTitle" data-i18n-aria-label="header.themeTitle" title="切换主题" aria-label="切换主题">☀️</button>
@@ -213,6 +215,20 @@
         </div>
       </div>
       <div id="history-list" role="log" aria-live="polite" aria-relevant="additions text" data-i18n-aria-label="a11y.taskStatus"></div>
+    </div>
+  </div>
+
+  <!-- 用量与性能看板：页头 📊 打开。数据来自 GET /api/stats（历史用量 + 任务性能） -->
+  <div id="stats-panel" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="stats-panel-title">
+    <div class="history-panel-card">
+      <div class="history-header">
+        <span class="history-title" id="stats-panel-title" data-i18n="stats.title">用量与性能</span>
+        <div class="history-actions">
+          <button id="stats-refresh" type="button" class="btn-ghost" data-i18n="history.refresh">刷新</button>
+          <button id="stats-close" type="button" class="theme-btn" data-i18n-title="history.closeTitle" data-i18n-aria-label="history.closeTitle" title="关闭">×</button>
+        </div>
+      </div>
+      <div id="stats-body" class="stats-body"></div>
     </div>
   </div>
 
