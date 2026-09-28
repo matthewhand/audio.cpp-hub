@@ -72,6 +72,8 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 
 未匹配的 `/api/*` 返回 `404 UNKNOWN_API`；其余 GET 由 `web/` 静态文件服务。
 
+> 表中 49 条与 `api.go` 的 `registerRoutes` 一一对应。其中 `PUT` / `DELETE` 的 `groups/{gid}` 与 `{taskId}/group` 两条在代码里共用一个四段通配模式 `/api/history/{modelId}/{seg3}/{seg4}` 再按路径段分发（两条路径在 `http.ServeMux` 里互相冲突），对外仍是上表的两个独立端点。
+
 ---
 
 ## 模型清单
@@ -419,16 +421,31 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 
 ## 前端 API 客户端（`web/api-client.js`）
 
-上面的两种错误体在浏览器侧的归一化由 `web/api-client.js` 完成，它是 `web/` 唯一的 HTTP 出口（无构建、无依赖的经典脚本，全局 `window.AudioCppHub.api`，下称 `Api`；完整契约见该文件头部注释）。
+上面的两种错误体在浏览器侧的归一化由 `web/api-client.js` 完成，它是 `web/` 唯一的 HTTP 出口（无构建、无依赖的经典脚本，全局 `window.AudioCppHub.api`，下称 `Api`；完整契约见该文件头部注释）。业务代码经 `web/modules/api.js` 绑定该全局后 `import { Api } from "./api.js"`，**新增请求一律走 `Api.*`，不要再直接写 `fetch`**。
 
 | 能力 | 用法 |
 | --- | --- |
-| 原语 | `Api.request(path, { method, body, query, params, headers, signal, timeout, raw })` → `Promise<data>` |
-| 方法糖 | `Api.get` / `Api.post` / `Api.put` / `Api.del`；`body` 传普通对象自动 JSON 编码 |
+| 原语 | `Api.request(path, { method, body, query, params, headers, signal, timeout, raw, cache })` → `Promise<data>`；`params` 替换 path 的 `{name}` 占位并做 `encodeURIComponent` |
+| 方法糖 | `Api.get` / `Api.post` / `Api.put` / `Api.del`；`body` 传普通对象自动 JSON 编码，`FormData` / `Blob` / 字符串原样发送 |
 | 列表守卫 | `Api.list(path)` → 返回体非数组时 reject `CLIENT_BAD_SHAPE` |
-| 错误 | 统一 reject `ApiError`：`status` / `code` / `params` / `type` / `detail` / `envelope` / `isAbort` / `isTimeout` / `isNetwork`；`message` 已本地化（走 `I18N.errText`） |
-| 客户端错误码 | `CLIENT_TIMEOUT` / `CLIENT_ABORTED` / `CLIENT_NETWORK` / `CLIENT_BAD_JSON` / `CLIENT_BAD_SHAPE` / `CLIENT_HTTP_ERROR` |
-| 中断 | 每次请求默认 20s 超时（`timeout: 0` 关闭）；`signal` 可与外部 `AbortController` 联动 |
-| 轮询 | `Api.poll(path, handler, { interval, list, onError, visibility })` → `{ stop(), refresh() }`：自调度不叠加请求、单飞、标签页隐藏时暂停且恢复后立即补一次、`stop()` 清定时器并中断在途请求 |
+| 错误 | 统一 reject `ApiError`：`status` / `code` / `params` / `type` / `detail` / `envelope` / `url` / `method` / `isAbort` / `isTimeout` / `isNetwork` / `isClient`；`message` 已本地化（走 `I18N.errText`） |
+| 客户端错误码 | `CLIENT_TIMEOUT` / `CLIENT_ABORTED` / `CLIENT_NETWORK` / `CLIENT_BAD_JSON` / `CLIENT_BAD_SHAPE` / `CLIENT_HTTP_ERROR`（`Api.CODE`） |
+| 默认值 | 单次请求 20s（`Api.DEFAULTS.timeout`，`timeout: 0` 关闭）；轮询间隔 2s、单次 10s（`Api.DEFAULTS.pollInterval` / `pollTimeout`） |
+| 中断 | 每次请求内部自建 `AbortController`，链接调用方 `signal` 与超时定时器，请求结束即清理，不留悬挂句柄 |
+| 轮询 | `Api.poll(path, handler, { interval, timeout, list, visibility, immediate, onError })` → `{ stop(), refresh() }`：自调度（上一轮结束才排下一轮，不叠加请求）、单飞、标签页隐藏时暂停且恢复后立即补一次、`list: true` 加数组形状守卫、失败只交给 `onError` 不打断轮询 |
+| 收尾 | `Api.stopAllPollers()` 停掉本客户端创建的全部轮询（组件整体卸载 / 测试清理用） |
 
-已迁移的调用方（见 `web/app.js`）：模型清单首次加载、`/api/instances`、`/api/events`、`/api/downloads` 三条 2s 轮询、任务轮询 `/api/tasks/{id}`（含 `stop()` 语义）、`POST /api/tasks`、`DELETE /api/tasks/{id}`、`GET /api/tasks?modelId=`。其余 `fetch` 调用（证书、executables、profiles、history、任务结果等）暂未迁移，`web/api-client.js` 头部「迁移约定」一节列出了后续顺序。
+已迁移的调用方（均已随 `web/app.js` 拆分落到 `web/modules/*`）：
+
+| 端点 | 调用点 |
+| --- | --- |
+| `GET /api/models` | `web/modules/models.js:30`（`Api.list`） |
+| `GET /api/instances` | `web/modules/instances.js:52` 首屏加载 + `web/modules/instances.js:60` 2s 轮询 |
+| `GET /api/events` | `web/modules/events.js:37` 2s 轮询（失败静默） |
+| `GET /api/downloads` | `web/modules/downloads.js:44` 首屏加载 + `web/modules/downloads.js:49` 2s 轮询 |
+| `POST /api/tasks` | `web/modules/tasks.js:26` |
+| `DELETE /api/tasks/{id}` | `web/modules/tasks.js:41` |
+| `GET /api/tasks?modelId=` | `web/modules/tasks.js:105`（`Api.list` + `query`，`reattachTasks` 重挂） |
+| `GET /api/tasks/{id}` | `web/modules/tasks.js:54`（每个进行中任务一个轮询句柄，到终态即 `stop()`） |
+
+全局 2s 轮询的启动顺序在 `web/app.js:110`–`112`（实例 → 事件 → 下载）。其余 `fetch` 调用（证书、executables、profiles、history、任务结果、voices、fs 等）尚未迁移；`web/api-client.js` 头部「迁移约定」一节列出了后续顺序（先 GET 列表 / 轮询，再 POST / PUT / DELETE）。

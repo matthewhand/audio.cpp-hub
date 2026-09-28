@@ -17,11 +17,22 @@ audio.cpp-hub 是 [audio.cpp](https://github.com/0xShug0/audio.cpp) 的 Web 管�
 - 模型权重下载（`download.go` + `packages.go`）：`POST /api/downloads` 创建任务（创建即开始），两种 body：按模型 `{"modelId","packageId"?,"token"?,"overwrite"?,"endpoint"?,"source"?}`（`packageId` 缺省取清单 default 包，URL 默认按 `hfEndpoint` 配置拼接，`endpoint` 可逐次覆盖下载源）或显式 `{"targetDir","files":[{url,path}],...}`。多线程 Range 分段下载到 `models/<targetDir>/`（先写 `<file>.part`，完成校验后改名；`os.File.WriteAt` 写偏移，共享信号量限制全局并发）；`GET /api/downloads`（列表 + percent/speedBps）、`GET /api/downloads/<id>`（详情含分段）、`POST /api/downloads/<id>/pause|resume`（暂停/续传，context cancel 快速中断 + runGeneration 代次）、`DELETE /api/downloads/<id>?purge=`（取消，purge 清理 .part）。任务状态落盘 `data/downloads/<id>/task.json`（原子写，~1s 节流），hub 重启后未完成任务自动从分段断点续传（按 .part 实际大小收敛各分段进度）；gated 仓库传 `token`（HF token，明文存 task.json，API 输出会剔除）；下载前并行 HEAD 探测大小/Range 能力并做磁盘空间预检（Windows 用 `golang.org/x/sys/windows`），不支持 Range 的文件退化为整流下载（中断后该文件重下）。下载包清单在根目录 `model-packages.json`（由 audio.cpp 的 model_specs 转换，覆盖全部 42 个模型），`go:embed` 内置，查询接口 `GET /api/models/<modelId>/packages`。**下载源扩展**：body 带 `source:"modelscope"` 时走 modelscope——repo 映射为 `HereIsMark/<repo名>`、revision 固定 `master`、URL `https://www.modelscope.cn/models/<repo>/resolve/master/<path>`；modelscope HEAD 不带 Content-Length，探测回退 GET `Range: bytes=0-0` 解析 Content-Range（注意它回 200 而非 206，两处都按头解析不挑状态码）；HereIsMark 下仅 audio.cpp-gguf 一个仓库，其它包走 modelscope 会 REMOTE_NOT_FOUND。相关配置：`modelsDir`（默认 `models`）、`downloadThreads`（默认 8）、`downloadSegmentsPerFile`（默认 4，分段最小粒度 32MB）、`hfEndpoint`（默认 `https://huggingface.co`，不可直连时改镜像如 `https://hf-mirror.com`）。前端：模型卡片有 ⬇ 按钮打开「下载权重」弹窗（下载源/包选择/token/覆盖），页头 ⬇️ 按钮（带进行中任务数角标）打开「下载管理」面板（进度条、暂停/续传/删除，2s 轮询），DONE 任务可一键把 `models/<targetDir>` 填入启动表单权重路径
 - Windows 系统托盘（`tray_windows.go`，`getlantern/systray`；菜单：打开首页 / 开机自启 / 退出程序；开机自启在 Startup 目录创建 `audio.cpp-hub.lnk` 快捷方式；`-ldflags="-H windowsgui"` 编译无控制台窗口，日志 tee 到 `logs/hub.log`；非 Windows 走 `tray_other.go` 无托盘）；启动时 `ensureWorkDir` 自动定位工作目录（cwd 无 web/ 时尝试上级目录与 exe 目录，双击 exe 也能跑）
 - 版本号：`main.go` 的 `var version = "dev"`，CI 用 `-ldflags "-X main.version=<tag>"` 注入，启动日志带版本号
+- Web UI 前端（`web/`）：仍是**纯原生 HTML/CSS/JS、运行时零构建**（Go 的 `staticHandler` 直接从磁盘提供），但内部结构已系统化，与旧版单文件脚本集不同：
+  - **i18n 拆成「词典 + 运行时」**：`web/i18n.zh.js`（`window.I18N_ZH`，597 行）与 `web/i18n.en.js`（`window.I18N_EN`，598 行）是纯数据词典（各 564 键，`node scripts/check-i18n-parity.js` 校验对等）；`web/i18n.js`（155 行）不含任何文案，只在初始化时读这两个全局（`web/i18n.js:13`–`14`）并导出 `window.I18N` 契约（`web/i18n.js:154`）：`lang` / `locale` / `t` / `plural` / `num` / `date` / `bytes` / `percent` / `setLang` / `applyI18n` / `onChange` / `errText` / `pick`。词典文件必须先于 `i18n.js` 加载（顺序硬约束，见 `web/index.html:472`–`474`）
+  - **HTTP 唯一出口**：`web/api-client.js`（459 行）暴露 `window.AudioCppHub.api`（`web/api-client.js:443`，下称 `Api`），集中 `fetch`、错误信封（`ApiError` 把 hub 风格与 `/v1/*` 的 OpenAI 风格归一）、`AbortController` 超时/中断、数组形状守卫与**可见性感知轮询** `Api.poll`（`web/api-client.js:372`，自调度不叠加请求、单飞、标签页隐藏时暂停并在恢复后补一次，句柄 `stop()` / `refresh()`）。业务侧统一经 `web/modules/api.js` 绑定后 `import { Api } from "./api.js"`；**新增请求一律走 `Api.*`，不再直接写 `fetch`**
+  - **`web/app.js` 是薄引导层**（119 行：导入模块、跨模块重画 `rerenderAll` `web/app.js:45`、最上层弹窗的 Esc/Tab 焦点锁定 `web/app.js:64`、按序建立 2s 轮询 `web/app.js:110`–`112`、首屏末尾应用初始 hash `web/app.js:119`）；业务逻辑按职责拆进 `web/modules/` 的 20 个模块（`dom` / `i18n-bridge` / `api` / `state` / `async-ui` / `ui` / `routing` / `command-palette` / `shell` / `models` / `settings` / `launch` / `instances` / `downloads` / `events` / `results` / `tasks` / `sidebar` / `panels` / `pickers`）。模块是浏览器原生 ES 模块，**不打包、不转译**；经典组件脚本（`audio-picker.js` / `voice-select.js` / `voices-panel.js` / `file-browser.js`）与模块之间的桥是 `web/legacy-globals.js`。完整模块地图、状态与轮询模型、编码约定见 `web/README.md`
+  - **绘制前恢复**：`web/boot.js`（58 行）在 `<head>` 中、样式表之前同步解析 `localStorage` 的 `hub-theme` / `hub-lang` 并写 `<html data-theme>`，避免首屏主题闪烁（独立文件是为满足 CSP `script-src 'self'`，不允许内联脚本），同时把解析逻辑挂成 `window.HubTheme`（三态 system/light/dark，`web/boot.js:53`）供 `web/modules/shell.js` 复用
+  - **UX 能力**：hash 路由与深链接（`web/modules/routing.js`，`#/model/<id>` / `#/instance/<id>` / `#/history` / `#/voices` / `#/downloads` / `#/settings`）、命令面板 `Ctrl/Cmd-K`（`web/modules/command-palette.js`）、统一异步三态骨架/空态/错误态（`web/modules/async-ui.js`）、动效系统（`web/motion.js` + `web/style.css` 末尾，遵循 `prefers-reduced-motion`）、可访问性（跳转链接、焦点管理、背景 `inert`、WCAG AA 对比度）
+  - **PWA**：`web/manifest.webmanifest` + `web/sw.js`（Service Worker，导航 network-first、静态资源 cache-first + 后台再验证，`/api/*` 与 `/v1/*` **绝不缓存** `web/sw.js:147`），注册在 `web/pwa.js`（102 行，静默降级）。详见 `docs/pwa.md`
+  - **设计系统**：`web/style.css`（2099 行）分 L1–L6（令牌 / 基础 / 布局 / 组件 / 工具 / 可访问性），人工核对外观用 `web/styleguide.html`（320 行，开发用演示页，不链接自主应用）
+  - **开发期工具链与测试（DEV-ONLY，不进发行包）**：根目录 `package.json` + `tsconfig.json` + `eslint.config.js`（tsc `checkJs` + `noEmit`、ESLint flat config、Prettier）与 `e2e/`（Playwright，9 个 spec，headless Chromium + mock 后端）、`test/unit/`（`node:test`，4 个测试文件）。**没有打包器**：发布物仍是「Go 二进制 + `web/` 源文件」，改完刷新浏览器即可；`npm install` 只是为了让静态闸门与测试能跑
+- 视觉文档：`docs/diagrams/` 下 19 张架构 / 时序 / 状态 / 部署 / 数据模型图（可编辑 HTML 单文件 + 明暗 PNG 预览，入口 `docs/diagrams/README.md`、清单 `docs/diagrams/INVENTORY.md`），由 `scripts/check-diagrams.py` 校验可访问性契约（`role=img` / `aria-labelledby` 解析到真实 `<title>`+`<desc>` / 无 `<script>` / 仅允许的 Google Fonts 远程引用），CI job「图示 / 可访问性契约」执行 `python3 scripts/check-diagrams.py docs/diagrams`
 
 ## 技术栈
 
 - Go 1.27，标准库为主；第三方依赖仅两个：`github.com/getlantern/systray`（Windows 托盘）、`golang.org/x/sys`（Windows 磁盘空间预检）
-- 前端：`web/` 下纯原生 HTML/CSS/JS（`app.js`、`i18n.js` 中英双语、`wav.js` WAV 处理等），无构建工具，由 Go 的 `http.FileServer` 直接从工作目录的 `web/` 提供
+- 前端：`web/` 下纯原生 HTML/CSS/JS，**无框架、无构建步骤、运行时不需要 Node.js**，由 Go 的 `staticHandler`（`api.go:152`）直接从工作目录的 `web/` 提供；结构为「经典脚本（`window.*`）+ `web/app.js` 引导的 `web/modules/*` ES 模块」两层，文案在 `web/i18n.zh.js` / `web/i18n.en.js`，HTTP 出口在 `web/api-client.js`
+- 开发期工具链（仅本地 / CI，不随发行版分发）：TypeScript `checkJs`、ESLint、Prettier、Playwright、node:test；无打包器，`tsc` 以 `noEmit` 运行、不产出任何 JS
 - 模型清单 `models.json` / `model-packages.json` 在仓库根目录，`go:embed` 进二进制
 - 原 Java 版（Netty）已从 main 分支移除（曾短暂放在 `legacy/`，该目录已删除）；完整备份现位于本 fork 的 `java-main-archive` 分支（含 git 历史）；其行为语义是 Go 版移植的参照
 
@@ -56,16 +67,46 @@ audio.cpp-hub 是 [audio.cpp](https://github.com/0xShug0/audio.cpp) 的 Web 管�
 ├── tray_other.go         # 非 Windows 平台托盘 stub（直接跑 HTTP 服务）
 ├── util.go               # JSON 响应约定（errJSON/okJSON/writeJSON）、UserError、readBodyMap、
 │                         # optString/optIntPtr/optStringMap、newID（8 位随机 hex）、writeFileAtomic 等
+├── constants.go          # 行为常量集中处（taskQueueSize / logTailLines / dlSegmentMin 等）
+├── proc_windows.go / proc_other.go  # hideChildWindow（抑制子进程控制台窗口，build tag 分平台）
 ├── models.go             # models.json embed 与模型查询
+├── internal/idvalidate/  # 会被拼进文件路径的 ID / 下载路径校验（集中正则，独立单测）
+├── internal/wav/         # 纯 RIFF/WAV 头解析（不依赖 hub 其余代码，独立单测）
+├── *_test.go             # 单测：ids（ID 校验）/ instance / proxy / download / history / task（含 -race）
 ├── models.json           # 支持模型清单（id/category/serverTask/paramSchema 等），GET /api/models 直接返回
 ├── model-packages.json   # 模型下载包清单（repo/revision/targetDir/files/default/gated）
 ├── icon.ico              # 托盘图标（go:embed）
 ├── go.mod / go.sum
-web/                      # 前端静态文件（无构建步骤）
-.github/workflows/        # 发布流水线（见「发布与部署」）
+web/                      # 前端静态文件（无构建步骤、运行时零 Node）
+├── index.html            # 全部静态 DOM + CSP（web/index.html:7）+ 脚本加载顺序（顺序有硬约束）
+├── style.css             # 设计系统 L1–L6（令牌 / 基础 / 布局 / 组件 / 工具 / 可访问性）
+├── app.js                # ES 模块引导层：导入模块、rerenderAll、Esc/Tab 焦点锁定、启动顺序
+├── modules/              # 20 个业务模块（dom / state / async-ui / ui / routing / command-palette /
+│                         # shell / models / settings / launch / instances / downloads / events /
+│                         # results / tasks / sidebar / panels / pickers / api / i18n-bridge）
+├── i18n.zh.js / i18n.en.js  # 中 / 英词典（window.I18N_ZH / I18N_EN，各 564 键，纯数据）
+├── i18n.js               # I18N 运行时（window.I18N，不含文案），见「项目概述」的 Web UI 条目
+├── api-client.js         # 唯一 HTTP 出口（window.AudioCppHub.api：ApiError / poll / list）
+├── legacy-globals.js     # 经典脚本 ↔ ES 模块的桥（window.$ / el + 转发器）
+├── boot.js / motion.js / pwa.js  # 绘制前主题恢复（HubTheme）；动效触发；Service Worker 注册
+├── sw.js / manifest.webmanifest / offline.html  # Service Worker、PWA 清单、断网兜底页
+├── audio-picker.js / voice-select.js / voices-panel.js / file-browser.js / wav.js
+│                         # 自包含经典组件（上传 / 录制 / 裁剪、音色下拉、音色库面板、文件浏览、WAV 工具）
+├── styleguide.html       # 组件样式指南页（开发用，浏览器直接打开）
+├── globals.d.ts          # 开发期类型声明（经典脚本的 window.* 公开接口，供 tsc checkJs）
+└── icons/                # PWA 图标（由 scripts/gen-icons.cjs 生成）
+test/unit/                # node:test 单元测试（wav / i18n / app-utils / file-browser）
+e2e/                      # Playwright e2e（9 个 spec，headless Chromium + mock 后端，无 Go/GPU/模型）
+scripts/                  # 闸门与生成脚本（check-i18n-parity.js、check-diagrams.py、ui-inventory*、
+│                         # perf-budget.mjs、gen-icons.cjs、axe-audit.js、record-demos.cjs）
+package.json / package-lock.json  # DEV-ONLY 工具链与测试脚本（tsc/ESLint/Prettier/Playwright）
+tsconfig.json / eslint.config.js  # DEV-ONLY 静态闸门配置（checkJs+noEmit / ESLint flat config）
+docs/                     # 文档：API.md（路由权威参考）、diagrams/（19 张图 + CI 校验）、
+│                         # ui.md、motion.md、pwa.md、assets/、media/
+.github/workflows/        # CI（build-and-release.yml 发布流水线 + ci.yml 质量/图示/前端闸门）
 ```
 
-运行时（相对工作目录）产生的数据，均被 `.gitignore` 排除：`logs/`、`run/<instanceId>/`（server.json + server.log + proxy-cache/，停止后自动清理）、`data/`（uploads/、voices/、profiles.json、history/<modelId>/ 操作历史、downloads/<taskId>/ 下载任务状态、tasks/<id>.task.json 推理任务状态 + <id>.result.json 非 TTS 结果，重启回放）、`models/`（下载的模型权重）、`ssl/`（HTTPS 证书，Go 版尚未实现）、`executables.json`、`hub.config.json`、`audio.cpp-hub(.exe)` 构建产物。
+运行时（相对工作目录）产生的数据，均被 `.gitignore` 排除：`logs/`、`run/<instanceId>/`（server.json + server.log + proxy-cache/，停止后自动清理）、`data/`（uploads/、voices/、profiles.json、history/<modelId>/ 操作历史、downloads/<taskId>/ 下载任务状态、tasks/<id>.task.json 推理任务状态 + <id>.result.json 非 TTS 结果，重启回放）、`models/`（下载的模型权重）、`ssl/`（HTTPS 证书，Go 版尚未实现）、`executables.json`、`hub.config.json`、`audio.cpp-hub(.exe)` 构建产物，以及 DEV-ONLY 工具链的 `node_modules/`、`test-results/`、`playwright-report/`、`blob-report/`。
 
 ## 构建与运行
 
@@ -88,24 +129,48 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o audio.cpp-hub
 
 首次运行后自行生成 `hub.config.json` / `data/` / `logs/` 等。代码改动后如需更新模型清单，直接编辑根目录 `models.json` / `model-packages.json`（go:embed 内置，无需复制步骤）。
 
+改 `web/` **不需要任何构建**：编辑源文件后刷新浏览器（`index.html` 不带缓存、其余静态资源 1 小时缓存，必要时硬刷新）。若要跑开发期闸门（Node ≥ 22），它们**只做检查、不产出任何运行期文件**：
+
+```bash
+npm ci
+npm run check          # check:types(tsc checkJs+noEmit) + lint(ESLint) + format:check(Prettier)
+npm run test:unit      # node:test：test/unit/**/*.test.mjs
+npm run test:e2e       # Playwright：headless Chromium + mock 后端，首次需 npx playwright install chromium
+```
+
+`tsc` 以 `noEmit` 运行，输出目录为空，不可能被误当成构建产物进发行包。发行包始终是「Go 二进制 + `web/` 源文件」。
+
 ## 测试
 
-本项目目前**没有任何自动化测试**（无 `_test.go`、无测试框架依赖）。改动后靠手动验证：`go vet ./...` 与构建通过后启动服务，打开 Web UI 或用 `curl` 打 `/api/*`、`/v1/*` 接口确认行为。
+自动化测试已覆盖 Go 侧与前端两侧，**无外部测试框架依赖**（Go 用标准库 `testing`，前端用 `node:test` + Playwright）：
+
+- **Go**：`go test ./...`（CI 另跑 `go test -race ./...`）。`*_test.go` 覆盖 ID/路径校验（`ids_test.go` + `internal/idvalidate`）、实例生命周期与端口分配（`instance_test.go`）、`/v1/*` 代理与 model 提取（`proxy_test.go`）、下载任务（`download_test.go`）、历史落盘与分组（`history_test.go`）、任务队列收敛与并发（`task_finalize_test.go` / `task_race_test.go`）、WAV 头解析（`internal/wav`）
+- **前端**：`npm run test:unit`（`test/unit/`：WAV 工具、i18n 含中英键 parity、app-utils、file-browser）、`npm run test:e2e`（`e2e/`：9 个 spec，Playwright + `page.route` mock 后端，覆盖实例/任务/历史/音色/下载/可执行文件/ASR/UI 切换/冒烟，**无需 Go 二进制、GPU 或模型**）
+- **其它闸门**：`node scripts/check-i18n-parity.js`（中英 564/564 键对等）、`python3 scripts/check-diagrams.py docs/diagrams`（19/19 图示可访问性契约）、`npm run ui:inventory:check`（UI 清单防漂移）、`npm run perf:budget`（首屏体积预算）。详见 `TESTING.md` 与 `web/README.md`
+
+改动仍需手动过一遍受影响页面（中英切换 / 深浅主题 / 窄屏），自动化测试覆盖的是契约与纯函数，不替代人工看界面。
 
 ## 发布与部署
 
 发布由 `.github/workflows/build-and-release.yml` 完成，推送 `v*.*.*` tag 或手动触发：
 
 - 在 ubuntu-latest 上用 actions/setup-go@v5（Go 1.27）交叉编译，`-ldflags "-X main.version=$VERSION"` 注入版本（无 tag 时 dev-<sha7>）
-- 产出两个原生 zip（CGO_ENABLED=0，无 JRE/launcher）：`audio.cpp-hub-<VERSION>-windows.zip`（`-H windowsgui` 托盘版 exe）与 `audio.cpp-hub-<VERSION>-linux.zip`，包内含二进制 + web/ + README.md + 空 audiocpp/ 占位目录
-- softprops/action-gh-release@v1 创建 GitHub Release（双语 notes：备份 data/ 提醒、安全警告、变更 commit 列表），zip 同时上传 artifact
+- 产出**四个原生 zip**（CGO_ENABLED=0，无 JRE/launcher）：`audio.cpp-hub-<VERSION>-windows-amd64.zip`（`-H windowsgui` 托盘版 exe）、`-linux-amd64.zip`、`-linux-arm64.zip`、`-darwin-arm64.zip`，每个包内含对应平台的二进制 + `web/` + `README.md`（**不含** `audiocpp/` 占位目录），另附 `SHA256SUMS`
+- softprops/action-gh-release@v1 创建 GitHub Release（中英双语 notes：备份 data/ 提醒、安全警告、变更 commit 列表），zip 同时上传 artifact
 - 发布包不含 audio.cpp 二进制，用户需自行下载放入 `audiocpp/` 目录并通过 UI 登记可执行文件
+- 发布物**不含** `package.json` / `node_modules` / `e2e/` / `test/`——前端工具链与测试是 DEV-ONLY，运行期只需要 `web/` 源文件
+
+CI 另有 `.github/workflows/ci.yml`（推送 / PR 触发，与发布流水线分离）：`quality` job 跑 `go mod verify` / `gofmt -l .` / `go vet ./...` / `go test -race ./...`（**不执行 `npm ci`**，因此看不到 `node_modules` 对 `go list ./...` 的副作用）；`diagrams` job 跑 `python3 scripts/check-diagrams.py docs/diagrams`；`web-toolchain` / `frontend` job 跑 `npm ci` + `check:types` / `lint` / `format:check` / `test:unit` / `ui:inventory:check` / `perf:budget` / `test:e2e`，**不执行任何 Go 命令**。
 
 ## 代码约定
 
-- **语言**：代码注释、日志消息、用户可见错误消息均为中文（部分用户可见文本中英双语）；标识符用英文。前端文案走 `web/i18n.js` 中英双语言
+- **语言**：代码注释、日志消息、用户可见错误消息均为中文（部分用户可见文本中英双语）；标识符用英文。前端文案走 `web/i18n.zh.js` + `web/i18n.en.js` 双词典（`web/i18n.js` 只是运行时，不含文案），新增文案必须同时改两份并跑 `node scripts/check-i18n-parity.js`
 - Go 代码风格：gofmt 标准格式；导出的管理器方法与类型多带中文注释简述职责
-- ID 生成统一为 8 位随机 hex（`util.go` 的 `newID()`，对应原 Java 版 UUID 前 8 位）
+- ID 生成统一为 8 位随机 hex（`util.go` 的 `newID()`，对应原 Java 版 UUID 前 8 位）；所有会被拼进文件路径的 id / 下载路径走 `internal/idvalidate` 集中校验，不要在 handler 里另写正则
+- 前端 HTTP：**一律走 `Api.*`（`web/api-client.js`），不再写裸 `fetch`**；轮询一律 `Api.poll`（不写 `setInterval`）；新错误码语义扩展 `api-client.js` 的 `CODE`。服务端 / 用户可控字符串进 HTML 前必须 `esc()`，URL 属性用 `safeHttpUrl()`，数字 / 字节 / 日期 / 百分比走 `I18N.num` / `bytes` / `date` / `percent`
+- 前端模块：业务逻辑进 `web/modules/*.js`（跨文件 `import` / `export`），不要往 `web/app.js` 堆；新经典脚本用 IIFE 包裹并放在模块入口之前，需要 `$` / `showToast` 等先过 `web/legacy-globals.js`；改动 `index.html` 脚本清单或模块图时同步 `web/sw.js` 的 `PRECACHE_URLS`（否则离线冷启动会在该脚本处断掉）
+- 前端硬约束：**无构建、无框架、无内联**——CSP（`web/index.html:7`）为 `script-src 'self'`，禁止内联脚本、`on*` 事件属性、内联 `style` 与外部 CDN；模块 `import` 只用同源相对路径
+- 文档：路由清单以 `api.go` 的 `registerRoutes` 为唯一权威，`docs/API.md` 与之逐条对齐；`file:line` 引用写进文档前必须核对当前代码（行号会随改动漂移）；图示新增后同步 `docs/diagrams/README.md` / `INVENTORY.md` 并让 `scripts/check-diagrams.py` 通过
 - 持久化：各 Registry/管理器直接读写工作目录下的 JSON 文件（`encoding/json`），互斥锁保护，无数据库；文件不存在/为空即视为空列表；状态文件一律原子写（tmp + rename，见 `writeFileAtomic`）
 - 错误处理：用户可预期错误返回 `UserError{Code, Params, Msg}`（`util.go`），API 层转成 `{"ok":false,"code","params","error"}` 结构的 JSON；`/v1/*` 代理用 OpenAI 风格 `{"error":{"message","type"}}`
 - 外部进程交互统一约定：`audiocpp_server --config <server.json>`，健康检查 `GET /health`，任务接口 `POST /v1/tasks/run`

@@ -39,6 +39,8 @@ Architecture, deployment, sequence, data and operations diagrams — editable HT
 
 - **Multi-instance management**: writes a `server.json` per instance and launches `audiocpp_server` as a subprocess — automatic port allocation (bound to 127.0.0.1), health polling (up to 120s), log viewing, one-click stop
 - **Web UI**: plain HTML/JS frontend (no build step), bilingual Chinese/English, with model selection, parameter forms and task submission
+- **UI capabilities**: hash routing and deep links (`#/model/<id>`, `#/history`, …, restorable via back/forward), a `Ctrl/Cmd-K` command palette, dark / light / follow-system themes, unified skeleton / empty / error states for lists, keyboard accessibility and WCAG AA contrast (motion respects `prefers-reduced-motion`)
+- **Installable / offline**: `manifest.webmanifest` + a Service Worker — network-first for navigations, cache-first with background revalidation for static assets; `/api/*` and `/v1/*` are never cached, there is an offline fallback page, and registration failures degrade silently
 - **Async task queue**: `POST /api/tasks` returns immediately and runs serially per instance; task state is persisted, so tasks survive a page refresh / hub restart, and results can be fetched later
 - **TTS operation history**: per-model synthesis records and result audio (no automatic eviction; delete manually), replayable from the history panel, with grouping and inline detail
 - **Voice library (reference audio)**: a global resource under `data/voices/` with unique names, rename / reference-text editing / preview
@@ -197,6 +199,10 @@ voices.go / audio.go    # Voice library; WAV upload and header parsing
 download.go / packages.go # Weight downloader; model-packages.json manifest
 fs.go / models.go / util.go # Filesystem browser; model list; utilities
 web/                    # Frontend static files (no build step)
+├── app.js + modules/   # ES-module entrypoint + 20 feature modules
+└── i18n.zh.js / i18n.en.js  # Bilingual dictionaries (i18n.js is the runtime only); api-client.js is the single HTTP exit
+docs/                   # Docs: API.md, diagrams/ (19 architecture / sequence / state diagrams), ui.md, motion.md, pwa.md
+test/ / e2e/            # Frontend unit tests (node:test) and e2e (Playwright + mock backend)
 models.json             # Model list (embedded with go:embed)
 model-packages.json     # Download package manifest (embedded with go:embed)
 run/                    # Runtime: instance server.json / server.log / proxy cache
@@ -232,8 +238,16 @@ Build steps, code style and pre-commit checks are in [`CONTRIBUTING.md`](CONTRIB
 ## Frontend (web/)
 
 The Web UI is plain HTML/CSS/JS in `web/`: **no framework, no build step, and no Node.js at runtime** — the Go server
-serves the static files straight from disk, so a browser refresh is all it takes. Any Node/npm tooling (if introduced)
-is dev/CI-only and does not ship.
+serves the static files straight from disk, so a browser refresh is all it takes. The Node/npm toolchain is
+**dev/CI-only** (TypeScript `checkJs`, ESLint, Prettier, Playwright e2e, node:test unit tests) and does not ship;
+the files in `web/` *are* the release artifact — there are no bundled outputs.
+
+It is organised in two layers: classic scripts (attaching to `window.*`, loaded in the `<script>` order at the bottom of
+`index.html`) plus `web/app.js` driving 20 native ES modules under `web/modules/*` (no bundling or transpiling — the
+browser resolves them by URL). i18n is split into the pure-data dictionaries `web/i18n.zh.js` / `web/i18n.en.js` and the
+runtime `web/i18n.js`; every HTTP request goes through `web/api-client.js` (`window.AudioCppHub.api`, with the error
+envelope, timeout/abort handling and visibility-aware polling); `web/boot.js` restores the theme and UI language before
+first paint, and `web/styleguide.html` is a component style guide.
 
 See [`web/README.md`](web/README.md) for the module map, state and polling model, coding conventions and contribution
 checklist. Architecture/sequence/state diagrams live in [`docs/diagrams/`](docs/diagrams/); demo GIFs in
@@ -244,5 +258,6 @@ e2e/unit tests and the performance budget in [`TESTING.md`](TESTING.md); offline
 ## Tech Stack & Provenance
 
 - Go 1.27, native single binary; the only dependencies are `github.com/getlantern/systray` (Windows tray) and `golang.org/x/sys`
-- Frontend: plain HTML/CSS/JS, with bilingual strings in `web/i18n.zh.js` / `web/i18n.en.js` and a single HTTP entry point in `web/api-client.js`
+- Frontend: plain HTML/CSS/JS, no framework and no build; classic scripts plus 20 ES modules in `web/modules/*`, bilingual strings in `web/i18n.zh.js` / `web/i18n.en.js`, a single HTTP entry point in `web/api-client.js`, and PWA support via `web/sw.js` + `web/manifest.webmanifest`
+- Dev-only toolchain (not shipped): TypeScript `checkJs`, ESLint, Prettier, Playwright, node:test; no bundler
 - This project is a companion management panel for [audio.cpp](https://github.com/0xShug0/audio.cpp) (fork maintained at <https://github.com/matthewhand/audio.cpp-hub>); it does not bundle upstream binaries — models and inference come from the upstream project
