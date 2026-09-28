@@ -6,13 +6,15 @@
   "type": "module",
   "scripts": {
     "check:types": "tsc -p tsconfig.json",
-    "lint": "eslint web",
+    "lint": "eslint web e2e test scripts",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
     "check": "npm run check:types && npm run lint && npm run format:check",
+    "check:i18n": "node scripts/check-i18n-parity.js",
     "test:unit": "node --test \"test/unit/**/*.test.mjs\"",
     "test:e2e": "playwright test --config e2e/playwright.config.mjs",
     "test": "npm run test:unit && npm run test:e2e",
+    "a11y:audit": "node scripts/axe-audit.js",
     "ui:inventory": "node scripts/ui-inventory.mjs",
     "ui:inventory:check": "node scripts/ui-inventory-check.mjs",
     "perf:budget": "node scripts/perf-budget.mjs"
@@ -20,6 +22,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.63.0",
+    "axe-core": "4.13.0",
     "eslint": "10.11.0",
     "globals": "17.12.0",
     "prettier": "3.9.9",

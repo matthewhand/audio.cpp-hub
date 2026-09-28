@@ -49,14 +49,17 @@ const mismatchedParams = [...zhKeys]
   .map((k) => `${k}: zh={${placeholder(zh[k])}} en={${placeholder(en[k])}}`);
 
 console.log(`zh keys: ${zhKeys.size}  |  en keys: ${enKeys.size}`);
-if (missingInEn.length)
+if (missingInEn.length) {
   console.log(`missing in en (${missingInEn.length}):\n  ` + missingInEn.join("\n  "));
-if (missingInZh.length)
+}
+if (missingInZh.length) {
   console.log(`missing in zh (${missingInZh.length}):\n  ` + missingInZh.join("\n  "));
-if (mismatchedParams.length)
+}
+if (mismatchedParams.length) {
   console.log(
     `placeholder mismatch (${mismatchedParams.length}):\n  ` + mismatchedParams.join("\n  ")
   );
+}
 
 if (dupZh.length) console.log(`duplicate keys in zh (${dupZh.length}):\n  ` + dupZh.join("\n  "));
 if (dupEn.length) console.log(`duplicate keys in en (${dupEn.length}):\n  ` + dupEn.join("\n  "));

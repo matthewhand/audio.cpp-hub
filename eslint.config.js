@@ -11,7 +11,10 @@
  *   - ES 模块（web/app.js + web/modules/*.js）：sourceType "module"，
  *     跨文件靠 import/export，额外启用 import/export 一致性检查。
  *
- * 规则集抽成 SHARED_RULES 由两个 block 各自展开：flat config 的 rules 不会跨
+ * e2e/ + test/ + scripts/ 是第三类：Node 侧代码（ESM 与 CommonJS 各一个 block），
+ * 规则集与 web/ 的模块 block 相同，只把 globals 换成 globals.node。详见各 block 注释。
+ *
+ * 规则集抽成 SHARED_RULES 由各 block 各自展开：flat config 的 rules 不会跨
  * block 继承，而第一个 block 用 ignores 把模块排除掉了，所以必须显式共享。
  *
  * 运行期不受影响：ESLint 不改写文件，web/ 仍由 Go 的 http.FileServer 直接提供。
@@ -101,6 +104,16 @@ const SHARED_RULES = {
   "operator-linebreak": "off"
 };
 
+/* Node 侧代码（e2e / test / scripts）的规则集 = web/ 的共享规则集 + 一处替换：
+   no-implicit-globals 打开——这三个目录全是 ESM，模块不会产生隐式全局。 */
+const NODE_RULES = {
+  ...SHARED_RULES,
+  "no-implicit-globals": "error",
+  /* import / export 卫生：重复 import、拼错的路径会与 no-undef 一起报出来。
+     no-duplicate-imports 在同一模块多次 import 同一文件时报错。 */
+  "no-duplicate-imports": "error"
+};
+
 export default [
   {
     // 工具链自身的配置文件由 node 加载，跳过
@@ -142,6 +155,66 @@ export default [
       "no-implicit-globals": "off", // 顶层 const/let 在经典脚本里刻意作为跨文件全局
       "no-import-assign": "off" // 经典脚本没有 import
     }
+  },
+
+  /* ---- e2e/ + test/ + scripts/ 下的 Node 侧代码：Node ESM ----
+   * 覆盖 e2e 下的 .mjs、test 下的 .mjs、scripts 下的 .mjs 与 .js（见下方 files）。
+   *
+   * 规则集与 web/ 的模块 block 完全一致，只把 globals 换成 Node：
+   *   - 没有浏览器全局（window / document / localStorage 一律 no-undef），
+   *     否则「在页面里能跑、在 Node 里是野变量」这类问题会被静默放过；
+   *   - e2e/*.spec.mjs 显式 import { test, expect } from "@playwright/test"，
+   *     不依赖 Playwright 注入的全局，所以不需要额外的 eslint 插件
+   *     （本仓库不引入 eslint-plugin-playwright：它带来的 autofix 建议会诱导
+   *     开发者删掉显式 import，而显式 import 正是这里想要的）。
+   */
+  {
+    files: ["e2e/**/*.mjs", "test/**/*.mjs", "scripts/**/*.mjs", "scripts/**/*.js"],
+    languageOptions: {
+      sourceType: "module",
+      ecmaVersion: 2022,
+      globals: { ...globals.node }
+    },
+    rules: NODE_RULES
+  },
+
+  /* ---- scripts/*.cjs：CommonJS（gen-icons.cjs / record-demos.cjs）---- */
+  {
+    files: ["scripts/**/*.cjs"],
+    languageOptions: {
+      sourceType: "commonjs",
+      ecmaVersion: 2022,
+      globals: { ...globals.node }
+    },
+    rules: {
+      ...NODE_RULES,
+      "no-implicit-globals": "off" // CommonJS 顶层 const/let 是模块作用域内的局部声明
+    }
+  },
+
+  /* ---- scripts/axe-audit.js：Node 驱动 + 注入页面的回调 ----
+   * 这个文件里同时存在两种代码：Node 侧的启动/编排，以及 page.evaluate /
+   * page.waitForFunction 里「在浏览器上下文执行」的回调。后者合法地用到 window 与
+   * document。对这两个名字做显式声明（与上面 web/ block 声明 I18N / WavUtil 同一手法），
+   * 而不是把整个 browser globals 打开——后者会让 Node 侧的拼写错误也一起消失。
+   */
+  {
+    files: ["scripts/axe-audit.js"],
+    languageOptions: {
+      globals: { window: "readonly", document: "readonly" }
+    }
+  },
+
+  /* ---- 唯一的单规则降级：scripts/ui-inventory.mjs 的 curly ----
+   * 该文件由另一条工作流独占，本 PR 不能改它。里面有 3 处
+   * 「if/for 的单条语句体被 Prettier 换到下一行」（第 111、114、329 行），
+   * curly:"multi-line" 会把这 3 处报成缺花括号。降级范围精确到「这个文件的这一条
+   * 纯风格规则」——文件仍然完整接受 no-undef / no-unused-vars / no-prototype-builtins
+   * 等全部正确性规则的检查。
+   * 债务清零后请把本 block 整体删掉：给第 111、114、329 行的语句体补上花括号即可。 */
+  {
+    files: ["scripts/ui-inventory.mjs"],
+    rules: { curly: "off" }
   },
 
   /* ---- web/app.js + web/modules/*.js：ES 模块 ----
