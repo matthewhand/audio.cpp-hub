@@ -4,8 +4,8 @@
  * 面板项来自 ROUTE_VIEWS，模型项来自 models，实例项来自 instances，因此不需要
  * 额外索引，2s 轮询刷新后候选自动是最新的。
  *
- * 打开/关闭一律走 focusDialog / restoreDialogFocus（async-ui.js），由它负责焦点栈与
- * 背景 inert；本模块只管列表渲染与 ↑↓/Enter/Esc 键盘语义。
+ * 打开/关闭一律走 focusDialog / restoreDialogFocus（async-ui.js），由它负责焦点栈、
+ * 背景 inert 与「等焦点目标真的可聚焦」；本模块只管列表渲染与 ↑↓/Enter/Esc 键盘语义。
  * Esc 在输入框里被 stopPropagation，避免和外层的「Esc 关最上层弹窗」抢一次。 */
 
 import { focusDialog, isOpen, restoreDialogFocus } from "./async-ui.js";
@@ -46,6 +46,7 @@ function renderPalette(query) {
     const empty = el(`<div class="cp-empty"></div>`);
     empty.textContent = t("palette.empty");
     list.appendChild(empty);
+    syncPaletteActiveDescendant(); // 空列表也必须同步：否则输入框上的 aria-activedescendant 指向已消失的选项
     return;
   }
   let lastGroup = null;
@@ -92,8 +93,11 @@ export function openCommandPalette() {
   paletteActive = 0;
   renderPalette("");
   $("command-palette").classList.remove("hidden");
-  focusDialog($("command-palette"));
-  input.focus();
+  /* 焦点目标显式给搜索框，别靠「第一个可聚焦元素碰巧是它」：命令面板的键盘语义
+     （↑↓ / Enter / 直接打字）全都挂在这个输入框上，焦点落到别处就等于键盘不可用。
+     focusDialog 负责等它真的可聚焦——刚摘掉 .hidden 时遮罩的 visibility 过渡
+     还没生效，那一瞬 focus() 是空操作（详见 async-ui.js 的 focusWhenRendered）。 */
+  focusDialog($("command-palette"), input);
   input.select();
 }
 export function closeCommandPalette() {
