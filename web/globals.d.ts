@@ -153,6 +153,50 @@ declare interface EventTarget {
 /** app.js 的 api() 给 Error 挂 status，调用侧按 404 等状态码分支处理 */
 type HubHttpError = Error & { status?: number };
 
+/* ---- api-client.js → window.AudioCppHub.api ----
+ * 类型实现体在 web/api-client.js 顶部（@typedef RequestOptions/PollOptions/
+ * ApiErrorOptions）。这里只声明 app.js 实际用到的成员，够用即可。
+ * app.js 通过 const Api = window.AudioCppHub.api 一次性取用。 */
+interface AudioCppHubRoot {
+  api: {
+    request(path: string, opts?: Record<string, unknown>): Promise<any>;
+    get(path: string, opts?: Record<string, unknown>): Promise<any>;
+    post(path: string, body?: unknown, opts?: Record<string, unknown>): Promise<any>;
+    put(path: string, body?: unknown, opts?: Record<string, unknown>): Promise<any>;
+    del(path: string, opts?: Record<string, unknown>): Promise<any>;
+    list(path: string, opts?: Record<string, unknown>): Promise<any[]>;
+    poll(
+      path: string | (() => string),
+      handler: (data: any) => void | Promise<void>,
+      opts?: Record<string, unknown>
+    ): { stop: () => void; refresh: () => Promise<void> };
+    stopAllPollers(): void;
+    /** 统一错误类型；构造签名见 api-client.js 的 ApiErrorOptions */
+    ApiError: new (
+      message: string,
+      opts?: Record<string, unknown>
+    ) => Error & {
+      code: string;
+      status: number;
+      aborted: boolean;
+      isAbort: boolean;
+      isTimeout: boolean;
+      isNetwork: boolean;
+      isClient: boolean;
+    };
+    buildUrl(
+      path: string,
+      params?: Record<string, string>,
+      query?: Record<string, string | number>
+    ): string;
+    CODE: Record<string, string>;
+    DEFAULTS: Record<string, number>;
+  };
+}
+declare interface Window {
+  AudioCppHub: AudioCppHubRoot;
+}
+
 /* ---- voices-panel.js → window.openVoicesPanel / window.closeVoicesPanel ---- */
 declare function openVoicesPanel(): void;
 declare function closeVoicesPanel(): void;

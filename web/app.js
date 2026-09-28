@@ -1579,18 +1579,7 @@ async function submitTask(req) {
   const task = await Api.post("/api/tasks", { instanceId: activeInstanceId, request: req });
   // 入队成功后立即刷新一次实例列表（不 await），卡片“工作中”徽标即时出现，不等 2s 轮询
   refreshInstances();
-  return JSON.parse(text);
-}
-
-async function fetchTask(taskId) {
-  const res = await fetch("/api/tasks/" + taskId);
-  const text = await res.text();
-  if (!res.ok) {
-    const err = /** @type {HubHttpError} */ (new Error(I18N.errText(text)));
-    err.status = res.status;
-    throw err;
-  }
-  return JSON.parse(text);
+  return task;
 }
 
 /* 任务耗时：优先用后端 startedAt→finishedAt，进行中算到当前时刻 */

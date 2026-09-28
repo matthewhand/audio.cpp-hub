@@ -110,9 +110,54 @@ const CODE = {
 };
 
 /* ---------------------------------------------------------------------------
+   共享类型（开发期 only，运行期被注释掉）
+   --------------------------------------------------------------------------- */
+
+/**
+ * request() 的调用参数。
+ * @typedef {object} RequestOptions
+ * @property {string}  [method]  HTTP 方法，缺省 GET
+ * @property {*}       [body]    plain object 走 JSON；FormData/Blob/ArrayBuffer/TypedArray/string 原样发送
+ * @property {Record<string,string|number>} [query]   追加到 URL 的查询参数
+ * @property {Record<string,string>} [params]  替换 path 中的 {name} 占位
+ * @property {Record<string,string>} [headers] 请求头
+ * @property {AbortSignal} [signal] 外部取消信号
+ * @property {number}   [timeout] 毫秒；缺省 DEFAULTS.timeout
+ * @property {boolean}  [raw]     true 时 resolve 原始 Response，不解析 JSON
+ * @property {boolean}  [cache]   透传给 fetch 的 cache 选项
+ */
+
+/**
+ * poll() 的调用参数。
+ * @typedef {object} PollOptions
+ * @property {number}  [interval]   轮询间隔（毫秒），缺省 DEFAULTS.pollInterval
+ * @property {number}  [timeout]    单次请求超时，缺省 DEFAULTS.pollTimeout
+ * @property {boolean} [visibility] 页面隐藏时暂停，缺省 true
+ * @property {boolean} [immediate]  启动时立即触发一次，缺省 false
+ * @property {boolean} [list]       true 时对返回体做数组形状守卫
+ * @property {RequestOptions} [request] 透传给 request() 的固定参数
+ * @property {(err: ApiError) => void} [onError] 请求失败回调
+ */
+
+/**
+ * ApiError 构造函数参数。
+ * @typedef {object} ApiErrorOptions
+ * @property {number}  [status]
+ * @property {string}  [code]
+ * @property {Record<string, *>} [params]
+ * @property {string}  [type]      OpenAI 风格错误的 type
+ * @property {string}  [detail]
+ * @property {*}       [envelope]  服务端原始错误体
+ * @property {string}  [url]
+ * @property {string}  [method]
+ * @property {boolean} [aborted]
+ */
+
+/* ---------------------------------------------------------------------------
    ApiError：所有失败路径的统一类型
    --------------------------------------------------------------------------- */
 class ApiError extends Error {
+  /** @param {string} message @param {ApiErrorOptions} [opts] */
   constructor(message, opts = {}) {
     super(message || "");
     this.name = "ApiError";
@@ -132,6 +177,7 @@ class ApiError extends Error {
   get isNetwork() { return this.code === CODE.NETWORK; }
   /* 客户端自造错误（超时/网络/解析/形状），与服务端业务 code 区分 */
   get isClient() { return this.code.startsWith("CLIENT_"); }
+  /** @override */
   toString() {
     return "ApiError{" + this.code + " " + this.status + " " + this.message + "}";
   }
@@ -243,10 +289,10 @@ function errorFromThrown(e, url, method, timedOut, externalAborted) {
 /**
  * 唯一 HTTP 原语。
  * @param {string} path 相对路径（可含 {param} 占位）或绝对 URL
- * @param {object} opts  { method, body, query, params, headers, signal, timeout, raw, cache }
+ * @param {RequestOptions} [opts]  { method, body, query, params, headers, signal, timeout, raw, cache }
  * @returns {Promise<any>} 解析后的 JSON（空体为 null）；raw:true 时为 Response
  */
-function request(path, opts = {}) {
+function request(path, /** @type {RequestOptions} */ opts = {}) {
   const method = (opts.method || "GET").toUpperCase();
   const url = buildUrl(path, opts.params, opts.query);
   const timeout = opts.timeout === undefined ? DEFAULTS.timeout : opts.timeout;
@@ -317,13 +363,13 @@ const livePollers = new Set();
 
 /**
  * 启动一个轮询。
- * @param {string|function} path 请求路径（可传函数，返回路径字符串以便动态构造）
- * @param {function} handler (data) => void | Promise<void>，收到解析后的数据
- * @param {object} opts { interval, timeout, visibility, immediate, list, request, onError }
+ * @param {string|(() => string)} path 请求路径（可传函数，返回路径字符串以便动态构造）
+ * @param {(data: any) => void | Promise<void>} handler 收到解析后的数据
+ * @param {PollOptions} [opts] { interval, timeout, visibility, immediate, list, request, onError }
  *        list: true 走 list() 形状守卫（返回体非数组 → CLIENT_BAD_SHAPE 交 onError）
- * @returns {{stop: function, refresh: function}} refresh() 返回本轮的 Promise（可 await）
+ * @returns {{stop: () => void, refresh: () => Promise<void>}} refresh() 返回本轮的 Promise（可 await）
  */
-function poll(path, handler, opts = {}) {
+function poll(path, handler, /** @type {PollOptions} */ opts = {}) {
   const interval = opts.interval || DEFAULTS.pollInterval;
   const timeout = opts.timeout || DEFAULTS.pollTimeout;
   const visibility = opts.visibility !== false;
@@ -392,7 +438,8 @@ function stopAllPollers() {
   for (const h of Array.from(livePollers)) h.stop();
 }
 
-const root = window.AudioCppHub || {};
+/** @type {AudioCppHubRoot} */
+const root = window.AudioCppHub || /** @type {any} */ ({});
 root.api = {
   CODE,
   DEFAULTS,
