@@ -24,11 +24,11 @@ window.AudioPicker = class AudioPicker {
     this.root.classList.add("picker");
     this.root.innerHTML = `
       <div class="picker-title">${t(title)}</div>
-      <div class="picker-tabs">
-        <button type="button" class="picker-tab active" data-tab="upload">${t("picker.tabUpload")}</button>
-        <button type="button" class="picker-tab" data-tab="record">${t("picker.tabRecord")}</button>
-        <button type="button" class="picker-tab" data-tab="library">${t("picker.tabLibrary")}</button>
-        <button type="button" class="picker-tab" data-tab="path">${t("picker.tabPath")}</button>
+      <div class="picker-tabs" role="tablist">
+        <button type="button" class="picker-tab active" data-tab="upload" role="tab" aria-selected="true">${t("picker.tabUpload")}</button>
+        <button type="button" class="picker-tab" data-tab="record" role="tab" aria-selected="false">${t("picker.tabRecord")}</button>
+        <button type="button" class="picker-tab" data-tab="library" role="tab" aria-selected="false">${t("picker.tabLibrary")}</button>
+        <button type="button" class="picker-tab" data-tab="path" role="tab" aria-selected="false">${t("picker.tabPath")}</button>
       </div>
       <div class="picker-pane" data-pane="upload">
         <input type="file" accept="audio/*" class="file-input" hidden>
@@ -87,9 +87,14 @@ window.AudioPicker = class AudioPicker {
     this.$ = (sel) => this.root.querySelector(sel);
     this.canvas = this.$(".wave");
     this.ctx2d = this.canvas.getContext("2d");
-    // 波形与音量滑块的读屏标签
-    this.canvas.setAttribute("role", "img");
+    // 波形可交互（点击定位 / 拖选裁剪）：role=slider + tabindex，键盘方向键定位、
+    // Shift+方向键扩选、Enter 应用裁剪、Delete/Esc 清除选区
+    this.canvas.setAttribute("role", "slider");
     this.canvas.setAttribute("aria-label", t("picker.waveform"));
+    this.canvas.setAttribute("aria-valuemin", "0");
+    this.canvas.setAttribute("aria-valuemax", "0");
+    this.canvas.setAttribute("aria-valuenow", "0");
+    this.canvas.tabIndex = 0;
     this.$(".volume").setAttribute("aria-label", t("picker.volume"));
     this.audioEl = this.$(".player-el");
     this.recorder = null;
@@ -148,7 +153,11 @@ window.AudioPicker = class AudioPicker {
     // Tab 切换
     this.root.querySelectorAll(".picker-tab").forEach(tab => {
       tab.onclick = () => {
-        this.root.querySelectorAll(".picker-tab").forEach(t => t.classList.toggle("active", t === tab));
+        this.root.querySelectorAll(".picker-tab").forEach(t => {
+          const on = t === tab;
+          t.classList.toggle("active", on);
+          t.setAttribute("aria-selected", on ? "true" : "false");
+        });
         this.root.querySelectorAll(".picker-pane").forEach(p =>
           p.classList.toggle("hidden", p.dataset.pane !== tab.dataset.tab));
         if (tab.dataset.tab === "library") this.loadVoices();
@@ -194,6 +203,7 @@ window.AudioPicker = class AudioPicker {
     this.audioEl.onended = () => { this.$(".play-btn").textContent = t("picker.play"); };
     this.audioEl.ontimeupdate = () => {
       this.$(".time-cur").textContent = WavUtil.formatDuration(this.audioEl.currentTime);
+      this.canvas.setAttribute("aria-valuenow", (this.audioEl.currentTime || 0).toFixed(2));
       this.drawWave(this.audioEl.currentTime);
     };
     this.$(".rate").onchange = (e) => { this.audioEl.playbackRate = parseFloat(e.target.value); };
@@ -226,6 +236,40 @@ window.AudioPicker = class AudioPicker {
       dragStart = null;
     };
     this.canvas.onmouseleave = () => { dragStart = null; };
+    // 键盘操作波形：方向键定位（Home/End 到首尾），Shift+方向键扩选，Enter 应用，Del/Esc 清除
+    this.canvas.onkeydown = (e) => {
+      if (!this.audioBuffer || !this.duration) return;
+      const step = this.duration / 100;
+      let cursor = this.audioEl.currentTime || 0;
+      if (e.key === "ArrowLeft") cursor = Math.max(0, cursor - step);
+      else if (e.key === "ArrowRight") cursor = Math.min(this.duration, cursor + step);
+      else if (e.key === "Home") cursor = 0;
+      else if (e.key === "End") cursor = this.duration;
+      else if (e.key === "Enter") { if (this.selection) this.applyTrim(); return; }
+      else if (e.key === "Delete" || e.key === "Escape") {
+        // 拦截 Esc，避免冒泡到全局弹窗关闭逻辑
+        e.stopPropagation();
+        e.preventDefault();
+        this.selection = null;
+        this._kbAnchor = null;
+        this.updateTrimUi();
+        this.drawWave(this.audioEl.currentTime || 0);
+        return;
+      } else return;
+      e.preventDefault();
+      if (e.shiftKey) {
+        const anchor = this._kbAnchor != null ? this._kbAnchor : (this.selection ? this.selection.start : cursor);
+        this._kbAnchor = anchor;
+        this.selection = { start: Math.min(anchor, cursor), end: Math.max(anchor, cursor) };
+        this.updateTrimUi();
+      } else {
+        this._kbAnchor = cursor;
+        if (this.selection) { this.selection = null; this.updateTrimUi(); }
+        this.audioEl.currentTime = cursor;
+      }
+      this.canvas.setAttribute("aria-valuenow", cursor.toFixed(2));
+      this.drawWave(this.audioEl.currentTime || 0);
+    };
 
     // 裁剪
     this.$(".trim-apply").onclick = () => this.applyTrim();
@@ -283,6 +327,8 @@ window.AudioPicker = class AudioPicker {
     this.audioBuffer = buffer;
     this.duration = buffer.duration;
     this.selection = null;
+    this._kbAnchor = null;
+    this.canvas.setAttribute("aria-valuemax", this.duration.toFixed(2));
     this.previewVoiceId = null;
     this.$(".picker-common").classList.remove("hidden");
     this.$(".voice-use").classList.add("hidden");

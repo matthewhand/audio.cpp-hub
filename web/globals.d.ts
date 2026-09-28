@@ -9,18 +9,38 @@
  * 这些声明不参与运行（不是 .js，不被 <script> 加载）。
  */
 
+/* ---- i18n.zh.js / i18n.en.js → window.I18N_ZH / window.I18N_EN ----
+ * 两份词典是纯数据（点分命名空间键 → 文案），由 i18n.js 在初始化时读取。
+ * 值一般是字符串；emotion.labels 这类列表型字典值为数组。 */
+type I18nDict = Record<string, string | string[]>;
+declare const I18N_ZH: I18nDict;
+declare const I18N_EN: I18nDict;
+
 /* ---- i18n.js → window.I18N ---- */
 interface I18NApi {
   lang(): string;
+  /** 当前语言的 BCP-47 标签（zh-CN / en），供 Intl 使用 */
+  locale(): string;
   /** 列表型字典值（如 emotion.labels）原样返回数组，供 UI 列表渲染。
    *  新增数组型字典键时在此补一条重载，否则调用侧会按 string 处理而报错。 */
   t(key: "emotion.labels"): string[];
   /** 查字典并按 params 插值 {name} 占位符；查不到时返回 key 本身 */
   t(key: string, params?: Record<string, unknown>): string;
+  /** 复数文案：按 Intl.PluralRules 选 key.<category>，缺失回退 key.other；
+   *  count 会以 {n} 注入 params。例：plural("dl.fileCount", 3) */
+  plural(key: string, count: number, params?: Record<string, unknown>): string;
+  /** 本地化数字，opts 透传 Intl.NumberFormat */
+  num(n: number, opts?: Intl.NumberFormatOptions): string;
+  /** 本地化日期/时间，缺省 dateStyle=medium + timeStyle=short；非法值返回 "" */
+  date(v: Date | number | string, opts?: Intl.DateTimeFormatOptions): string;
+  /** 本地化字节大小（B/KB/MB/GB/TB），数字与单位均走 Intl */
+  bytes(n: number): string;
+  /** 本地化百分比，入参为 0..100 的数值 */
+  percent(n: number): string;
   setLang(next: string): void;
-  /** 批量替换 data-i18n / -placeholder / -title 标注 */
+  /** 批量替换 data-i18n / -placeholder / -title / -aria-label 标注 */
   applyI18n(root?: ParentNode): void;
-  /** 注册语言切换回调（app.js / AudioPicker / FileBrowser） */
+  /** 注册语言切换回调（app.js / AudioPicker / FileBrowser / VoicesPanel） */
   onChange(cb: () => void): void;
   /** 解析后端 {"code","params"} 错误体并翻译，无匹配 code 时原样返回 */
   errText(text: string): string;
@@ -30,6 +50,8 @@ interface I18NApi {
 declare const I18N: I18NApi;
 declare interface Window {
   I18N: I18NApi;
+  I18N_ZH: I18nDict;
+  I18N_EN: I18nDict;
 }
 
 /* ---- boot.js → window.HubTheme ----

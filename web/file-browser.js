@@ -24,18 +24,22 @@ window.FileBrowser = (() => {
 
   function buildOverlay() {
     overlay = document.createElement("div");
+    overlay.id = "fb-overlay";
     overlay.className = "modal-overlay fb-overlay hidden";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "fb-title");
     overlay.innerHTML = `
       <div class="modal fb-modal">
         <div class="modal-header">
-          <span class="modal-title fb-title">${t("fb.titleFile")}</span>
-          <button type="button" class="modal-close fb-close">×</button>
+          <span class="modal-title fb-title" id="fb-title">${t("fb.titleFile")}</span>
+          <button type="button" class="modal-close fb-close" aria-label="${t("history.closeTitle")}">×</button>
         </div>
         <div class="fb-toolbar">
-          <button type="button" class="fb-up" title="${t("fb.upTitle")}">${t("fb.up")}</button>
+          <button type="button" class="fb-up" title="${t("fb.upTitle")}" aria-label="${t("fb.upTitle")}">${t("fb.up")}</button>
           <input type="text" class="fb-path" placeholder="${t("fb.pathPlaceholder")}">
           <button type="button" class="fb-go">${t("fb.go")}</button>
-          <button type="button" class="fb-refresh" title="${t("fb.refreshTitle")}">⟳</button>
+          <button type="button" class="fb-refresh" title="${t("fb.refreshTitle")}" aria-label="${t("fb.refreshTitle")}">⟳</button>
         </div>
         <div class="fb-roots"></div>
         <div class="fb-subbar">
@@ -44,7 +48,7 @@ window.FileBrowser = (() => {
           <label class="checkbox-label fb-hidden-toggle"><input type="checkbox" class="fb-hidden"> ${t("fb.showHidden")}</label>
           <button type="button" class="fb-mkdir">${t("fb.mkdir")}</button>
         </div>
-        <div class="fb-list"></div>
+        <div class="fb-list" role="listbox"></div>
         <div class="fb-footer">
           <span class="fb-selection" title=""></span>
           <button type="button" class="fb-pick-current btn-ghost hidden">${t("fb.pickCurrent")}</button>
@@ -98,6 +102,7 @@ window.FileBrowser = (() => {
     buildExtFilter();
     loadRoots();
     overlay.classList.remove("hidden");
+    if (window.focusDialog) window.focusDialog(overlay);
     const start = (opts.startPath || "").trim();
     if (start) {
       navigate(start);
@@ -256,9 +261,12 @@ window.FileBrowser = (() => {
     for (const e of rows) {
       const row = document.createElement("div");
       row.className = "fb-row" + (e.path === selectedPath ? " selected" : "");
+      row.setAttribute("role", "option");
+      row.setAttribute("tabindex", "0");
+      row.setAttribute("aria-selected", e.path === selectedPath ? "true" : "false");
       const icon = e.dir ? "📁" : "📄";
       const size = e.dir ? "" : formatSize(e.size);
-      row.innerHTML = `<span class="fb-icon">${icon}</span>
+      row.innerHTML = `<span class="fb-icon" aria-hidden="true">${icon}</span>
         <span class="fb-name"></span>
         <span class="fb-size"></span>
         <span class="fb-mtime"></span>`;
@@ -268,6 +276,10 @@ window.FileBrowser = (() => {
       row.title = e.path;
       row.onclick = () => onRowClick(e);
       row.ondblclick = () => onRowDblClick(e);
+      row.onkeydown = (ev) => {
+        if (ev.key === "Enter" && e.dir) { ev.preventDefault(); navigate(e.path); }
+        else if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onRowClick(e); }
+      };
       list.appendChild(row);
     }
     updateFooter();
@@ -293,10 +305,10 @@ window.FileBrowser = (() => {
   function select(e) {
     selectedPath = e.path;
     selectedIsDir = e.dir;
-    overlay.querySelectorAll(".fb-row").forEach(r => r.classList.remove("selected"));
+    overlay.querySelectorAll(".fb-row").forEach(r => { r.classList.remove("selected"); r.setAttribute("aria-selected", "false"); });
     const rows = overlay.querySelectorAll(".fb-row");
     visibleEntries().forEach((item, i) => {
-      if (item.path === e.path && rows[i]) rows[i].classList.add("selected");
+      if (item.path === e.path && rows[i]) { rows[i].classList.add("selected"); rows[i].setAttribute("aria-selected", "true"); }
     });
     updateFooter();
   }
@@ -355,6 +367,7 @@ window.FileBrowser = (() => {
 
   function close() {
     if (overlay) overlay.classList.add("hidden");
+    if (window.restoreDialogFocus) window.restoreDialogFocus();
   }
 
   function setStatus(text) {
@@ -411,11 +424,7 @@ window.FileBrowser = (() => {
 
   function formatSize(bytes) {
     if (bytes == null) return "";
-    if (window.WavUtil && WavUtil.formatSize) return WavUtil.formatSize(bytes);
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + " MB";
-    return (bytes / 1024 / 1024 / 1024).toFixed(2) + " GB";
+    return I18N.bytes(bytes);
   }
 
   return { open, isOpen, cancel, relocalize };
