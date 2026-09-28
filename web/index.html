@@ -315,6 +315,16 @@
     </div>
   </div>
 
+  <!-- 命令面板：Ctrl/Cmd-K 打开，跳转模型 / 实例 / 面板 -->
+  <div id="command-palette" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="command-palette-title">
+    <div class="command-palette-card">
+      <span id="command-palette-title" class="hidden" data-i18n="palette.title">命令面板</span>
+      <input id="command-palette-input" type="text" autocomplete="off" spellcheck="false" data-i18n-placeholder="palette.placeholder" data-i18n-aria-label="palette.title" placeholder="搜索模型、实例或面板…">
+      <div id="command-palette-list" class="cp-list" role="listbox"></div>
+      <div class="cp-hint"><span data-i18n="palette.hint">↑↓ 选择 · Enter 打开 · Esc 关闭</span><span><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>K</kbd></span></div>
+    </div>
+  </div>
+
   <!-- 任务处理中等待遮罩 -->
   <div id="busy-overlay" class="modal-overlay hidden">
     <div class="busy-box">

@@ -108,6 +108,15 @@ window.I18N = (() => {
     "common.failedElapsed": "{verb}失败（耗时 {t}）：{msg}",
     "common.loadFailed": "加载失败",
     "common.retry": "重试",
+    "common.dismiss": "关闭",
+    /* ---------- 统一异步状态 / 命令面板 ---------- */
+    "state.loading": "加载中…",
+    "model.empty": "暂无模型",
+    "palette.title": "命令面板",
+    "palette.placeholder": "搜索模型、实例或面板…",
+    "palette.group.panels": "面板",
+    "palette.empty": "没有匹配项",
+    "palette.hint": "↑↓ 选择 · Enter 打开 · Esc 关闭",
     /* ---------- TTS 面板 ---------- */
     "tts.title": "语音合成",
     "tts.textLabel": "合成文本",
@@ -668,6 +677,15 @@ window.I18N = (() => {
     "common.failedElapsed": "{verb} failed (after {t}): {msg}",
     "common.loadFailed": "Failed to load",
     "common.retry": "Retry",
+    "common.dismiss": "Dismiss",
+    /* ---------- unified async state / command palette ---------- */
+    "state.loading": "Loading…",
+    "model.empty": "No models",
+    "palette.title": "Command palette",
+    "palette.placeholder": "Search models, instances or panels…",
+    "palette.group.panels": "Panels",
+    "palette.empty": "No matches",
+    "palette.hint": "↑↓ navigate · Enter open · Esc close",
     /* ---------- TTS panel ---------- */
     "tts.title": "Text to Speech",
     "tts.textLabel": "Text to synthesize",

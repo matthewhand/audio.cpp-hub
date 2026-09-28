@@ -166,9 +166,16 @@ declare interface EventTarget {
   closest?: (selector: string) => Element | null;
 }
 
-/* ---- api() 抛出的带状态码错误 ---- */
-/** app.js 的 api() 给 Error 挂 status，调用侧按 404 等状态码分支处理 */
-type HubHttpError = Error & { status?: number };
+/* ---- hub 错误信封：{"ok":false,"code","params","error"} ---- */
+/** app.js 的 parseApiError() 给 Error 挂 code/params（供 I18N 按 err.<code> 映射），
+ *  api() 抛出的 ApiError 则另带 status。见 api-client.js 的 ApiErrorOptions。 */
+type HubHttpError = Error & {
+  status?: number;
+  /** 后端错误码，如 "INSTANCE_NOT_FOUND"；缺失时由 stateErrorMessage 回退 message */
+  code?: string;
+  /** 错误参数，供 I18N.t(key, params) 插值 */
+  params?: Record<string, unknown>;
+};
 
 /* ---- api-client.js → window.AudioCppHub.api ----
  * 类型实现体在 web/api-client.js 顶部（@typedef RequestOptions/PollOptions/
@@ -212,6 +219,21 @@ interface AudioCppHubRoot {
 }
 declare interface Window {
   AudioCppHub: AudioCppHubRoot;
+}
+
+/* ---- app.js → window.hub* 路由 / 面板钩子 ----
+ * app.js 是 hash 路由的唯一应用方（applyRoute）；下列钩子供晚于它加载的
+ * voices-panel.js 等在按钮点击 / 关闭时与路由保持同步（#/voices 深链接、
+ * 面板再次点击收起）。内部实现（go/applyRoute/parseRoute…）不导出。 */
+declare interface Window {
+  /** 改 hash 触发 hashchange → applyRoute；同 hash 时直接重放（用于重试） */
+  hubNavigate(hash: string): void;
+  /** 页头按钮：同一面板再次点击则收起（回到默认模型路由） */
+  hubTogglePanel(route: string): void;
+  /** 重放一次 applyRoute（voices-panel.js 加载后补跑，使 #/voices 刷新可还原） */
+  hubApplyRoute(): void;
+  /** 由各 closeX() 调用：仅当当前路由仍指向该面板时才回退（避免误导航） */
+  hubPanelClosed(view: string): void;
 }
 
 /* ---- voices-panel.js → window.openVoicesPanel / window.closeVoicesPanel ---- */

@@ -21,10 +21,14 @@ window.openVoicesPanel = function () {
 function closeVoicesPanel() {
   $("voices-panel").classList.add("hidden");
   if (window.restoreDialogFocus) window.restoreDialogFocus();
+  if (window.hubPanelClosed) window.hubPanelClosed("voices");
 }
 window.closeVoicesPanel = closeVoicesPanel;
 
-$("voices-btn").onclick = window.openVoicesPanel;
+$("voices-btn").onclick = () => {
+  if (window.hubTogglePanel) window.hubTogglePanel("voices");
+  else window.openVoicesPanel();
+};
 $("voices-close").onclick = closeVoicesPanel;
 $("voices-panel").addEventListener("mousedown", (e) => {
   if (e.target === e.currentTarget) closeVoicesPanel();
@@ -34,11 +38,15 @@ $("voices-panel").addEventListener("mousedown", (e) => {
 async function loadVoices() {
   try {
     const res = await fetch("/api/voices");
-    if (!res.ok) throw new Error(I18N.errText(await res.text()));
+    if (!res.ok) {
+      const text = await res.text();
+      throw (window.parseApiError ? window.parseApiError(text) : new Error(I18N.errText(text)));
+    }
     const data = await res.json();
     voices = Array.isArray(data) ? data : [];
   } catch (e) {
     voices = [];
+    if (window.renderStateError) { window.renderStateError($("voices-list"), e, loadVoices); return; }
   }
   renderVoicesList();
 }
@@ -47,10 +55,17 @@ function renderVoicesList() {
   const list = $("voices-list");
   list.innerHTML = "";
   if (!voices.length) {
-    const hint = document.createElement("div");
-    hint.className = "hint history-empty";
-    hint.textContent = t("voices.empty");
-    list.appendChild(hint);
+    if (window.renderEmptyState) {
+      window.renderEmptyState(list, t("voices.empty"), {
+        label: t("voices.addTitle"),
+        onClick: () => { const n = $("voice-add-name"); if (n) n.focus(); }
+      });
+    } else {
+      const hint = document.createElement("div");
+      hint.className = "hint history-empty";
+      hint.textContent = t("voices.empty");
+      list.appendChild(hint);
+    }
     return;
   }
   for (const v of voices) list.appendChild(makeVoiceRow(v));
@@ -208,4 +223,8 @@ function afterChange() {
   loadVoices();
   if (window.refreshVoiceSelects) window.refreshVoiceSelects();
 }
+
+/* 本文件晚于 app.js 加载：app.js 初始化时 openVoicesPanel 尚未定义，
+   这里补跑一次路由，使 #/voices 深链接在刷新后也能打开 */
+if (window.hubApplyRoute) window.hubApplyRoute();
 })();
