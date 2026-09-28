@@ -229,6 +229,7 @@ function makeTrackRow(name, b64) {
   </div>`);
   row.dataset.blobUrl = url;
   row.querySelector(".track-name").textContent = name;
+  row.querySelector("audio").setAttribute("aria-label", name);
   row.querySelector("audio").src = url;
   const a = row.querySelector("a");
   a.textContent = t("common.download");

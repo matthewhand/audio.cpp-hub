@@ -44,12 +44,12 @@
       <span class="subtitle" data-i18n="header.subtitle">audiocpp_server 进程管理 &amp; 音频工作台</span>
     </div>
     <div class="header-actions">
-      <button id="voices-btn" class="theme-btn" data-i18n-title="voices.title" title="音色库">🎙</button>
-      <button id="history-btn" class="theme-btn" data-i18n-title="history.title" title="操作历史">🕘</button>
-      <button id="downloads-btn" class="theme-btn" data-i18n-title="dl.managerTitle" title="下载管理">⬇️<span id="dl-badge" class="dl-badge hidden">0</span></button>
-      <button id="lang-toggle" class="theme-btn" data-i18n-title="header.langTitle" title="切换语言 / Switch language">EN</button>
-      <button id="settings-btn" class="theme-btn" data-i18n-title="header.settingsTitle" title="可执行文件设置">⚙️</button>
-      <button id="theme-toggle" class="theme-btn" data-i18n-title="header.themeTitle" title="切换主题">☀️</button>
+      <button id="voices-btn" class="theme-btn" data-i18n-title="voices.title" data-i18n-aria-label="voices.title" title="音色库" aria-label="音色库">🎙</button>
+      <button id="history-btn" class="theme-btn" data-i18n-title="history.title" data-i18n-aria-label="history.title" title="操作历史" aria-label="操作历史">🕘</button>
+      <button id="downloads-btn" class="theme-btn" data-i18n-title="dl.managerTitle" data-i18n-aria-label="dl.managerTitle" title="下载管理" aria-label="下载管理">⬇️<span id="dl-badge" class="dl-badge hidden">0</span></button>
+      <button id="lang-toggle" class="theme-btn" data-i18n-title="header.langTitle" data-i18n-aria-label="header.langTitle" title="切换语言 / Switch language" aria-label="切换语言 / Switch language">EN</button>
+      <button id="settings-btn" class="theme-btn" data-i18n-title="header.settingsTitle" data-i18n-aria-label="header.settingsTitle" title="可执行文件设置" aria-label="可执行文件设置">⚙️</button>
+      <button id="theme-toggle" class="theme-btn" data-i18n-title="header.themeTitle" data-i18n-aria-label="header.themeTitle" title="切换主题" aria-label="切换主题">☀️</button>
     </div>
   </header>
 
@@ -99,19 +99,19 @@
 
           <div id="tts-emotion-block" class="hidden">
             <div class="tabs" role="tablist" data-i18n-aria-label="emotion.tabsLabel" aria-label="情感模式">
-              <button class="tab active" data-mode="none" role="tab" aria-selected="true" data-i18n="emotion.tab.none">无</button>
-              <button class="tab" data-mode="emotion_audio" role="tab" aria-selected="false" data-i18n="emotion.tab.emotion_audio">情感参考音频</button>
-              <button class="tab" data-mode="emotion_vector" role="tab" aria-selected="false" data-i18n="emotion.tab.emotion_vector">情感向量</button>
-              <button class="tab" data-mode="emotion_text" role="tab" aria-selected="false" data-i18n="emotion.tab.emotion_text">情感文本</button>
+              <button class="tab active" data-mode="none" role="tab" aria-selected="true" aria-controls="emotion-pane-none" tabindex="0" data-i18n="emotion.tab.none">无</button>
+              <button class="tab" data-mode="emotion_audio" role="tab" aria-selected="false" aria-controls="emotion-pane-emotion_audio" tabindex="-1" data-i18n="emotion.tab.emotion_audio">情感参考音频</button>
+              <button class="tab" data-mode="emotion_vector" role="tab" aria-selected="false" aria-controls="emotion-pane-emotion_vector" tabindex="-1" data-i18n="emotion.tab.emotion_vector">情感向量</button>
+              <button class="tab" data-mode="emotion_text" role="tab" aria-selected="false" aria-controls="emotion-pane-emotion_text" tabindex="-1" data-i18n="emotion.tab.emotion_text">情感文本</button>
             </div>
-            <div id="emotion-pane-none" class="emotion-pane" data-i18n="emotion.paneNone">跟随说话人参考音频的情感。</div>
-            <div id="emotion-pane-emotion_audio" class="emotion-pane hidden">
+            <div id="emotion-pane-none" class="emotion-pane" role="tabpanel" data-i18n="emotion.paneNone">跟随说话人参考音频的情感。</div>
+            <div id="emotion-pane-emotion_audio" class="emotion-pane hidden" role="tabpanel">
               <div id="emotion-picker"></div>
             </div>
-            <div id="emotion-pane-emotion_vector" class="emotion-pane hidden">
+            <div id="emotion-pane-emotion_vector" class="emotion-pane hidden" role="tabpanel">
               <div id="emotion-sliders"></div>
             </div>
-            <div id="emotion-pane-emotion_text" class="emotion-pane hidden">
+            <div id="emotion-pane-emotion_text" class="emotion-pane hidden" role="tabpanel">
               <label><span data-i18n="emotion.textLabel">情感描述</span><input id="tts-emotion-text" type="text" data-i18n-placeholder="emotion.textPlaceholder" placeholder="例如：愤怒、悲伤"></label>
               <div class="hint" data-i18n="emotion.hintAuto">留空则从合成文本自动推断。</div>
             </div>
@@ -189,7 +189,7 @@
           <div id="other-voice-block"><div id="other-voice-picker"></div></div>
           <div id="other-language-row"></div>
           <div id="other-fields"></div>
-          <label><span data-i18n="other.extraLabel">额外参数（JSON，合并进请求）</span><textarea id="other-extra" rows="3" placeholder='{"seed": 42}'></textarea></label>
+          <label><span data-i18n="other.extraLabel">额外参数（JSON，合并进请求）</span><textarea id="other-extra" rows="3" data-i18n-placeholder="other.extraPlaceholder" placeholder='{"seed": 42}'></textarea></label>
           <button id="other-submit" class="btn" data-i18n="other.submit">运行</button>
           <div id="other-msg" class="msg" role="status" aria-live="polite"></div>
           <div id="other-stats" class="task-stats" aria-live="polite"></div>
@@ -287,7 +287,7 @@
       </div>
       <details id="launch-advanced">
         <summary data-i18n="launch.advanced">高级参数（session_options）</summary>
-        <textarea id="launch-adv-options" rows="4" spellcheck="false" placeholder="voxcpm2.weight_type=q8_0"></textarea>
+        <textarea id="launch-adv-options" rows="4" spellcheck="false" data-i18n-placeholder="launch.advOptionsPlaceholder" placeholder="voxcpm2.weight_type=q8_0"></textarea>
         <div class="hint" data-i18n="launch.advancedHint">每行一个 key=value，写入 server.json 模型条目的 session_options</div>
       </details>
       <div id="exec-empty-hint" class="hint hidden"><span data-i18n="launch.execEmpty">尚未配置可执行文件</span>
@@ -463,8 +463,8 @@
             <div class="exec-section-title" data-i18n="https.generateTitle">生成自签证书</div>
             <div class="hint" data-i18n="https.generateDesc">基于 JDK 自带 keytool 生成自签 CA 与服务器证书；生成后需重启程序。主机名与 IP 会写入证书 SAN，供局域网访问使用。</div>
             <div class="grid">
-              <label class="span-all"><span data-i18n="https.hostnames">主机名（每行一个，可选）</span><textarea id="https-hostnames" rows="2" placeholder="my-pc&#10;my-pc.local"></textarea></label>
-              <label class="span-all"><span data-i18n="https.ips">IP 地址（每行一个，可选）</span><textarea id="https-ips" rows="2" placeholder="192.168.1.10"></textarea></label>
+              <label class="span-all"><span data-i18n="https.hostnames">主机名（每行一个，可选）</span><textarea id="https-hostnames" rows="2" data-i18n-placeholder="https.hostnamesPlaceholder" placeholder="my-pc&#10;my-pc.local"></textarea></label>
+              <label class="span-all"><span data-i18n="https.ips">IP 地址（每行一个，可选）</span><textarea id="https-ips" rows="2" data-i18n-placeholder="https.ipsPlaceholder" placeholder="192.168.1.10"></textarea></label>
               <label><span data-i18n="https.validity">有效期（天）</span><input id="https-validity" type="number" min="1" value="3650"></label>
               <label><span data-i18n="https.keysize">密钥长度</span>
                 <select id="https-keysize">

@@ -72,6 +72,7 @@
       "label": "launch.title",
       "i18n": [
         "history.closeTitle",
+        "launch.advOptionsPlaceholder",
         "launch.advanced",
         "launch.advancedHint",
         "launch.backend",
@@ -147,7 +148,7 @@
       "id": "panel-other",
       "kind": "panel",
       "label": "other.title",
-      "i18n": ["other.extraLabel", "other.submit", "other.title"]
+      "i18n": ["other.extraLabel", "other.extraPlaceholder", "other.submit", "other.title"]
     },
     {
       "id": "panel-sep",
@@ -209,7 +210,9 @@
         "https.generateDesc",
         "https.generateTitle",
         "https.hostnames",
+        "https.hostnamesPlaceholder",
         "https.ips",
+        "https.ipsPlaceholder",
         "https.keysize",
         "https.password",
         "https.passwordPlaceholder",
@@ -278,7 +281,9 @@
         "https.generateDesc",
         "https.generateTitle",
         "https.hostnames",
+        "https.hostnamesPlaceholder",
         "https.ips",
+        "https.ipsPlaceholder",
         "https.keysize",
         "https.password",
         "https.passwordPlaceholder",
@@ -329,7 +334,7 @@
       "id": "downloads-btn",
       "tag": "button",
       "type": null,
-      "i18n": ["dl.managerTitle"],
+      "i18n": ["dl.managerTitle", "dl.managerTitle"],
       "handlers": [{ "event": "click", "sources": ["web/modules/downloads.js"] }]
     },
     {
@@ -402,7 +407,7 @@
       "id": "history-btn",
       "tag": "button",
       "type": null,
-      "i18n": ["history.title"],
+      "i18n": ["history.title", "history.title"],
       "handlers": [{ "event": "click", "sources": ["web/modules/sidebar.js"] }]
     },
     {
@@ -468,8 +473,20 @@
       "i18n": ["https.generate"],
       "handlers": [{ "event": "click", "sources": ["web/modules/settings.js"] }]
     },
-    { "id": "https-hostnames", "tag": "textarea", "type": null, "i18n": [], "handlers": [] },
-    { "id": "https-ips", "tag": "textarea", "type": null, "i18n": [], "handlers": [] },
+    {
+      "id": "https-hostnames",
+      "tag": "textarea",
+      "type": null,
+      "i18n": ["https.hostnamesPlaceholder"],
+      "handlers": []
+    },
+    {
+      "id": "https-ips",
+      "tag": "textarea",
+      "type": null,
+      "i18n": ["https.ipsPlaceholder"],
+      "handlers": []
+    },
     { "id": "https-keysize", "tag": "select", "type": null, "i18n": [], "handlers": [] },
     {
       "id": "https-password",
@@ -511,10 +528,16 @@
       "id": "lang-toggle",
       "tag": "button",
       "type": null,
-      "i18n": ["header.langTitle"],
+      "i18n": ["header.langTitle", "header.langTitle"],
       "handlers": [{ "event": "click", "sources": ["web/modules/shell.js"] }]
     },
-    { "id": "launch-adv-options", "tag": "textarea", "type": null, "i18n": [], "handlers": [] },
+    {
+      "id": "launch-adv-options",
+      "tag": "textarea",
+      "type": null,
+      "i18n": ["launch.advOptionsPlaceholder"],
+      "handlers": []
+    },
     { "id": "launch-backend", "tag": "select", "type": null, "i18n": [], "handlers": [] },
     {
       "id": "launch-btn",
@@ -655,7 +678,13 @@
       "i18n": ["music.submit"],
       "handlers": [{ "event": "click", "sources": ["web/modules/panels.js"] }]
     },
-    { "id": "other-extra", "tag": "textarea", "type": null, "i18n": [], "handlers": [] },
+    {
+      "id": "other-extra",
+      "tag": "textarea",
+      "type": null,
+      "i18n": ["other.extraPlaceholder"],
+      "handlers": []
+    },
     {
       "id": "other-submit",
       "tag": "button",
@@ -688,7 +717,7 @@
       "id": "settings-btn",
       "tag": "button",
       "type": null,
-      "i18n": ["header.settingsTitle"],
+      "i18n": ["header.settingsTitle", "header.settingsTitle"],
       "handlers": [{ "event": "click", "sources": ["web/modules/settings.js"] }]
     },
     {
@@ -709,7 +738,7 @@
       "id": "theme-toggle",
       "tag": "button",
       "type": null,
-      "i18n": ["header.themeTitle"],
+      "i18n": ["header.themeTitle", "header.themeTitle"],
       "handlers": [{ "event": "click", "sources": ["web/modules/shell.js"] }]
     },
     { "id": "tts-download", "tag": "a", "type": null, "i18n": ["tts.download"], "handlers": [] },
@@ -787,7 +816,7 @@
       "id": "voices-btn",
       "tag": "button",
       "type": null,
-      "i18n": ["voices.title"],
+      "i18n": ["voices.title", "voices.title"],
       "handlers": [{ "event": "click", "sources": ["web/voices-panel.js"] }]
     },
     {
@@ -814,8 +843,8 @@
   ],
   "dataHooks": [
     { "name": "data-i18n", "count": 125 },
-    { "name": "data-i18n-aria-label", "count": 18 },
-    { "name": "data-i18n-placeholder", "count": 18 },
+    { "name": "data-i18n-aria-label", "count": 24 },
+    { "name": "data-i18n-placeholder", "count": 22 },
     { "name": "data-i18n-title", "count": 9 },
     { "name": "data-mode", "count": 4 },
     { "name": "data-section", "count": 3 },
@@ -824,14 +853,17 @@
   "shortcuts": [
     { "key": " ", "negated": false, "source": "web/audio-picker.js" },
     { "key": " ", "negated": false, "source": "web/file-browser.js" },
+    { "key": "ArrowDown", "negated": false, "source": "web/file-browser.js" },
     { "key": "ArrowDown", "negated": false, "source": "web/modules/async-ui.js" },
     { "key": "ArrowDown", "negated": false, "source": "web/modules/command-palette.js" },
     { "key": "ArrowLeft", "negated": false, "source": "web/audio-picker.js" },
     { "key": "ArrowRight", "negated": false, "source": "web/audio-picker.js" },
+    { "key": "ArrowUp", "negated": false, "source": "web/file-browser.js" },
     { "key": "ArrowUp", "negated": false, "source": "web/modules/async-ui.js" },
     { "key": "ArrowUp", "negated": false, "source": "web/modules/command-palette.js" },
     { "key": "Delete", "negated": false, "source": "web/audio-picker.js" },
     { "key": "End", "negated": false, "source": "web/audio-picker.js" },
+    { "key": "End", "negated": false, "source": "web/file-browser.js" },
     { "key": "End", "negated": false, "source": "web/modules/async-ui.js" },
     { "key": "Enter", "negated": false, "source": "web/audio-picker.js" },
     { "key": "Enter", "negated": false, "source": "web/file-browser.js" },
@@ -843,6 +875,7 @@
     { "key": "Escape", "negated": false, "source": "web/modules/models.js" },
     { "key": "Escape", "negated": false, "source": "web/modules/sidebar.js" },
     { "key": "Home", "negated": false, "source": "web/audio-picker.js" },
+    { "key": "Home", "negated": false, "source": "web/file-browser.js" },
     { "key": "Home", "negated": false, "source": "web/modules/async-ui.js" },
     { "key": "k", "negated": false, "source": "web/modules/command-palette.js" },
     { "key": "K", "negated": false, "source": "web/modules/command-palette.js" },
@@ -879,6 +912,7 @@
       "path": "/api/executables/{param}/devices",
       "sources": ["web/modules/launch.js"]
     },
+    { "method": "GET", "path": "/api/fs/list", "sources": ["web/file-browser.js"] },
     { "method": "GET", "path": "/api/fs/list?path={param}", "sources": ["web/file-browser.js"] },
     { "method": "POST", "path": "/api/fs/mkdir", "sources": ["web/file-browser.js"] },
     { "method": "GET", "path": "/api/fs/roots", "sources": ["web/file-browser.js"] },

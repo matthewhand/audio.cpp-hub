@@ -102,6 +102,12 @@ jobs:
       - name: i18n 中英键对齐（zh/en parity）
         run: npm run check:i18n
 
+      # 同样只有本脚本能看见的一类回归：web/sw.js 的 PRECACHE_URLS 漏掉首屏资源
+      # （index.html 引用 / app.js 的 ES module 传递闭包）。install 走 allSettled，
+      # 漏项不会让安装失败，只在离线冷启动时白屏，因此必须有静态闸门。
+      - name: Service Worker 预缓存覆盖
+        run: npm run check:sw
+
   frontend:
     name: 前端（单元 / e2e / 清单 / 预算 / 无障碍）
     runs-on: ubuntu-latest

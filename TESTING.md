@@ -9,6 +9,8 @@
 | `npm run ui:inventory` | 生成 `ui_inventory.json` 与 `docs/ui.md` |
 | `npm run ui:inventory:check` | 校验两者与源码一致（CI 防漂移） |
 | `npm run perf:budget` | 首屏 JS/CSS raw+gzip 体积与请求数预算检查，并校验「模块图 / modulepreload / SW 预缓存」三方一致 |
+| `npm run check:i18n` | 中英词典键一一对应 + 占位符一致 + `index.html` 里 `data-i18n*` 引用键都存在 |
+| `npm run check:sw` | `web/sw.js` 的 `PRECACHE_URLS` 覆盖 index.html 本地引用、模块图传递闭包与固定外壳 |
 
 前置：Node ≥ 22（本仓库使用 v22）、`npm ci` 装 devDependencies（仅 `@playwright/test`）。首次跑 e2e 前如本机无浏览器：`npx playwright install chromium`。
 
@@ -158,6 +160,14 @@
 漏掉 `modulepreload` 不会让页面报错，只会让那个模块悄悄退回串行取；漏掉 SW 预缓存不会让
 安装失败（`install` 用 `allSettled`），但离线冷启动会在该脚本处断掉。两者都必须靠检查挡住。
 
+`perf:budget` 的三方一致只覆盖 **ES module 图**；`index.html` 里那些**经典脚本**
+（`i18n.zh.js` / `i18n.en.js` / `api-client.js` / `file-browser.js` / `audio-picker.js` …）
+漏出预缓存时它看不见，而这批脚本缺任意一个都会让离线首屏直接崩（`i18n.js` 读不到
+`window.I18N_ZH`、模块图拿不到 `Api`）。`npm run check:sw` 补上这一段：静态遍历
+`index.html` 的 `<script src>` / `<link rel=stylesheet>` 引用 + 从这些入口出发的 ES module
+静态 `import` 传递闭包，核对 `web/sw.js` 的 `PRECACHE_URLS` 与固定外壳项。只读校验，绝不
+改 `web/`；有缺失即退出 1（CI `web-toolchain` job 执行）。
+
 ### 历次重新标定说明
 
 > **更早的两轮**（数字取自当时的树形，保留以便对照）：原预算（280/80/56/14 KiB、12 个请求）
@@ -186,7 +196,7 @@
 
 `.github/workflows/ci.yml` 中：
 
-- **`web-toolchain` job**（开发期类型 / Lint / 格式硬闸门）：`npm ci` → `check:types`（tsc `--checkJs`，noEmit）→ `lint`（ESLint flat config）→ `format:check`（Prettier）。该 job 不需要浏览器，故 `npm ci` 带 `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`（`@playwright/test` 同在 devDependencies 里，其 postinstall 会被跳过；浏览器由下面的 job 安装）。
+- **`web-toolchain` job**（开发期类型 / Lint / 格式硬闸门）：`npm ci` → `check:types`（tsc `--checkJs`，noEmit）→ `lint`（ESLint flat config）→ `format:check`（Prettier）→ `check:i18n`（中英键 + HTML 引用键）→ `check:sw`（SW 预缓存覆盖）。该 job 不需要浏览器，故 `npm ci` 带 `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`（`@playwright/test` 同在 devDependencies 里，其 postinstall 会被跳过；浏览器由下面的 job 安装）。
 - **`frontend` job**（本文件描述的测试链）：`npm ci` → `test:unit` → `ui:inventory:check` → `perf:budget` → `playwright install --with-deps chromium` → `test:e2e` → 上传 Playwright 报告（失败也上传）。
 
 两个 job 与 Go 的 `quality` / `diagrams` job 并行、互不影响；所有 action 均按 commit SHA 固定。

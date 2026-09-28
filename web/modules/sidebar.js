@@ -213,6 +213,8 @@ export function makeGroupHeaderRow(gid, name, count, collapsed) {
   </div>`);
   const toggle = row.querySelector(".group-toggle");
   toggle.textContent = collapsed ? "▸" : "▾";
+  toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  toggle.setAttribute("aria-label", t(collapsed ? "history.groupExpand" : "history.groupCollapse", { name }));
   toggle.onclick = () => { groupCollapsed.set(gid, !collapsed); renderSidebarList(); };
   row.querySelector(".group-name").textContent = name;
   row.querySelector(".group-count").textContent = I18N.plural("history.groupCount", count);
@@ -403,12 +405,14 @@ export function buildHistoryDetail(item, rec) {
   }
   // 音色 / 提示词
   const voiceLines = [];
-  if (voice.kind === "speaker" && voice.speaker) voiceLines.push("speaker: " + voice.speaker);
+  if (voice.kind === "speaker" && voice.speaker) {
+    voiceLines.push(t("history.detailSpeaker", { name: voice.speaker }));
+  }
   if (voice.instruct) voiceLines.push(masked ? t("history.masked") : voice.instruct);
   if (rec.options && rec.options.instruction) {
     voiceLines.push(masked ? t("history.masked") : String(rec.options.instruction));
   }
-  if (rec.language) voiceLines.push("language: " + rec.language);
+  if (rec.language) voiceLines.push(t("history.detailLanguage", { lang: rec.language }));
   if (voiceLines.length) {
     const sec = addSection(t("history.detailVoice"));
     const div = el(`<div class="detail-text"></div>`);
@@ -445,14 +449,17 @@ export function buildRefAudioRow(modelId, taskId, name, origName) {
   nameEl.title = nameEl.textContent;
   const audio = row.querySelector("audio");
   const playBtn = row.querySelector(".ref-play");
+  const refLabel = origName || name;
+  audio.setAttribute("aria-label", refLabel);
+  playBtn.setAttribute("aria-label", t("history.playNamed", { name: refLabel }));
   playBtn.textContent = t("history.play");
   playBtn.onclick = () => {
     if (!audio.src) { audio.src = url; audio.classList.remove("hidden"); }
     if (audio.paused) audio.play(); else audio.pause();
   };
-  audio.onplay = () => { playBtn.textContent = t("history.pause"); };
-  audio.onpause = () => { playBtn.textContent = t("history.play"); };
-  audio.onended = () => { playBtn.textContent = t("history.play"); };
+  audio.onplay = () => { playBtn.textContent = t("history.pause"); playBtn.setAttribute("aria-label", t("history.pauseNamed", { name: refLabel })); };
+  audio.onpause = () => { playBtn.textContent = t("history.play"); playBtn.setAttribute("aria-label", t("history.playNamed", { name: refLabel })); };
+  audio.onended = () => { playBtn.textContent = t("history.play"); playBtn.setAttribute("aria-label", t("history.playNamed", { name: refLabel })); };
   const a = row.querySelector("a");
   a.textContent = t("history.download");
   a.href = url;
@@ -502,6 +509,9 @@ export function makeHistoryRow(item) {
     </div>`);
     const audio = player.querySelector("audio");
     const playBtn = player.querySelector(".history-play");
+    const rowLabel = (item.text || t("history.noText")).slice(0, 60);
+    audio.setAttribute("aria-label", rowLabel);
+    playBtn.setAttribute("aria-label", t("history.playNamed", { name: rowLabel }));
     playBtn.textContent = t("history.play");
     playBtn.onclick = () => {
       if (!audio.src) {
@@ -511,9 +521,9 @@ export function makeHistoryRow(item) {
       if (audio.paused) audio.play();
       else audio.pause();
     };
-    audio.onplay = () => { playBtn.textContent = t("history.pause"); };
-    audio.onpause = () => { playBtn.textContent = t("history.play"); };
-    audio.onended = () => { playBtn.textContent = t("history.play"); };
+    audio.onplay = () => { playBtn.textContent = t("history.pause"); playBtn.setAttribute("aria-label", t("history.pauseNamed", { name: rowLabel })); };
+    audio.onpause = () => { playBtn.textContent = t("history.play"); playBtn.setAttribute("aria-label", t("history.playNamed", { name: rowLabel })); };
+    audio.onended = () => { playBtn.textContent = t("history.play"); playBtn.setAttribute("aria-label", t("history.playNamed", { name: rowLabel })); };
     const a = player.querySelector("a");
     a.textContent = t("history.download");
     a.href = audioUrl;

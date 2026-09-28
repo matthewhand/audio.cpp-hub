@@ -93,7 +93,7 @@ export function renderDownloadList() {
       <span class="badge ${DL_STATUS_CLASS[d.status] || "stopped"}">${esc(t("dl.status." + d.status))}</span>
     </div>
     <div class="dl-progress"><div class="dl-progress-fill${!pctOk || pct < 0 ? " indeterminate" : ""}" style="width:${pctShown}%"></div></div>
-    <div class="dl-row-meta">${esc(fmtBytes(d.downloadedBytes))} / ${esc(fmtBytes(d.totalBytes))}${pctOk && pct >= 0 ? ` ｜ ${esc(I18N.percent(pctShown))}` : ""}${d.status === "RUNNING" && d.speedBps > 0 ? ` ｜ ${esc(fmtBytes(d.speedBps))}/s` : ""} ｜ ${esc(t("dl.fileProgress", { done: d.completedFiles, n: d.fileCount }))}</div>`;
+    <div class="dl-row-meta">${esc(fmtBytes(d.downloadedBytes))} / ${esc(fmtBytes(d.totalBytes))}${pctOk && pct >= 0 ? ` ｜ ${esc(I18N.percent(pctShown))}` : ""}${d.status === "RUNNING" && d.speedBps > 0 ? ` ｜ ${esc(t("dl.speed", { v: fmtBytes(d.speedBps) }))}` : ""} ｜ ${esc(t("dl.fileProgress", { done: d.completedFiles, n: d.fileCount }))}</div>`;
     if (d.status === "FAILED" && d.error) {
       html += `<div class="error-text">${esc(d.error)}</div>`;
     }
@@ -194,7 +194,7 @@ export function renderMdlPackages() {
     const name = row.querySelector(".dl-package-name");
     name.textContent = p.displayName || p.id;
     if (p.default) name.appendChild(el(` <span class="badge ready">${t("dl.recommended")}</span>`));
-    if (p.gated) name.appendChild(el(` <span class="badge stopped">gated</span>`));
+    if (p.gated) name.appendChild(el(` <span class="badge stopped">${t("dl.gated")}</span>`));
     c.appendChild(row);
   });
 }
