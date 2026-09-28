@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - '**'
+      - "**"
   pull_request:
 
 permissions:
@@ -60,3 +60,33 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: 校验图示 HTML（role=img / aria / 无远程依赖）
         run: python3 scripts/check-diagrams.py docs/diagrams
+
+  web-toolchain:
+    name: 前端 / 类型 · Lint · 格式（开发期工具链）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: 设置 Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装工具链依赖（仅 devDependencies，运行期零构建）
+        run: npm ci
+
+      # 硬闸门（ratchet）：tsc --checkJs 与 ESLint 在合并前必须零错误，不使用基线文件豁免。
+      # 已知降级集中记录在 web/globals.d.ts / .prettierignore / web/README.md，
+      # 均为显式声明而非静默关闭检查。
+      - name: 类型检查（tsc --checkJs，noEmit）
+        run: npm run check:types
+
+      - name: Lint（ESLint flat config）
+        run: npm run lint
+
+      - name: 格式检查（Prettier，范围见 .prettierignore）
+        run: npm run format:check

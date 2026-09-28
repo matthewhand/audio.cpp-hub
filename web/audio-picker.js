@@ -536,8 +536,6 @@ window.AudioPicker = class AudioPicker {
     this.setMsg(t("picker.currentAudio", { name: voice.name }));
   }
 
-
-
   /* ---------- 本地路径 ---------- */
   /* 通过服务器端文件选择器挑选音频文件，选好后自动探测 */
   async browsePath() {
