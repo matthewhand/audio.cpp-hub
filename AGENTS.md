@@ -18,7 +18,7 @@ audio.cpp-hub 是 [audio.cpp](https://github.com/0xShug0/audio.cpp) 的 Web 管�
 - Windows 系统托盘（`tray_windows.go`，`getlantern/systray`；菜单：打开首页 / 开机自启 / 退出程序；开机自启在 Startup 目录创建 `audio.cpp-hub.lnk` 快捷方式；`-ldflags="-H windowsgui"` 编译无控制台窗口，日志 tee 到 `logs/hub.log`；非 Windows 走 `tray_other.go` 无托盘）；启动时 `ensureWorkDir` 自动定位工作目录（cwd 无 web/ 时尝试上级目录与 exe 目录，双击 exe 也能跑）
 - 版本号：`main.go` 的 `var version = "dev"`，CI 用 `-ldflags "-X main.version=<tag>"` 注入，启动日志带版本号
 - Web UI 前端（`web/`）：仍是**纯原生 HTML/CSS/JS、运行时零构建**（Go 的 `staticHandler` 直接从磁盘提供），但内部结构已系统化，与旧版单文件脚本集不同：
-  - **i18n 拆成「词典 + 运行时」**：`web/i18n.zh.js`（`window.I18N_ZH`，597 行）与 `web/i18n.en.js`（`window.I18N_EN`，598 行）是纯数据词典（各 564 键，`node scripts/check-i18n-parity.js` 校验对等）；`web/i18n.js`（155 行）不含任何文案，只在初始化时读这两个全局（`web/i18n.js:13`–`14`）并导出 `window.I18N` 契约（`web/i18n.js:154`）：`lang` / `locale` / `t` / `plural` / `num` / `date` / `bytes` / `percent` / `setLang` / `applyI18n` / `onChange` / `errText` / `pick`。词典文件必须先于 `i18n.js` 加载（顺序硬约束，见 `web/index.html:472`–`474`）
+  - **i18n 拆成「词典 + 运行时」**：`web/i18n.zh.js`（`window.I18N_ZH`，611 行）与 `web/i18n.en.js`（`window.I18N_EN`，612 行）是纯数据词典（各 578 键，`node scripts/check-i18n-parity.js` 校验对等**并校验 `web/*.html` 里 `data-i18n*` 引用键都存在**——两侧同时漏配的键只有这条能看见）；`web/i18n.js`（155 行）不含任何文案，只在初始化时读这两个全局（`web/i18n.js:13`–`14`）并导出 `window.I18N` 契约（`web/i18n.js:154`）：`lang` / `locale` / `t` / `plural` / `num` / `date` / `bytes` / `percent` / `setLang` / `applyI18n` / `onChange` / `errText` / `pick`。词典文件必须先于 `i18n.js` 加载（顺序硬约束，见 `web/index.html:472`–`474`）
   - **HTTP 唯一出口**：`web/api-client.js`（459 行）暴露 `window.AudioCppHub.api`（`web/api-client.js:443`，下称 `Api`），集中 `fetch`、错误信封（`ApiError` 把 hub 风格与 `/v1/*` 的 OpenAI 风格归一）、`AbortController` 超时/中断、数组形状守卫与**可见性感知轮询** `Api.poll`（`web/api-client.js:372`，自调度不叠加请求、单飞、标签页隐藏时暂停并在恢复后补一次，句柄 `stop()` / `refresh()`）。业务侧统一经 `web/modules/api.js` 绑定后 `import { Api } from "./api.js"`；**新增请求一律走 `Api.*`，不再直接写 `fetch`**
   - **`web/app.js` 是薄引导层**（119 行：导入模块、跨模块重画 `rerenderAll` `web/app.js:45`、最上层弹窗的 Esc/Tab 焦点锁定 `web/app.js:64`、按序建立 2s 轮询 `web/app.js:110`–`112`、首屏末尾应用初始 hash `web/app.js:119`）；业务逻辑按职责拆进 `web/modules/` 的 20 个模块（`dom` / `i18n-bridge` / `api` / `state` / `async-ui` / `ui` / `routing` / `command-palette` / `shell` / `models` / `settings` / `launch` / `instances` / `downloads` / `events` / `results` / `tasks` / `sidebar` / `panels` / `pickers`）。模块是浏览器原生 ES 模块，**不打包、不转译**；经典组件脚本（`audio-picker.js` / `voice-select.js` / `voices-panel.js` / `file-browser.js`）与模块之间的桥是 `web/legacy-globals.js`。完整模块地图、状态与轮询模型、编码约定见 `web/README.md`
   - **绘制前恢复**：`web/boot.js`（58 行）在 `<head>` 中、样式表之前同步解析 `localStorage` 的 `hub-theme` / `hub-lang` 并写 `<html data-theme>`，避免首屏主题闪烁（独立文件是为满足 CSP `script-src 'self'`，不允许内联脚本），同时把解析逻辑挂成 `window.HubTheme`（三态 system/light/dark，`web/boot.js:53`）供 `web/modules/shell.js` 复用
@@ -84,7 +84,7 @@ web/                      # 前端静态文件（无构建步骤、运行时零 
 ├── modules/              # 20 个业务模块（dom / state / async-ui / ui / routing / command-palette /
 │                         # shell / models / settings / launch / instances / downloads / events /
 │                         # results / tasks / sidebar / panels / pickers / api / i18n-bridge）
-├── i18n.zh.js / i18n.en.js  # 中 / 英词典（window.I18N_ZH / I18N_EN，各 564 键，纯数据）
+├── i18n.zh.js / i18n.en.js  # 中 / 英词典（window.I18N_ZH / I18N_EN，各 578 键，纯数据）
 ├── i18n.js               # I18N 运行时（window.I18N，不含文案），见「项目概述」的 Web UI 条目
 ├── api-client.js         # 唯一 HTTP 出口（window.AudioCppHub.api：ApiError / poll / list）
 ├── legacy-globals.js     # 经典脚本 ↔ ES 模块的桥（window.$ / el + 转发器）
@@ -97,7 +97,7 @@ web/                      # 前端静态文件（无构建步骤、运行时零 
 └── icons/                # PWA 图标（由 scripts/gen-icons.cjs 生成）
 test/unit/                # node:test 单元测试（wav / i18n / app-utils / file-browser）
 e2e/                      # Playwright e2e（9 个 spec，headless Chromium + mock 后端，无 Go/GPU/模型）
-scripts/                  # 闸门与生成脚本（check-i18n-parity.js、check-diagrams.py、ui-inventory*、
+scripts/                  # 闸门与生成脚本（check-i18n-parity.js、check-sw-precache.mjs、check-diagrams.py、ui-inventory*、
 │                         # perf-budget.mjs、gen-icons.cjs、axe-audit.js、record-demos.cjs）
 package.json / package-lock.json  # DEV-ONLY 工具链与测试脚本（tsc/ESLint/Prettier/Playwright）
 tsconfig.json / eslint.config.js  # DEV-ONLY 静态闸门配置（checkJs+noEmit / ESLint flat config）
@@ -146,7 +146,7 @@ npm run test:e2e       # Playwright：headless Chromium + mock 后端，首次�
 
 - **Go**：`go test ./...`（CI 另跑 `go test -race ./...`）。`*_test.go` 覆盖 ID/路径校验（`ids_test.go` + `internal/idvalidate`）、实例生命周期与端口分配（`instance_test.go`）、`/v1/*` 代理与 model 提取（`proxy_test.go`）、下载任务（`download_test.go`）、历史落盘与分组（`history_test.go`）、任务队列收敛与并发（`task_finalize_test.go` / `task_race_test.go`）、WAV 头解析（`internal/wav`）
 - **前端**：`npm run test:unit`（`test/unit/`：WAV 工具、i18n 含中英键 parity、app-utils、file-browser）、`npm run test:e2e`（`e2e/`：9 个 spec，Playwright + `page.route` mock 后端，覆盖实例/任务/历史/音色/下载/可执行文件/ASR/UI 切换/冒烟，**无需 Go 二进制、GPU 或模型**）
-- **其它闸门**：`node scripts/check-i18n-parity.js`（中英 564/564 键对等）、`python3 scripts/check-diagrams.py docs/diagrams`（19/19 图示可访问性契约）、`npm run ui:inventory:check`（UI 清单防漂移）、`npm run perf:budget`（首屏体积预算）。详见 `TESTING.md` 与 `web/README.md`
+- **其它闸门**：`node scripts/check-i18n-parity.js`（中英 578/578 键对等 + `web/*.html` 的 `data-i18n*` 引用键均存在）、`node scripts/check-sw-precache.mjs`（`web/sw.js` 的 `PRECACHE_URLS` 覆盖 `index.html` 本地引用与模块图传递闭包——`perf:budget` 的三方一致只管 ES module 图，管不到经典脚本）、`python3 scripts/check-diagrams.py docs/diagrams`（19/19 图示可访问性契约）、`npm run ui:inventory:check`（UI 清单防漂移）、`npm run perf:budget`（首屏体积预算）。详见 `TESTING.md` 与 `web/README.md`
 
 改动仍需手动过一遍受影响页面（中英切换 / 深浅主题 / 窄屏），自动化测试覆盖的是契约与纯函数，不替代人工看界面。
 

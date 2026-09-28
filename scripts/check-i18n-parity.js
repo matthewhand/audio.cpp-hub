@@ -31,6 +31,24 @@ function duplicates(rel) {
 const dupZh = duplicates("../web/i18n.zh.js");
 const dupEn = duplicates("../web/i18n.en.js");
 
+/* HTML 里通过 data-i18n* 引用文案键；这些键也必须存在于两份词典中，
+   否则用户会直接看到键名（历史上出现过 palette.hint 这类漏配）。
+   注意：HTML 引用键独立检查，即便中英两侧同时缺失也要报出来。 */
+function htmlReferencedKeys() {
+  const keys = new Set();
+  const files = ["../web/index.html", "../web/offline.html", "../web/styleguide.html"];
+  for (const rel of files) {
+    const p = path.resolve(HERE, rel);
+    if (!fs.existsSync(p)) continue;
+    const html = fs.readFileSync(p, "utf8");
+    for (const m of html.matchAll(/data-i18n(?:-placeholder|-title|-aria-label)?="([^"]+)"/g)) {
+      keys.add(m[1]);
+    }
+  }
+  return keys;
+}
+const htmlKeys = htmlReferencedKeys();
+
 const zhKeys = new Set(Object.keys(zh));
 const enKeys = new Set(Object.keys(en));
 
@@ -48,7 +66,12 @@ const mismatchedParams = [...zhKeys]
   .filter((k) => enKeys.has(k) && placeholder(zh[k]) !== placeholder(en[k]))
   .map((k) => `${k}: zh={${placeholder(zh[k])}} en={${placeholder(en[k])}}`);
 
+/* HTML 引用的键缺失（两处都缺 / 只缺一处） */
+const htmlMissingZh = [...htmlKeys].filter((k) => !zhKeys.has(k));
+const htmlMissingEn = [...htmlKeys].filter((k) => !enKeys.has(k));
+
 console.log(`zh keys: ${zhKeys.size}  |  en keys: ${enKeys.size}`);
+console.log(`HTML 引用键: ${htmlKeys.size}（data-i18n / -placeholder / -title / -aria-label）`);
 if (missingInEn.length) {
   console.log(`missing in en (${missingInEn.length}):\n  ` + missingInEn.join("\n  "));
 }
@@ -60,6 +83,12 @@ if (mismatchedParams.length) {
     `placeholder mismatch (${mismatchedParams.length}):\n  ` + mismatchedParams.join("\n  ")
   );
 }
+if (htmlMissingZh.length) {
+  console.log(`HTML 引用键缺失 in zh (${htmlMissingZh.length}):\n  ` + htmlMissingZh.join("\n  "));
+}
+if (htmlMissingEn.length) {
+  console.log(`HTML 引用键缺失 in en (${htmlMissingEn.length}):\n  ` + htmlMissingEn.join("\n  "));
+}
 
 if (dupZh.length) console.log(`duplicate keys in zh (${dupZh.length}):\n  ` + dupZh.join("\n  "));
 if (dupEn.length) console.log(`duplicate keys in en (${dupEn.length}):\n  ` + dupEn.join("\n  "));
@@ -68,6 +97,8 @@ const ok =
   !missingInEn.length &&
   !missingInZh.length &&
   !mismatchedParams.length &&
+  !htmlMissingZh.length &&
+  !htmlMissingEn.length &&
   !dupZh.length &&
   !dupEn.length;
 console.log(ok ? "OK: zh/en parity holds" : "FAIL: zh/en parity broken");

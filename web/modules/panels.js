@@ -499,17 +499,37 @@ $("tts-submit").onclick = async () => {
 };
 
 /* ---------- 情感模式 Tab（index_tts2 / index_tts2_5） ---------- */
-document.querySelectorAll("#tts-emotion-block .tab").forEach(tab => {
-  tab.onclick = () => {
-    emotionMode = tab.dataset.mode;
-    document.querySelectorAll("#tts-emotion-block .tab").forEach(tb => {
-      const on = tb === tab;
-      tb.classList.toggle("active", on);
-      tb.setAttribute("aria-selected", on ? "true" : "false");
-    });
-    document.querySelectorAll("#tts-emotion-block .emotion-pane").forEach(p => p.classList.add("hidden"));
-    $("emotion-pane-" + emotionMode).classList.remove("hidden");
-    $("emotion-alpha-row").classList.toggle("hidden", emotionMode === "none");
+/** @type {HTMLButtonElement[]} */
+const emotionTabs = /** @type {HTMLButtonElement[]} */ ([
+  ...document.querySelectorAll("#tts-emotion-block .tab")
+]);
+function selectEmotionTab(tab, { focus = false } = {}) {
+  if (!tab) return;
+  emotionMode = tab.dataset.mode;
+  emotionTabs.forEach(tb => {
+    const on = tb === tab;
+    tb.classList.toggle("active", on);
+    tb.setAttribute("aria-selected", on ? "true" : "false");
+    tb.tabIndex = on ? 0 : -1;
+  });
+  document.querySelectorAll("#tts-emotion-block .emotion-pane").forEach(p => p.classList.add("hidden"));
+  $("emotion-pane-" + emotionMode).classList.remove("hidden");
+  $("emotion-alpha-row").classList.toggle("hidden", emotionMode === "none");
+  if (focus) tab.focus();
+}
+emotionTabs.forEach((tab, i) => {
+  tab.onclick = () => selectEmotionTab(tab);
+  tab.onkeydown = e => {
+    const step = { ArrowRight: 1, ArrowLeft: -1, Home: "first", End: "last" };
+    if (!(e.key in step)) return;
+    e.preventDefault();
+    const next =
+      step[e.key] === "first"
+        ? 0
+        : step[e.key] === "last"
+          ? emotionTabs.length - 1
+          : (i + step[e.key] + emotionTabs.length) % emotionTabs.length;
+    selectEmotionTab(emotionTabs[next], { focus: true });
   };
 });
 
