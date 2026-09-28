@@ -1,9 +1,9 @@
 /* #74 性能预算：对首屏关键资源做 raw + gzip 体积与请求数检查。
    不需要浏览器——按真实工作目录 web/ 的文件与 index.html 的引用计算，
-   并沿 ES module 的 import 图传递闭包（app.js → core/ + features/）。
+   并沿 ES module 的 import 图（含 `export ... from` 再导出）传递闭包。
 
-   预算针对**首屏同步加载**的资源；动态 import() 的懒加载模块不计入初始请求数，
-   但计入体积统计（避免把懒加载当成绕过预算的手段）。 */
+   预算针对**首屏同步加载**的资源：静态 import/再导出的模块计入；
+   动态 import() 的懒加载模块不计入（首屏不请求），属预期行为。 */
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
@@ -42,20 +42,115 @@ function kib(n) {
   return (n / KIB).toFixed(1);
 }
 
-/* 从 html 中提取所有被引用的本地脚本/样式（去掉查询串、前导 /）。 */
+/* 从 html 中提取所有被引用的本地脚本/样式（去掉查询串、前导 /）。
+   引号与属性大小写不敏感（prettier 目前统一双引号，此处防御格式变动）。 */
 function referencedAssets(html) {
   const refs = new Set();
-  for (const m of html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)) refs.add(m[1]);
-  for (const m of html.matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*\bhref="([^"]+)"/g))
+  for (const m of html.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi)) refs.add(m[1]);
+  for (const m of html.matchAll(
+    /<link\b[^>]*\brel\s*=\s*["']stylesheet["'][^>]*\bhref\s*=\s*["']([^"']+)["']/gi,
+  ))
     refs.add(m[1]);
-  for (const m of html.matchAll(/<link\b[^>]*\bhref="([^"]+)"[^>]*\brel="stylesheet"/g))
+  for (const m of html.matchAll(
+    /<link\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*\brel\s*=\s*["']stylesheet["']/gi,
+  ))
     refs.add(m[1]);
   return [...refs]
     .map((r) => r.replace(/^\//, "").split("?")[0])
     .filter((r) => !/^https?:/.test(r));
 }
 
-/* 递归解析一个 ES module 的静态 import 说明符，返回其依赖的 web/ 相对路径。 */
+/* 去掉注释，避免把注释里的 "import" 误判为真实语句。
+   注意：保留字符串字面量，否则 import 的路径说明符也会被抹掉。 */
+function stripComments(src) {
+  // 简单状态机：跳过字符串/模板串/正则字面量，只在代码区移除注释。
+  let out = "";
+  let i = 0;
+  const n = src.length;
+  let state = "code"; // code | line | block | sq | dq | tpl | regex
+  while (i < n) {
+    const c = src[i];
+    const nxt = src[i + 1];
+    if (state === "code") {
+      if (c === "/" && nxt === "/") {
+        state = "line";
+        i += 2;
+        continue;
+      }
+      if (c === "/" && nxt === "*") {
+        state = "block";
+        i += 2;
+        continue;
+      }
+      if (c === "'") {
+        state = "sq";
+        out += c;
+        i++;
+        continue;
+      }
+      if (c === '"') {
+        state = "dq";
+        out += c;
+        i++;
+        continue;
+      }
+      if (c === "`") {
+        state = "tpl";
+        out += c;
+        i++;
+        continue;
+      }
+      out += c;
+      i++;
+      continue;
+    }
+    if (state === "line") {
+      if (c === "\n") {
+        state = "code";
+        out += c;
+      }
+      i++;
+      continue;
+    }
+    if (state === "block") {
+      if (c === "*" && nxt === "/") {
+        state = "code";
+        i += 2;
+      } else i++;
+      continue;
+    }
+    // 单/双引号字符串：保留内容（import 说明符必须用引号，需保留以便匹配）
+    if (state === "sq" || state === "dq") {
+      out += c;
+      if (c === "\\") {
+        if (i + 1 < n) out += src[i + 1];
+        i += 2;
+        continue;
+      }
+      if ((state === "sq" && c === "'") || (state === "dq" && c === '"')) state = "code";
+      i++;
+      continue;
+    }
+    // 模板字符串：清空内容（说明符不会用反引号），避免其中的 "import" 被误判
+    if (state === "tpl") {
+      if (c === "\\") {
+        i += 2;
+        continue;
+      }
+      if (c === "`") {
+        state = "code";
+        out += c;
+      } else out += " ";
+      i++;
+      continue;
+    }
+    i++;
+  }
+  return out;
+}
+
+/* 递归解析一个 ES module 的静态依赖说明符（import ... from / export ... from /
+   副作用 import），返回其依赖的 web/ 相对路径闭包。 */
 function moduleDeps(entry, seen) {
   if (seen.has(entry)) return [];
   seen.add(entry);
@@ -65,9 +160,19 @@ function moduleDeps(entry, seen) {
   } catch {
     return [];
   }
+  const code = stripComments(src);
+  const specs = [];
+  // import 语句：import "x"、import { a } from "x"、import * as n from "x"、多行形式
+  for (const m of code.matchAll(/\bimport\s*(?:[^'"();]*?\bfrom\s*)?["']([^"']+)["']/g))
+    specs.push(m[1]);
+  // 再导出：export { a } from "x"、export * from "x"、export * as n from "x"
+  for (const m of code.matchAll(
+    /\bexport\s+(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s*["']([^"']+)["']/g,
+  ))
+    specs.push(m[1]);
+
   const out = [];
-  for (const m of src.matchAll(/\bimport\s+(?:[^'"]*?\bfrom\s+)?["']([^"']+)["']/g)) {
-    const spec = m[1];
+  for (const spec of specs) {
     if (!spec.startsWith(".")) continue; // 仅本地相对导入
     const resolved = path
       .normalize(path.join(path.dirname(entry), spec))
@@ -96,18 +201,20 @@ export function measure() {
   // CSS：样式入口（本仓库为单文件，保留扩展位）
   const css = cssEntries.filter((f) => fs.existsSync(path.join(WEB, f)));
 
-  const scriptTags = [...html.matchAll(/<script\b[^>]*\bsrc=/g)].length;
-  const cssTags = [...html.matchAll(/<link\b[^>]*\brel="stylesheet"/g)].length;
-  // 初始请求数 = <script src> + <link stylesheet> + app.js 同步 import 闭包中的模块数
-  const importedModules =
-    js.length - jsEntries.filter((f) => fs.existsSync(path.join(WEB, f))).length;
+  // 初始请求数 = 去重后的本地 script 入口 + stylesheet 入口 + import 闭包新增模块数。
+  // 用归一化集合统一口径，避免重复标签/缺失文件造成的偏差。
+  const entryRequests = [...new Set([...jsEntries, ...cssEntries])].filter((f) =>
+    fs.existsSync(path.join(WEB, f)),
+  ).length;
+  const closureModules = js.filter((f) => !jsEntries.includes(f)).length;
+  const subresourceRequests = entryRequests + closureModules;
 
   return {
     jsRaw: sum(js, bytes),
     jsGzip: sum(js, gzipBytes),
     cssRaw: sum(css, bytes),
     cssGzip: sum(css, gzipBytes),
-    subresourceRequests: scriptTags + cssTags + Math.max(importedModules, 0),
+    subresourceRequests,
   };
 }
 

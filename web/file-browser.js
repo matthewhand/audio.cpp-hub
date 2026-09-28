@@ -37,18 +37,18 @@ window.FileBrowser = (() => {
         </div>
         <div class="fb-toolbar">
           <button type="button" class="fb-up" title="${t("fb.upTitle")}" aria-label="${t("fb.upTitle")}">${t("fb.up")}</button>
-          <input type="text" class="fb-path" placeholder="${t("fb.pathPlaceholder")}">
+          <input type="text" class="fb-path" aria-label="${t("fb.pathPlaceholder")}" placeholder="${t("fb.pathPlaceholder")}">
           <button type="button" class="fb-go">${t("fb.go")}</button>
           <button type="button" class="fb-refresh" title="${t("fb.refreshTitle")}" aria-label="${t("fb.refreshTitle")}">⟳</button>
         </div>
         <div class="fb-roots"></div>
         <div class="fb-subbar">
-          <input type="text" class="fb-search" placeholder="${t("fb.searchPlaceholder")}">
-          <select class="fb-ext hidden"></select>
+          <input type="text" class="fb-search" aria-label="${t("fb.searchPlaceholder")}" placeholder="${t("fb.searchPlaceholder")}">
+          <select class="fb-ext hidden" aria-label="${t("fb.extLabel")}"></select>
           <label class="checkbox-label fb-hidden-toggle"><input type="checkbox" class="fb-hidden"> ${t("fb.showHidden")}</label>
           <button type="button" class="fb-mkdir">${t("fb.mkdir")}</button>
         </div>
-        <div class="fb-list" role="listbox"></div>
+        <div class="fb-list" id="fb-list" role="listbox" aria-label="${t("fb.listLabel")}"></div>
         <div class="fb-footer">
           <span class="fb-selection" title=""></span>
           <button type="button" class="fb-pick-current btn-ghost hidden">${t("fb.pickCurrent")}</button>
@@ -264,6 +264,7 @@ window.FileBrowser = (() => {
       row.setAttribute("role", "option");
       row.setAttribute("tabindex", "0");
       row.setAttribute("aria-selected", e.path === selectedPath ? "true" : "false");
+      row.dataset.fbPath = e.path;
       const icon = e.dir ? "📁" : "📄";
       const size = e.dir ? "" : formatSize(e.size);
       row.innerHTML = `<span class="fb-icon" aria-hidden="true">${icon}</span>
@@ -276,9 +277,31 @@ window.FileBrowser = (() => {
       row.title = e.path;
       row.onclick = () => onRowClick(e);
       row.ondblclick = () => onRowDblClick(e);
+      const rowEls = () => [...list.querySelectorAll(".fb-row")];
       row.onkeydown = (ev) => {
-        if (ev.key === "Enter" && e.dir) { ev.preventDefault(); navigate(e.path); }
-        else if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onRowClick(e); }
+        if (ev.key === "Enter" && e.dir) {
+          ev.preventDefault();
+          navigate(e.path);
+        } else if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          onRowClick(e);
+        } else if (ev.key === "ArrowDown" || ev.key === "ArrowUp" || ev.key === "Home" || ev.key === "End") {
+          // roving：方向键在列表内移动选中项并把焦点移过去
+          ev.preventDefault();
+          const all = visibleEntries();
+          const cur = all.findIndex((x) => x.path === (selectedPath || e.path));
+          let next;
+          if (ev.key === "Home") next = 0;
+          else if (ev.key === "End") next = all.length - 1;
+          else if (ev.key === "ArrowDown") next = Math.min(cur + 1, all.length - 1);
+          else next = Math.max(cur - 1, 0);
+          const target = all[next];
+          if (target) {
+            select(target);
+            const el2 = rowEls()[next];
+            if (el2) el2.focus();
+          }
+        }
       };
       list.appendChild(row);
     }
@@ -305,10 +328,16 @@ window.FileBrowser = (() => {
   function select(e) {
     selectedPath = e.path;
     selectedIsDir = e.dir;
-    overlay.querySelectorAll(".fb-row").forEach(r => { r.classList.remove("selected"); r.setAttribute("aria-selected", "false"); });
+    overlay.querySelectorAll(".fb-row").forEach((r) => {
+      r.classList.remove("selected");
+      r.setAttribute("aria-selected", "false");
+    });
     const rows = overlay.querySelectorAll(".fb-row");
     visibleEntries().forEach((item, i) => {
-      if (item.path === e.path && rows[i]) { rows[i].classList.add("selected"); rows[i].setAttribute("aria-selected", "true"); }
+      if (item.path === e.path && rows[i]) {
+        rows[i].classList.add("selected");
+        rows[i].setAttribute("aria-selected", "true");
+      }
     });
     updateFooter();
   }
@@ -393,10 +422,20 @@ window.FileBrowser = (() => {
     const up = $(".fb-up");
     up.textContent = t("fb.up");
     up.title = t("fb.upTitle");
-    $(".fb-path").placeholder = t("fb.pathPlaceholder");
+    up.setAttribute("aria-label", t("fb.upTitle"));
+    $(".fb-close").setAttribute("aria-label", t("history.closeTitle"));
+    const pathInput = $(".fb-path");
+    pathInput.placeholder = t("fb.pathPlaceholder");
+    pathInput.setAttribute("aria-label", t("fb.pathPlaceholder"));
     $(".fb-go").textContent = t("fb.go");
-    $(".fb-refresh").title = t("fb.refreshTitle");
-    $(".fb-search").placeholder = t("fb.searchPlaceholder");
+    const refresh = $(".fb-refresh");
+    refresh.title = t("fb.refreshTitle");
+    refresh.setAttribute("aria-label", t("fb.refreshTitle"));
+    const search = $(".fb-search");
+    search.placeholder = t("fb.searchPlaceholder");
+    search.setAttribute("aria-label", t("fb.searchPlaceholder"));
+    $(".fb-ext").setAttribute("aria-label", t("fb.extLabel"));
+    $(".fb-list").setAttribute("aria-label", t("fb.listLabel"));
     const hiddenLabel = $(".fb-hidden-toggle");
     hiddenLabel.childNodes.forEach(n => {
       if (n.nodeType === Node.TEXT_NODE) n.textContent = " " + t("fb.showHidden");

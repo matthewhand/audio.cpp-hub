@@ -323,6 +323,12 @@ function makeGroupHeaderRow(gid, name, count, collapsed) {
   </div>`);
   const toggle = row.querySelector(".group-toggle");
   toggle.textContent = collapsed ? "▸" : "▾";
+  // 折叠开关的可访问名 + 展开状态（▸/▾ 符号对读屏无意义）
+  toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  toggle.setAttribute(
+    "aria-label",
+    t(collapsed ? "history.groupExpand" : "history.groupCollapse", { name }),
+  );
   toggle.onclick = () => {
     state.groupCollapsed.set(gid, !collapsed);
     renderSidebarList();
@@ -533,12 +539,13 @@ function buildHistoryDetail(item, rec) {
   }
   // 音色 / 提示词
   const voiceLines = [];
-  if (voice.kind === "speaker" && voice.speaker) voiceLines.push("speaker: " + voice.speaker);
+  if (voice.kind === "speaker" && voice.speaker)
+    voiceLines.push(t("history.detailSpeaker", { name: voice.speaker }));
   if (voice.instruct) voiceLines.push(masked ? t("history.masked") : voice.instruct);
   if (rec.options && rec.options.instruction) {
     voiceLines.push(masked ? t("history.masked") : String(rec.options.instruction));
   }
-  if (rec.language) voiceLines.push("language: " + rec.language);
+  if (rec.language) voiceLines.push(t("history.detailLanguage", { lang: rec.language }));
   if (voiceLines.length) {
     const sec = addSection(t("history.detailVoice"));
     const div = el(`<div class="detail-text"></div>`);
@@ -575,6 +582,9 @@ function buildRefAudioRow(modelId, taskId, name, origName) {
   nameEl.title = nameEl.textContent;
   const audio = row.querySelector("audio");
   const playBtn = row.querySelector(".ref-play");
+  const refLabel = origName || name;
+  audio.setAttribute("aria-label", refLabel);
+  playBtn.setAttribute("aria-label", t("history.playNamed", { name: refLabel }));
   playBtn.textContent = t("history.play");
   playBtn.onclick = () => {
     if (!audio.src) {
@@ -586,12 +596,15 @@ function buildRefAudioRow(modelId, taskId, name, origName) {
   };
   audio.onplay = () => {
     playBtn.textContent = t("history.pause");
+    playBtn.setAttribute("aria-label", t("history.pauseNamed", { name: refLabel }));
   };
   audio.onpause = () => {
     playBtn.textContent = t("history.play");
+    playBtn.setAttribute("aria-label", t("history.playNamed", { name: refLabel }));
   };
   audio.onended = () => {
     playBtn.textContent = t("history.play");
+    playBtn.setAttribute("aria-label", t("history.playNamed", { name: refLabel }));
   };
   const a = row.querySelector("a");
   a.textContent = t("history.download");
@@ -644,6 +657,9 @@ function makeHistoryRow(item) {
     </div>`);
     const audio = player.querySelector("audio");
     const playBtn = player.querySelector(".history-play");
+    const rowLabel = (item.text || t("history.noText")).slice(0, 60);
+    audio.setAttribute("aria-label", rowLabel);
+    playBtn.setAttribute("aria-label", t("history.playNamed", { name: rowLabel }));
     playBtn.textContent = t("history.play");
     playBtn.onclick = () => {
       if (!audio.src) {
@@ -655,12 +671,15 @@ function makeHistoryRow(item) {
     };
     audio.onplay = () => {
       playBtn.textContent = t("history.pause");
+      playBtn.setAttribute("aria-label", t("history.pauseNamed", { name: rowLabel }));
     };
     audio.onpause = () => {
       playBtn.textContent = t("history.play");
+      playBtn.setAttribute("aria-label", t("history.playNamed", { name: rowLabel }));
     };
     audio.onended = () => {
       playBtn.textContent = t("history.play");
+      playBtn.setAttribute("aria-label", t("history.playNamed", { name: rowLabel }));
     };
     const a = player.querySelector("a");
     a.textContent = t("history.download");

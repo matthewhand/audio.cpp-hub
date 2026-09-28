@@ -89,6 +89,12 @@ jobs:
       - name: UI 清单漂移检查
         run: npm run ui:inventory:check
 
+      - name: i18n 中英键一致性（含 HTML 引用键）
+        run: npm run i18n:check
+
+      - name: Service Worker 预缓存覆盖检查
+        run: npm run check:sw
+
       - name: 性能预算检查
         run: npm run perf:budget
 

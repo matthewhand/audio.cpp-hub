@@ -31,6 +31,8 @@ const PRECACHE_URLS = [
   OFFLINE_URL,
   "/manifest.webmanifest",
   "/boot.js",
+  "/i18n.zh.js",
+  "/i18n.en.js",
   "/i18n.js",
   "/wav.js",
   "/file-browser.js",
@@ -45,7 +47,27 @@ const PRECACHE_URLS = [
   "/icons/icon-512.png",
   "/icons/icon-maskable-192.png",
   "/icons/icon-maskable-512.png",
-  "/icons/apple-touch-icon-180.png"
+  "/icons/apple-touch-icon-180.png",
+  "/core/dom.js",
+  "/core/i18n.js",
+  "/core/api.js",
+  "/core/state.js",
+  "/core/format.js",
+  "/core/ui.js",
+  "/core/router.js",
+  "/features/models.js",
+  "/features/executables.js",
+  "/features/instances.js",
+  "/features/downloads.js",
+  "/features/tts.js",
+  "/features/workspace.js",
+  "/features/settings.js",
+  "/features/history.js",
+  "/features/voices.js",
+  "/features/panels.js",
+  "/features/params.js",
+  "/features/tasks.js",
+  "/features/palette.js"
 ];
 
 /* 可 cache-first 的静态资源扩展名（API 已在前面拦截，不可能命中这里）。 */

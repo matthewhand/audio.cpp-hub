@@ -88,6 +88,7 @@
       "label": "launch.title",
       "i18n": [
         "history.closeTitle",
+        "launch.advOptionsPlaceholder",
         "launch.advanced",
         "launch.advancedHint",
         "launch.backend",
@@ -171,6 +172,7 @@
       "label": "other.title",
       "i18n": [
         "other.extraLabel",
+        "other.extraPlaceholder",
         "other.submit",
         "other.title"
       ]
@@ -239,7 +241,9 @@
         "https.generateDesc",
         "https.generateTitle",
         "https.hostnames",
+        "https.hostnamesPlaceholder",
         "https.ips",
+        "https.ipsPlaceholder",
         "https.keysize",
         "https.password",
         "https.passwordPlaceholder",
@@ -308,7 +312,9 @@
         "https.generateDesc",
         "https.generateTitle",
         "https.hostnames",
+        "https.hostnamesPlaceholder",
         "https.ips",
+        "https.ipsPlaceholder",
         "https.keysize",
         "https.password",
         "https.passwordPlaceholder",
@@ -391,6 +397,7 @@
       "tag": "button",
       "type": null,
       "i18n": [
+        "dl.managerTitle",
         "dl.managerTitle"
       ],
       "handlers": [
@@ -537,6 +544,7 @@
       "tag": "button",
       "type": null,
       "i18n": [
+        "history.title",
         "history.title"
       ],
       "handlers": [
@@ -697,14 +705,18 @@
       "id": "https-hostnames",
       "tag": "textarea",
       "type": null,
-      "i18n": [],
+      "i18n": [
+        "https.hostnamesPlaceholder"
+      ],
       "handlers": []
     },
     {
       "id": "https-ips",
       "tag": "textarea",
       "type": null,
-      "i18n": [],
+      "i18n": [
+        "https.ipsPlaceholder"
+      ],
       "handlers": []
     },
     {
@@ -799,6 +811,7 @@
       "tag": "button",
       "type": null,
       "i18n": [
+        "header.langTitle",
         "header.langTitle"
       ],
       "handlers": [
@@ -814,7 +827,9 @@
       "id": "launch-adv-options",
       "tag": "textarea",
       "type": null,
-      "i18n": [],
+      "i18n": [
+        "launch.advOptionsPlaceholder"
+      ],
       "handlers": []
     },
     {
@@ -1105,7 +1120,9 @@
       "id": "other-extra",
       "tag": "textarea",
       "type": null,
-      "i18n": [],
+      "i18n": [
+        "other.extraPlaceholder"
+      ],
       "handlers": []
     },
     {
@@ -1177,6 +1194,7 @@
       "tag": "button",
       "type": null,
       "i18n": [
+        "header.settingsTitle",
         "header.settingsTitle"
       ],
       "handlers": [
@@ -1218,6 +1236,7 @@
       "tag": "button",
       "type": null,
       "i18n": [
+        "header.themeTitle",
         "header.themeTitle"
       ],
       "handlers": [
@@ -1375,6 +1394,7 @@
       "tag": "button",
       "type": null,
       "i18n": [
+        "voices.title",
         "voices.title"
       ],
       "handlers": [
@@ -1443,11 +1463,11 @@
     },
     {
       "name": "data-i18n-aria-label",
-      "count": 18
+      "count": 24
     },
     {
       "name": "data-i18n-placeholder",
-      "count": 18
+      "count": 22
     },
     {
       "name": "data-i18n-title",
@@ -1488,6 +1508,11 @@
       "source": "web/features/palette.js"
     },
     {
+      "key": "ArrowDown",
+      "negated": false,
+      "source": "web/file-browser.js"
+    },
+    {
       "key": "ArrowLeft",
       "negated": false,
       "source": "web/audio-picker.js"
@@ -1508,6 +1533,11 @@
       "source": "web/features/palette.js"
     },
     {
+      "key": "ArrowUp",
+      "negated": false,
+      "source": "web/file-browser.js"
+    },
+    {
       "key": "Delete",
       "negated": false,
       "source": "web/audio-picker.js"
@@ -1521,6 +1551,11 @@
       "key": "End",
       "negated": false,
       "source": "web/core/dom.js"
+    },
+    {
+      "key": "End",
+      "negated": false,
+      "source": "web/file-browser.js"
     },
     {
       "key": "Enter",
@@ -1576,6 +1611,11 @@
       "key": "Home",
       "negated": false,
       "source": "web/core/dom.js"
+    },
+    {
+      "key": "Home",
+      "negated": false,
+      "source": "web/file-browser.js"
     },
     {
       "key": "k",

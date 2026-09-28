@@ -14,17 +14,17 @@
 | `downloads-modal` | modal | `dl.managerTitle` | 2 |
 | `history-panel` | modal | `history.title` | 7 |
 | `instance-detail-modal` | modal | `instance.detailTitle` | 2 |
-| `launch-modal` | modal | `launch.title` | 25 |
+| `launch-modal` | modal | `launch.title` | 26 |
 | `model-dl-modal` | modal | `dl.title` | 11 |
 | `panel-asr` | panel | `asr.title` | 5 |
 | `panel-music` | panel | `music.title` | 14 |
-| `panel-other` | panel | `other.title` | 3 |
+| `panel-other` | panel | `other.title` | 4 |
 | `panel-sep` | panel | `sep.title` | 3 |
 | `panel-tts` | panel | `tts.title` | 19 |
-| `settings-modal` | modal | `settings.title` | 41 |
+| `settings-modal` | modal | `settings.title` | 43 |
 | `settings-pane-executables` | settings-pane | `exec.listTitle` | 13 |
 | `settings-pane-general` | settings-pane | `settings.general.language` | 7 |
-| `settings-pane-https` | settings-pane | `https.enableLabel` | 16 |
+| `settings-pane-https` | settings-pane | `https.enableLabel` | 18 |
 | `voices-panel` | modal | `voices.title` | 6 |
 
 ## 控件
@@ -34,7 +34,7 @@
 | `asr-copy` | button | — | `asr.copy` | `click` |
 | `asr-submit` | button | — | `asr.submit` | `click` |
 | `command-palette-input` | input | text | `palette.placeholder`<br>`palette.title` | `input`, `keydown` |
-| `downloads-btn` | button | — | `dl.managerTitle` | `click` |
+| `downloads-btn` | button | — | `dl.managerTitle`<br>`dl.managerTitle` | `click` |
 | `downloads-modal-close` | button | — | `history.closeTitle` | `click` |
 | `exec-add-btn` | button | — | `exec.add` | `click` |
 | `exec-browse-btn` | button | — | `launch.browse` | `click` |
@@ -45,7 +45,7 @@
 | `exec-new-btn` | button | — | `exec.new` | `click` |
 | `exec-note` | input | text | — | — |
 | `exec-path` | input | text | `exec.pathPlaceholder` | — |
-| `history-btn` | button | — | `history.title` | `click` |
+| `history-btn` | button | — | `history.title`<br>`history.title` | `click` |
 | `history-clear` | button | — | `history.clear` | `click` |
 | `history-close` | button | — | `history.closeTitle`<br>`history.closeTitle` | `click` |
 | `history-group-new` | button | — | `history.groupNew` | `click` |
@@ -55,8 +55,8 @@
 | `https-download-keystore` | button | — | `https.downloadKeystore` | `click` |
 | `https-enabled` | input | checkbox | `https.enableLabel` | `change` |
 | `https-generate-btn` | button | — | `https.generate` | `click` |
-| `https-hostnames` | textarea | — | — | — |
-| `https-ips` | textarea | — | — | — |
+| `https-hostnames` | textarea | — | `https.hostnamesPlaceholder` | — |
+| `https-ips` | textarea | — | `https.ipsPlaceholder` | — |
 | `https-keysize` | select | — | — | — |
 | `https-password` | input | text | `https.passwordPlaceholder` | — |
 | `https-validity` | input | number | — | — |
@@ -64,8 +64,8 @@
 | `instance-detail-close` | button | — | `history.closeTitle` | `click` |
 | `instance-select` | select | — | `instance.barLabel` | `change` |
 | `instance-stop` | button | — | `instance.stopCurrent` | `click` |
-| `lang-toggle` | button | — | `header.langTitle` | `click` |
-| `launch-adv-options` | textarea | — | — | — |
+| `lang-toggle` | button | — | `header.langTitle`<br>`header.langTitle` | `click` |
+| `launch-adv-options` | textarea | — | `launch.advOptionsPlaceholder` | — |
 | `launch-backend` | select | — | — | — |
 | `launch-btn` | button | — | `launch.submit` | `click` |
 | `launch-device` | select | — | — | `change` |
@@ -89,15 +89,15 @@
 | `music-seed` | input | text | `music.seedPlaceholder` | — |
 | `music-style` | textarea | — | `music.stylePlaceholder` | — |
 | `music-submit` | button | — | `music.submit` | `click` |
-| `other-extra` | textarea | — | — | — |
+| `other-extra` | textarea | — | `other.extraPlaceholder` | — |
 | `other-submit` | button | — | `other.submit` | `click` |
 | `profile-del-btn` | button | — | `launch.profileDelete` | `click` |
 | `profile-save-btn` | button | — | `launch.profileSave` | `click` |
 | `sep-submit` | button | — | `sep.submit` | `click` |
-| `settings-btn` | button | — | `header.settingsTitle` | `click` |
+| `settings-btn` | button | — | `header.settingsTitle`<br>`header.settingsTitle` | `click` |
 | `settings-modal-close` | button | — | `history.closeTitle` | `click` |
 | `skip-to-content` | a | — | `a11y.skipToContent` | — |
-| `theme-toggle` | button | — | `header.themeTitle` | `click` |
+| `theme-toggle` | button | — | `header.themeTitle`<br>`header.themeTitle` | `click` |
 | `tts-download` | a | — | `tts.download` | — |
 | `tts-emotion-alpha` | input | range | `emotion.alphaLabel` | `input` |
 | `tts-emotion-text` | input | text | `emotion.textPlaceholder` | — |
@@ -109,7 +109,7 @@
 | `voice-add-btn` | button | — | `voices.add` | `click` |
 | `voice-add-name` | input | text | `voices.namePlaceholder` | — |
 | `voice-add-text` | textarea | — | `voices.textPlaceholder` | — |
-| `voices-btn` | button | — | `voices.title` | `click` |
+| `voices-btn` | button | — | `voices.title`<br>`voices.title` | `click` |
 | `voices-close` | button | — | `history.closeTitle`<br>`history.closeTitle` | `click` |
 | `weights-browse-btn` | button | — | `launch.browseDir` | `click` |
 | `weights-gguf-btn` | button | — | `launch.browseGguf` | `click` |
@@ -122,13 +122,16 @@
 | ` ` | 等值 | `web/file-browser.js` |
 | `ArrowDown` | 等值 | `web/core/dom.js` |
 | `ArrowDown` | 等值 | `web/features/palette.js` |
+| `ArrowDown` | 等值 | `web/file-browser.js` |
 | `ArrowLeft` | 等值 | `web/audio-picker.js` |
 | `ArrowRight` | 等值 | `web/audio-picker.js` |
 | `ArrowUp` | 等值 | `web/core/dom.js` |
 | `ArrowUp` | 等值 | `web/features/palette.js` |
+| `ArrowUp` | 等值 | `web/file-browser.js` |
 | `Delete` | 等值 | `web/audio-picker.js` |
 | `End` | 等值 | `web/audio-picker.js` |
 | `End` | 等值 | `web/core/dom.js` |
+| `End` | 等值 | `web/file-browser.js` |
 | `Enter` | 等值 | `web/audio-picker.js` |
 | `Enter` | 等值 | `web/features/palette.js` |
 | `Enter` | 等值 | `web/file-browser.js` |
@@ -140,6 +143,7 @@
 | `Escape` | 等值 | `web/file-browser.js` |
 | `Home` | 等值 | `web/audio-picker.js` |
 | `Home` | 等值 | `web/core/dom.js` |
+| `Home` | 等值 | `web/file-browser.js` |
 | `k` | 等值 | `web/features/palette.js` |
 | `K` | 等值 | `web/features/palette.js` |
 | `Tab` | 非 (guard) | `web/core/ui.js` |
@@ -205,8 +209,8 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | 属性 | 静态出现次数 |
 | --- | --- |
 | `data-i18n` | 125 |
-| `data-i18n-aria-label` | 18 |
-| `data-i18n-placeholder` | 18 |
+| `data-i18n-aria-label` | 24 |
+| `data-i18n-placeholder` | 22 |
 | `data-i18n-title` | 9 |
 | `data-mode` | 4 |
 | `data-section` | 3 |

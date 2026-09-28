@@ -1,8 +1,17 @@
 #!/usr/bin/env node
 /* 校验 i18n.zh.js / i18n.en.js 的中英键完全一致（issue #70 的 parity check）。
+   并校验 HTML 里 data-i18n / -placeholder / -aria-label 引用的键在两份字典都存在。
    - 无第三方依赖，node scripts/check-i18n-parity.js
    - 缺失键、占位符不一致会打印并以退出码 1 结束，可接入 CI */
+/* 仓库根 package.json 为 "type": "module"，.js 按 ESM 解析，
+   故用 createRequire 保留原有 CommonJS 的 require / __dirname 语义 */
+import { createRequire } from "module";
+import { fileURLToPath } from "url";
+
+const require = createRequire(import.meta.url);
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const path = require("path");
+const fs = require("fs");
 
 global.window = {};
 require(path.resolve(__dirname, "../web/i18n.zh.js"));
@@ -21,8 +30,23 @@ function duplicates(file) {
 const dupZh = duplicates("../web/i18n.zh.js");
 const dupEn = duplicates("../web/i18n.en.js");
 
+/* HTML 里的 data-i18n / data-i18n-placeholder / data-i18n-aria-label 引用键，
+   前端 relocalize 机制会读取它们，必须同时存在于 zh/en 字典 */
+const htmlFiles = ["../web/index.html", "../web/offline.html", "../web/styleguide.html"].filter(
+  (f) => fs.existsSync(path.resolve(__dirname, f)),
+);
+const htmlKeys = new Set();
+for (const file of htmlFiles) {
+  const src = fs.readFileSync(path.resolve(__dirname, file), "utf8");
+  for (const m of src.matchAll(/data-i18n(?:-placeholder|-aria-label)?="([^"]+)"/g))
+    htmlKeys.add(m[1]);
+}
+
 const zhKeys = new Set(Object.keys(zh));
 const enKeys = new Set(Object.keys(en));
+
+const htmlMissingInEn = [...htmlKeys].filter((k) => !enKeys.has(k));
+const htmlMissingInZh = [...htmlKeys].filter((k) => !zhKeys.has(k));
 
 const missingInEn = [...zhKeys].filter((k) => !enKeys.has(k));
 const missingInZh = [...enKeys].filter((k) => !zhKeys.has(k));
@@ -48,6 +72,16 @@ if (mismatchedParams.length)
     `placeholder mismatch (${mismatchedParams.length}):\n  ` + mismatchedParams.join("\n  "),
   );
 
+console.log(`HTML 引用键: ${htmlKeys.size}（data-i18n / -placeholder / -aria-label）`);
+if (htmlMissingInZh.length)
+  console.log(
+    `HTML 引用键缺失 in zh (${htmlMissingInZh.length}):\n  ` + htmlMissingInZh.join("\n  "),
+  );
+if (htmlMissingInEn.length)
+  console.log(
+    `HTML 引用键缺失 in en (${htmlMissingInEn.length}):\n  ` + htmlMissingInEn.join("\n  "),
+  );
+
 if (dupZh.length) console.log(`duplicate keys in zh (${dupZh.length}):\n  ` + dupZh.join("\n  "));
 if (dupEn.length) console.log(`duplicate keys in en (${dupEn.length}):\n  ` + dupEn.join("\n  "));
 
@@ -55,6 +89,8 @@ const ok =
   !missingInEn.length &&
   !missingInZh.length &&
   !mismatchedParams.length &&
+  !htmlMissingInZh.length &&
+  !htmlMissingInEn.length &&
   !dupZh.length &&
   !dupEn.length;
 console.log(ok ? "OK: zh/en parity holds" : "FAIL: zh/en parity broken");

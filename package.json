@@ -16,6 +16,8 @@
     "test": "npm run test:unit && npm run test:e2e",
     "ui:inventory": "node scripts/ui-inventory.mjs",
     "ui:inventory:check": "node scripts/ui-inventory-check.mjs",
+    "i18n:check": "node scripts/check-i18n-parity.js",
+    "check:sw": "node scripts/check-sw-precache.mjs",
     "perf:budget": "node scripts/perf-budget.mjs"
   },
   "devDependencies": {

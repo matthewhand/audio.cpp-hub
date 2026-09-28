@@ -74,7 +74,7 @@ function renderPalette(query) {
       list.appendChild(g);
     }
     const row = el(
-      `<div class="cp-item" role="option" data-idx="${i}"><span class="cp-item-label"></span><span class="cp-item-sub"></span></div>`,
+      `<div class="cp-item" id="cp-opt-${i}" role="option" aria-selected="${i === paletteActive}" data-idx="${i}"><span class="cp-item-label"></span><span class="cp-item-sub"></span></div>`,
     );
     row.querySelector(".cp-item-label").textContent = it.label;
     row.querySelector(".cp-item-sub").textContent = it.sub || "";
@@ -83,13 +83,24 @@ function renderPalette(query) {
     row.onclick = () => runPaletteItem(i);
     list.appendChild(row);
   });
+  syncPaletteActiveDescendant();
   scrollPaletteActive();
+}
+function syncPaletteActiveDescendant() {
+  const input = $("command-palette-input");
+  if (paletteItems.length) input.setAttribute("aria-activedescendant", "cp-opt-" + paletteActive);
+  else input.removeAttribute("aria-activedescendant");
 }
 function setPaletteActive(i) {
   paletteActive = i;
   $("command-palette-list")
     .querySelectorAll(".cp-item")
-    .forEach((r) => r.classList.toggle("active", Number(r.dataset.idx) === i));
+    .forEach((r) => {
+      const on = Number(r.dataset.idx) === i;
+      r.classList.toggle("active", on);
+      r.setAttribute("aria-selected", on ? "true" : "false");
+    });
+  syncPaletteActiveDescendant();
   scrollPaletteActive();
 }
 function scrollPaletteActive() {
