@@ -7,6 +7,10 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob: data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>audio.cpp-hub</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#f6f6f7">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png">
   <script src="/boot.js"></script>
   <link rel="stylesheet" href="/style.css">
 </head>
@@ -468,6 +472,10 @@
   <script src="/file-browser.js"></script>
   <script src="/audio-picker.js"></script>
   <script src="/voice-select.js"></script>
+  <!-- 动效系统：注册在 app.js 之前，保证首屏渲染即可用；只做纯 UI 反馈，不含业务逻辑 -->
+  <script src="/motion.js"></script>
+  <!-- PWA：注册 /sw.js + 更新提示。须在 i18n.js 之后，且不依赖 app.js -->
+  <script src="/pwa.js"></script>
   <script src="/app.js"></script>
   <script src="/voices-panel.js"></script>
 </body>
