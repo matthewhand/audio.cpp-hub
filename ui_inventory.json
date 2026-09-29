@@ -84,6 +84,8 @@
         "launch.exec",
         "launch.execEmpty",
         "launch.execGoto",
+        "launch.idleUnload",
+        "launch.idleUnloadPlaceholder",
         "launch.name",
         "launch.namePlaceholder",
         "launch.port",
@@ -571,6 +573,13 @@
       ]
     },
     {
+      "id": "launch-idle-unload",
+      "tag": "input",
+      "type": "number",
+      "i18n": ["launch.idleUnloadPlaceholder"],
+      "handlers": [{ "event": "input", "sources": ["web/modules/launch.js"] }]
+    },
+    {
       "id": "launch-modal-close",
       "tag": "button",
       "type": null,
@@ -870,9 +879,9 @@
     }
   ],
   "dataHooks": [
-    { "name": "data-i18n", "count": 127 },
+    { "name": "data-i18n", "count": 128 },
     { "name": "data-i18n-aria-label", "count": 26 },
-    { "name": "data-i18n-placeholder", "count": 22 },
+    { "name": "data-i18n-placeholder", "count": 23 },
     { "name": "data-i18n-title", "count": 11 },
     { "name": "data-mode", "count": 4 },
     { "name": "data-section", "count": 3 },

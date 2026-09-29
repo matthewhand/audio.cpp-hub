@@ -14,7 +14,7 @@
 | `downloads-modal` | modal | `dl.managerTitle` | 2 |
 | `history-panel` | modal | `history.title` | 7 |
 | `instance-detail-modal` | modal | `instance.detailTitle` | 2 |
-| `launch-modal` | modal | `launch.title` | 26 |
+| `launch-modal` | modal | `launch.title` | 28 |
 | `model-dl-modal` | modal | `dl.title` | 11 |
 | `panel-asr` | panel | `asr.title` | 5 |
 | `panel-music` | panel | `music.title` | 14 |
@@ -71,6 +71,7 @@
 | `launch-btn` | button | — | `launch.submit` | `click` |
 | `launch-device` | select | — | — | `change` |
 | `launch-exec` | select | — | — | `change`, `mousedown` |
+| `launch-idle-unload` | input | number | `launch.idleUnloadPlaceholder` | `input` |
 | `launch-modal-close` | button | — | `history.closeTitle` | `click` |
 | `launch-name` | input | text | `launch.namePlaceholder` | — |
 | `launch-open-btn` | button | — | `instance.create` | `click` |
@@ -213,9 +214,9 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 
 | 属性 | 静态出现次数 |
 | --- | --- |
-| `data-i18n` | 127 |
+| `data-i18n` | 128 |
 | `data-i18n-aria-label` | 26 |
-| `data-i18n-placeholder` | 22 |
+| `data-i18n-placeholder` | 23 |
 | `data-i18n-title` | 11 |
 | `data-mode` | 4 |
 | `data-section` | 3 |
