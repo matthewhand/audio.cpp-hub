@@ -20,7 +20,7 @@ import { closeInstanceDetail, instances, openInstanceDetail } from "./instances.
 import { selectModelById } from "./models.js";
 import { closeSettingsModal, openSettingsModal } from "./settings.js";
 import { closeHistoryPanel, openHistoryPanel } from "./sidebar.js";
-import { closeStatsPanel, openStatsPanel } from "./stats.js";
+import { closeStatsPanel, openStatsPanel, wireStatsButton } from "./stats-lazy.js";
 import { selectedModelId } from "./state.js";
 
 export const ROUTE_VIEWS = ["history", "voices", "downloads", "stats", "settings"];
@@ -66,6 +66,9 @@ export function goPanel(route) {
   const target = "#/" + route;
   go(location.hash === target ? defaultRoute() : target);
 }
+
+// 看板的页头按钮由懒加载外观接线（模块本身要点击后才拉）
+wireStatsButton(goPanel);
 
 window.hubNavigate = go;
 window.hubTogglePanel = goPanel;

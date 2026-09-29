@@ -3,7 +3,7 @@
 > 由 `npm run ui:inventory` 从 `web/index.html` 与 `web/*.js`、`web/modules/*.js` 自动生成，请勿手改。
 > 漂移检查：`npm run ui:inventory:check`（CI 会跑）。
 
-来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/file-browser.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/legacy-globals.js`、`web/modules/async-ui.js`、`web/modules/command-palette.js`、`web/modules/dom.js`、`web/modules/downloads.js`、`web/modules/instances.js`、`web/modules/launch.js`、`web/modules/models.js`、`web/modules/panels.js`、`web/modules/routing.js`、`web/modules/settings.js`、`web/modules/shell.js`、`web/modules/sidebar.js`、`web/modules/state.js`、`web/modules/stats.js`、`web/modules/tasks.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/voices-panel.js`、`web/wav.js`
+来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/file-browser.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/legacy-globals.js`、`web/modules/async-ui.js`、`web/modules/command-palette.js`、`web/modules/dom.js`、`web/modules/downloads.js`、`web/modules/instances.js`、`web/modules/launch.js`、`web/modules/models.js`、`web/modules/panels.js`、`web/modules/routing.js`、`web/modules/settings.js`、`web/modules/shell.js`、`web/modules/sidebar.js`、`web/modules/state.js`、`web/modules/stats-lazy.js`、`web/modules/tasks.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/voices-panel.js`、`web/wav.js`
 
 ## 面板地图
 
@@ -98,9 +98,9 @@
 | `settings-btn` | button | — | `header.settingsTitle`<br>`header.settingsTitle` | `click` |
 | `settings-modal-close` | button | — | `history.closeTitle` | `click` |
 | `skip-to-content` | a | — | `a11y.skipToContent` | — |
-| `stats-btn` | button | — | `stats.title`<br>`stats.title` | `click` |
-| `stats-close` | button | — | `history.closeTitle`<br>`history.closeTitle` | `click` |
-| `stats-refresh` | button | — | `history.refresh` | `click` |
+| `stats-btn` | button | — | `stats.title`<br>`stats.title` | — |
+| `stats-close` | button | — | `history.closeTitle`<br>`history.closeTitle` | — |
+| `stats-refresh` | button | — | `history.refresh` | — |
 | `theme-toggle` | button | — | `header.themeTitle`<br>`header.themeTitle` | `click` |
 | `tts-download` | a | — | `tts.download` | — |
 | `tts-emotion-alpha` | input | range | `emotion.alphaLabel` | `input` |
@@ -196,7 +196,6 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | POST | `/api/profiles` | `web/modules/launch.js` |
 | DELETE | `/api/profiles/{param}` | `web/modules/launch.js` |
 | PUT | `/api/profiles/{param}` | `web/modules/launch.js` |
-| GET | `/api/stats` | `web/modules/stats.js` |
 | POST | `/api/tasks` | `web/modules/tasks.js` |
 | GET | `/api/tasks?modelId={param}` | `web/modules/tasks.js` |
 | DELETE | `/api/tasks/{param}` | `web/modules/sidebar.js`, `web/modules/tasks.js` |

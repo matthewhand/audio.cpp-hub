@@ -11,7 +11,6 @@
  * I18N formatters for numbers / percentages / byte sizes. */
 
 import { $, el, t, Api } from "./dom.js";
-import { goPanel } from "./routing.js";
 import {
   showSkeleton,
   renderEmptyState,
@@ -23,13 +22,16 @@ import {
 let lastStats = null;
 
 /* ---------- open / close ---------- */
+// Called by stats-lazy.js after the chunk loads. openStatsPanel assumes the
+// panel shell is already visible (the facade shows it immediately for a snappy
+// click) and adds focus + data on top.
 export function openStatsPanel() {
   const wasHidden = $("stats-panel").classList.contains("hidden");
   $("stats-panel").classList.remove("hidden");
   if (wasHidden) {
     focusDialog($("stats-panel"));
-    loadStats();
   }
+  loadStats();
 }
 
 export function closeStatsPanel() {
@@ -151,8 +153,10 @@ function formatMs(ms) {
   return v >= 1000 ? (v / 1000).toFixed(2) + "s" : Math.round(v) + "ms";
 }
 
-/* ---------- event wiring (DOM is ready when the module evaluates) ---------- */
-$("stats-btn").onclick = () => goPanel("stats");
+/* ---------- event wiring (DOM is ready when the module evaluates) ----------
+   The header button is NOT wired here: it must work before this chunk loads, so
+   stats-lazy.js owns it. These are the in-panel controls, only reachable once the
+   module is loaded. */
 $("stats-close").onclick = () => closeStatsPanel();
 $("stats-refresh").onclick = () => loadStats();
 $("stats-panel").addEventListener("mousedown", (e) => {

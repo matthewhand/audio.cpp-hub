@@ -24,7 +24,7 @@
       "web/modules/shell.js",
       "web/modules/sidebar.js",
       "web/modules/state.js",
-      "web/modules/stats.js",
+      "web/modules/stats-lazy.js",
       "web/modules/tasks.js",
       "web/motion.js",
       "web/pwa.js",
@@ -746,21 +746,21 @@
       "tag": "button",
       "type": null,
       "i18n": ["stats.title", "stats.title"],
-      "handlers": [{ "event": "click", "sources": ["web/modules/stats.js"] }]
+      "handlers": []
     },
     {
       "id": "stats-close",
       "tag": "button",
       "type": null,
       "i18n": ["history.closeTitle", "history.closeTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/modules/stats.js"] }]
+      "handlers": []
     },
     {
       "id": "stats-refresh",
       "tag": "button",
       "type": null,
       "i18n": ["history.refresh"],
-      "handlers": [{ "event": "click", "sources": ["web/modules/stats.js"] }]
+      "handlers": []
     },
     {
       "id": "theme-toggle",
@@ -999,7 +999,6 @@
     { "method": "POST", "path": "/api/profiles", "sources": ["web/modules/launch.js"] },
     { "method": "DELETE", "path": "/api/profiles/{param}", "sources": ["web/modules/launch.js"] },
     { "method": "PUT", "path": "/api/profiles/{param}", "sources": ["web/modules/launch.js"] },
-    { "method": "GET", "path": "/api/stats", "sources": ["web/modules/stats.js"] },
     { "method": "POST", "path": "/api/tasks", "sources": ["web/modules/tasks.js"] },
     { "method": "GET", "path": "/api/tasks?modelId={param}", "sources": ["web/modules/tasks.js"] },
     {

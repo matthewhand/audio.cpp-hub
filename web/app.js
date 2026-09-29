@@ -28,7 +28,7 @@ import { applyRoute } from "./modules/routing.js";
 import { closeSettingsModal, lastCertStatus, loadExecutables, renderCertStatus, renderExecList, settingsModal, syncGeneralPane, updateLaunchExec } from "./modules/settings.js";
 import { applyLangBtn, applyThemeIcon, closeDrawer } from "./modules/shell.js";
 import { closeHistoryPanel } from "./modules/sidebar.js";
-import { closeStatsPanel, loadStats } from "./modules/stats.js";
+import { closeStatsPanel, reloadStats } from "./modules/stats-lazy.js";
 import { models, selectedModel } from "./modules/state.js";
 
 /* 回填经典脚本侧的转发器：audio-picker.js 的 toast、voices-panel.js 的弹窗焦点管理
@@ -55,7 +55,7 @@ function rerenderAll() {
   }
   if (!$("downloads-modal").classList.contains("hidden")) renderDownloadList();
   if (!$("model-dl-modal").classList.contains("hidden") && mdlPackages) renderMdlPackages();
-  if (!$("stats-panel").classList.contains("hidden")) loadStats();
+  if (!$("stats-panel").classList.contains("hidden")) reloadStats();
   (window.__audioPickers || []).forEach(p => p.refreshLabels && p.refreshLabels());
   (window.__voiceSelects || []).forEach(v => v.refreshLabels && v.refreshLabels());
   if (window.FileBrowser && FileBrowser.relocalize) FileBrowser.relocalize();
