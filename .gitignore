@@ -44,3 +44,10 @@ REVIEW_FOR_GROK.md
 !docker/start-hub.sh
 !docker/start-instance.sh
 
+# 演示素材的本地生成物：WebM + poster 已随仓库提交（见 docs/media/README.md），
+# 但体积更大的 GIF / MP4 与失败/中断的录制默认不入库，避免污染 git status。
+docs/media/*.gif
+docs/media/*.mp4
+docs/media/tts.webm
+docs/media/tts.poster.png
+
