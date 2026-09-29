@@ -47,5 +47,15 @@ Playwright。hub 不可达 / Playwright 缺失 / Chromium 启动失败时脚本�
 
 ## 提交策略
 
-片段体积大且随 UI 变动需重录，默认**不提交**生成物；确需随发布更新时，单独
-提交并保持与当次界面一致，切勿提交占位/伪造内容。
+**本目录的 WebM + 海报帧已随仓库提交**（README 用 `<video preload="none">` 引用，
+首屏不整段加载）。原因是它们是**唯一**演示 `启动实例` / `主题切换` 两个场景的素材，
+且总体约 4 MB，远小于旧 GIF。
+
+- **WebM + poster**：已提交，供 README / 发布说明引用。
+- **GIF / MP4**：体积大（同一场景 3–4 MB），默认**不提交**，按需本地生成或分渠道分发。
+  重新录制时用 `--gif` / `--mp4` 产出即可。
+- **`tts` 场景**：`tts.webm` 约 4 MB 偏大，且本地一次 `tts.gif` 录到 0 字节（中断），
+  因此 TTS 演示暂以 README 里的 `docs/assets/hub-tts.gif` 为准，本目录的 `tts.*`
+  未提交。重录：`node scripts/record-demos.cjs --scenario=tts`。
+- 切勿提交占位/伪造内容：脚本只连接真实实例录制。
+

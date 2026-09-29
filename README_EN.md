@@ -11,7 +11,7 @@ Repository: <https://github.com/matthewhand/audio.cpp-hub>
 
 ## Demo
 
-These GIFs are captured from the running web UI (Playwright recording + ffmpeg encoding), not mockups.
+These clips are captured from the running web UI (Playwright recording + ffmpeg encoding), not mockups. Shorter ones use `<video>` (WebM + poster frame, so the whole clip is not fetched on first paint); the older GIFs are inlined.
 
 **Overview: model list and a ready instance** — the left rail lists launchable models and instance cards (the BreezeTTS instance is READY here); selecting a model opens its workspace on the right.
 
@@ -21,13 +21,24 @@ These GIFs are captured from the running web UI (Playwright recording + ffmpeg e
 
 ![hub-tts](docs/assets/hub-tts.gif)
 
+**Launching an instance** — set the weights path and device, start the model, and wait for the health check to report it ready.
+
+<video src="docs/media/instance-start.webm" poster="docs/media/instance-start.poster.png" width="640" controls preload="none" loop muted playsinline></video>
+
 **Operation history** — open it from the 🕘 button in the header; expand a record inline and replay the reference / result audio.
 
-![hub-history](docs/assets/hub-history.gif)
+<video src="docs/media/history.webm" poster="docs/media/history.poster.png" width="640" controls preload="none" loop muted playsinline></video>
 
 **Download manager** — open it from the ⬇️ button in the header to watch weight-download progress and pause / resume / fill the path into the launch form.
 
-![hub-downloads](docs/assets/hub-downloads.gif)
+<video src="docs/media/downloads.webm" poster="docs/media/downloads.poster.png" width="640" controls preload="none" loop muted playsinline></video>
+
+**Theme switching** — system / light / dark, restored before first paint so there is no flash (see `web/boot.js`).
+
+<video src="docs/media/theme-switch.webm" poster="docs/media/theme-switch.poster.png" width="640" controls preload="none" loop muted playsinline></video>
+
+> Clips are recorded by `scripts/record-demos.cjs` from a **real running hub**; see
+> [`docs/media/README.md`](docs/media/README.md) for the scenario list and how to re-record.
 
 ## Diagrams
 
