@@ -309,6 +309,8 @@
         "voices.add",
         "voices.addTitle",
         "voices.namePlaceholder",
+        "voices.searchAria",
+        "voices.searchPlaceholder",
         "voices.textPlaceholder",
         "voices.title"
       ]
@@ -864,6 +866,13 @@
       "handlers": [{ "event": "click", "sources": ["web/voices-panel.js"] }]
     },
     {
+      "id": "voices-search",
+      "tag": "input",
+      "type": "search",
+      "i18n": ["voices.searchPlaceholder", "voices.searchAria"],
+      "handlers": [{ "event": "input", "sources": ["web/voices-panel.js"] }]
+    },
+    {
       "id": "weights-browse-btn",
       "tag": "button",
       "type": null,
@@ -880,8 +889,8 @@
   ],
   "dataHooks": [
     { "name": "data-i18n", "count": 128 },
-    { "name": "data-i18n-aria-label", "count": 26 },
-    { "name": "data-i18n-placeholder", "count": 23 },
+    { "name": "data-i18n-aria-label", "count": 27 },
+    { "name": "data-i18n-placeholder", "count": 24 },
     { "name": "data-i18n-title", "count": 11 },
     { "name": "data-mode", "count": 4 },
     { "name": "data-section", "count": 3 },

@@ -365,6 +365,59 @@ footer { flex: none; }
 }
 .stats-total-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .stats-total-label { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+/* 最近 14 天生成量迷你条形图 */
+.stats-perday {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-5);
+}
+.stats-perday-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 72px;
+  margin-top: var(--space-3);
+}
+.stats-perday-day {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+}
+.stats-perday-fill {
+  width: 100%;
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+  opacity: 0.85;
+}
+.stats-perday-fill.zero { background: var(--border); }
+.stats-perday-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+/* 音色库搜索框 */
+.voices-toolbar { margin-bottom: var(--space-3); }
+.voices-toolbar input[type="search"] {
+  width: 100%;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+}
+.voices-toolbar input[type="search"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
 .stats-models { display: flex; flex-direction: column; gap: var(--space-3); }
 .stats-model-head { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
 .stats-model-title { font-weight: 600; font-size: 14px; }

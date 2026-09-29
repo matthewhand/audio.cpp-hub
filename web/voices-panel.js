@@ -32,6 +32,7 @@ $("voices-btn").onclick = () => {
   else window.openVoicesPanel();
 };
 $("voices-close").onclick = closeVoicesPanel;
+$("voices-search").addEventListener("input", renderVoicesList);
 $("voices-panel").addEventListener("mousedown", (e) => {
   if (e.target === e.currentTarget) closeVoicesPanel();
 });
@@ -50,6 +51,12 @@ async function loadVoices() {
 function renderVoicesList() {
   const list = $("voices-list");
   list.innerHTML = "";
+  // 搜索过滤：名称或文本内容子串匹配（大小写不敏感）
+  const q = ($("voices-search").value || "").trim().toLowerCase();
+  const shown = q
+    ? voices.filter(v =>
+        v.name.toLowerCase().includes(q) || (v.text || "").toLowerCase().includes(q))
+    : voices;
   if (!voices.length) {
     if (window.renderEmptyState) {
       window.renderEmptyState(list, t("voices.empty"), {
@@ -64,7 +71,14 @@ function renderVoicesList() {
     }
     return;
   }
-  for (const v of voices) list.appendChild(makeVoiceRow(v));
+  if (!shown.length) {
+    const hint = document.createElement("div");
+    hint.className = "hint history-empty";
+    hint.textContent = t("voices.searchEmpty");
+    list.appendChild(hint);
+    return;
+  }
+  for (const v of shown) list.appendChild(makeVoiceRow(v));
 }
 
 /* 单行音色：名称 + 时长 + 文本预览 + 试听/编辑/删除；编辑态行内改名与文本 */

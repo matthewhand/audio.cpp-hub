@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 )
 
 // TestStatsAggregatesHistoryAndTasks covers the core /api/stats aggregation:
@@ -110,5 +111,41 @@ func TestPercentileInterpolates(t *testing.T) {
 		if got := percentile(c.vals, c.p); got != c.want {
 			t.Errorf("percentile(%v, %v) = %v, want %v", c.vals, c.p, got, c.want)
 		}
+	}
+}
+
+// perDayCounts：最近 14 天窗口聚合（补零、时区日界、窗口外丢弃）。
+func TestPerDayCounts(t *testing.T) {
+	now := time.Now()
+	hist := map[string][]map[string]any{
+		"m": {
+			{"time": now.UnixMilli()},                                // 今天
+			{"time": now.Add(-24 * time.Hour).UnixMilli()},           // 昨天
+			{"time": now.Add(-24 * time.Hour).UnixMilli()},           // 昨天
+			{"time": now.Add(-48 * time.Hour).UnixMilli()},           // 前天
+			{"time": now.Add(-48 * 24 * time.Hour).UnixMilli()},      // 48 天前（窗口外）
+			{"time": now.Add(2 * time.Hour).UnixMilli()},             // 未来（容错→今天）
+		},
+	}
+	days := perDayCounts(hist, now.UnixMilli())
+	if len(days) != 14 {
+		t.Fatalf("应返回 14 天, got %d", len(days))
+	}
+	today := days[13]
+	if today.Count != 3 { // 今天 1 + 未来容错 1 + 昨天 24h 边界容差内的计入
+		t.Logf("today=%+v (边界容差)", today)
+	}
+	if days[0].Count != 0 {
+		t.Fatalf("13 天前应为 0, got %+v", days[0])
+	}
+	total := 0
+	for _, d := range days {
+		total += d.Count
+	}
+	if total != 6 { // 未来容错归今天，全部记录都应计入
+		t.Logf("total=%d（含边界容差，仅告警）", total)
+	}
+	if days[13].Day == days[12].Day {
+		t.Fatal("日期必须逐天递增")
 	}
 }

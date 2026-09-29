@@ -26,7 +26,7 @@
 | `settings-pane-general` | settings-pane | `settings.general.language` | 7 |
 | `settings-pane-https` | settings-pane | `https.enableLabel` | 18 |
 | `stats-panel` | modal | `stats.title` | 3 |
-| `voices-panel` | modal | `voices.title` | 6 |
+| `voices-panel` | modal | `voices.title` | 8 |
 
 ## 控件
 
@@ -116,6 +116,7 @@
 | `voice-add-text` | textarea | — | `voices.textPlaceholder` | — |
 | `voices-btn` | button | — | `voices.title`<br>`voices.title` | `click` |
 | `voices-close` | button | — | `history.closeTitle`<br>`history.closeTitle` | `click` |
+| `voices-search` | input | search | `voices.searchPlaceholder`<br>`voices.searchAria` | `input` |
 | `weights-browse-btn` | button | — | `launch.browseDir` | `click` |
 | `weights-gguf-btn` | button | — | `launch.browseGguf` | `click` |
 
@@ -215,8 +216,8 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | 属性 | 静态出现次数 |
 | --- | --- |
 | `data-i18n` | 128 |
-| `data-i18n-aria-label` | 26 |
-| `data-i18n-placeholder` | 23 |
+| `data-i18n-aria-label` | 27 |
+| `data-i18n-placeholder` | 24 |
 | `data-i18n-title` | 11 |
 | `data-mode` | 4 |
 | `data-section` | 3 |

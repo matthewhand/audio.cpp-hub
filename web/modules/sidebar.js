@@ -546,6 +546,13 @@ export function makeHistoryRow(item) {
   delBtn.onclick = () => deleteHistoryItem(item.taskId);
   // 「详情」：行内展开四要素完整内容；「移动」：弹出菜单移入分组（仅 TTS 历史有分组）
   const btns = row.querySelector(".history-btns");
+  // 「Remix」：同款声音设计（音色/指令/seed+1），文本留空写新台词（仅 breeze）
+  const remixBtn = el(`<button type="button"></button>`);
+  remixBtn.textContent = t("history.remix");
+  remixBtn.title = t("history.remixTip");
+  remixBtn.onclick = () => remixHistoryRecord(item.taskId);
+  remixBtn.classList.toggle("hidden", !selectedModel() || selectedModel().family !== "breeze_tts");
+  btns.insertBefore(remixBtn, loadBtn);
   const detailBtn = el(`<button type="button"></button>`);
   detailBtn.textContent = historyDetails.has(item.taskId) ? t("task.collapse") : t("task.detail");
   detailBtn.onclick = () => toggleHistoryDetail(item);
@@ -637,4 +644,28 @@ export async function loadHistoryRecord(taskId) {
   }
   fillTtsForm(m, rec);
   showToast("info", t("history.loaded"));
+}
+
+/* 「Remix」：载入同款音色/指令/seed，但文本留空——同一声音设计下写新台词。
+   seed 顺移一位，避免逐字重播同一段音频。 */
+export async function remixHistoryRecord(taskId) {
+  const modelId = historyModelId();
+  const m = selectedModel();
+  if (!modelId || !m || m.family !== "breeze_tts") return;
+  let rec;
+  try {
+    rec = await Api.get("/api/history/{modelId}/{taskId}", { params: { modelId, taskId } });
+  } catch (e) {
+    showToast("error", t("history.loadFailed") + t("common.colon") + e.message);
+    return;
+  }
+  const remix = JSON.parse(JSON.stringify(rec));
+  remix.text = "";
+  if (remix.options && remix.options.seed != null) {
+    remix.options.seed = Number(remix.options.seed) + 1;
+  }
+  fillTtsForm(m, remix);
+  const text = $("tts-text");
+  if (text) { text.value = ""; text.focus(); }
+  showToast("info", t("history.remixed"));
 }

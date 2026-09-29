@@ -61,9 +61,43 @@ function renderStats(data) {
   }
 
   body.appendChild(renderTotals(data.totals || {}, models.length));
+  if (Array.isArray(data.perDay) && data.perDay.length) {
+    body.appendChild(renderPerDay(data.perDay));
+  }
   const list = el(`<div class="stats-models"></div>`);
   for (const m of models) list.appendChild(renderModelCard(m));
   body.appendChild(list);
+}
+
+/* 最近 14 天生成量：迷你条形图（旧→新），条高按窗口内峰值归一化 */
+function renderPerDay(days) {
+  const wrap = el(`<div class="stats-perday card"></div>`);
+  const title = el(`<div class="detail-label"></div>`);
+  title.textContent = t("stats.perDayTitle");
+  wrap.appendChild(title);
+  const max = Math.max(1, ...days.map(d => d.count));
+  const bars = el(`<div class="stats-perday-bars"></div>`);
+  for (const d of days) {
+    const bar = el(`<div class="stats-perday-day" role="img"></div>`);
+    bar.setAttribute("aria-label", t("stats.perDayBar", { day: d.day, n: I18N.num(d.count) }));
+    bar.title = `${d.day} — ${I18N.num(d.count)}`;
+    const fill = el(`<div class="stats-perday-fill"></div>`);
+    const h = d.count ? Math.max(8, Math.round((d.count / max) * 100)) : 0;
+    fill.style.height = h + "%";
+    fill.classList.toggle("zero", !d.count);
+    bar.appendChild(fill);
+    bars.appendChild(bar);
+  }
+  wrap.appendChild(bars);
+  const labels = el(`<div class="stats-perday-labels"></div>`);
+  const first = el(`<span></span>`);
+  const last = el(`<span></span>`);
+  first.textContent = days[0].day.slice(5);
+  last.textContent = days[days.length - 1].day.slice(5) + " · " + t("stats.perDayTotal", { n: I18N.num(days.reduce((a, d) => a + d.count, 0)) });
+  labels.appendChild(first);
+  labels.appendChild(last);
+  wrap.appendChild(labels);
+  return wrap;
 }
 
 function renderTotals(totals, modelCount) {

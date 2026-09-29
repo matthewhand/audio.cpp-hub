@@ -50,6 +50,45 @@ type statsResponse struct {
 	GeneratedAt int64        `json:"generatedAt"`
 	Totals      statsTotals  `json:"totals"`
 	Models      []modelStats `json:"models"`
+	PerDay      []dayCount   `json:"perDay"` // 最近 14 天生成量（含 0 的天），旧→新
+}
+
+// dayCount 单日生成次数（按记录本地时区的天聚合）。
+type dayCount struct {
+	Day   string `json:"day"`   // YYYY-MM-DD
+	Count int    `json:"count"`
+}
+
+// perDayCounts 聚合最近 14 天（含今天）的每日记录数，补零到固定窗口，旧→新。
+func perDayCounts(history map[string][]map[string]any, nowMs int64) []dayCount {
+	const window = 14
+	loc := time.Local
+	now := time.UnixMilli(nowMs).In(loc)
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	counts := make([]int64, window)
+	for _, recs := range history {
+		for _, rec := range recs {
+			t, ok := toInt64(rec["time"])
+			if !ok {
+				continue
+			}
+			// 该记录距今天的天数（0 = 今天），按本地时区的日界计算
+			daysAgo := int(dayStart.Sub(time.UnixMilli(t).In(loc)) / (24 * time.Hour))
+			if t >= dayStart.UnixMilli() {
+				daysAgo = 0
+			}
+			if daysAgo < 0 || daysAgo >= window {
+				continue // 窗口外（更早的历史）
+			}
+			counts[window-1-daysAgo]++
+		}
+	}
+	out := make([]dayCount, window)
+	for i := 0; i < window; i++ {
+		d := dayStart.AddDate(0, 0, -(window - 1 - i))
+		out[i] = dayCount{Day: d.Format("2006-01-02"), Count: int(counts[i])}
+	}
+	return out
 }
 
 type statsTotals struct {
@@ -176,6 +215,7 @@ func (h *Hub) Stats() statsResponse {
 	})
 	out.Models = models
 	out.Totals.Models = len(models)
+	out.PerDay = perDayCounts(h.history.Snapshot(), out.GeneratedAt)
 	for _, ms := range models {
 		out.Totals.Total += ms.Total
 		out.Totals.OK += ms.OK
