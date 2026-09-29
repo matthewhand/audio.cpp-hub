@@ -321,8 +321,9 @@ func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idleUnloadMs := optIntPtr(body, "idleUnloadMs")
-	if idleUnloadMs != nil && *idleUnloadMs <= 0 {
-		errJSON(w, http.StatusBadRequest, "IDLE_UNLOAD_POSITIVE", nil, "idleUnloadMs 必须为正整数")
+	// 0 表示显式常驻（永不空闲卸载），仅拒绝负数。
+	if idleUnloadMs != nil && *idleUnloadMs < 0 {
+		errJSON(w, http.StatusBadRequest, "IDLE_UNLOAD_POSITIVE", nil, "idleUnloadMs 不能为负数")
 		return
 	}
 	var execEntry *Executable

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -272,4 +273,42 @@ func equalStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// idleUnloadMs → server.json 契约：nil / 0（显式常驻）/ 正值三种形态。
+func TestWriteServerJSONIdleUnload(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "server.json")
+	zero := 0
+	fiveMin := 300000
+
+	read := func(p StartParams) map[string]any {
+		t.Helper()
+		if err := writeServerJSON(path, 18090, p, "m"); err != nil {
+			t.Fatalf("writeServerJSON: %v", err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read back: %v", err)
+		}
+		var root map[string]any
+		if err := json.Unmarshal(data, &root); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		return root
+	}
+
+	// nil（未指定）→ 不写 idle_unload_ms，引擎按自身默认（常驻）处理
+	if got := read(StartParams{Backend: "cpu", WeightsPath: "/tmp/w"}); got["idle_unload_ms"] != nil {
+		t.Fatalf("nil 应不写 idle_unload_ms, got %v", got["idle_unload_ms"])
+	}
+	// 0（显式常驻）→ 同样不写该键
+	if got := read(StartParams{Backend: "cpu", WeightsPath: "/tmp/w", IdleUnloadMs: &zero}); got["idle_unload_ms"] != nil {
+		t.Fatalf("0 应不写 idle_unload_ms, got %v", got["idle_unload_ms"])
+	}
+	// 正值 → 原样写入
+	root := read(StartParams{Backend: "cpu", WeightsPath: "/tmp/w", IdleUnloadMs: &fiveMin})
+	if v, ok := root["idle_unload_ms"].(float64); !ok || int(v) != 300000 {
+		t.Fatalf("300000 应原样写入, got %v", root["idle_unload_ms"])
+	}
 }

@@ -63,7 +63,8 @@ line="$(instance_line || true)"
 if [[ -z "$line" ]]; then
   log "No existing instance '$SERVICE_NAME'; starting model=$MODEL_ID backend=$BACKEND device=$DEVICE"
   start_payload="{\"modelId\":\"$MODEL_ID\",\"name\":\"$SERVICE_NAME\",\"weightsPath\":\"$WEIGHTS\",\"backend\":\"$BACKEND\",\"device\":$DEVICE,\"threads\":$THREADS"
-  if [[ -n "$IDLE_UNLOAD_MS" ]]; then
+  # 0 = keep the model permanently resident (no idle unload)
+  if [[ -n "$IDLE_UNLOAD_MS" && "$IDLE_UNLOAD_MS" != "0" ]]; then
     start_payload="$start_payload,\"idleUnloadMs\":$IDLE_UNLOAD_MS"
   fi
   if [[ -n "$EXECUTABLE_ID" ]]; then

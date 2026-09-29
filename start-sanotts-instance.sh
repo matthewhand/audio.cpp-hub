@@ -11,7 +11,9 @@ WEIGHTS="/home/matthewh/audio.cpp-hub/runtime/models/sanoTTS-heart-nano-GGUF"
 BACKEND="vulkan"
 DEVICE=0
 THREADS=4
-IDLE_UNLOAD_MS=300000
+# Warm-model policy: no idle unload + boot warm-up so sanotts answers instantly
+IDLE_UNLOAD_MS=0
+WARMUP_TEXT="Warm-up."
 
 log() { printf '[start-sanotts] %s\n' "$*" >&2; }
 
@@ -44,10 +46,22 @@ except Exception:
     print('NONE')
 ")
   case "$ST" in
-    READY)    log "instance '$NAME' READY"; exit 0 ;;
+    READY)    break ;;
     STARTING) sleep 2 ;;
     *)        log "instance '$NAME' status=$ST; giving up (boot continues)"; exit 0 ;;
   esac
 done
-log "instance '$NAME' did not reach READY in time (boot continues)"
+if [[ "${ST:-}" != "READY" ]]; then
+  log "instance '$NAME' did not reach READY in time (boot continues)"
+  exit 0
+fi
+
+# Warm the model into VRAM (READY does not prove the weights are resident)
+rm -f /tmp/sanotts-warmup.wav
+curl -fsS -m 120 -X POST "$HUB_URL/v1/audio/speech" \
+  -H 'Content-Type: application/json' \
+  --data-raw "{\"model\":\"$NAME\",\"input\":\"$WARMUP_TEXT\",\"response_format\":\"wav\"}" \
+  -o /tmp/sanotts-warmup.wav \
+  || { log "warm-up request failed (boot continues)"; exit 0; }
+[[ -s /tmp/sanotts-warmup.wav ]] && log "instance '$NAME' warm (model resident in VRAM)"
 exit 0

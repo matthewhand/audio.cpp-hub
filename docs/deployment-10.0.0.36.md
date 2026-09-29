@@ -52,9 +52,14 @@ sudo systemctl restart audio-cpp-hub
 - The engine binary has a baked RUNPATH pointing at the (deleted) `~/audio.cpp/1.3.296.0`
   Vulkan SDK; `executables.json` sets `LD_LIBRARY_PATH` to `runtime/vulkan-loader/` so the
   SDK loader resolves anyway. Do not delete `runtime/vulkan-loader/`.
-- Instance `server.json` files in `run/<id>/` are regenerated on every start; patches to
-  engine-only fields (e.g. `idle_unload_ms`) must be re-applied after a stop/start or via
-  a start-hook. They are engine config, not hub state.
+- Instance `server.json` files in `run/<id>/` are regenerated on every start; engine-only
+  fields are supplied via `idleUnloadMs` on `POST /api/instances` (wired through by the
+  boot scripts), so they survive stop/start cycles. Engine config, not hub state.
+- **Warm-model policy (client-facing latency)**: `breeze` and `sanotts` run with **no
+  idle unload** (always resident, warm-up request at boot — first client request never
+  pays a cold start). Only `citrinet` (internal ASR) unloads after 5 idle minutes
+  (`idleUnloadMs: 300000`). Reload is automatic + lazy either way; see the idleUnloadMs
+  feature commit for the measured 3851 → 156 MiB unload behavior.
 - Recreating an instance: `DELETE /api/instances/<id>` then `POST /api/instances` — the
   hub only regenerates its fields, which is how per-instance `threads` are changed here.
 
