@@ -171,7 +171,7 @@ CI 另有 `.github/workflows/ci.yml`（推送 / PR 触发，与发布流水线�
 
 ## 代码约定
 
-- **语言**：代码注释、日志消息、用户可见错误消息均为中文（部分用户可见文本中英双语）；标识符用英文。前端文案走 `web/i18n.zh.js` + `web/i18n.en.js` 双词典（`web/i18n.js` 只是运行时，不含文案），新增文案必须同时改两份并跑 `node scripts/check-i18n-parity.js`
+- **语言**：代码注释一律用英文（标识符同样用英文）。**用户可见错误消息与前端文案仍为中文**（前端走 `web/i18n.zh.js` + `web/i18n.en.js` 双词典，`web/i18n.js` 只是运行时不含文案；新增文案必须同时改两份并跑 `npm run check:i18n`）。日志消息沿用各自模块既有语言，不做强制统一。注：2026-09 之前注释为中文，`stats.go` / `web/modules/stats.js` 等新代码已切到英文，老文件暂未批量转换（属独立清扫任务，不要在功能 PR 里顺带改）
 - Go 代码风格：gofmt 标准格式；导出的管理器方法与类型多带中文注释简述职责
 - ID 生成统一为 8 位随机 hex（`util.go` 的 `newID()`，对应原 Java 版 UUID 前 8 位）；所有会被拼进文件路径的 id / 下载路径走 `internal/idvalidate` 集中校验，不要在 handler 里另写正则
 - 前端 HTTP：**一律走 `Api.*`（`web/api-client.js`），不再写裸 `fetch`**；轮询一律 `Api.poll`（不写 `setInterval`）；新错误码语义扩展 `api-client.js` 的 `CODE`。服务端 / 用户可控字符串进 HTML 前必须 `esc()`，URL 属性用 `safeHttpUrl()`，数字 / 字节 / 日期 / 百分比走 `I18N.num` / `bytes` / `date` / `percent`

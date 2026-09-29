@@ -7,41 +7,45 @@ import (
 	"time"
 )
 
-// stats.go — 用量与性能统计（GET /api/stats）。
+// stats.go — usage & performance statistics (GET /api/stats).
 //
-// 数据来源刻意复用既有持久化，不新增采集点、不迁移 schema：
-//   - 历史索引（data/history/<modelId>/index.jsonl）是**无淘汰**的长期资产，
-//     用于用量口径：任务数、成功率、生成音频总时长/总字节；
-//   - 内存中的 TaskManager 保留最近 finishedKeep 条已完成任务，带三个时间戳，
-//     用于性能口径：排队等待、执行耗时、实时率（RTF）。
+// Deliberately derives from data that is already persisted: no new capture
+// points, no schema migration.
+//   - The history index (data/history/<modelId>/index.jsonl) is the long-term,
+//     never-evicted asset. It supplies the usage figures: task counts, success
+//     rate, total generated audio seconds and bytes.
+//   - The in-memory TaskManager keeps the most recent `finishedKeep` finished
+//     tasks with their three timestamps, and supplies the performance figures:
+//     queue wait, run time and real-time factor (RTF).
 //
-// RTF = 执行秒数 / 生成音频秒数（越小越快；<1 表示比实时快）。
-// 仅对同时具备 StartedAt/FinishedAt 与 result.durationSec 的任务计入。
+// RTF = run seconds / generated-audio seconds. Lower is faster; below 1 means
+// faster than real time. Only tasks that have both StartedAt/FinishedAt and
+// result.durationSec are counted.
 
-// modelStats 单个模型的聚合结果。
+// modelStats holds the aggregate figures for a single model.
 type modelStats struct {
 	ModelID      string `json:"modelId"`
 	InstanceName string `json:"instanceName,omitempty"`
 	Category     string `json:"category,omitempty"`
 
-	// 用量（来自历史索引，无淘汰）
-	Total        int     `json:"total"`       // 历史记录总数（含失败）
-	OK           int     `json:"ok"`          // 成功数
-	Failed       int     `json:"failed"`      // 失败数
-	SuccessRate  float64 `json:"successRate"` // ok / total，0..1
+	// Usage (from the never-evicted history index)
+	Total        int     `json:"total"`       // history records, failures included
+	OK           int     `json:"ok"`          // succeeded
+	Failed       int     `json:"failed"`      // failed
+	SuccessRate  float64 `json:"successRate"` // ok / total, 0..1
 	AudioSeconds float64 `json:"audioSeconds"`
 	OutputBytes  int64   `json:"outputBytes"`
-	LastAt       int64   `json:"lastAt"` // 最近一次时间戳（ms）
+	LastAt       int64   `json:"lastAt"` // most recent timestamp (ms)
 
-	// 性能（来自内存任务的时间戳 + result.durationSec）
-	QueueMsP50     float64 `json:"queueMsP50"` // 排队等待中位数（ms）
-	RunMsP50       float64 `json:"runMsP50"`   // 执行耗时中位数（ms）
-	RunMsP95       float64 `json:"runMsP95"`   // 执行耗时 P95（ms）
-	RTFP50         float64 `json:"rtfP50"`     // 实时率中位数
+	// Performance (from in-memory task timestamps + result.durationSec)
+	QueueMsP50     float64 `json:"queueMsP50"` // median queue wait (ms)
+	RunMsP50       float64 `json:"runMsP50"`   // median run time (ms)
+	RunMsP95       float64 `json:"runMsP95"`   // P95 run time (ms)
+	RTFP50         float64 `json:"rtfP50"`     // median real-time factor
 	SamplesForPerf int     `json:"samplesForPerf"`
 }
 
-// statsResponse 是 /api/stats 的响应体。
+// statsResponse is the /api/stats response body.
 type statsResponse struct {
 	GeneratedAt int64        `json:"generatedAt"`
 	Totals      statsTotals  `json:"totals"`
@@ -58,16 +62,17 @@ type statsTotals struct {
 	OutputBytes  int64   `json:"outputBytes"`
 }
 
-// handleStats 返回按模型聚合的用量与性能统计。
+// handleStats returns the per-model usage and performance aggregate.
 func (h *Hub) handleStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.Stats())
 }
 
-// Stats 聚合历史（用量）与任务（性能），按模型分组。
+// Stats aggregates history (usage) and tasks (performance), grouped by model.
 func (h *Hub) Stats() statsResponse {
 	byModel := map[string]*modelStats{}
 
-	// 用量：历史索引（无淘汰）。每个 modelId 一个目录，记录旧→新。
+	// Usage: the history index (never evicted). One directory per modelId,
+	// records ordered oldest -> newest.
 	for modelID, recs := range h.history.Snapshot() {
 		ms := byModel[modelID]
 		if ms == nil {
@@ -105,7 +110,8 @@ func (h *Hub) Stats() statsResponse {
 		}
 	}
 
-	// 性能：内存任务（带时间戳）。按 modelId 收集样本后取分位数。
+	// Performance: in-memory tasks (they carry timestamps). Collect samples
+	// per modelId, then take percentiles.
 	type sample struct {
 		queueMs float64
 		runMs   float64
@@ -161,7 +167,7 @@ func (h *Hub) Stats() statsResponse {
 		ms.AudioSeconds = round3(ms.AudioSeconds)
 		models = append(models, *ms)
 	}
-	// 用量大的在前，其次最近使用。
+	// Heaviest usage first, then most recently used.
 	sort.SliceStable(models, func(i, j int) bool {
 		if models[i].Total != models[j].Total {
 			return models[i].Total > models[j].Total
@@ -184,7 +190,8 @@ func (h *Hub) Stats() statsResponse {
 	return out
 }
 
-// Snapshot 返回历史索引的浅拷贝（modelId → 记录切片副本），锁外聚合。
+// Snapshot returns a shallow copy of the history index (modelId -> copy of the
+// record slice) so aggregation can run outside the lock.
 func (m *HistoryManager) Snapshot() map[string][]map[string]any {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -197,7 +204,8 @@ func (m *HistoryManager) Snapshot() map[string][]map[string]any {
 	return out
 }
 
-// Snapshot 返回全部任务的快照（含已完成），锁外聚合用。
+// Snapshot returns a snapshot of every task (including finished ones) so
+// aggregation can run outside the lock.
 func (m *TaskManager) Snapshot() []Task {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -208,7 +216,8 @@ func (m *TaskManager) Snapshot() []Task {
 	return out
 }
 
-// percentile 返回已排序副本上的线性插值分位数（p 取 0..100）。空集返回 0。
+// percentile returns a linearly interpolated percentile (p in 0..100) over a
+// sorted copy of vals. Returns 0 for an empty set.
 func percentile(vals []float64, p float64) float64 {
 	if len(vals) == 0 {
 		return 0

@@ -24,6 +24,7 @@ func headersTestHandler(t *testing.T) http.Handler {
 		"styleguide.html":      "<!DOCTYPE html><title>sg</title><style>b{}</style>",
 		"style.css":            "body{}",
 		"app.js":               "export const x = 1;",
+		"sw.js":                "self.addEventListener('fetch', () => {});",
 		"manifest.webmanifest": "{}",
 		"icons/icon-192.png":   "\x89PNG\r\n",
 	}
@@ -206,6 +207,39 @@ func TestHeadersStyleguideCSPRelaxed(t *testing.T) {
 	if !strings.Contains(got, "frame-ancestors 'none'") {
 		t.Errorf("styleguide CSP 丢了 frame-ancestors: %q", got)
 	}
+}
+
+// The service worker script itself must be revalidated, not served with the
+// one-hour max-age used for ordinary static assets. Otherwise discovery of a
+// new worker is deferred to each browser's own update heuristics and a stale
+// worker can keep controlling the page (#97).
+func TestHeadersServiceWorkerNoCache(t *testing.T) {
+	h := headersTestHandler(t)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/sw.js", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("状态码 = %d, 期望 200", rec.Code)
+	}
+	if got, want := rec.Header().Get("Cache-Control"), "no-cache"; got != want {
+		t.Errorf("GET /sw.js Cache-Control = %q, 期望 %q", got, want)
+	}
+	assertSecurityHeaders(t, rec)
+}
+
+// The manifest needs an explicit content type: Go's MIME table is not
+// guaranteed to know .webmanifest, and a wrong type makes the browser refuse
+// to install the PWA (#97).
+func TestHeadersManifestContentType(t *testing.T) {
+	h := headersTestHandler(t)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/manifest.webmanifest", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("状态码 = %d, 期望 200", rec.Code)
+	}
+	if got, want := rec.Header().Get("Content-Type"), "application/manifest+json"; !strings.HasPrefix(got, want) {
+		t.Errorf("Content-Type = %q, 期望以 %q 开头", got, want)
+	}
+	assertSecurityHeaders(t, rec)
 }
 
 func TestIsAPIPath(t *testing.T) {
