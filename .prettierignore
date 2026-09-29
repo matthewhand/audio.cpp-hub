@@ -25,6 +25,10 @@ docs/**
 models.json
 model-packages.json
 
+# ---- 4b. Python client: Prettier has no parser for .py (style is not part of
+#      the JS format ratchet; syntax is covered by the smoke test) ----
+clients/
+
 # ---- 5. 依赖与生成物 ----
 node_modules/
 package-lock.json
