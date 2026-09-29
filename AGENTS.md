@@ -82,6 +82,11 @@ audio.cpp-hub 是 [audio.cpp](https://github.com/0xShug0/audio.cpp) 的 Web 管�
 ├── model-packages.json   # 模型下载包清单（repo/revision/targetDir/files/default/gated）
 ├── icon.ico              # 托盘图标（go:embed）
 ├── go.mod / go.sum
+├── cmd/fanout-proxy/     # 多机语音农场统一入口（独立 package main，stdlib only，默认 :18082）
+│                         #   config.go(farm.routes.json 校验) / health.go(7s 轮询 + 连续 2 次失败判掉)
+│                         #   router.go(model 改写 + 目标选择 + 流式转发) / main.go(4 个端点)
+│                         #   端点：GET /farm/health、GET /api/instances、GET /v1/models、POST /v1/audio/speech
+│                         #   文档 docs/fanout-design.md，本目录 README.md 含构建/冒烟/部署；systemd user unit 模板
 web/                      # 前端静态文件（无构建步骤、运行时零 Node）
 ├── index.html            # 全部静态 DOM + CSP（web/index.html:7）+ 脚本加载顺序（顺序有硬约束）
 ├── style.css             # 设计系统 L1–L6（令牌 / 基础 / 布局 / 组件 / 工具 / 可访问性）
@@ -151,7 +156,7 @@ npm run test:e2e       # Playwright：headless Chromium + mock 后端，首次�
 
 自动化测试已覆盖 Go 侧与前端两侧，**无外部测试框架依赖**（Go 用标准库 `testing`，前端用 `node:test` + Playwright）：
 
-- **Go**：`go test ./...`（CI 另跑 `go test -race ./...`）。`*_test.go` 覆盖 ID/路径校验（`ids_test.go` + `internal/idvalidate`）、实例生命周期与端口分配（`instance_test.go`）、安全响应头（`headers_test.go`）、`/v1/*` 代理与 model 提取（`proxy_test.go`）、下载任务（`download_test.go`）、历史落盘与分组（`history_test.go`）、用量与性能聚合（`stats_test.go`）、任务队列收敛与并发（`task_finalize_test.go` / `task_race_test.go`）、WAV 头解析（`internal/wav`）
+- **Go**：`go test ./...`（CI 另跑 `go test -race ./...`）。`*_test.go` 覆盖 ID/路径校验（`ids_test.go` + `internal/idvalidate`）、实例生命周期与端口分配（`instance_test.go`）、安全响应头（`headers_test.go`）、`/v1/*` 代理与 model 提取（`proxy_test.go`）、下载任务（`download_test.go`）、历史落盘与分组（`history_test.go`）、用量与性能聚合（`stats_test.go`）、任务队列收敛与并发（`task_finalize_test.go` / `task_race_test.go`）、WAV 头解析（`internal/wav`）；`cmd/fanout-proxy/` 另有表驱动单测（别名解析 / 目标选择与故障转移 / 2 次失败判掉 / model 改写 / 已提交路由表）
 - **前端**：`npm run test:unit`（`test/unit/`：WAV 工具、i18n 含中英键 parity、app-utils、api-client、file-browser、routing）、`npm run test:e2e`（`e2e/`：9 个 spec / 11 条用例，Playwright + `page.route` mock 后端，覆盖实例/任务/历史/音色/下载/可执行文件/ASR/UI 切换/冒烟，**无需 Go 二进制、GPU 或模型**）
 - **其它闸门**：`node scripts/check-i18n-parity.js`（中英 578/578 键对等 + `web/*.html` 的 `data-i18n*` 引用键均存在）、`node scripts/check-sw-precache.mjs`（`web/sw.js` 的 `PRECACHE_URLS` 覆盖 `index.html` 本地引用与模块图传递闭包——`perf:budget` 的三方一致只管 ES module 图，管不到经典脚本）、`python3 scripts/check-diagrams.py docs/diagrams`（19/19 图示可访问性契约）、`npm run ui:inventory:check`（UI 清单防漂移）、`npm run perf:budget`（首屏体积预算）。详见 `TESTING.md` 与 `web/README.md`
 

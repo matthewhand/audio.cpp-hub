@@ -11,6 +11,32 @@ expose any of them to the public internet.
 | `10.0.0.30` (second hub) | same iGPU | `:18081` | `qwen3-vd` (voice-design, `instruct` top-level) | Docker `audio-cpp-hub-amd-qwen3`, image `audio-cpp-hub:amd-a3bfac4`, state dirs `data-qwen3/ logs-qwen3/ run-qwen3/` |
 | `10.0.0.32` (WINDOWS2) | Ryzen 9 5950X, CPU only (in Docker) | `:18080` | `sanotts` (fast tiny TTS) | Docker Desktop (WSL2), container `audio-cpp-hub-cpu`, image `audio-cpp-hub:cpu-espeak` |
 
+## Unified fan-out entrypoint — `http://10.0.0.36:18082`
+
+`cmd/fanout-proxy` (tiny Go router, stdlib only) sits in front of the four hubs
+above and gives agents one OpenAI-shaped base URL with automatic failover, so
+they no longer hard-code `host:port:model` triples:
+
+| Alias | Serves from (in order) |
+|---|---|
+| `breeze`, `expressive` | `.36:18080 breeze` → `.30:18080 breeze` |
+| `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` |
+| `sanotts`, `instant` | `.36:18080 sanotts` → `.32:18080 sanotts` |
+| `citrinet`, `stt` | `.36:18080 citrinet` |
+
+- `POST /v1/audio/speech` routes on `model`, rewrites it to the upstream service
+  name, streams the audio back and fails over on hub-down / 5xx / "instance not
+  READY". `GET /v1/models` lists only aliases that currently resolve.
+- `GET /farm/health` — per-hub up/down + latency + which backend each alias
+  resolved to; `GET /api/instances` — the whole farm's instances in one list.
+- History is **not** unified: responses carry `X-Fanout-Hub` /
+  `X-Fanout-Instance` so a take can be fetched from the origin hub's
+  `/api/history/...`. STT/async tasks still go to `.36:18080` directly.
+- The 6600 XT (`.30` DEVICE=0) is deliberately absent from the route table, and
+  no hub is reconfigured by the proxy. LAN-only, no auth — same warning as
+  above. Design and rationale: `docs/fanout-design.md`; ops:
+  `cmd/fanout-proxy/README.md`.
+
 ## 10.0.0.30 — two containers on one host
 
 The prod container (port 18080) is managed by `compose.amd.yaml`. The qwen3
@@ -81,9 +107,12 @@ CPU performance is a non-issue for sanotts: ~30–300 ms per sentence.
 
 ## Client routing quick reference
 
-- Expressive / sarcastic voice design: `.36:18080` model `breeze`
-  (`options.instruction`) or `.30:18081` model `qwen3-vd` (top-level
-  `instruct`, ~2.5x faster than breeze).
-- Instant TTS: `.36:18080` or `.32:18080`, model `sanotts`.
-- Standby breeze (if .36 is down): `.30:18080` model `breeze`.
-- STT: `.36:18080` model `citrinet` via async `POST /api/tasks`.
+- One base URL for everything TTS: `http://10.0.0.36:18082` (fan-out, failover
+  included) — preferred for agents.
+- Per-host direct access, when you want to pin a take to one box:
+  - Expressive / sarcastic voice design: `.36:18080` model `breeze`
+    (`options.instruction`) or `.30:18081` model `qwen3-vd` (top-level
+    `instruct`, ~2.5x faster than breeze).
+  - Instant TTS: `.36:18080` or `.32:18080`, model `sanotts`.
+  - Standby breeze (if .36 is down): `.30:18080` model `breeze`.
+  - STT: `.36:18080` model `citrinet` via async `POST /api/tasks`.

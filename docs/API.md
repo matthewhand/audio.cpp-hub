@@ -11,6 +11,8 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 
 > Web UI 侧的错误信封由 [`web/api-client.js`](../web/api-client.js) 归一化为 `ApiError`（`code` / `params` / `message`），见文末「[前端 API 客户端](#前端-api-客户端webapi-clientjs)」。
 
+> 本文只覆盖 hub 本体的路由。多机语音农场的统一入口 `cmd/fanout-proxy`（默认 `:18082`）是独立二进制，只暴露 `GET /farm/health`、`GET /api/instances`、`GET /v1/models`、`POST /v1/audio/speech`，见 [`docs/fanout-design.md`](fanout-design.md)。
+
 > English: this file is Chinese-first. Method and path are language-neutral; see the comments in `api.go` for exact handler semantics.
 
 ## 路由索引

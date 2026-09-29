@@ -4,9 +4,34 @@ Audience: an autonomous agent (or script) on the LAN that wants to **generate sp
 in a variety of voice designs** and **transcribe audio** against this hub.
 
 - Base URL: `http://10.0.0.36:18080` (LAN-only service, no auth — never expose publicly)
+- Optional single entrypoint: `http://10.0.0.36:18082` — the LAN fan-out proxy,
+  same request/response shapes plus automatic failover across the farm
+  (`breeze`/`expressive`, `qwen3-vd`/`voice-design-fast`, `sanotts`/`instant`,
+  `citrinet`/`stt`). TTS only; history, voices and STT still live on `:18080`.
+  See [Unified fan-out base URL](#unified-fan-out-base-url) below.
 - All bodies are JSON unless stated otherwise
 - Error bodies: `{"error": {"code", "params", "message"}}` (API routes) or
   `{"error": {"message", "type"}}` (`/v1/*` proxy routes)
+
+## Unified fan-out base URL
+
+`http://10.0.0.36:18082` fronts every hub in the farm (`docs/farm.md`), so an
+agent can speak model **aliases** instead of `host:port:service` triples:
+
+```jsonc
+// POST http://10.0.0.36:18082/v1/audio/speech
+{ "model": "expressive", "input": "…", "options": { "instruction": "…" } }
+//  -> .36 breeze, or .30 breeze if .36 is down / not READY
+```
+
+- `GET /v1/models` — only the aliases that currently have a working backend.
+- Successful responses add `X-Fanout-Hub` / `X-Fanout-Instance`; use the hub
+  there to fetch the archived take from `/api/history/...`.
+- `GET /farm/health` — per-hub up/down and which backend each alias resolved to.
+- Not proxied: `/api/history/*`, `/api/voices/*`, `/api/audio/upload`,
+  `/api/tasks*` and STT. Keep using `:18080` for those.
+- Fan-out is LAN-only with no auth, exactly like the hubs.
+
 
 ## Instances used here
 
