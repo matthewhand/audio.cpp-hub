@@ -1318,6 +1318,27 @@
     }
   },
   {
+    "id": "sanotts",
+    "family": "sanotts",
+    "ggufUrl": "https://huggingface.co/ampixa/sanoTTS",
+    "displayName": "SanoTTS",
+    "displayNameEn": "SanoTTS",
+    "description": "SanoTTS 超轻量英语语音合成（heart-nano 音色，24kHz）。",
+    "descriptionEn": "SanoTTS ultra-lightweight English speech synthesis (heart-nano voice, 24kHz).",
+    "category": "tts",
+    "serverTask": "tts",
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "none"
+    },
+    "outputType": "audio",
+    "paramSchema": {}
+  },
+  {
     "id": "stable_audio",
     "family": "stable_audio",
     "hfUrl": "https://huggingface.co/stabilityai/stable-audio-3-medium",

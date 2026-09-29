@@ -34,6 +34,8 @@ REVIEW_FOR_GROK.md
 /compose.test.yaml
 /.env.amd-go
 /*.service
+/runtime/
+/bin/
 
 # 容器内使用的默认配置（端口 18080），需纳入版本控制
 !docker/hub.config.json
