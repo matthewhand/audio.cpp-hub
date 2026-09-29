@@ -48,6 +48,8 @@ window.VoiceSelect = class VoiceSelect {
     // 注册到全局列表：语言切换时由 app.js 统一调用 refreshLabels()
     window.__voiceSelects = window.__voiceSelects || [];
     window.__voiceSelects.push(this);
+    // 反向引用：voices-panel 的「用于 TTS」等外部入口按挂载点定位选择器实例
+    this.root.__voiceSelect = this;
     this.refreshLabels();
     this.refresh();
   }

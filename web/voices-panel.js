@@ -109,6 +109,13 @@ function makeVoiceRow(v) {
   editBtn.textContent = t("voices.edit");
   editBtn.onclick = () => enterEdit(row, v);
 
+  const useBtn = document.createElement("button");
+  useBtn.type = "button";
+  useBtn.className = "btn-ghost";
+  useBtn.textContent = t("voices.useInTts");
+  useBtn.title = t("voices.useInTtsTip");
+  useBtn.onclick = () => useVoiceInTts(v);
+
   const delBtn = document.createElement("button");
   delBtn.type = "button";
   delBtn.className = "stop-btn";
@@ -116,11 +123,33 @@ function makeVoiceRow(v) {
   delBtn.onclick = () => deleteVoice(v);
 
   btns.appendChild(playBtn);
+  btns.appendChild(useBtn);
   btns.appendChild(editBtn);
   btns.appendChild(delBtn);
   row.appendChild(info);
   row.appendChild(btns);
   return row;
+}
+
+/* 「用于 TTS」：跳到 breeze 的克隆模式并选中该音色（breeze 是当前唯一克隆入口） */
+function useVoiceInTts(v) {
+  if (window.hubNavigate) window.hubNavigate("#/model/breeze-tts");
+  if (window.closeVoicesPanel) window.closeVoicesPanel();
+  // 面板渲染是异步链（selectModelById → renderWorkspace），轮询等待 breeze 克隆控件就绪
+  let tries = 0;
+  const timer = setInterval(() => {
+    const modeSel = document.getElementById("tts-breeze-mode");
+    const pickerRoot = /** @type {any} */ (document.getElementById("voice-picker"));
+    const vs = pickerRoot && pickerRoot.__voiceSelect;
+    if (modeSel && vs) {
+      clearInterval(timer);
+      modeSel.value = "voice_clone";
+      modeSel.dispatchEvent(new Event("change"));
+      vs.setVoice(v.vid);
+      return;
+    }
+    if (++tries > 20) clearInterval(timer);
+  }, 100);
 }
 
 /* 行内编辑：名称 input + 文本 textarea + 保存/取消 */

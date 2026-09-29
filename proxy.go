@@ -332,8 +332,13 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 // archiveV1Speech 把 tee 落盘的成功音频从临时文件改名为历史 wav 并写入操作历史。
 // taskID 与 /api/tasks 生成的格式一致，前端可正常播放/删除。
 func (h *Hub) archiveV1Speech(inst *Instance, teePath, taskID string, request map[string]any) {
-	if info, err := wav.ParseFile(teePath); err != nil || info.DurationSec <= 0 {
+	info, err := wav.ParseFile(teePath)
+	if err != nil || info.DurationSec <= 0 {
 		return // 非 WAV（上游将来改格式）不归档，defer 已清理临时文件
+	}
+	var size int64
+	if st, serr := os.Stat(teePath); serr == nil {
+		size = st.Size()
 	}
 	finalPath := filepath.Join(historyDir(inst.ModelID), taskID+".wav")
 	if err := os.Rename(teePath, finalPath); err != nil {
@@ -341,8 +346,12 @@ func (h *Hub) archiveV1Speech(inst *Instance, teePath, taskID string, request ma
 		return
 	}
 	h.history.RecordTTS(inst, request, taskID, map[string]any{
-		"file": taskID + ".wav",
-		"via":  "v1/audio/speech",
+		"file":        taskID + ".wav",
+		"size":        size,
+		"durationSec": round3(info.DurationSec),
+		"sampleRate":  info.SampleRate,
+		"channels":    info.Channels,
+		"via":         "v1/audio/speech",
 	}, "")
 }
 

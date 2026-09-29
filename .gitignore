@@ -51,3 +51,6 @@ docs/media/*.mp4
 docs/media/tts.webm
 docs/media/tts.poster.png
 
+
+# Python client bytecode
+__pycache__/

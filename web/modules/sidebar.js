@@ -494,7 +494,15 @@ export function makeHistoryRow(item) {
     if (item.result.size != null) meta.push(WavUtil.formatSize(item.result.size));
   }
   if (item.instanceName) meta.push(item.instanceName);
-  row.querySelector(".history-meta").textContent = meta.join(" ｜ ");
+  const metaEl = row.querySelector(".history-meta");
+  metaEl.textContent = meta.join(" ｜ ");
+  // 同步代理（/v1/audio/speech）归档的记录带 via 标记，与任务流记录区分
+  if (item.result && item.result.via === "v1/audio/speech") {
+    const via = el(`<span class="history-via"></span>`);
+    via.textContent = t("history.viaSync");
+    via.title = t("history.viaSyncTip");
+    metaEl.appendChild(via);
+  }
   if (!item.ok) {
     const err = el(`<div class="error-text history-error"></div>`);
     err.textContent = item.error || t("history.failedBadge");
