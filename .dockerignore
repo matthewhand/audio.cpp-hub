@@ -37,3 +37,8 @@ HANDOFF.md
 LOAD_REPORT.md
 REVIEW_FOR_GROK.md
 *.service
+
+# qwen3-vd secondary-hub state dirs (same pattern as data/logs/run)
+data-qwen3
+logs-qwen3
+run-qwen3
