@@ -64,6 +64,9 @@ const PRECACHE_URLS = [
   "/modules/downloads.js",
   "/modules/tasks.js",
   "/modules/sidebar.js",
+  "/modules/stats-lazy.js",
+  // 看板模块是懒加载的（不在首屏），但离线冷启动点击 📊 仍要能用，
+  // 因此只进预缓存、不进 index.html 的 modulepreload。
   "/modules/stats.js",
   "/modules/panels.js",
   "/style.css",

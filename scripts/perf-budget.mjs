@@ -55,13 +55,22 @@ const KIB = 1024;
  * exchange of 5.4 KiB for an entire dashboard view, not silent bloat: the
  * numbers are recalibrated on the same basis and the measured values are
  * recorded inline below. To get back to the old waterline, make stats.js a
- * dynamic import() loaded on click rather than raising the budget again. */
+ * dynamic import() loaded on click rather than raising the budget again.
+ *
+ * 2026-09 (done): stats.js IS now that dynamic import(). `stats-lazy.js` is a
+ * small eager facade that routing.js imports; the real module is pulled on first
+ * click of the dashboard. First-load raw 336.6 -> 334.6 KiB and gzip 119.9 ->
+ * 119.2 KiB, with the ~5.4 KiB chunk now paid only when #/stats is opened. The
+ * ratchet now also understands lazy chunks: they are required in sw.js's
+ * PRECACHE_URLS (so #/stats still works offline) but excluded from first-load
+ * size and request counts. Tighten further by moving more click-to-open panels
+ * behind the same pattern. */
 export const BUDGETS = {
-  jsRawKiB: 340, // 初始 JS 未压缩合计（实测 336.6）
-  jsGzipKiB: 121, // 初始 JS gzip 传输合计（实测 119.9）
+  jsRawKiB: 336, // 初始 JS 未压缩合计（实测 334.6）
+  jsGzipKiB: 120, // 初始 JS gzip 传输合计（实测 119.2）
   cssRawKiB: 68, // 初始 CSS 未压缩（实测 66.2）
   cssGzipKiB: 18, // 初始 CSS gzip 传输（实测 16.9）
-  totalGzipKiB: 138, // JS + CSS gzip 合计（实测 136.8，不含 HTML，HTML 很小）
+  totalGzipKiB: 137, // JS + CSS gzip 合计（实测 136.1，不含 HTML，HTML 很小）
   subresourceRequests: 31, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 30）
   ttiTargetMs: 1500 // 目标 TTI（本地/局域网，中端笔电）——浏览器指标，本脚本不测量
 };
@@ -127,6 +136,28 @@ function kib(n) {
   return (n / KIB).toFixed(1);
 }
 
+/** 收集经 import("...") 懒加载的模块：它们不在首屏，但必须进 sw.js 预缓存以便离线可用。 */
+function collectLazyModules() {
+  const lazy = new Set();
+  const dir = path.join(WEB, "modules");
+  if (!fs.existsSync(dir)) return [...lazy];
+  for (const name of fs.readdirSync(dir)) {
+    if (!name.endsWith(".js")) continue;
+    const file = `modules/${name}`;
+    const src = fs.readFileSync(path.join(WEB, file), "utf8");
+    for (const m of src.matchAll(/\bimport\(\s*["'](\.\/[^"']+)["']\s*\)/g)) {
+      const spec = m[1];
+      lazy.add(
+        path
+          .normalize(path.join(path.dirname(file), spec))
+          .split(path.sep)
+          .join("/")
+      );
+    }
+  }
+  return [...lazy];
+}
+
 export function measure() {
   const html = fs.readFileSync(path.join(WEB, "index.html"), "utf8");
   /* 初载资源一律从 index.html 反推，不再维护一份手写文件名清单：
@@ -160,27 +191,27 @@ export function measure() {
     initialFiles: [...jsFiles, ...CSS_HIT],
     modules,
     moduleDeps,
+    lazyModules: collectLazyModules(),
     preloads: modulepreloads(),
     precache: precached()
   };
 }
 
 /* 三方一致性：模块图（app.js 的 import 图，不含 app.js 自身）⊆ index.html 的
-   modulepreload，模块图 + app.js ⊆ sw.js 预缓存。
+   modulepreload，模块图 + app.js + 懒加载模块 ⊆ sw.js 预缓存。
    任一处漏项都不会让页面报错，只会让首屏悄悄退回串行取模块 / 离线首屏缺件——
-   这正是要在这里显式挡住的漂移。 */
+   这正是要在这里显式挡住的漂移。
+   懒加载模块（动态 import）不参与首屏体积与请求数，但必须在预缓存里，
+   否则离线冷启动点开看板会 404。 */
 function graphDrift(m) {
   const inPreload = new Set(m.preloads);
   const inPrecache = new Set(m.precache);
+  const known = new Set([...m.modules, ...m.lazyModules]);
   return {
     missingPreload: m.moduleDeps.filter((f) => !inPreload.has("/" + f)),
-    stalePreload: m.preloads.filter(
-      (f) => f.startsWith("/modules/") && !m.modules.includes(f.slice(1))
-    ),
-    missingPrecache: m.modules.filter((f) => !inPrecache.has("/" + f)),
-    stalePrecache: m.precache.filter(
-      (f) => f.startsWith("/modules/") && !m.modules.includes(f.slice(1))
-    )
+    stalePreload: m.preloads.filter((f) => f.startsWith("/modules/") && !known.has(f.slice(1))),
+    missingPrecache: [...m.modules, ...m.lazyModules].filter((f) => !inPrecache.has("/" + f)),
+    stalePrecache: m.precache.filter((f) => f.startsWith("/modules/") && !known.has(f.slice(1)))
   };
 }
 
