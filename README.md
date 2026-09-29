@@ -11,7 +11,8 @@
 
 ## 演示
 
-以下 GIF 均从运行中的 Web UI 实拍（Playwright 录屏 + ffmpeg 压制），非设计稿。
+以下片段均从运行中的 Web UI 实拍（Playwright 录屏 + ffmpeg 转码），非设计稿。
+短视频用 `<video>`（WebM + 海报帧，首屏不整段加载），较老的 GIF 直接内联。
 
 **总览：模型列表与就绪实例** — 左侧是可启动的模型清单与实例卡片（此处 BreezeTTS 实例状态为 READY），选中模型后右侧进入对应工作台。
 
@@ -21,13 +22,24 @@
 
 ![hub-tts](docs/assets/hub-tts.gif)
 
+**启动实例** — 填写权重路径与设备、启动模型，等待健康检查通过后变为「就绪」。
+
+<video src="docs/media/instance-start.webm" poster="docs/media/instance-start.poster.png" width="640" controls preload="none" loop muted playsinline></video>
+
 **操作历史** — 页头 🕘 打开操作历史，行内展开记录详情，参考音频与结果音频可回听。
 
-![hub-history](docs/assets/hub-history.gif)
+<video src="docs/media/history.webm" poster="docs/media/history.poster.png" width="640" controls preload="none" loop muted playsinline></video>
 
 **下载管理** — 页头 ⬇️ 打开下载管理，查看权重下载进度，可暂停 / 续传 / 一键填入启动表单。
 
-![hub-downloads](docs/assets/hub-downloads.gif)
+<video src="docs/media/downloads.webm" poster="docs/media/downloads.poster.png" width="640" controls preload="none" loop muted playsinline></video>
+
+**主题切换** — 跟随系统 / 浅色 / 深色三态，首屏无闪烁（见 `web/boot.js`）。
+
+<video src="docs/media/theme-switch.webm" poster="docs/media/theme-switch.poster.png" width="640" controls preload="none" loop muted playsinline></video>
+
+> 素材由 `scripts/record-demos.cjs` 从**真实运行的 hub** 录制，场景清单与重录方式见
+> [`docs/media/README.md`](docs/media/README.md)。
 
 ## 架构图
 
