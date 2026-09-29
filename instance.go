@@ -31,6 +31,7 @@ type Instance struct {
 	Device         *int
 	ExecName       string
 	Threads        *int
+	IdleUnloadMs   *int // 空闲自动卸载毫秒数（server.json 顶层 idle_unload_ms），nil 表示不卸载
 	SessionOptions map[string]string
 	Status         string // STARTING / READY
 	CreatedAt      string
@@ -105,6 +106,7 @@ type StartParams struct {
 	Device         *int
 	Port           *int
 	Threads        *int
+	IdleUnloadMs   *int
 	ExecPath       string
 	ExecName       string
 	ServerTask     string
@@ -209,6 +211,7 @@ func (m *InstanceManager) Start(p StartParams) (*Instance, error) {
 		Device:         p.Device,
 		ExecName:       p.ExecName,
 		Threads:        p.Threads,
+		IdleUnloadMs:   p.IdleUnloadMs,
 		SessionOptions: p.SessionOptions,
 		Status:         "STARTING",
 		CreatedAt:      time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
@@ -534,6 +537,9 @@ func writeServerJSON(path string, port int, p StartParams, instanceName string) 
 	if p.Device != nil {
 		root["device"] = *p.Device
 	}
+	if p.IdleUnloadMs != nil && *p.IdleUnloadMs > 0 {
+		root["idle_unload_ms"] = *p.IdleUnloadMs
+	}
 	data, err := json.Marshal(root)
 	if err != nil {
 		return err
@@ -564,6 +570,9 @@ func (m *InstanceManager) ToJSON(inst *Instance, taskCount int) map[string]any {
 	}
 	if inst.Threads != nil {
 		out["threads"] = *inst.Threads
+	}
+	if inst.IdleUnloadMs != nil {
+		out["idleUnloadMs"] = *inst.IdleUnloadMs
 	}
 	return out
 }

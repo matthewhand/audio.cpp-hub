@@ -210,6 +210,12 @@ $("launch-threads").addEventListener("input", (e) => {
   localStorage.setItem("hub-threads", e.target.value.trim());
 });
 
+/* 空闲卸载毫秒数全局持久化（空 = 模型常驻显存） */
+$("launch-idle-unload").value = localStorage.getItem("hub-idle-unload") || "";
+$("launch-idle-unload").addEventListener("input", (e) => {
+  localStorage.setItem("hub-idle-unload", e.target.value.trim());
+});
+
 /* ---------- 启动配置（Profile）：持久化到后端 data/profiles.json ---------- */
 export async function loadProfiles() {
   try {
@@ -274,6 +280,7 @@ export function fillLaunchForm(p) {
   applyWantedDevice();
   $("launch-port").value = p.port ?? "";
   $("launch-threads").value = p.threads ?? "";
+  $("launch-idle-unload").value = p.idleUnloadMs ?? "";
   $("launch-adv-options").value = envToText(p.sessionOptions);
   if (p.executableId && [...$("launch-exec").options].some(o => o.value === p.executableId)
       && $("launch-exec").value !== p.executableId) {
@@ -308,6 +315,8 @@ export function collectProfileFields(name) {
   if (device !== null) fields.device = device;
   if (port !== "") fields.port = parseInt(port, 10);
   if (threads !== "") fields.threads = parseInt(threads, 10);
+  const idleUnload = $("launch-idle-unload").value;
+  if (idleUnload !== "") fields.idleUnloadMs = parseInt(idleUnload, 10);
   const sessionOptions = parseSessionOptionsText();
   if (Object.keys(sessionOptions).length) fields.sessionOptions = sessionOptions;
   return fields;
@@ -405,6 +414,8 @@ $("launch-btn").onclick = async () => {
   if (device !== null) body.device = device;
   if (port !== "") body.port = parseInt(port, 10);
   if (threads !== "") body.threads = parseInt(threads, 10);
+  const idleUnload = $("launch-idle-unload").value;
+  if (idleUnload !== "") body.idleUnloadMs = parseInt(idleUnload, 10);
   let sessionOptions;
   try {
     sessionOptions = parseSessionOptionsText();

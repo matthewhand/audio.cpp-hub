@@ -9,6 +9,7 @@
 #   AUDIOCPP_BACKEND  / BACKEND        vulkan | cpu | hip（默认 vulkan）
 #   AUDIOCPP_DEVICE   / DEVICE         传给引擎的设备序号（默认 0）
 #   AUDIOCPP_THREADS  / THREADS        CPU 线程数（默认 4）
+#   AUDIOCPP_IDLE_UNLOAD_MS / IDLE_UNLOAD_MS  空闲自动卸载毫秒数（可选，缺省常驻）
 #   AUDIOCPP_VOICE_REF / VOICE_REF     参考音频路径（可选）
 #   WARMUP_TEXT                        预热句子（可选）
 #   HUB_URL                            hub 基础地址（默认 http://127.0.0.1:18080）
@@ -22,6 +23,7 @@ WEIGHTS="${AUDIOCPP_WEIGHTS:-${WEIGHTS:-}}"
 BACKEND="${AUDIOCPP_BACKEND:-${BACKEND:-vulkan}}"
 DEVICE="${AUDIOCPP_DEVICE:-${DEVICE:-0}}"
 THREADS="${AUDIOCPP_THREADS:-${THREADS:-4}}"
+IDLE_UNLOAD_MS="${AUDIOCPP_IDLE_UNLOAD_MS:-${IDLE_UNLOAD_MS:-}}"
 VOICE_REF="${AUDIOCPP_VOICE_REF:-${VOICE_REF:-}}"
 EXECUTABLE_ID="${AUDIOCPP_EXECUTABLE_ID:-}"
 SERVER_BIN="${AUDIOCPP_SERVER_BIN:-/audio.cpp/bin/audiocpp_server}"
@@ -61,6 +63,9 @@ line="$(instance_line || true)"
 if [[ -z "$line" ]]; then
   log "No existing instance '$SERVICE_NAME'; starting model=$MODEL_ID backend=$BACKEND device=$DEVICE"
   start_payload="{\"modelId\":\"$MODEL_ID\",\"name\":\"$SERVICE_NAME\",\"weightsPath\":\"$WEIGHTS\",\"backend\":\"$BACKEND\",\"device\":$DEVICE,\"threads\":$THREADS"
+  if [[ -n "$IDLE_UNLOAD_MS" ]]; then
+    start_payload="$start_payload,\"idleUnloadMs\":$IDLE_UNLOAD_MS"
+  fi
   if [[ -n "$EXECUTABLE_ID" ]]; then
     start_payload="$start_payload,\"executableId\":\"$EXECUTABLE_ID\""
   fi

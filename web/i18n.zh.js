@@ -353,6 +353,8 @@ window.I18N_ZH = {
   "launch.portPlaceholder": "留空自动分配",
   "launch.threads": "线程数（可选）",
   "launch.threadsPlaceholder": "留空自动（CPU 核心数）",
+  "launch.idleUnload": "空闲卸载（可选）",
+  "launch.idleUnloadPlaceholder": "留空常驻（毫秒）",
   "launch.advOptionsPlaceholder": "voxcpm2.weight_type=q8_0",
   "launch.execEmpty": "尚未配置可执行文件",
   "launch.execGoto": "去配置",

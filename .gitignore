@@ -36,7 +36,11 @@ REVIEW_FOR_GROK.md
 /*.service
 /runtime/
 /bin/
+.gocache/
 
-# 容器内使用的默认配置（端口 18080），需纳入版本控制
+# 容器内使用的默认配置与启动脚本（端口 18080），需纳入版本控制
 !docker/hub.config.json
+!docker/executables.json
+!docker/start-hub.sh
+!docker/start-instance.sh
 

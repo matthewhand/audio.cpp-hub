@@ -283,7 +283,7 @@ func (h *Hub) handleInstanceList(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleInstanceStart 启动实例：{"modelId","weightsPath","backend"?,"device"?,"port"?,
-// "threads"?,"executableId"?,"name"?,"sessionOptions"?}
+// "threads"?,"idleUnloadMs"?,"executableId"?,"name"?,"sessionOptions"?}
 func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 	body := readBodyMap(w, r)
 	if body == nil {
@@ -318,6 +318,11 @@ func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 	threads := optIntPtr(body, "threads")
 	if threads != nil && *threads <= 0 {
 		errJSON(w, http.StatusBadRequest, "THREADS_POSITIVE", nil, "threads 必须为正整数")
+		return
+	}
+	idleUnloadMs := optIntPtr(body, "idleUnloadMs")
+	if idleUnloadMs != nil && *idleUnloadMs <= 0 {
+		errJSON(w, http.StatusBadRequest, "IDLE_UNLOAD_POSITIVE", nil, "idleUnloadMs 必须为正整数")
 		return
 	}
 	var execEntry *Executable
@@ -362,6 +367,7 @@ func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 		Device:         optIntPtr(body, "device"),
 		Port:           optIntPtr(body, "port"),
 		Threads:        threads,
+		IdleUnloadMs:   idleUnloadMs,
 		ExecPath:       execPath,
 		ExecName:       execEntry.Name,
 		ServerTask:     serverTask,

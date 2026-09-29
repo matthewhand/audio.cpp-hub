@@ -354,6 +354,8 @@ window.I18N_EN = {
   "launch.portPlaceholder": "Leave empty for auto assignment",
   "launch.threads": "Threads (optional)",
   "launch.threadsPlaceholder": "Leave empty for auto (CPU cores)",
+  "launch.idleUnload": "Idle unload (optional)",
+  "launch.idleUnloadPlaceholder": "Leave empty to stay resident (milliseconds)",
   "launch.advOptionsPlaceholder": "voxcpm2.weight_type=q8_0",
   "launch.execEmpty": "No executable configured yet",
   "launch.execGoto": "Configure",

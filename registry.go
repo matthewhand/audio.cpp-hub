@@ -339,7 +339,7 @@ func (r *ProfileRegistry) List() []map[string]any {
 // profileFields 允许持久化的字段白名单。
 var profileFields = []string{
 	"name", "modelId", "weightsPath", "backend", "device", "port", "threads",
-	"executableId", "instanceName", "sessionOptions",
+	"idleUnloadMs", "executableId", "instanceName", "sessionOptions",
 }
 
 // Save 新增（id 为空）或按 id 更新；更新且不存在时返回 nil。

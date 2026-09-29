@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# start-sanotts-instance.sh — host-local boot helper (10.0.0.36).
-# Starts the secondary 'sanotts' instance if absent and waits for READY.
+# start-citrinet-instance.sh — host-local boot helper (10.0.0.36).
+# Starts the 'citrinet' ASR instance if absent and waits for READY.
 # Deliberately tolerant: never fails the service boot (breeze must still serve).
 set -u
 
 HUB_URL="http://127.0.0.1:18080"
-MODEL_ID="sanotts"
-NAME="sanotts"
-WEIGHTS="/home/matthewh/audio.cpp-hub/runtime/models/sanoTTS-heart-nano-GGUF"
+MODEL_ID="citrinet_asr"
+NAME="citrinet"
+WEIGHTS="/home/matthewh/audio.cpp-hub/models/Citrinet-ASR-GGUF/citrinet-asr-q8_0.gguf"
 BACKEND="vulkan"
 DEVICE=0
 THREADS=4
 IDLE_UNLOAD_MS=300000
 
-log() { printf '[start-sanotts] %s\n' "$*" >&2; }
+log() { printf '[start-citrinet] %s\n' "$*" >&2; }
 
 # Wait for the hub API (ExecStartPost runs after ExecStart, but the hub needs a moment)
 for i in $(seq 1 30); do
