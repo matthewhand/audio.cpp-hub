@@ -205,6 +205,58 @@ export class MockBackend {
 
     // ---------- 事件 / 证书 ----------
     if (method === "GET" && p === "/api/events") return this.json(route, this.events);
+    // 用量与性能看板（#74 起懒加载，这里提供两个模型的样本以覆盖多卡片渲染）
+    if (method === "GET" && p === "/api/stats") {
+      return this.json(route, {
+        generatedAt: 1756400000000,
+        totals: {
+          models: 2,
+          total: 12,
+          ok: 11,
+          failed: 1,
+          successRate: 0.917,
+          audioSeconds: 48.6,
+          outputBytes: 778240
+        },
+        models: [
+          {
+            modelId: "breeze-tts",
+            instanceName: "breeze2tts",
+            category: "tts",
+            total: 10,
+            ok: 10,
+            failed: 0,
+            successRate: 1,
+            audioSeconds: 40.2,
+            outputBytes: 643200,
+            lastAt: 1756399000000,
+            queueMsP50: 120,
+            runMsP50: 2100,
+            runMsP95: 3400,
+            rtfP50: 0.42,
+            samplesForPerf: 10
+          },
+          {
+            modelId: "index-tts2",
+            instanceName: "index2",
+            category: "tts",
+            total: 2,
+            ok: 1,
+            failed: 1,
+            successRate: 0.5,
+            audioSeconds: 8.4,
+            outputBytes: 135040,
+            lastAt: 1756300000000,
+            // samplesForPerf = 0 → 看板不应展示性能行
+            queueMsP50: 0,
+            runMsP50: 0,
+            runMsP95: 0,
+            rtfP50: 0,
+            samplesForPerf: 0
+          }
+        ]
+      });
+    }
     if (method === "GET" && p === "/api/cert/status") {
       return this.json(route, { ok: true, data: { enabled: false, exists: false } });
     }

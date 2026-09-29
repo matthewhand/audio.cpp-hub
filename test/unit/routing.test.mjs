@@ -46,6 +46,7 @@ function makeRouting({ hash = "", instances = [], selectedModelId = null } = {})
     openDownloadsModal: downloads.open,
     closeStatsPanel: stats.close,
     openStatsPanel: stats.open,
+    wireStatsButton: () => {},
     closeSettingsModal: settings.close,
     openSettingsModal: settings.open,
     closeInstanceDetail: detail.close,
