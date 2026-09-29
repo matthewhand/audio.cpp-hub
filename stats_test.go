@@ -4,8 +4,9 @@ import (
 	"testing"
 )
 
-// TestStatsAggregatesHistoryAndTasks 覆盖 /api/stats 的核心聚合：
-// 用量来自历史索引（无淘汰），性能来自内存任务的时间戳与 result.durationSec。
+// TestStatsAggregatesHistoryAndTasks covers the core /api/stats aggregation:
+// usage from the never-evicted history index, performance from in-memory
+// task timestamps plus result.durationSec.
 func TestStatsAggregatesHistoryAndTasks(t *testing.T) {
 	t.Chdir(t.TempDir())
 
@@ -13,8 +14,8 @@ func TestStatsAggregatesHistoryAndTasks(t *testing.T) {
 	tm := NewTaskManager(h)
 	hub := &Hub{history: h, tasks: tm}
 
-	// 直接注入历史索引（等价于已落盘并 replay）：
-	// model A 两条（1 成功 1 失败），model B 一条成功。
+	// Inject the history index directly (equivalent to persisted + replayed):
+	// model A has two records (1 ok, 1 failed); model B has one success.
 	h.mu.Lock()
 	h.index["model-a"] = []map[string]any{
 		{
@@ -33,7 +34,7 @@ func TestStatsAggregatesHistoryAndTasks(t *testing.T) {
 	}
 	h.mu.Unlock()
 
-	// 任务：model-a 一条完成，排队 500ms、执行 1000ms、音频 2.0s → RTF 0.5。
+	// One finished model-a task: 500ms queue, 1000ms run, 2.0s audio -> RTF 0.5.
 	started := int64(1500)
 	finished := int64(2500)
 	tm.mu.Lock()
@@ -58,19 +59,19 @@ func TestStatsAggregatesHistoryAndTasks(t *testing.T) {
 	if got.Totals.OutputBytes != 3000 {
 		t.Fatalf("totals.outputBytes = %d, want 3000", got.Totals.OutputBytes)
 	}
-	// 成功率 2/3 → 0.667（round3）
+	// success rate 2/3 -> 0.667 (round3)
 	if got.Totals.SuccessRate != 0.667 {
 		t.Fatalf("totals.successRate = %v, want 0.667", got.Totals.SuccessRate)
 	}
 	if len(got.Models) != 2 {
 		t.Fatalf("models = %d, want 2", len(got.Models))
 	}
-	// 用量大的在前：model-a(2) 先于 model-b(1)
+	// Heaviest usage first: model-a (2) ahead of model-b (1)
 	if got.Models[0].ModelID != "model-a" {
 		t.Fatalf("first model = %s, want model-a", got.Models[0].ModelID)
 	}
 
-	// 性能：model-a 一个样本 → queue=500, run=1000, rtf=0.5
+	// Performance: one model-a sample -> queue=500, run=1000, rtf=0.5
 	a := got.Models[0]
 	if a.SamplesForPerf != 1 {
 		t.Fatalf("model-a samples = %d, want 1", a.SamplesForPerf)
@@ -84,13 +85,14 @@ func TestStatsAggregatesHistoryAndTasks(t *testing.T) {
 	if a.RTFP50 != 0.5 {
 		t.Fatalf("model-a rtfP50 = %v, want 0.5", a.RTFP50)
 	}
-	// 失败那条计入了 total，但没有 result → 不计入 audioSeconds（保持 2.0）
+	// The failed record counts toward total but has no result, so it does not
+	// contribute to audioSeconds (stays 2.0)
 	if a.AudioSeconds != 2.0 {
 		t.Fatalf("model-a audioSeconds = %v, want 2", a.AudioSeconds)
 	}
 }
 
-// TestPercentileInterpolates 覆盖分位数插值边界。
+// TestPercentileInterpolates covers percentile interpolation boundaries.
 func TestPercentileInterpolates(t *testing.T) {
 	cases := []struct {
 		vals []float64

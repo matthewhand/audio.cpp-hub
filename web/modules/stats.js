@@ -1,11 +1,14 @@
-/* web/modules/stats.js — 用量与性能看板（#/stats）
+/* web/modules/stats.js — usage & performance dashboard (#/stats)
  *
- * 数据来自 GET /api/stats（见根目录 stats.go）：用量口径取自历史索引（无淘汰），
- * 性能口径取自内存任务的时间戳与 result.durationSec。本模块只负责拉取、渲染与
- * 打开/关闭面板；不持有跨模块状态。刷新沿用页头按钮，与历史面板一致。
+ * Data comes from GET /api/stats (see stats.go at the repo root): usage figures
+ * are derived from the never-evicted history index, performance figures from
+ * in-memory task timestamps plus result.durationSec. This module only fetches,
+ * renders, and opens/closes the panel; it holds no cross-module state. Refreshing
+ * follows the header button, same as the history panel.
  *
- * 渲染对齐既有约定：三态骨架（showSkeleton / renderEmptyState / renderStateError）、
- * escapeHtml 一律走 esc()，数字/百分比/字节走 I18N 格式化，文案走 i18n 词典。 */
+ * Rendering follows the existing conventions: tri-state primitives
+ * (showSkeleton / renderEmptyState / renderStateError), escaping via esc(), and
+ * I18N formatters for numbers / percentages / byte sizes. */
 
 import { $, el, t, Api } from "./dom.js";
 import { goPanel } from "./routing.js";
@@ -19,7 +22,7 @@ import {
 
 let lastStats = null;
 
-/* ---------- 打开 / 关闭 ---------- */
+/* ---------- open / close ---------- */
 export function openStatsPanel() {
   const wasHidden = $("stats-panel").classList.contains("hidden");
   $("stats-panel").classList.remove("hidden");
@@ -45,7 +48,7 @@ export async function loadStats() {
   }
 }
 
-/* ---------- 渲染 ---------- */
+/* ---------- rendering ---------- */
 function renderStats(data) {
   const body = $("stats-body");
   body.innerHTML = "";
@@ -128,12 +131,12 @@ function renderModelCard(m) {
   return card;
 }
 
-/* 0..1 的比率 → 0..100（供 I18N.percent） */
+/* Convert a 0..1 ratio to 0..100 for I18N.percent */
 function pct(v) {
   return typeof v === "number" ? v * 100 : 0;
 }
 
-/* 秒 → 可读时长（h/m/s），小于 60s 保留一位小数 */
+/* Seconds -> human readable (h/m/s); one decimal below 60s */
 function formatDuration(sec) {
   const s = Number(sec) || 0;
   if (s < 60) return s.toFixed(1) + "s";
@@ -148,7 +151,7 @@ function formatMs(ms) {
   return v >= 1000 ? (v / 1000).toFixed(2) + "s" : Math.round(v) + "ms";
 }
 
-/* ---------- 事件绑定（模块求值时 DOM 已就绪） ---------- */
+/* ---------- event wiring (DOM is ready when the module evaluates) ---------- */
 $("stats-btn").onclick = () => goPanel("stats");
 $("stats-close").onclick = () => closeStatsPanel();
 $("stats-refresh").onclick = () => loadStats();

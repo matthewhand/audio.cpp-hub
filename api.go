@@ -200,10 +200,26 @@ func staticHandler() http.Handler {
 		}
 		defer f.Close()
 		// 任何 HTML 入口都要每次回源校验，新部署立刻可见（不只 index.html）
-		if strings.HasSuffix(p, ".html") {
+		switch {
+		case strings.HasSuffix(p, ".html"):
 			w.Header().Set("Cache-Control", "no-cache")
-		} else {
+		case path.Base(p) == "sw.js":
+			// When the Service Worker's own bytes change the browser must notice
+			// promptly, otherwise the old worker keeps controlling the page (#97).
+			// The one-hour max-age used for ordinary static assets defers discovery
+			// to each browser's own update heuristics, which vary between browsers.
+			// no-cache just requires revalidation on every request: exact semantics,
+			// and it does not forbid caching.
+			w.Header().Set("Cache-Control", "no-cache")
+		default:
 			w.Header().Set("Cache-Control", "public, max-age="+strconv.Itoa(staticAssetMaxAge))
+		}
+		// PWA manifest: Go's MIME table is not guaranteed to know .webmanifest and
+		// may fall back to text/plain or application/octet-stream, which makes the
+		// browser refuse to install the app (#97). Declare it explicitly instead of
+		// relying on the platform MIME registry.
+		if path.Base(p) == "manifest.webmanifest" {
+			w.Header().Set("Content-Type", "application/manifest+json; charset=utf-8")
 		}
 		http.ServeContent(w, r, path.Base(p), st.ModTime(), f)
 	})
