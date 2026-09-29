@@ -72,18 +72,18 @@ so standard OpenAI clients work unchanged.
 
 ### Where results are archived
 
-Only the **async task flow** (`POST /api/tasks`, and the legacy `/api/run`) is
-persisted under `data/history/<modelId>/` — the synchronous `/v1/audio/speech`
-proxy is a pure pass-through and archives **nothing**:
+**Every successful TTS generation is archived** under `data/history/<modelId>/` —
+both the async task flow and the synchronous `/v1/audio/speech` proxy (the proxy
+te-es the response audio into history on the fly):
 
 - `GET /api/history/breeze-tts` — newest-first list (id, truncated text, refs)
 - `GET /api/history/breeze-tts/<taskId>/audio` — the WAV itself
-- `GET /api/history/breeze-tts/<taskId>` — full record incl. the request so any
-  take can be reproduced exactly
+- `GET /api/history/breeze-tts/<taskId>` — full record incl. the request
+  (instruction/seed/voice_ref when sent) so any take can be reproduced exactly
 
-Agents that want provenance/archiving should submit TTS via `POST /api/tasks`
-(`{"instanceId", "request": {…same fields as /v1/audio/speech…}}`), poll to
-`DONE`, then fetch `GET /api/history/breeze-tts/<taskId>/audio`.
+Sync-proxy records carry `result.via: "v1/audio/speech"`; the Web UI history
+panel lists and plays them like any other take. Failed or client-interrupted
+calls are not archived.
 
 ## 2. Speech → text (STT)
 

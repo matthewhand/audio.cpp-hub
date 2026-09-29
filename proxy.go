@@ -15,6 +15,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/matthewhand/audio.cpp-hub/internal/idvalidate"
+	"github.com/matthewhand/audio.cpp-hub/internal/wav"
 )
 
 // /v1/* OpenAI 兼容代理（移植自 Java 版 V1ProxyHandler + RequestModelExtractor）。
@@ -252,6 +255,53 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 	}
 	w.WriteHeader(resp.StatusCode)
 	flusher, _ := w.(http.Flusher)
+	// /v1/audio/speech 透明归档：仅当请求路径与响应形态符合 TTS 时，把回写的音频字节
+	// 同时落盘（tee），成功后按 taskId 记入操作历史（复用 RecordTTS；失败不归档）。
+	var teeFile *os.File
+	teePath := ""
+	archiveTaskID := ""
+	archiveReq := map[string]any{}
+	if h.history != nil && r.URL.Path == "/v1/audio/speech" && resp.StatusCode == http.StatusOK &&
+		strings.HasPrefix(resp.Header.Get("Content-Type"), "audio/") {
+		// 请求体仍在缓存文件里（defer os.Remove 还没执行），读取归档所需的最小要素。
+		if data, rerr := os.ReadFile(bodyPath); rerr == nil {
+			var parsed map[string]any
+			if jerr := json.Unmarshal(data, &parsed); jerr == nil {
+				if s := optString(parsed, "input"); s != "" {
+					archiveReq["text"] = s
+				}
+				if s := optString(parsed, "voice_ref"); s != "" {
+					archiveReq["voice_ref"] = s
+				}
+				if s := optString(parsed, "reference_text"); s != "" {
+					archiveReq["reference_text"] = s
+				}
+				if s := optString(parsed, "seed"); s != "" {
+					archiveReq["seed"] = parsed["seed"]
+				}
+				if o, ok := parsed["options"].(map[string]any); ok {
+					archiveReq["options"] = o
+				}
+			}
+		}
+		archiveTaskID = newID() + newID()
+		if idvalidate.SafeKey(archiveTaskID) && idvalidate.SafeKey(inst.ModelID) {
+			dir := historyDir(inst.ModelID)
+			if err := os.MkdirAll(dir, 0755); err == nil {
+				tf, terr := os.CreateTemp(dir, ".v1-*.wav.tmp")
+				if terr == nil {
+					teeFile = tf
+					teePath = tf.Name()
+				}
+			}
+		}
+	}
+	if teeFile != nil {
+		defer func() {
+			teeFile.Close()
+			os.Remove(teePath) // 归档失败/客户端中断时清理临时文件（成功路径已提前改名）
+		}()
+	}
 	buf := make([]byte, v1ResponseChunk)
 	for {
 		n, readErr := resp.Body.Read(buf)
@@ -259,14 +309,41 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 			if _, werr := w.Write(buf[:n]); werr != nil {
 				return // 客户端断开，context 取消会让上游读中断
 			}
+			if teeFile != nil {
+				if _, terr := teeFile.Write(buf[:n]); terr != nil {
+					log.Printf("/v1/audio/speech 归档写盘失败，放弃本次归档: %v", terr)
+					teeFile.Close()
+					teeFile = nil
+				}
+			}
 			if flusher != nil {
 				flusher.Flush() // SSE 必须逐块下发
 			}
 		}
 		if readErr != nil {
+			if readErr == io.EOF && teeFile != nil && inst.ServerTask == "tts" {
+				h.archiveV1Speech(inst, teePath, archiveTaskID, archiveReq)
+			}
 			return
 		}
 	}
+}
+
+// archiveV1Speech 把 tee 落盘的成功音频从临时文件改名为历史 wav 并写入操作历史。
+// taskID 与 /api/tasks 生成的格式一致，前端可正常播放/删除。
+func (h *Hub) archiveV1Speech(inst *Instance, teePath, taskID string, request map[string]any) {
+	if info, err := wav.ParseFile(teePath); err != nil || info.DurationSec <= 0 {
+		return // 非 WAV（上游将来改格式）不归档，defer 已清理临时文件
+	}
+	finalPath := filepath.Join(historyDir(inst.ModelID), taskID+".wav")
+	if err := os.Rename(teePath, finalPath); err != nil {
+		log.Printf("/v1/audio/speech 归档改名失败: %v", err)
+		return
+	}
+	h.history.RecordTTS(inst, request, taskID, map[string]any{
+		"file": taskID + ".wav",
+		"via":  "v1/audio/speech",
+	}, "")
 }
 
 // v1Error OpenAI 风格错误体：{"error":{"message","type"}}。
