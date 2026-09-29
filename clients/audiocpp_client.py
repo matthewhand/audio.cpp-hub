@@ -96,19 +96,23 @@ def speech(text: str, model: str = "breeze", *, instruction: str | None = None,
            voice_ref: str | None = None, reference_text: str | None = None,
            extra_options: dict | None = None, hub: str = DEFAULT_HUB,
            timeout: int = 600) -> bytes:
-    """Generate speech; returns raw WAV bytes (synchronous /v1/audio/speech)."""
+    """Generate speech; returns raw WAV bytes (synchronous /v1/audio/speech).
+
+    voice_ref/reference_text are TOP-LEVEL body fields (engine contract), not
+    options entries — the engine rejects unknown keys inside options.
+    """
     options = dict(extra_options or {})
     if instruction is not None:
         options["instruction"] = instruction
     if temperature is not None:
         options["temperature"] = temperature
-    if voice_ref is not None:
-        options["voice_ref"] = voice_ref
-    if reference_text is not None:
-        options["reference_text"] = reference_text
     body = {"model": model, "input": text, "response_format": "wav"}
     if seed is not None:
         body["seed"] = seed
+    if voice_ref is not None:
+        body["voice_ref"] = voice_ref
+    if reference_text is not None:
+        body["reference_text"] = reference_text
     if options:
         body["options"] = options
     return _request(hub, "/v1/audio/speech", body=body, timeout=timeout)

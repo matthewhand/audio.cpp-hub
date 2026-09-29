@@ -16,6 +16,11 @@ in a variety of voice designs** and **transcribe audio** against this hub.
 | `sanotts` | SanoTTS (heart-nano) | ultra-fast TTS | always warm |
 | `citrinet` | Citrinet ASR | STT | lazy, unloads after 5 min idle |
 
+Registered reference voices (voice library): `persona_vex` (dry sarcastic
+female), `persona_gruff` (gravelly amused male), `persona_sunny` (bright fast
+female), `persona_deadpan` (flat monotone male) — seed-42 breeze designs,
+STT-verified, each with its exact transcript stored as `text`.
+
 ## 1. Text → speech (voice design)
 
 `POST /v1/audio/speech` — synchronous; response body is raw WAV bytes.
@@ -50,10 +55,11 @@ full request, so any good result is reproducible later.
 
 ### Cloned voices (reference audio)
 
-`breeze` clones from a reference clip. Two ways:
+`breeze` clones from a reference clip. The reference fields are **top-level**
+request body keys (the engine rejects unknown keys inside `options`):
 
-- **Ad hoc:** `options.voice_ref` = absolute path of a WAV on the server **and**
-  `options.reference_text` = exact transcript of that clip (required for cloning).
+- **Ad hoc:** `"voice_ref"` = absolute path of a WAV on the server **and**
+  `"reference_text"` = exact transcript of that clip (required for cloning).
   Upload clips via `POST /api/audio/upload` (raw WAV bytes, ≤50 MB) → use the
   returned `path`.
 - **Voice library (reusable):** `POST /api/voices {"name", "text", "path"}`
@@ -61,14 +67,23 @@ full request, so any good result is reproducible later.
   best source of `voice_ref` paths for agents. Cloned designs combine with
   `instruction` for delivery steering.
 
+Extra top-level keys the caller adds (e.g. OpenAI-style `"voice"`) are ignored,
+so standard OpenAI clients work unchanged.
+
 ### Where results are archived
 
-Every TTS call is persisted under `data/history/<modelId>/`:
+Only the **async task flow** (`POST /api/tasks`, and the legacy `/api/run`) is
+persisted under `data/history/<modelId>/` — the synchronous `/v1/audio/speech`
+proxy is a pure pass-through and archives **nothing**:
 
-- `GET /api/history/breeze` — newest-first list (id, truncated text, refs)
-- `GET /api/history/breeze/<taskId>/audio` — the WAV itself
-- `GET /api/history/breeze/<taskId>` — full record incl. the request (instruction,
-  seed, …) so any take can be reproduced exactly
+- `GET /api/history/breeze-tts` — newest-first list (id, truncated text, refs)
+- `GET /api/history/breeze-tts/<taskId>/audio` — the WAV itself
+- `GET /api/history/breeze-tts/<taskId>` — full record incl. the request so any
+  take can be reproduced exactly
+
+Agents that want provenance/archiving should submit TTS via `POST /api/tasks`
+(`{"instanceId", "request": {…same fields as /v1/audio/speech…}}`), poll to
+`DONE`, then fetch `GET /api/history/breeze-tts/<taskId>/audio`.
 
 ## 2. Speech → text (STT)
 
