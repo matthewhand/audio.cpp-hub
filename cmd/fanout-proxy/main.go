@@ -200,11 +200,19 @@ func (p *proxy) handleInstances(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
 		if a["hub"] != b["hub"] {
-			return a["hub"].(string) < b["hub"].(string)
+			return strField(a, "hub") < strField(b, "hub")
 		}
-		return a["instanceName"].(string) < b["instanceName"].(string)
+		return strField(a, "instanceName") < strField(b, "instanceName")
 	})
 	writeJSON(w, http.StatusOK, out)
+}
+
+// strField reads a string field from a decoded upstream object. Hubs are
+// remote input: an older build, or a baseUrl pointed at the wrong port, can
+// omit a field or make it a different type, and a sort must not panic on that.
+func strField(m map[string]any, key string) string {
+	s, _ := m[key].(string)
+	return s
 }
 
 // ---------------------------------------------------------------- GET /v1/models

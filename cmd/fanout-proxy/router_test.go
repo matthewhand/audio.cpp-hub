@@ -648,6 +648,33 @@ func TestAggregatedInstances(t *testing.T) {
 	}
 }
 
+// A hub is remote input: an older build, or a baseUrl pointed at the wrong
+// port, can report instances without a service name. Sorting must not panic.
+func TestAggregatedInstancesToleratesMissingInstanceName(t *testing.T) {
+	const hubA = "http://a:18080"
+	p := newTestProxy([]Hub{{BaseURL: hubA}}, breezeRoute(hubA, hubA))
+	p.hub.apply(hubA, []map[string]any{
+		{"id": "a1", "status": "READY"},
+		{"instanceName": "breeze", "status": "READY"},
+	}, 5*time.Millisecond, nil)
+
+	rec := httptest.NewRecorder()
+	p.handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/instances", nil))
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var out []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("instances = %v, want both entries passed through", out)
+	}
+	if out[0]["instanceName"] != nil || out[1]["instanceName"] != "breeze" {
+		t.Errorf("order = %v, want the nameless entry first", out)
+	}
+}
+
 func TestFarmHealthReportsRoutes(t *testing.T) {
 	const hubA, hubB = "http://a:18080", "http://b:18080"
 	p := newTestProxy([]Hub{{BaseURL: hubA}, {BaseURL: hubB}}, breezeRoute(hubA, hubB))
