@@ -4,14 +4,16 @@ Audience: an autonomous agent (or script) on the LAN that wants to **generate sp
 in a variety of voice designs** and **transcribe audio** against this hub.
 
 - **Base URL: `http://10.0.0.36:18082`** — the LAN fan-out proxy, i.e. one URL for
-  the whole farm with automatic failover. Use it for TTS and discovery. LAN-only,
-  no auth — never expose publicly.
+  the whole farm with automatic failover. Use it for TTS, STT and discovery.
+  LAN-only, no auth — never expose publicly.
 - Secondary URL: `http://10.0.0.36:18080` — a single hub, required for the routes
-  the fan-out does not proxy (STT/async tasks, upload, voices, history), because
-  each hub owns that state. See [Unified fan-out base URL](#unified-fan-out-base-url).
+  the fan-out does not proxy (upload, voices, history), because each hub owns that
+  state. See [Unified fan-out base URL](#unified-fan-out-base-url).
 - All bodies are JSON unless stated otherwise
-- Error bodies: `{"error": {"code", "params", "message"}}` (API routes) or
-  `{"error": {"message", "type"}}` (`/v1/*` proxy routes)
+- Error bodies: `{"error": {"code", "params", "message"}}` (hub API routes) or
+  `{"error": {"message", "type"}}` (fan-out, i.e. `:18082` — same envelope on
+  `:18080 /v1/*`). One exception: the fan-out's task *reads* relay the hub's own
+  status and body verbatim, because a hub `404` must stay recognizable.
 
 The ready-made client already defaults to both: `clients/audiocpp_client.py`
 (`DEFAULT_HUB` = the fan-out for TTS, `DEFAULT_DIRECT_HUB` = `.36:18080` for the
@@ -34,29 +36,35 @@ agent can speak model **aliases** instead of `host:port:service` triples:
 | `breeze`, `expressive` | `.36:18080 breeze` → `.30:18080 breeze` |
 | `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` |
 | `sanotts`, `instant` | `.36:18080 sanotts` → `.32:18080 sanotts` |
-| `citrinet`, `stt` | `.36:18080 citrinet` (TTS shape only — see below) |
+| `citrinet`, `stt` | `.36:18080 citrinet` |
+
+An alias names a *service*; the endpoint you call names the *request shape*.
+TTS is `POST /v1/audio/speech`; ASR is `POST /api/tasks` ([§2](#2-speech--text-stt)).
+Calling speech against `citrinet` 503s — the engine wants audio, not text.
 
 - `GET /v1/models` — only the aliases that currently have a working backend.
 - `GET /api/instances` — every hub's instances in one list, each entry tagged with
   its `hub` / `hubLabel`. Ids are hub-local, so they are not usable for
   `/api/tasks` on another host.
 - Successful responses add `X-Fanout-Hub` / `X-Fanout-Instance`; use the hub
-  there to fetch the archived take from `/api/history/...`.
+  there to fetch the archived take from `/api/history/...`, and to poll the task
+  you just submitted.
 - `GET /farm/health` — per-hub up/down, latency, which backend each alias
   resolved to, and each target's live `inFlight` against `inFlightCap`.
   Fan-out only; hubs answer 404.
-- **Fairness cap:** at most `maxInFlightPerTarget` (default 2) speech forwards
-  may be in flight per hub+service. A busy target is skipped, so the call spills
-  to the standby; when *every* target of the route is busy you get `429` +
+- **Fairness cap:** at most `maxInFlightPerTarget` (default 2) forwards may be in
+  flight per hub+service. A busy target is skipped, so the call spills to the
+  standby; when *every* target of the route is busy you get `429` +
   `Retry-After: 5` (`type: rate_limit_error`) instead of a `503`. Treat that as
   "retry shortly", not as an outage — OpenAI SDKs already retry `429` by default.
   Fan out over time or raise the cap server-side; only the single-target routes
-  (`qwen3-vd` / `voice-design-fast`) have nowhere to spill to.
-- **Not proxied:** `/api/history/*`, `/api/voices/*`, `/api/audio/upload`,
-  `/api/tasks*` and therefore STT. Keep using `:18080` for those. The `citrinet`
-  alias exists so the route table and `/farm/health` cover the ASR box, but a
-  `/v1/audio/speech` call against it fails (503 — the engine wants an audio
-  contract, not text). Transcribe through the hub's task API instead.
+  (`qwen3-vd` / `voice-design-fast` / `citrinet`) have nowhere to spill to. For
+  `POST /api/tasks` the slot covers the *submission*; the hub's own serial queue
+  is what bounds how much runs at once.
+- **Not proxied:** `/api/history/*`, `/api/voices/*`, `/api/audio/upload` and
+  `/v1/tasks/run`. Keep using `:18080` for those — the first three because each
+  hub owns that state, and `/v1/tasks/run` because it is hub-shaped
+  (`model` = service name).
 - Fan-out is LAN-only with no auth, exactly like the hubs.
 
 
@@ -66,7 +74,7 @@ agent can speak model **aliases** instead of `host:port:service` triples:
 |---|---|---|---|---|
 | `breeze` | breeze-tts | expressive TTS / voice design | always warm | `breeze`, `expressive` |
 | `sanotts` | SanoTTS (heart-nano) | ultra-fast TTS | always warm | `sanotts`, `instant` |
-| `citrinet` | Citrinet ASR | STT | lazy, unloads after 5 min idle | `citrinet`, `stt` (TTS unusable) |
+| `citrinet` | Citrinet ASR | STT | lazy, unloads after 5 min idle | `citrinet`, `stt` (task shape only) |
 
 Those three live on `.36:18080`; the farm adds `qwen3-vd` on `.30:18081`
 (aliases `qwen3-vd` / `voice-design-fast`) and a spare `breeze` on `.30:18080`
@@ -159,39 +167,67 @@ calls are not archived.
 
 ## 2. Speech → text (STT)
 
-Hub-only: the fan-out does not proxy `/api/tasks`, so STT goes to
-`http://10.0.0.36:18080` with the service name `citrinet`.
+STT goes through the fan-out (`http://10.0.0.36:18082`) with the `stt` alias, so
+it inherits the same failover and 429-shedding behavior as TTS.
 
-Two supported shapes. **Note:** OpenAI-style `POST /v1/audio/transcriptions`
-(multipart) is **not available** — the proxy routes by the top-level `"model"`
-of a JSON body and returns 400 for multipart. Use one of these instead:
+**Note:** OpenAI-style `POST /v1/audio/transcriptions` (multipart) is **not**
+available — the fan-out routes by the top-level `"model"` of a JSON body and
+returns 400 for multipart. Use the async task API instead.
 
 ### a) Async task API (recommended; any audio size)
+
+```jsonc
+// POST http://10.0.0.36:18082/api/tasks
+{ "model": "stt",                          // alias; the fan-out resolves the
+  "request": { "audio": "/abs/path/on/server.wav" } }   // engine's own request
+//  -> 202 + { "id": "<hub-local task id>", "status": "QUEUED", … }
+//     X-Fanout-Hub: http://10.0.0.36:18080   <- keep this, see below
+```
+
+Task ids are hub-local, so reading the result back names the origin hub:
+
+```jsonc
+// GET      http://10.0.0.36:18082/api/tasks/<id>?hub=http://10.0.0.36:18080
+// GET      …/api/tasks/<id>/result?hub=…      -> {"text","timing"}
+// DELETE   …/api/tasks/<id>?hub=…              (cancel / remove the record)
+// GET      …/api/tasks?hub=…&active=1          (list; active/modelId filters pass through)
+```
+
+- `?hub=` is **required** for every task read and must be a hub base URL from
+  `/farm/health`; anything else is a `400`, and a hub the fan-out believes is
+  down answers `502` immediately. The value is exactly the `X-Fanout-Hub`
+  header from the submission (or the `hub` field of a `GET /api/instances`
+  entry).
+- The hub's own status and body are relayed verbatim — a `404` for an unknown
+  task stays a hub-shaped `404`, and is *not* a failover signal.
+- `request.audio` takes a **server-side file path** — it is **not** base64.
+  Files not already on the box: `POST /api/audio/upload` with the raw WAV bytes
+  (`Content-Type: audio/wav`, ≤50 MB) to that same hub → response includes
+  `"path"`. The fan-out does not proxy uploads, so the path you get from `.36`
+  only works for work routed to `.36`.
+- Poll until `status` is `DONE` or `FAILED`; the transcript is in the `text`
+  field (`GET .../result` serves the same `{"text","timing"}`).
+- Same-instance tasks run **serially in submit order** — safe to fire many.
+  The fan-out's `inFlight` cap applies to submission only.
+
+### b) Hub-direct shapes (when you want to pin a hub)
+
+Both still work against `http://10.0.0.36:18080` with the service name, and are
+the right call when the audio file exists on that hub and nowhere else.
 
 ```jsonc
 // POST /api/tasks
 { "instanceId": "<id from GET /api/instances where instanceName==citrinet>",
   "request": { "audio": "/abs/path/on/server.wav" } }
-```
 
-- `request.audio` takes a **server-side file path** — it is **not** base64.
-- Files not already on the box: `POST /api/audio/upload` with the raw WAV bytes
-  (`Content-Type: audio/wav`, ≤50 MB) → response includes `"path"`.
-- Poll `GET /api/tasks/<id>` until `status` is `DONE` or `FAILED`; the transcript
-  is in the `text` field (also `GET /api/tasks/<id>/result` → `{"text","timing"}`).
-- `DELETE /api/tasks/<id>` cancels queued work or removes the record.
-- Same-instance tasks run **serially in submit order** — safe to fire many.
-
-### b) Sync JSON proxy (small clips, script-friendly)
-
-The engine also accepts a plain JSON body on its native endpoint via the proxy:
-
-```jsonc
-// POST /v1/tasks/run  (JSON, not multipart)
+// POST /v1/tasks/run  (JSON, not multipart) — sync, small clips
 { "model": "citrinet", "audio": "/abs/path/on/server.wav" }
+//  -> the engine's JSON response directly
 ```
 
-which returns the engine's JSON response (`{"text", "timing"}`) directly.
+`clients/audiocpp_client.py` still defaults to (b): `transcribe()` takes
+`--direct-hub` / `AUDIOCPP_DIRECT_HUB_URL`. Point an agent that wants one base
+URL at the shape in (a) instead.
 
 ### STT in Open WebUI
 
@@ -203,8 +239,8 @@ work against the fan-out; wiring: [farm.md → Open WebUI TTS wiring](farm.md#op
 ## 3. Minimal agent loop (pseudocode)
 
 ```
-transcribe(sample)     -> text          # ASR for feedback   (:18080 task API)
-design(instruction, seed) -> wav        # TTS via the fan-out (:18082)
+transcribe(sample)     -> text          # ASR for feedback   (:18082 /api/tasks, alias stt)
+design(instruction, seed) -> wav        # TTS via the fan-out (:18082 /v1/audio/speech)
 score(text, persona)   -> quality       # agent's own rubric / LLM judge
 loop:
   for seed in seeds:
@@ -214,9 +250,13 @@ loop:
   instr = mutate(instr)                 # next persona variant
 ```
 
-`clients/audiocpp_client.py` implements exactly this split:
+Every hop is `:18082`; the `X-Fanout-Hub` header is what pins the follow-up reads
+(history, task result) to the hub that owns the state.
+
+`clients/audiocpp_client.py` implements the same loop with the two-URL split:
 `speech_with_origin()` returns the headers, `transcribe()`/`voices()`/`history()`
-take the direct hub. `voice_sweep()` automates the seed loop.
+take the direct hub (`transcribe()` is hub-direct shape (b) above).
+`voice_sweep()` automates the seed loop.
 
 ## 4. Operational notes
 

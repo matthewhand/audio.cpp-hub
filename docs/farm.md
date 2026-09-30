@@ -30,25 +30,32 @@ they no longer hard-code `host:port:model` triples:
 - `POST /v1/audio/speech` routes on `model`, rewrites it to the upstream service
   name, streams the audio back and fails over on hub-down / 5xx / "instance not
   READY". `GET /v1/models` lists only aliases that currently resolve.
+- `POST /api/tasks` (STT) routes on `model` the same way — `{"model":"stt",
+  "request":{…}}` — and rewrites the alias into the origin hub's local
+  `instanceId`. Reading a task back is a read-through pinned with
+  `?hub=<baseUrl>` (task ids are hub-local), e.g.
+  `GET /api/tasks/<id>?hub=http://10.0.0.36:18080`. Failover covers
+  *submission*; the task then runs on the engine that accepted it.
 - `GET /farm/health` — per-hub up/down + latency + which backend each alias
   resolved to, plus `inFlightCap` / per-target `inFlight`;
   `GET /api/instances` — the whole farm's instances in one list.
 - **Per-origin in-flight cap** (`maxInFlightPerTarget`, default `2`, `<= 0`
-  disables): at most N speech forwards may be in flight per hub+service. A hub
+  disables): at most N forwards may be in flight per hub+service. A hub
   runs one engine per instance with a serial queue, so an uncapped router lets
   one loud agent fill `.36 breeze`'s queue while everything else stalls
   invisibly. A target at its cap is skipped, so the request spills to the
   standby; only a route whose every target is busy answers `429` +
   `Retry-After: 5` (not `503`). `qwen3-vd` and `citrinet` are single-target, so
   parallel callers there get 429s past the cap — OpenAI SDKs retry those
-  automatically. Knob details: `cmd/fanout-proxy/README.md` → "Knobs".
+  automatically. For `POST /api/tasks` the cap covers the submission only; the
+  hub's serial queue bounds what actually runs. Knob details:
+  `cmd/fanout-proxy/README.md` → "Knobs".
 - History is **not** unified: responses carry `X-Fanout-Hub` /
   `X-Fanout-Instance` so a take can be fetched from the origin hub's
-  `/api/history/...`. Same for voice libraries and STT: the fan-out proxies
-  `/v1/audio/speech` only, so `/api/tasks`, `/api/voices` and `/api/history/*`
-  go to `.36:18080` directly. The `citrinet` alias exists for routing/health
-  coverage, but a speech call against it 503s (the engine wants an audio
-  contract, not text) — STT uses the task API.
+  `/api/history/...`. Same for voice libraries: `/api/voices` and
+  `/api/history/*` go to `.36:18080` directly, since each hub owns that state.
+  A speech call against `citrinet` still 503s (the engine wants an audio
+  contract, not text) — ASR uses `POST /api/tasks` instead.
 - The 6600 XT (`.30` DEVICE=0) is deliberately absent from the route table, and
   no hub is reconfigured by the proxy. LAN-only, no auth — same warning as
   above. Design and rationale: `docs/fanout-design.md`; ops:
@@ -124,20 +131,22 @@ CPU performance is a non-issue for sanotts: ~30–300 ms per sentence.
 
 ## Client routing quick reference
 
-- One base URL for everything TTS: `http://10.0.0.36:18082` (fan-out, failover
-  included) — preferred for agents and the default in
-  `clients/audiocpp_client.py` (`DEFAULT_HUB`).
-- One hub URL for the rest: `http://10.0.0.36:18080` for STT, upload, voice
+- One base URL for everything generative **and** STT: `http://10.0.0.36:18082`
+  (fan-out, failover included) — preferred for agents and the default in
+  `clients/audiocpp_client.py` (`DEFAULT_HUB`). ASR is `POST /api/tasks` with
+  `"model": "stt"` plus `?hub=` on the follow-up reads.
+- One hub URL for the per-host state: `http://10.0.0.36:18080` for upload, voice
   library and history — that client's `DEFAULT_DIRECT_HUB` (`--direct-hub` /
-  `AUDIOCPP_DIRECT_HUB_URL`), because the fan-out proxies TTS only and the state
-  is per host.
+  `AUDIOCPP_DIRECT_HUB_URL`), because those live per host and the fan-out does
+  not proxy them. The client also still sends STT here.
 - Per-host direct access, when you want to pin a take to one box:
   - Expressive / sarcastic voice design: `.36:18080` model `breeze`
     (`options.instruction`) or `.30:18081` model `qwen3-vd` (top-level
     `instruct`, ~2.5x faster than breeze).
   - Instant TTS: `.36:18080` or `.32:18080`, model `sanotts`.
   - Standby breeze (if .36 is down): `.30:18080` model `breeze`.
-  - STT: `.36:18080` model `citrinet` via async `POST /api/tasks`.
+  - STT: `.36:18080` model `citrinet` via async `POST /api/tasks` (hub-direct
+    shape, `instanceId` instead of an alias).
 
 Quick checks against the farm:
 
@@ -166,9 +175,10 @@ service names, not aliases) or the backend is down — check
 **STT does not work through this path.** The fan-out does not speak OpenAI
 `POST /v1/audio/transcriptions`, and OWUI's built-in OpenAI STT would need an
 adapter to reach `citrinet`; there is none, so don't point OWUI's STT config at
-`:18082` or `:18080` expecting it to work. Transcription stays on the hub task
-API (`.36:18080`, service `citrinet`) — the Python client's `transcribe()`, or
-`POST /api/tasks` directly. Contract: [agent-api.md §2](agent-api.md#2-speech--text-stt).
+`:18082` or `:18080` expecting it to work. Transcription stays on the task API —
+the Python client's `transcribe()` against `.36:18080`, or the fan-out's
+`POST /api/tasks` with `"model": "stt"` and a `?hub=`-pinned read.
+Contract: [agent-api.md §2](agent-api.md#2-speech--text-stt).
 
 Because OWUI can't set per-request `options.instruction`, keep expressive voice
 design (`qwen3-vd`, `breeze` + instruction) for API/agent use; from OWUI pick

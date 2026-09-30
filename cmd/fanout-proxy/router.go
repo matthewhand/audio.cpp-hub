@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -184,6 +185,113 @@ func busyReason(cap int) string {
 	return "at in-flight cap (" + strconv.Itoa(cap) + ")"
 }
 
+// ---------------------------------------------------------------- 转发循环
+
+// readJSONBody reads the request body under the shared ceiling and decodes it as
+// a JSON object, writing the 413 / 400 itself.
+func (p *proxy) readJSONBody(w http.ResponseWriter, r *http.Request) (map[string]json.RawMessage, bool) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, p.cfg.MaxBodyBytes+1))
+	if err != nil {
+		openAIError(w, http.StatusBadRequest, "Cannot read request body", nil)
+		return nil, false
+	}
+	if int64(len(body)) > p.cfg.MaxBodyBytes {
+		openAIError(w, http.StatusRequestEntityTooLarge, "Request body too large", nil)
+		return nil, false
+	}
+	fields, err := decodeBody(body)
+	if err != nil {
+		openAIError(w, http.StatusBadRequest, `Body must be a JSON object with a "model" field`, nil)
+		return nil, false
+	}
+	return fields, true
+}
+
+// routeByModel resolves the body's "model" alias to its route, writing the 400 /
+// 404 itself. The alias is echoed back because errors and logs should name what
+// the caller asked for.
+func (p *proxy) routeByModel(w http.ResponseWriter, fields map[string]json.RawMessage) (*Route, string, bool) {
+	alias, err := extractModel(fields)
+	if err != nil {
+		openAIError(w, http.StatusBadRequest, err.Error(), map[string]any{"known_models": p.cfg.aliases()})
+		return nil, "", false
+	}
+	rt, ok := p.cfg.routeFor(alias)
+	if !ok {
+		openAIError(w, http.StatusNotFound, "No fan-out route for model "+alias,
+			map[string]any{"known_models": p.cfg.aliases()})
+		return nil, "", false
+	}
+	return rt, alias, true
+}
+
+// tryTarget is one attempt against one usable target: build the upstream body
+// and forward it. Returning an error means "this target did not work, try the
+// next"; once it has written to w it must report Streamed.
+type tryTarget func(w http.ResponseWriter, r *http.Request, target Target) (forwardResult, error)
+
+// forwardWithFailover walks the route's target list in order until one answers.
+// It owns the failover story shared by every forwarded endpoint: skip reasons,
+// the per-origin in-flight cap (a busy target spills to the standby), the
+// non-retryable 4xx short-circuit, and the terminal 429 / 503. Once any response
+// byte has reached the client there is nothing to retry, so every retryable
+// outcome has to surface before that.
+func (p *proxy) forwardWithFailover(w http.ResponseWriter, r *http.Request, alias string, rt *Route, tryOne tryTarget) {
+	attempts := []attempt{}
+	busy := 0 // targets skipped only because they sit at their in-flight cap
+	for _, c := range planTargets(rt, p.hub) {
+		if c.skip != "" {
+			attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: c.skip})
+			continue
+		}
+		// One slot per in-flight forward on this origin instance, so a noisy
+		// client cannot pin an engine while the farm looks healthy.
+		key := targetKey(c.target)
+		if !p.lim.acquire(key) {
+			attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: busyReason(p.cfg.MaxInFlightPerTarget)})
+			busy++
+			continue
+		}
+		res, err := func() (forwardResult, error) {
+			defer p.lim.release(key)
+			return tryOne(w, r, c.target)
+		}()
+		switch {
+		case err != nil && res.Streamed:
+			// Upstream was already streaming; the client is mid-download, so
+			// there is nothing left to fail over to.
+			log.Printf("fanout: client stream from %s/%s broke: %v", c.target.Hub, c.target.InstanceName, err)
+			return
+		case err != nil:
+			reason := err.Error()
+			var he *httpError
+			if errors.As(err, &he) && !retryable(he.status) {
+				attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: reason})
+				openAIError(w, he.status, "Upstream rejected the request: "+reason, map[string]any{"attempts": attempts})
+				return
+			}
+			attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: reason})
+		default:
+			log.Printf("fanout: %s -> %s/%s", alias, c.target.Hub, c.target.InstanceName)
+			return
+		}
+	}
+
+	// Every usable target was busy: this is load shedding, not an outage, so
+	// say 429 with a Retry-After instead of a misleading 503.
+	if busy > 0 && busy == len(attempts) {
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+		openAIError(w, http.StatusTooManyRequests,
+			"All fan-out backends for model "+alias+" are at their in-flight cap",
+			map[string]any{"attempts": attempts, "hubs_tried": hubList(attempts), "inFlightCap": p.cfg.MaxInFlightPerTarget})
+		return
+	}
+
+	openAIError(w, http.StatusServiceUnavailable,
+		"No fan-out backend available for model "+alias,
+		map[string]any{"attempts": attempts, "hubs_tried": hubList(attempts)})
+}
+
 // ---------------------------------------------------------------- 转发
 
 // forwardClient has no timeout on purpose: TTS generation is unbounded, and a
@@ -218,34 +326,33 @@ type attempt struct {
 	Reason       string `json:"reason"`
 }
 
-// speechResult is the outcome of a forwarded speech request.
-type speechResult struct {
-	// Streamed is set when upstream answered and the body was already relayed.
+// forwardResult is the outcome of one forward at one target.
+type forwardResult struct {
+	// Streamed is set when upstream answered and the body was already relayed,
+	// i.e. there is nothing left to fail over to.
 	Streamed bool
-	Attempt  attempt
 }
 
-// relaySpeech forwards body to one hub and streams the response to w. The
+// relayUpstream POSTs body to one hub at path and streams the response to w. The
 // response is only written once upstream headers are known good, which is what
 // makes failover possible at all.
-func relaySpeech(w http.ResponseWriter, r *http.Request, target Target, body []byte) (speechResult, error) {
-	url := target.Hub + "/v1/audio/speech"
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, url, bytes.NewReader(body))
+func relayUpstream(w http.ResponseWriter, r *http.Request, target Target, path string, body []byte) (forwardResult, error) {
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, target.Hub+path, bytes.NewReader(body))
 	if err != nil {
-		return speechResult{}, err
+		return forwardResult{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.ContentLength = int64(len(body))
 	// Client disconnects must abort the upstream generation, not leak it.
 	resp, err := forwardClient.Do(req)
 	if err != nil {
-		return speechResult{}, err
+		return forwardResult{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		io.Copy(io.Discard, resp.Body) // drain for keep-alive
-		return speechResult{}, &httpError{status: resp.StatusCode, url: target.Hub + ": " + summarize(detail)}
+		return forwardResult{}, &httpError{status: resp.StatusCode, url: target.Hub + ": " + summarize(detail)}
 	}
 
 	h := w.Header()
@@ -256,10 +363,12 @@ func relaySpeech(w http.ResponseWriter, r *http.Request, target Target, body []b
 		h.Set("Content-Length", cl)
 	}
 	h.Set("X-Fanout-Hub", target.Hub)
-	h.Set("X-Fanout-Instance", target.InstanceName)
+	if target.InstanceName != "" {
+		h.Set("X-Fanout-Instance", target.InstanceName)
+	}
 	w.WriteHeader(resp.StatusCode)
 	_, err = io.CopyBuffer(flushWriter{w: w}, resp.Body, make([]byte, 32<<10))
-	return speechResult{Streamed: true}, err
+	return forwardResult{Streamed: true}, err
 }
 
 // summarize trims an upstream error body down to a loggable one-liner.

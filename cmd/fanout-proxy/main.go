@@ -13,15 +13,12 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"sort"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -91,6 +88,13 @@ func (p *proxy) handler() http.Handler {
 	mux.HandleFunc("GET /api/instances", p.handleInstances)
 	mux.HandleFunc("GET /v1/models", p.handleModels)
 	mux.HandleFunc("POST /v1/audio/speech", p.handleSpeech)
+	// STT / ASR: submit by alias, then read the task back on the hub that took
+	// it (task ids are hub-local, hence the ?hub= pin on the reads).
+	mux.HandleFunc("POST /api/tasks", p.handleTaskCreate)
+	mux.HandleFunc("GET /api/tasks", p.handleTaskRead)
+	mux.HandleFunc("GET /api/tasks/{id}", p.handleTaskRead)
+	mux.HandleFunc("GET /api/tasks/{id}/result", p.handleTaskRead)
+	mux.HandleFunc("DELETE /api/tasks/{id}", p.handleTaskRead)
 	mux.HandleFunc("/", p.handleFallback)
 	return withCORS(mux)
 }
@@ -101,7 +105,7 @@ func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, OpenAI-*")
 			w.Header().Set("Access-Control-Max-Age", "86400")
 			w.WriteHeader(http.StatusNoContent)
@@ -246,93 +250,24 @@ func (p *proxy) handleModels(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------- POST /v1/audio/speech
 
 // handleSpeech routes a speech request by model alias, walking the failover
-// list until one backend answers. Once bytes reach the client no retry is
-// possible, so every retryable failure has to surface before that.
+// list until one backend answers. Only the body rewrite differs from the other
+// forwarded endpoints; the failover itself is forwardWithFailover's.
 func (p *proxy) handleSpeech(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, p.cfg.MaxBodyBytes+1))
-	if err != nil {
-		openAIError(w, http.StatusBadRequest, "Cannot read request body", nil)
-		return
-	}
-	if int64(len(body)) > p.cfg.MaxBodyBytes {
-		openAIError(w, http.StatusRequestEntityTooLarge, "Request body too large", nil)
-		return
-	}
-	fields, err := decodeBody(body)
-	if err != nil {
-		openAIError(w, http.StatusBadRequest, "Body must be a JSON object with a \"model\" field", nil)
-		return
-	}
-	alias, err := extractModel(fields)
-	if err != nil {
-		openAIError(w, http.StatusBadRequest, err.Error(), map[string]any{"known_models": p.cfg.aliases()})
-		return
-	}
-	rt, ok := p.cfg.routeFor(alias)
+	fields, ok := p.readJSONBody(w, r)
 	if !ok {
-		openAIError(w, http.StatusNotFound, "No fan-out route for model "+alias,
-			map[string]any{"known_models": p.cfg.aliases()})
 		return
 	}
-
-	attempts := []attempt{}
-	busy := 0 // targets skipped only because they sit at their in-flight cap
-	for _, c := range planTargets(rt, p.hub) {
-		if c.skip != "" {
-			attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: c.skip})
-			continue
-		}
-		upstream, err := rewriteModel(fields, c.target.InstanceName)
+	rt, alias, ok := p.routeByModel(w, fields)
+	if !ok {
+		return
+	}
+	p.forwardWithFailover(w, r, alias, rt, func(w http.ResponseWriter, r *http.Request, target Target) (forwardResult, error) {
+		upstream, err := rewriteModel(fields, target.InstanceName)
 		if err != nil {
-			attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: err.Error()})
-			continue
+			return forwardResult{}, err
 		}
-		// One slot per in-flight forward on this origin instance, so a noisy
-		// client cannot pin an engine while the farm looks healthy.
-		key := targetKey(c.target)
-		if !p.lim.acquire(key) {
-			attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: busyReason(p.cfg.MaxInFlightPerTarget)})
-			busy++
-			continue
-		}
-		res, err := func() (speechResult, error) {
-			defer p.lim.release(key)
-			return relaySpeech(w, r, c.target, upstream)
-		}()
-		switch {
-		case err != nil && res.Streamed:
-			// Upstream was already streaming; the client is mid-download, so
-			// there is nothing left to fail over to.
-			log.Printf("fanout: client stream from %s/%s broke: %v", c.target.Hub, c.target.InstanceName, err)
-			return
-		case err != nil:
-			reason := err.Error()
-			var he *httpError
-			if errors.As(err, &he) && !retryable(he.status) {
-				attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: reason})
-				openAIError(w, he.status, "Upstream rejected the request: "+reason, map[string]any{"attempts": attempts})
-				return
-			}
-			attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: reason})
-		default:
-			log.Printf("fanout: %s -> %s/%s", alias, c.target.Hub, c.target.InstanceName)
-			return
-		}
-	}
-
-	// Every usable target was busy: this is load shedding, not an outage, so
-	// say 429 with a Retry-After instead of a misleading 503.
-	if busy > 0 && busy == len(attempts) {
-		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
-		openAIError(w, http.StatusTooManyRequests,
-			"All fan-out backends for model "+alias+" are at their in-flight cap",
-			map[string]any{"attempts": attempts, "hubs_tried": hubList(attempts), "inFlightCap": p.cfg.MaxInFlightPerTarget})
-		return
-	}
-
-	openAIError(w, http.StatusServiceUnavailable,
-		"No fan-out backend available for model "+alias,
-		map[string]any{"attempts": attempts, "hubs_tried": hubList(attempts)})
+		return relayUpstream(w, r, target, "/v1/audio/speech", upstream)
+	})
 }
 
 // handleFallback answers unknown paths with the served surface, which is more
@@ -341,6 +276,8 @@ func (p *proxy) handleFallback(w http.ResponseWriter, r *http.Request) {
 	openAIError(w, http.StatusNotFound, "Unknown endpoint "+r.Method+" "+r.URL.Path, map[string]any{
 		"endpoints": []string{
 			"GET /farm/health", "GET /api/instances", "GET /v1/models", "POST /v1/audio/speech",
+			"POST /api/tasks", "GET /api/tasks", "GET /api/tasks/{id}", "GET /api/tasks/{id}/result",
+			"DELETE /api/tasks/{id}",
 		},
 	})
 }

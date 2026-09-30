@@ -173,3 +173,13 @@ func (c *Config) aliases() []string {
 	sort.Strings(out)
 	return out
 }
+
+// hubBaseURLs returns every configured hub base URL, in config order. Config
+// order is failover priority, which is also what an agent should try first.
+func (c *Config) hubBaseURLs() []string {
+	out := make([]string, 0, len(c.Hubs))
+	for _, h := range c.Hubs {
+		out = append(out, h.BaseURL)
+	}
+	return out
+}

@@ -85,13 +85,16 @@ audio.cpp-hub 是 [audio.cpp](https://github.com/0xShug0/audio.cpp) 的 Web 管�
 ├── go.mod / go.sum
 ├── cmd/fanout-proxy/     # 多机语音农场统一入口（独立 package main，stdlib only，默认 :18082）
 │                         #   config.go(farm.routes.json 校验) / health.go(7s 轮询 + 连续 2 次失败判掉)
-│                         #   router.go(model 改写 + 目标选择 + 流式转发) / main.go(4 个端点)
-│                         #   端点：GET /farm/health、GET /api/instances、GET /v1/models、POST /v1/audio/speech
+│                         #   router.go(model 改写 + 目标选择 + 在途上限 + 共用故障转移循环 + 流式转发)
+│                         #   tasks.go(POST /api/tasks 按别名路由 + ?hub= 钉住的读回) / main.go(端点)
+│                         #   端点：GET /farm/health、GET /api/instances、GET /v1/models、
+│                         #   POST /v1/audio/speech、POST /api/tasks、GET|DELETE /api/tasks[/{id}[/result]]
 │                         #   文档 docs/fanout-design.md，本目录 README.md 含构建/冒烟/部署；systemd user unit 模板
 clients/                  # 仓库内 Python 客户端（stdlib only，不进 Go 构建）
 └── audiocpp_client.py     #   TTS/音色设计、STT、voice sweep、音色库/历史、农场健康；两个 base URL：
                           #   DEFAULT_HUB = fan-out :18082（TTS + 发现，--hub / AUDIOCPP_HUB_URL）；
-                          #   DEFAULT_DIRECT_HUB = :18080（fan-out 不代理的 hub 内接口，
+                          #   DEFAULT_DIRECT_HUB = :18080（fan-out 不代理的 hub 内接口
+                          #   upload/voices/history，以及 STT——上传与任务同主机更省事，
                           #   --direct-hub / AUDIOCPP_DIRECT_HUB_URL）；本地开发两者同指 127.0.0.1:18080
 web/                      # 前端静态文件（无构建步骤、运行时零 Node）
 ├── index.html            # 全部静态 DOM + CSP（web/index.html:7）+ 脚本加载顺序（顺序有硬约束）

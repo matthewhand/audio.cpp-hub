@@ -23,10 +23,12 @@ everything. Both default to the farm on 10.0.0.36:
      `qwen3-vd`/`voice-design-fast`, `sanotts`/`instant`, `citrinet`/`stt`.
      Override with AUDIOCPP_HUB_URL or --hub.
 
-  2. DEFAULT_DIRECT_HUB = http://10.0.0.36:18080 — a real hub, for the
-     endpoints the fan-out 404s (it proxies TTS only). Every hub keeps its own
-     state, so these always talk to one host:
-       POST /api/tasks (STT), /api/audio/upload, /api/voices, /api/history/*
+  2. DEFAULT_DIRECT_HUB = http://10.0.0.36:18080 — a real hub, for the endpoints
+     the fan-out does not proxy (/api/audio/upload, /api/voices, /api/history/*):
+     every hub keeps its own state, so these always talk to one host.
+     STT is sent here too, on purpose: it keeps upload + task on one host, and
+     the fan-out's /api/tasks needs a per-read ?hub= pin anyway (see
+     docs/agent-api.md §2 for the fan-out STT shape).
      Override with AUDIOCPP_DIRECT_HUB_URL or --direct-hub.
 
 Local development: a hub running on this machine serves both roles, so point
@@ -144,7 +146,7 @@ def instance_id(name: str, hub: str = DEFAULT_DIRECT_HUB) -> str:
     """Resolve a hub-side service name (e.g. `citrinet`) to that hub's task id.
 
     Hub-local by construction: instance ids mean nothing outside the hub that
-    issued them, and the fan-out does not proxy /api/tasks anyway.
+    issued them, which is also why the fan-out pins task reads with ?hub=.
     """
     for inst in instances(hub):
         if inst.get("instanceName") == name:
@@ -242,7 +244,9 @@ def upload_wav(path_or_bytes, hub: str = DEFAULT_DIRECT_HUB) -> dict:
 
 # --------------------------------------------------------------------------- #
 # STT — speech to text (async task API; `audio` = server-side path, NOT base64)
-# Hub-only: the fan-out proxies /v1/audio/speech only, not /api/tasks.
+# Sent to a real hub on purpose: the fan-out also serves POST /api/tasks by alias
+# (`{"model":"stt","request":{…}}`, see docs/agent-api.md §2), but keeping upload
+# and task on one host is simpler and needs no ?hub= pin on the reads.
 # --------------------------------------------------------------------------- #
 
 def transcribe(audio: str, *, hub: str = DEFAULT_DIRECT_HUB, service: str = "citrinet",
@@ -254,9 +258,8 @@ def transcribe(audio: str, *, hub: str = DEFAULT_DIRECT_HUB, service: str = "cit
     (uploaded via /api/audio/upload first). Returns the final task dict
     (`text` holds the transcript) when wait=True, else the submitted task.
 
-    Goes to a real hub by default: `/api/tasks` is not a fan-out route, and
-    `service` is a service name on that host (the fan-out's `citrinet` alias
-    only exists for /v1/audio/speech).
+    Goes to a real hub by default: `service` is a service name on that host, and
+    the audio path has to live on the same host that runs the engine.
     """
     path = audio
     if upload:
@@ -356,7 +359,7 @@ def _main(argv=None):
                         f"local dev: {LOCAL_HUB})")
     p.add_argument("--direct-hub", default=None,
                    help="a single hub, for the routes the fan-out does not proxy "
-                        "(STT/tasks, upload, voices, history) "
+                        "(upload, voices, history) and for STT, which stays here "
                         f"(default $AUDIOCPP_DIRECT_HUB_URL or {DEFAULT_DIRECT_HUB}; "
                         f"local dev: {LOCAL_HUB})")
     sub = p.add_subparsers(dest="cmd", required=True)

@@ -731,8 +731,8 @@ func TestUnknownEndpointListsSurface(t *testing.T) {
 		t.Errorf("message = %q, want it to echo the path", env["message"])
 	}
 	paths, _ := env["endpoints"].([]any)
-	if len(paths) != 4 {
-		t.Errorf("endpoints = %v, want the 4 served routes", paths)
+	if len(paths) != 9 {
+		t.Errorf("endpoints = %v, want the 9 served routes", paths)
 	}
 }
 

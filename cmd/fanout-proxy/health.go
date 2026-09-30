@@ -42,6 +42,26 @@ func (s *hubState) ready(instanceName string) bool {
 	return false
 }
 
+// instanceID is the hub-local task id of a READY service, resolved from the same
+// poll snapshot routing already reads. Task submission needs it because
+// POST /api/tasks addresses an instance by id, not by service name.
+//
+// Instances come from remote JSON: the id may be missing (older hub) or not a
+// string, which reads as "unknown" and makes the caller skip the target.
+func (s *hubState) instanceID(instanceName string) string {
+	if s == nil || !s.ok {
+		return ""
+	}
+	for _, inst := range s.instances {
+		if inst["instanceName"] != instanceName || inst["status"] != "READY" {
+			continue
+		}
+		id, _ := inst["id"].(string)
+		return id
+	}
+	return ""
+}
+
 // healthStore is the poll cache every routing decision reads. It is the only
 // mutable state in the proxy, and it is refreshed by a single ticker.
 type healthStore struct {

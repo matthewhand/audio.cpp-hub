@@ -1,6 +1,7 @@
 # Fan-out design
 
 Status: **implemented** (option B) — `cmd/fanout-proxy/`, shipped 2026-09-30.
+STT followed on 2026-09-30 (follow-up 1: `POST /api/tasks` by alias).
 Decisions below are as built; superseded drafts are kept only where they explain
 *why* (e.g. the 6600 XT verdict).
 
@@ -79,9 +80,11 @@ Rules baked into the implementation:
   translating request schemas across engines is exactly the kind of surprise a
   tiny router must not introduce. Agents asking for `qwen3-vd` get a clear
   `503` instead of a different model wearing the same name.
-- `citrinet` / `stt` are listed for discoverability only: STT is served through
-  the hub's async `POST /api/tasks` flow, which the proxy does not expose yet.
-  See "Not proxied" below.
+- `citrinet` / `stt` are the ASR aliases: TTS is served with
+  `POST /v1/audio/speech`, ASR with `POST /api/tasks` (see "STT through the
+  fan-out"). The reverse pairing still fails, and on purpose — a speech call
+  against `citrinet` 503s because the engine wants an audio contract, not text.
+  The alias names a *service*, the endpoint names the *request shape*.
 
 ## Endpoints
 
@@ -91,10 +94,65 @@ Rules baked into the implementation:
 | `GET` | `/api/instances` | aggregated instances of every up hub, each tagged `hub` / `hubLabel` |
 | `GET` | `/v1/models` | OpenAI list, only aliases whose route currently has a READY target |
 | `POST` | `/v1/audio/speech` | route by `model` alias → rewrite `model` → stream response → failover, with a per-origin in-flight cap |
+| `POST` | `/api/tasks` | route by `model` alias → rewrite `instanceId` → submit → failover, same cap |
+| `GET` | `/api/tasks`, `/api/tasks/{id}`, `/api/tasks/{id}/result`, `DELETE /api/tasks/{id}` | read-through to one hub, pinned with `?hub=<baseUrl>` (task ids are hub-local) |
 
 **Not proxied** (deliberate): `/api/history/*`, `/api/voices/*`,
-`/api/audio/upload`, `/api/tasks*`, `/v1/tasks/run`. Those need per-origin paths
-or server-side file access, so they stay on the origin hub.
+`/api/audio/upload`, `/v1/tasks/run`. Those need per-origin paths or
+server-side file access, so they stay on the origin hub.
+
+## STT through the fan-out
+
+The hub's ASR flow is its async task API (`POST /api/tasks`, then poll for
+`text`). The fan-out serves it with the same route table, poll cache and
+failover list as speech, so ASR gets one alias and one entrypoint:
+
+```jsonc
+// POST http://10.0.0.36:18082/api/tasks
+{ "model": "stt", "request": { "audio": "/audio.cpp/data/uploads/clip.wav" } }
+//  -> 202 + the hub's task record, X-Fanout-Hub: http://10.0.0.36:18080
+```
+
+What the proxy has to bridge: the hub addresses an instance by **hub-local id**,
+not by service name, and an agent only knows the alias. So submission resolves
+`instanceName` → `instanceId` out of the `/api/instances` snapshot the proxy
+already caches for routing, and rewrites that one field. `request` is relayed
+byte-for-byte (`json.RawMessage`), the same "only the routing key is touched"
+rule speech keeps. A target the snapshot cannot give an id for is skipped with
+`no instance id for <service>`, exactly like `hub is down`.
+
+Decisions taken:
+
+- **Failover covers submission, not execution.** The hub enqueues and answers
+  `202` immediately; the ASR then runs on that one engine. The reads below carry
+  no failover on purpose — re-submitting elsewhere would duplicate work, not
+  recover it.
+- **Reads are pinned, not guessed.** Task ids are 8-char hub-local ids, so
+  `GET`/`DELETE /api/tasks*` require `?hub=<baseUrl>`; a hub not in the config is
+  a `400`, one the poll cache reports down is a `502` without dialing. Guessing a
+  host could answer with another hub's task. The pin comes straight from
+  `X-Fanout-Hub` on the submission (or from `hub` on a `GET /api/instances`
+  entry); hub filters such as `active=1` / `modelId` pass through untouched.
+- **A read is a read.** The hub's own status and body are the answer — its
+  `404 TASK_NOT_FOUND` stays a `404` instead of being rewrapped in a fan-out
+  envelope — and only a transport failure becomes a `502`. Reads carry a 30 s
+  ceiling (they have no side effects, so a stuck hub must not pin the request);
+  the forwards stay unbounded because generation is.
+- **The in-flight cap covers submission.** A slot is held for the submit round
+  trip, then released while the task still runs — the hub's own serial queue is
+  what bounds execution, so for ASR the cap limits *how fast work is queued*, not
+  how much of it is running.
+- **`request.audio` is a server-side path**, i.e. it exists on the origin hub
+  only. If the `stt` route ever grows a second host, a submission that fails
+  over would reference a file the standby cannot read: that surfaces as a
+  `FAILED` task on the engine, not as a second failover. Today the route is
+  single-host, so it cannot happen; uploading first and keeping ASR pinned to
+  the host that holds the file is the safe pattern if that changes.
+
+Known cost of failover here: if a submission is accepted but its response is
+lost in transit, the proxy fails over and the work runs twice. ASR is
+idempotent, so the price is one wasted engine slot — same as a re-sent TTS
+request.
 
 ## Health aggregation
 
@@ -123,7 +181,9 @@ or server-side file access, so they stay on the origin hub.
 - A hub is marked **down after 2 consecutive failures**; one successful poll
   restores it immediately. One blip never moves traffic off a warm primary.
 - A target is usable only if its hub is up *and* that hub reports the instance
-  `READY` — a lazy-loading `citrinet` on `.36` is skipped until it is warm.
+  `READY` — a lazy-loading `citrinet` on `.36` is skipped until it is warm. That
+  same snapshot carries the hub-local `instanceId`, which is all `POST /api/tasks`
+  needs, so task routing adds no polling.
 - `inFlight` per target is a live count (not from the poll cache), shown next to
   the effective `inFlightCap` so a target about to start shedding is visible
   before it does. `resolved` stays the poll-cache answer: first READY target,
@@ -131,8 +191,8 @@ or server-side file access, so they stay on the origin hub.
 
 ## Failure / failover
 
-1. Target unusable per the poll cache (hub down, instance not READY) → next
-   target, recording the skip reason.
+1. Target unusable per the poll cache (hub down, instance not READY, no instance
+   id for a task submission) → next target, recording the skip reason.
 2. Target at its per-origin in-flight cap → next target, same as above (see
    "Fairness" below).
 3. Transport error, `5xx`, `409` (hub: instance still starting) or `429` → next
@@ -185,15 +245,22 @@ Decisions taken:
 - `cmd/fanout-proxy/` — own `package main`, stdlib only, so the hub root package
   is untouched. `config.go` (farm.routes.json + validation), `health.go` (poll
   cache + down threshold), `router.go` (model rewrite, target planning,
-  in-flight limiter, streaming forward), `main.go` (flags, handlers).
-- `cmd/fanout-proxy/farm.routes.json` — the committed farm topology.
+  in-flight limiter, shared failover loop, streaming forward), `tasks.go`
+  (`POST /api/tasks` by alias + pinned task read-through), `main.go` (flags,
+  handlers).
+- `cmd/fanout-proxy/farm.routes.json` — the committed farm topology. The task
+  path needs no new key: an alias names a service, and the engine's own request
+  object rides along untouched.
 - `cmd/fanout-proxy/audio-cpp-fanout.service` — systemd **user** unit template
   (install notes in the file header); nothing is enabled automatically.
 - `cmd/fanout-proxy/README.md` — build / run / endpoints / knobs / smoke test.
 - Table-driven unit tests cover alias resolution, target planning and failover
   (including httptest stand-ins for two hubs), the 2-failure down threshold, the
   body rewrite, the in-flight cap (spill, `429` shedding, slot release, nil and
-  `cap <= 0` safety), and the committed route table.
+  `cap <= 0` safety), the committed route table, and the task path (alias →
+  per-hub `instanceId` rewrite, submission failover, cap shedding and slot
+  release, instance-id resolution incl. malformed/absent ids, and the pinned
+  read-through across all four task routes plus its rejection cases).
 - Agent-facing contract: `docs/agent-api.md`. Farm table: `docs/farm.md`.
 
 ## RX 6600 XT throwaway verdict (2026-09-30, unchanged)
@@ -228,12 +295,19 @@ Retry DEVICE=0 only after GPU driver/kernel update, again in a throwaway.
 
 ## Follow-ups
 
-1. STT through the fan-out: forward `POST /api/tasks` for the `stt`/`citrinet`
-   alias so ASR gets the same failover story as TTS.
+1. ~~STT through the fan-out~~ — **shipped**, see "STT through the fan-out":
+   `POST /api/tasks` routes by the same alias, resolves the hub-local
+   `instanceId` from the poll snapshot, and fails over on submission; the task
+   reads (`GET` / `GET .../result` / `DELETE`) are a read-through pinned with
+   `?hub=<baseUrl>`. Remaining gaps, both about audio files rather than routing:
+   uploads still go to the origin hub (`/api/audio/upload` is not proxied), and a
+   failover between two hosts would reference a path only the origin can read —
+   moot while `stt` is single-host.
 2. ~~Per-origin in-flight cap~~ — **shipped**, see "Fairness" above.
    `maxInFlightPerTarget` (default 2), capped targets spill to the standby,
    all-busy sheds `429` + `Retry-After`, and `/farm/health` reports
-   `inFlight` / `inFlightCap`.
+   `inFlight` / `inFlightCap`. Note it caps submission for `POST /api/tasks`;
+   execution is bounded by the hub's own serial queue.
 3. Sticky sessions for multi-seed auditions, if agents ever need a whole sweep
    to land on one host. Note the cap makes this sharper, not softer: a sweep
    fired in parallel now splits across `.36` and `.30`, so seeds of one audition
