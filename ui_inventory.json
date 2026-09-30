@@ -11,6 +11,7 @@
       "web/i18n.zh.js",
       "web/legacy-globals.js",
       "web/modules/async-ui.js",
+      "web/modules/command-palette-lazy.js",
       "web/modules/command-palette.js",
       "web/modules/dom.js",
       "web/modules/downloads-lazy.js",
@@ -928,8 +929,8 @@
     { "key": "Home", "negated": false, "source": "web/audio-picker.js" },
     { "key": "Home", "negated": false, "source": "web/modules/async-ui.js" },
     { "key": "Home", "negated": false, "source": "web/modules/file-browser.js" },
-    { "key": "k", "negated": false, "source": "web/modules/command-palette.js" },
-    { "key": "K", "negated": false, "source": "web/modules/command-palette.js" },
+    { "key": "k", "negated": false, "source": "web/modules/command-palette-lazy.js" },
+    { "key": "K", "negated": false, "source": "web/modules/command-palette-lazy.js" },
     { "key": "Tab", "negated": true, "source": "web/app.js" }
   ],
   "endpoints": [

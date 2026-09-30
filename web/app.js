@@ -18,7 +18,7 @@
  * 模块地图与每层的边界见 web/README.md。 */
 
 import { FOCUSABLE_SEL, focusDialog, parseApiError, renderEmptyState, renderStateError, restoreDialogFocus, showToast, startEventsPolling, topmostOverlay } from "./modules/async-ui.js";
-import { closeCommandPalette } from "./modules/command-palette.js";
+import { closeCommandPalette } from "./modules/command-palette-lazy.js";
 import { $ } from "./modules/dom.js";
 import { closeDownloadsModal, closeModelDlModal, relocalizeDownloads, startDownloadsPolling } from "./modules/downloads-lazy.js";
 import { cancelFileBrowser, relocalizeFileBrowser } from "./modules/file-browser-lazy.js";

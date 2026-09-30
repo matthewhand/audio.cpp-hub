@@ -53,7 +53,7 @@ const PRECACHE_URLS = [
   "/modules/async-ui.js",
   "/modules/state.js",
   "/modules/routing.js",
-  "/modules/command-palette.js",
+  "/modules/command-palette-lazy.js",
   "/modules/shell.js",
   "/modules/models.js",
   "/modules/settings-lazy.js",
@@ -72,6 +72,7 @@ const PRECACHE_URLS = [
   "/modules/voices-panel.js",   // 音色库管理面板
   "/modules/downloads.js",      // 下载管理弹窗 + 按模型下载弹窗
   "/modules/settings.js",       // 设置弹窗（通用 / HTTPS / 可执行文件列表）
+  "/modules/command-palette.js", // 命令面板（Ctrl/Cmd-K）
   "/modules/panels.js",
   "/style.css",
   "/icons/icon-192.png",

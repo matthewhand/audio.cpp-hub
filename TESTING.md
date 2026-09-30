@@ -29,11 +29,14 @@
   打开路径确实经 `import("./file-browser.js")` 并发去重）。
 - `stats-lazy.test.mjs`：看板外观层（先同步显示外壳再加载 chunk、关闭/重画在未加载时空转、
   并发打开共享一次 import、import 失败收回面板、`wireStatsButton` 接线）。
-- `lazy-panels.test.mjs`：音色库 / 下载 / 设置三个外观层的同一组契约——同步关闭与语言切换
+- `lazy-panels.test.mjs`：音色库 / 下载 / 设置 / 命令面板四个外观层的同一组契约——同步关闭与语言切换
   在 chunk 未加载时是 no-op（或只收已显示的外壳并放弃随后那次打开）、并发打开共享一次
   import、失败不缓存、页头与入口按钮接线路由、**首屏必须可见/被依赖的东西没有被懒加载**
   （下载角标与 2s 轮询、可执行文件登记落到启动弹窗下拉）、**形状闸门**（chunk 走 `import()`、
-  进 `PRECACHE_URLS` 而不进 `modulepreload`、旧的经典脚本标签与预缓存项已撤掉）。
+  进 `PRECACHE_URLS` 而不进 `modulepreload`、旧的经典脚本标签与预缓存项已撤掉）、
+  **命令面板的和弦只注册一次**（外观层独家持有全局 Ctrl/Cmd-K，chunk 不得再挂
+  `document` keydown——两份监听会各处理一次同一次按键，真浏览器里表现为「打开又立刻关掉」；
+  `e2e/command-palette.spec.mjs` 从行为侧钉同一条）。
 
 > **数字/单位排版已收口到 `I18N.bytes`（Intl）**：`modules/downloads.js`（懒加载 chunk）的
 > `fmtBytes` 与 `modules/file-browser.js` 的 `formatSize` 现在只做「非法值兜底 + 委托」。单测因此断言**契约与兜底**，不硬编码 ICU 版本的空格 / 千分位 / `kB` vs `KB` 差异。
@@ -79,6 +82,7 @@
 | 下载暂停 / 续传 + 懒加载契约 | `downloads.spec.mjs` |
 | 文件浏览器懒加载（含经典脚本的动态 import） | `file-browser.spec.mjs` |
 | 看板懒加载 | `stats.spec.mjs` |
+| 命令面板懒加载（和弦首按即开、再按即关、Esc） | `command-palette.spec.mjs` |
 | 模型切换 / 主题 / 语言 | `ui-switch.spec.mjs` |
 
 ### 延迟/未覆盖（诚实说明）
@@ -111,11 +115,11 @@
 
 | 指标 | 预算 | 当前实测 |
 | --- | --- | --- |
-| 初始 JS raw | 315 KiB | 313.5 KiB |
-| 初始 JS gzip | 116 KiB | 114.4 KiB |
+| 初始 JS raw | 312 KiB | 310.2 KiB |
+| 初始 JS gzip | 115 KiB | 113.6 KiB |
 | 初始 CSS raw | 68 KiB | 67.6 KiB |
 | 初始 CSS gzip | 18 KiB | 17.2 KiB |
-| JS+CSS gzip 合计 | 133 KiB | 131.6 KiB |
+| JS+CSS gzip 合计 | 132 KiB | 130.7 KiB |
 | 初始子资源请求数 | 31 | 30 |
 | TTI 目标 | ≤ 1500 ms（本地/局域网，中端笔电） | 由真实浏览器测量，不在本脚本校验 |
 
@@ -123,7 +127,36 @@
 **棘轮方向只朝下**：每次把一个「点开才用得上」的视图挪进懒加载 chunk，就按新的实测值重新收一次，
 并在 `scripts/perf-budget.mjs` 顶注留下 before → after 全量对照——**不许**为了让新功能过线而调高。
 
-### 懒加载文件浏览器（2026-09，本轮）
+### 懒加载命令面板（2026-09，本轮）
+
+`web/modules/command-palette.js`（6.1 KiB raw / 2.5 KiB gzip）改成懒加载 chunk，经首屏外观层
+`web/modules/command-palette-lazy.js` 按需 import。它是最后一个「从不上首屏」的视图——**没有入口
+按钮**，唯一入口是全局 Ctrl/Cmd-K 和弦，所以和弦必须留在外观层（否则首按必然失灵）。
+同口径实测：
+
+| 指标 | 懒加载前 | 懒加载后 | 变化 |
+| --- | --- | --- | --- |
+| 初始子资源请求数 | 30 | 30 | 0（1 chunk 换 1 外观层） |
+| 初始 JS raw | 313.5 KiB | **310.2 KiB** | −3.3 KiB |
+| 初始 JS gzip | 114.4 KiB | **113.6 KiB** | −0.8 KiB |
+| JS+CSS gzip 合计 | 131.6 KiB | **130.7 KiB** | −0.9 KiB |
+| 首屏模块数 | 17 | 18 | +1（64 行 / 1.5 KiB 的外观层） |
+
+净收益不大，因为外观层要背着和弦。与下载 / 设置 / 音色库三块不同，这里**不先亮外壳**：
+命令面板的核心就是那个搜索框，而外壳的 input 监听由 chunk 绑定，外壳先亮会吞掉 chunk 在路上
+时抢跑的那几下按键。
+
+`test/unit/lazy-panels.test.mjs`（5 条）从源码侧钉住「和弦只注册一次」，`e2e/command-palette.spec.mjs`
+（2 条）从行为侧钉住同一件事：两次 Ctrl-K 必须能开再能关，一旦有两份监听，第二次按键会被处理
+两遍、面板停在打开态。
+
+**剩下的候选与不做的原因**（实测，非猜测；同一张表也记在 `scripts/perf-budget.mjs` 顶注）：
+中英词典合计 21.7 KiB gzip（首屏 gzip 的 16%，一次只用一种语言，但改按需加载要动 i18n 的加载
+顺序硬约束并让 `setLang` 异步化——是独立一轮，不是 easy win）；`sidebar.js` 里的 `#/history`
+面板与常驻侧栏共享行状态，切不开；`panels.js` / `style.css` 是首屏内容本身；`pwa.js` 只值
+1.7 KiB 且属渐进增强而非点击才用。
+
+### 懒加载文件浏览器（2026-09）
 
 `web/file-browser.js`（17.2 KiB raw / 5.7 KiB gzip 的经典脚本，挂在 `window.FileBrowser`）
 改成懒加载 chunk `web/modules/file-browser.js`，经首屏外观层 `web/modules/file-browser-lazy.js`

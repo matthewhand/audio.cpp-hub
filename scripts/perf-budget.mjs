@@ -138,15 +138,54 @@ const KIB = 1024;
  * extra round trip on the first open (the shell appears synchronously, content
  * follows).
  *
- * Budgets are re-pinned just above the new measurements. Next candidates: the
- * history sidebar (`#/history`) and the command palette (`Ctrl/Cmd-K`, 6.1 KiB) —
- * both are click-to-open views with the same shape. */
+ * 2026-09 (done, this ratchet step): the command palette joined the same set. It is
+ * the one remaining view that is *never* on first paint — there is no entry point for
+ * it, only the Ctrl/Cmd-K chord — so paying 6.1 KiB raw / 2.5 KiB gzip of candidates,
+ * list rendering and ↑↓/Enter semantics on every model-list-and-run-a-task session was
+ * pure waste. `modules/command-palette.js` became a lazy chunk behind the eager facade
+ * `modules/command-palette-lazy.js`, which is the *only* owner of the global chord.
+ * That ownership matters: the chunk used to register a second `document` keydown
+ * listener, and two listeners on one chord toggle the palette twice (open, then close)
+ * — a bug you only see in a real browser, once the chunk lands. The facade owns the
+ * chord; the chunk keeps only the handlers local to its own DOM.
+ *
+ * Measured before -> after (`npm run perf:budget` on this tree):
+ *
+ *   | 指标            | 懒加载前（before） | 懒加载后（after） | 变化           |
+ *   | ---------------- | ----------------- | ----------------- | -------------- |
+ *   | 初始子资源请求数 | 30                | 30                | 0（1 chunk 换 1 外观） |
+ *   | 初始 JS raw      | 313.5 KiB         | 310.2 KiB         | **−3.3 KiB**   |
+ *   | 初始 JS gzip     | 114.4 KiB         | 113.6 KiB         | **−0.8 KiB**   |
+ *   | JS+CSS gzip 合计 | 131.6 KiB         | 130.7 KiB         | **−0.9 KiB**   |
+ *   | 首屏模块数       | 17                | 18                | +1（1.5 KiB 的外观层） |
+ *
+ * Unlike the settings/downloads/voices step above, this one does **not** show a
+ * "shell first" affordance: the palette *is* a text box, and the shell's input
+ * handlers are bound by the chunk, so flashing an empty search box would swallow
+ * the keystrokes typed while the chunk is in flight. It opens whole, like
+ * `openVoicesPanel`. Net win is small because the facade carries the chord.
+ *
+ * Budgets are re-pinned just below the new measurements — a ratchet, never a raise.
+ *
+ * What is left, and why none of it was done here (measured, not guessed):
+ *
+ *   | 候选                            | gzip   | 不做的原因                                              |
+ *   | ------------------------------- | ------ | ------------------------------------------------------- |
+ *   | `i18n.zh.js` + `i18n.en.js`     | 21.7 K | **最大的一块**（首屏 gzip 的 16%），但一次只用一种语言。改成
+ *                                         按需加载要动 i18n 的加载顺序硬约束并让 `setLang` 异步化
+ *                                         ——不是 easy win，是独立的一轮。                        |
+ *   | `modules/sidebar.js` 里的历史面板 | 9.1 K  | `#/history` 面板与常驻操作历史侧栏共享 `sidebarRows` /
+ *                                         `historyDetails` / `makeHistoryRow`，切不开；拆是重构。   |
+ *   | `modules/panels.js`             | 10.8 K | 工作区表单本身，首屏就要画，不是「点开才用得上」。          |
+ *   | `style.css`                     | 17.6 K | 无打包器，按用途拆 CSS 要改整套首屏结构与视觉契约。        |
+ *   | `pwa.js`                        | 1.7 K  | 渐进增强而非点击才用；挪走只省 1 次请求换一个形状变更。    |
+ */
 export const BUDGETS = {
-  jsRawKiB: 315, // 初始 JS 未压缩合计（实测 313.5）
-  jsGzipKiB: 116, // 初始 JS gzip 传输合计（实测 114.4）
+  jsRawKiB: 312, // 初始 JS 未压缩合计（实测 310.2）
+  jsGzipKiB: 115, // 初始 JS gzip 传输合计（实测 113.6）
   cssRawKiB: 68, // 初始 CSS 未压缩（实测 67.6）
   cssGzipKiB: 18, // 初始 CSS gzip 传输（实测 17.2）
-  totalGzipKiB: 133, // JS + CSS gzip 合计（实测 131.6，不含 HTML，HTML 很小)
+  totalGzipKiB: 132, // JS + CSS gzip 合计（实测 130.7，不含 HTML，HTML 很小)
   subresourceRequests: 31, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 30）
   ttiTargetMs: 1500 // 目标 TTI（本地/局域网，中端笔电）——浏览器指标，本脚本不测量
 };

@@ -1,8 +1,9 @@
-/* 单元测试：三个「点击才打开」面板的懒加载外观层
- * （web/modules/voices-panel-lazy.js / downloads-lazy.js / settings-lazy.js）。
+/* 单元测试：四个「点击才打开」面板的懒加载外观层
+ * （web/modules/voices-panel-lazy.js / downloads-lazy.js / settings-lazy.js /
+ *  command-palette-lazy.js）。
  *
- * 这一轮把音色库、下载、设置三块从首屏模块图挪到懒加载 chunk，沿用 stats-lazy /
- * file-browser-lazy 已有的形状，因此外观层要守住的契约完全一致：
+ * 前面几轮把音色库、下载、设置、命令面板从首屏模块图挪到懒加载 chunk，沿用
+ * stats-lazy / file-browser-lazy 已有的形状，因此外观层要守住的契约完全一致：
  *   - 真模块只经 import("./x.js") 拉取，且并发打开共享同一次网络往返；
  *   - 同步路径（Esc 关最上层弹窗、applyRoute 的关闭分支、语言切换重画）在 chunk
  *     从未加载时必须是 no-op 或「只收起外壳」，不能抛错、不能卡住；
@@ -447,14 +448,111 @@ test("settings-lazy: wireSettingsButtons 同时接页头 ⚙ 与启动弹窗的�
   assert.deepEqual(calls.at(-1), ["go", "#/settings"]);
 });
 
+/* ================ 命令面板：modules/command-palette-lazy.js ================ */
+function makePaletteLazy({ importImpl, open = false } = {}) {
+  const log = [];
+  const listeners = [];
+  const mod = {
+    openCommandPalette: spy(log, "mod.openCommandPalette"),
+    closeCommandPalette: spy(log, "mod.closeCommandPalette")
+  };
+  let loads = 0;
+  const sandbox = {
+    console: { error: (...a) => log.push(["error", ...a]) },
+    isOpen: (id) => id === "command-palette" && open,
+    document: { addEventListener: (evt, cb) => listeners.push([evt, cb]) },
+    __load: () => {
+      loads++;
+      return importImpl ? importImpl() : Promise.resolve(mod);
+    }
+  };
+  sandbox.globalThis = sandbox;
+  const api = loadEsModule(
+    "modules/command-palette-lazy.js",
+    sandbox,
+    stubImport("command-palette.js")
+  );
+  const pressCtrlK = () => {
+    const entry = listeners.find(([evt]) => evt === "keydown");
+    assert.ok(entry, "外观层求值时就应挂上 Ctrl/Cmd-K 监听");
+    let prevented = false;
+    entry[1]({
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      key: "k",
+      preventDefault: () => (prevented = true)
+    });
+    return prevented;
+  };
+  return { api, log, loads: () => loads, pressCtrlK, listeners };
+}
+
+test("palette-lazy: 全局 Ctrl/Cmd-K 在 chunk 到位前就已接线并能首次唤起", async () => {
+  /* 命令面板没有任何入口按钮，唯一入口就是这个和弦。chunk 只在第一次按键时才
+     到位——若接线留在 chunk 里，首按必然失灵，而且此后每按一次都得等一次往返。 */
+  const p = makePaletteLazy();
+  assert.equal(p.pressCtrlK(), true, "和弦必须 preventDefault（否则浏览器自己开搜索）");
+  await new Promise((r) => setTimeout(r, 0));
+  assert.ok(
+    p.log.some(([k]) => k === "mod.openCommandPalette"),
+    "chunk 到位后应真的打开"
+  );
+});
+
+test("palette-lazy: Ctrl/Cmd-K 全局监听只登记一次（chunk 不得重复注册）", () => {
+  /* 两层 document keydown 监听会各处理同一次按键：打开再立刻关掉。这种缺陷只在
+     真浏览器里、chunk 落地之后才显形，因此在这里钉死归属。 */
+  const p = makePaletteLazy();
+  assert.equal(p.listeners.length, 1, "外观层登记唯一一份 Ctrl/Cmd-K 监听");
+  assert.equal(p.listeners[0][0], "keydown");
+  assert.doesNotMatch(
+    readWeb("modules/command-palette.js"),
+    /document\.addEventListener\("keydown"/,
+    "chunk 里不该再有全局 keydown 监听（会和外观层重复处理同一次按键）"
+  );
+});
+
+test("palette-lazy: 同步关闭在 chunk 未加载时是安全空操作，加载后转发", async () => {
+  const unloaded = makePaletteLazy();
+  unloaded.api.closeCommandPalette();
+  assert.deepEqual(unloaded.log, [], "面板不可能开着（只能由 chunk 打开）→ 不调真实模块");
+
+  const loaded = makePaletteLazy();
+  await loaded.api.openCommandPalette();
+  loaded.log.length = 0;
+  loaded.api.closeCommandPalette();
+  assert.ok(loaded.log.some(([k]) => k === "mod.closeCommandPalette"));
+});
+
+test("palette-lazy: 并发打开共享同一次动态 import（连按只加载一次）", async () => {
+  const p = makePaletteLazy();
+  await Promise.all([
+    p.api.openCommandPalette(),
+    p.api.openCommandPalette(),
+    p.api.openCommandPalette()
+  ]);
+  assert.equal(p.loads(), 1);
+});
+
+test("palette-lazy: import 失败时记录错误而不抛出，且不缓存失败（下次按键能重试）", async () => {
+  const p = makePaletteLazy({ importImpl: () => Promise.reject(new Error("network")) });
+  await p.api.openCommandPalette();
+  assert.equal(p.log.filter(([k]) => k === "error").length, 1);
+  p.log.length = 0;
+  await p.api.openCommandPalette(); // 第二次按键必须还能再试一次
+  assert.equal(p.loads(), 2, "失败不该被缓存住");
+});
+
 /* ============ 形状闸门：chunk 走 import()，且只进预缓存不进 modulepreload ============ */
-test("三块 chunk 都由外观层 import() 拉取（不是首屏静态 import）", () => {
-  /* 「点开才付」是这轮改动的全部意义。改成静态 import 就会被拽回首屏模块图，
+test("各 chunk 都由外观层 import() 拉取（不是首屏静态 import）", () => {
+  /* 「点开才付」是这几轮改动的全部意义。改成静态 import 就会被拽回首屏模块图，
      perf:budget 的体积预算会立刻超标——这里先给出更直接的指向。 */
   const facades = {
     "modules/voices-panel-lazy.js": "voices-panel.js",
     "modules/downloads-lazy.js": "downloads.js",
-    "modules/settings-lazy.js": "settings.js"
+    "modules/settings-lazy.js": "settings.js",
+    "modules/command-palette-lazy.js": "command-palette.js"
   };
   for (const [facade, chunk] of Object.entries(facades)) {
     const src = readWeb(facade);
@@ -463,7 +561,7 @@ test("三块 chunk 都由外观层 import() 拉取（不是首屏静态 import�
   }
 });
 
-test("三块 chunk 进 sw.js 预缓存但不进 index.html 的 modulepreload", () => {
+test("各 chunk 进 sw.js 预缓存但不进 index.html 的 modulepreload", () => {
   /* modulepreload 会把懒加载的收益全部抵消（首屏就并行取完）；但离线冷启动点开面板
      又必须能拿到 chunk，因此只能进 PRECACHE_URLS。 */
   const preloads = new Set(modulepreloads());
@@ -471,7 +569,8 @@ test("三块 chunk 进 sw.js 预缓存但不进 index.html 的 modulepreload", (
   for (const chunk of [
     "/modules/voices-panel.js",
     "/modules/downloads.js",
-    "/modules/settings.js"
+    "/modules/settings.js",
+    "/modules/command-palette.js"
   ]) {
     assert.equal(preloads.has(chunk), false, `${chunk} 不该被预载`);
     assert.equal(precache.has(chunk), true, `${chunk} 必须在预缓存里（离线冷启动）`);
@@ -480,7 +579,8 @@ test("三块 chunk 进 sw.js 预缓存但不进 index.html 的 modulepreload", (
   for (const facade of [
     "/modules/voices-panel-lazy.js",
     "/modules/downloads-lazy.js",
-    "/modules/settings-lazy.js"
+    "/modules/settings-lazy.js",
+    "/modules/command-palette-lazy.js"
   ]) {
     assert.equal(preloads.has(facade), true, `${facade} 属于首屏模块图`);
   }

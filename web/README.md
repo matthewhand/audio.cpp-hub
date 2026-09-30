@@ -39,7 +39,7 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 ### 1. 硬约束
 
 - **无构建、无框架**：一个 `index.html`（538 行）+ 11 个经典 `<script>`（共享全局作用域）
-  + 1 个 `<script type="module">` 入口及其 17 个首屏 `web/modules/*.js`（外加 5 块按需加载的 chunk）。**模块不做任何转译**——
+  + 1 个 `<script type="module">` 入口及其 18 个首屏 `web/modules/*.js`（外加 6 块按需加载的 chunk）。**模块不做任何转译**——
   浏览器原生支持 ES 模块，所以「拆模块」不需要打包器。
   模块数量是**首屏请求数**（浏览器一个文件一个请求，见首屏的 `modulepreload` 约定）：
   别把它拆成一堆十几行的「微模块」——`npm run perf:budget` 的请求数预算就是拿它挡着的。
@@ -56,7 +56,7 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 - **服务侧**：`api.go:165` 的 `staticHandler` 用 `http.Dir("web")` 提供服务，目录请求只回 `index.html`（禁用目录列表），`index.html` 不缓存、其余资源缓存 1 小时（`api.go:203`、`api.go:205`）。
   工作目录由 `main.go:68` 的 `ensureWorkDir` 自动定位（当前目录没有 `web/` 时尝试上级与 exe 目录）。
 - **前端侧**：没有路由库、没有状态管理库。`web/app.js` 是 117 行的**引导层**（导入模块、跨模块重画、
-  最上层弹窗的 Esc / Tab 焦点锁定、启动顺序），业务逻辑按职责拆进 `web/modules/*.js`（17 个首屏模块 + 5 块懒加载 chunk）；
+  最上层弹窗的 Esc / Tab 焦点锁定、启动顺序），业务逻辑按职责拆进 `web/modules/*.js`（18 个首屏模块 + 6 块懒加载 chunk）；
   其余经典脚本是自包含组件（IIFE 或挂到 `window` 的 class），只暴露构造器 / 方法。
 - **数据流是手写的单向流**：DOM 事件 → `Api.*`（`web/api-client.js`）→ 更新模块级 `let` 状态 → 重新渲染相关 DOM。没有响应式绑定，改了 state 必须手动调用对应 render 函数。
 - **HTTP 只有唯一出口**：`web/modules/dom.js:27` 绑定 `window.AudioCppHub.api`，各模块一律
@@ -96,8 +96,8 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 #### 3.2 ES 模块（`web/app.js` + `web/modules/*.js`）
 
 `app.js` 是**引导层**：导入各模块、承担跨模块的重画（`rerenderAll`）与最上层弹窗的 Esc / Tab
-焦点锁定，然后按原顺序建立轮询、首屏加载并应用初始 hash。业务逻辑按职责拆成 17 个模块
-（下表即**首屏静态模块图**，浏览器一定会取的那批；五个 `*-lazy.js` 是懒加载外观层，
+焦点锁定，然后按原顺序建立轮询、首屏加载并应用初始 hash。业务逻辑按职责拆成 18 个模块
+（下表即**首屏静态模块图**，浏览器一定会取的那批；六个 `*-lazy.js` 是懒加载外观层，
 见 3.2 的 chunk 表）：
 
 | 模块（行数） | 负责 | 关键位置 |
@@ -107,7 +107,7 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 | `modules/async-ui.js`（332） | **跨功能复用的 UI 原语**：toast（`notify` / `showToast`）、列表三态（`showSkeleton` / `renderEmptyState` / `renderStateError` / `renderListError`）、`setButtonBusy`、`parseApiError`、`/api/events` → toast 轮询；弹窗栈（`OVERLAY_IDS` / `topmostOverlay`）、`focusDialog` / `restoreDialogFocus`（焦点栈 + 背景 `inert`）、`bindMenuKeys`、`dismissToast`、`showBusy` / `hideBusy` | `showToast` `web/modules/async-ui.js:57`，`parseApiError` `:62`，`showSkeleton` `:90`，`renderListError` `:136`，`setButtonBusy` `:142`，`startEventsPolling` `:188`，`OVERLAY_IDS` `:196`，`focusDialog` `:225`，`dismissToast` `:242`，`bindMenuKeys` `:251`，`showBusy` `:271` |
 | `modules/state.js`（30） | 跨模块共享的可变状态：模型清单 / 可执行文件 / 启动配置 / 当前选中模型 / 当前实例 + 各自的 `setXxx()` | `models` `web/modules/state.js:11`，`setModels` `:21` |
 | `modules/routing.js`（122） | #88 hash 路由：`parseRoute` / `go` / `goPanel` / `applyRoute` + 路由意图 `pendingModelId` / `pendingInstanceId` / `pendingSettingsSection` + `window.hub*` 钩子 | `ROUTE_VIEWS` `web/modules/routing.js:25`，`parseRoute` `:41`，`go` `:58`，`applyRoute` `:80` |
-| `modules/command-palette.js`（138） | #88 命令面板（Ctrl/Cmd-K）：候选项拼装、过滤、↑↓/Enter/Esc | `paletteSources` `web/modules/command-palette.js:21`，`renderPalette` `:38` |
+| `modules/command-palette-lazy.js`（64） | **全局 Ctrl/Cmd-K 和弦的唯一所有者**（首屏必需：命令面板没有入口按钮）+ 命令面板的懒加载外观。`ensure` `web/modules/command-palette-lazy.js:25`，`openCommandPalette` `:40`，`closeCommandPalette` `:52`，和弦注册 `:58` |
 | `modules/shell.js`（45） | 主题三态循环（`window.HubTheme`）、语言切换、移动端抽屉 | — |
 | `modules/models.js`（164） | 模型列表（按 category 分组）、已配置黯淡态、空态、HF 仓库/镜像菜单（含 `role=menu` 键盘导航）、`selectModelById` | `loadModels` `web/modules/models.js:24`，`hfMirrorOf` `:55`，`renderModelList` `:109`，`selectModelById` `:147` |
 | `modules/settings-lazy.js`（201） | **可执行文件登记**（首屏必需：启动弹窗下拉 + 模型卡片已配置态 + 设备探测缓存 + 增删改表单字段）+ 设置弹窗的懒加载外观 | `deviceCache` `web/modules/settings-lazy.js:29`，`loadExecutables` `:39`，`updateLaunchExec` `:57`，`parseEnvText` `:80`，`parseSessionOptionsText` `:100`，`openSettingsModal` `:156`，`relocalizeSettings` `:182`，`wireSettingsButtons` `:189` |
@@ -132,8 +132,9 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 | `modules/voices-panel-lazy.js`（68） | `modules/voices-panel.js`（257）：音色库管理面板（页头 🎙）——列表 / 试听 / 行内编辑 / 删除 / 「用于 TTS」/ 添加。`openVoicesPanel` `web/modules/voices-panel.js:25`，`closeVoicesPanel` `:37` | `routing.js` 静态 import 外观层（页头 🎙 由 `wireVoicesButton` 接线、`#/voices` 路由与 Esc 走 `openVoicesPanel` / `closeVoicesPanel`）；经典脚本 `voice-select.js` 的「管理音色库」按钮经外观层挂上的 `window.openVoicesPanel` |
 | `modules/downloads-lazy.js`（160） | `modules/downloads.js`（211）：下载管理弹窗（进度 / 暂停 / 续传 / 删除 / 填入权重）+ 按模型下载弹窗（包 / token / 下载源）。`openDownloadsModal` `web/modules/downloads.js:31`，`renderDownloadList` `:44`，`loadMdlPackages` `:136`，`relocalize` `:208` | `routing.js`（页头 ⬇️ 与 `#/downloads`）与 `models.js`（模型卡片的 ⬇ 按钮）都 import 外观层；数据与角标留在外观层，chunk 经 `getDownloads()` 读 |
 | `modules/settings-lazy.js`（201） | `modules/settings.js`（208）：设置弹窗的三个分节——通用（界面语言 / 主题）、HTTPS 证书（全站唯一的 blob 下载路径）、可执行文件列表渲染。`openSettingsModal` `web/modules/settings.js:20`，`activateSettingsSection` `:32`，`loadCertStatus` `:60`，`renderExecList` `:145`，`relocalize` `:202` | `routing.js`（页头 ⚙ 与启动弹窗的「去添加程序」）import 外观层；可执行文件**数据**（启动弹窗也要用）留在外观层，chunk 经 `state.js` 的活绑定读 |
+| `modules/command-palette-lazy.js`（64） | `modules/command-palette.js`（136）：#88 命令面板——候选项拼装、过滤、渲染、↑↓/Enter/Esc。`paletteSources` `web/modules/command-palette.js:25`，`renderPalette` `:42`，`openCommandPalette` `:94` | `app.js`（Esc 关最上层弹窗）import 外观层；**全局 Ctrl/Cmd-K 和弦由外观层独家注册**，因此首按就有效——chunk 里刻意不再注册同一个 `document` keydown，两层监听会各处理一次同一次按键（打开又立刻关掉） |
 
-**切分线不总是「整个模块 vs 首屏」**。三块里只有音色库是纯点击视图（整块搬进 chunk）；
+**切分线不总是「整个模块 vs 首屏」**。音色库与命令面板是纯点击视图（整块搬进 chunk）；
 下载与设置是**按「首屏可不可见」切**：页头 ⬇️ 角标要在首屏跳动、`loadExecutables` 决定模型
 卡片的已配置黯淡态与启动弹窗的可执行文件下拉，因此这两块的数据与状态机必须留在外观层，
 搬走的只是弹窗 DOM 渲染。判断口径一句话：**首屏能看见 / 被首屏其它模块依赖的东西留在
@@ -146,8 +147,10 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 外壳），只有异步的打开路径才 `await` chunk。另外**页头 / 入口按钮的 onclick 也在外观层**
 （`wireStatsButton` / `wireVoicesButton` / `wireDownloadsButton` / `wireSettingsButtons`，
 由 `routing.js` 传入导航函数以避开模块环）——否则按钮要等 chunk 到位才有点击行为。
+命令面板的入口不是按钮而是**全局和弦**，因此同样归外观层（`command-palette-lazy.js:58`）。
 `test/unit/stats-lazy.test.mjs` 与 `test/unit/lazy-panels.test.mjs` 钉住了这层
-「未加载即空转」「首屏数据不懒加载」「外壳先出」的守卫，`e2e/stats.spec.mjs`、
+「未加载即空转」「首屏数据不懒加载」「外壳先出」「和弦只注册一次」的守卫，
+`e2e/stats.spec.mjs`、
 `e2e/file-browser.spec.mjs`、`e2e/voices.spec.mjs`、`e2e/downloads.spec.mjs`、
 `e2e/executable.spec.mjs` 钉住「首屏不取 chunk、点开才取、再开不重复取」。
 
