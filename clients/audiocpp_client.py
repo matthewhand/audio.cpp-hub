@@ -8,12 +8,52 @@ Zero dependencies (uses urllib). Provides:
   - voice_sweep():   generate a variety of voice designs (instruction x seed grid)
   - voices():        list registered voice-library entries (usable as voice_ref)
   - history():       browse archived generations (with exact request params)
-  - CLI:             say / stt / sweep / voices / history subcommands
+  - models():        list ready fan-out aliases (or hub service names)
+  - farm_health():   per-hub up/down + which backend each alias resolved to
+  - CLI:             say / stt / sweep / voices / history / health / models
 
-Service base URL defaults to http://127.0.0.1:18080; override with
-AUDIOCPP_HUB_URL or --hub (LAN host example: http://10.0.0.36:18080).
+TWO base URLs, because the LAN fan-out proxy (docs/farm.md) does not proxy
+everything. Both default to the farm on 10.0.0.36:
 
-The hub is a LAN-only, unauthenticated service — keep it off the public internet.
+  1. DEFAULT_HUB = http://10.0.0.36:18082 — the fan-out. One URL for the whole
+     farm with automatic failover; serve TTS and discovery through it.
+       GET  /v1/models, POST /v1/audio/speech, GET /api/instances,
+       GET  /farm/health
+     `model` is a farm alias, not a host service name: `breeze`/`expressive`,
+     `qwen3-vd`/`voice-design-fast`, `sanotts`/`instant`, `citrinet`/`stt`.
+     Override with AUDIOCPP_HUB_URL or --hub.
+
+  2. DEFAULT_DIRECT_HUB = http://10.0.0.36:18080 — a real hub, for the
+     endpoints the fan-out 404s (it proxies TTS only). Every hub keeps its own
+     state, so these always talk to one host:
+       POST /api/tasks (STT), /api/audio/upload, /api/voices, /api/history/*
+     Override with AUDIOCPP_DIRECT_HUB_URL or --direct-hub.
+
+Local development: a hub running on this machine serves both roles, so point
+both URLs at it —
+  --hub http://127.0.0.1:18080 --direct-hub http://127.0.0.1:18080
+— or export AUDIOCPP_HUB_URL / AUDIOCPP_DIRECT_HUB_URL to the same value. The
+two are independent on purpose: a fan-out URL is never a valid --direct-hub.
+
+Examples:
+  # TTS through the fan-out, printing which hub actually served the take
+  ./audiocpp_client.py say "Oh, brilliant." -m expressive \
+      --instruction "dry sarcastic female" -o out.wav
+  # 12.4s -> out.wav; [fanout] http://10.0.0.36:18080 (stderr)
+
+  from audiocpp_client import speech_with_origin, history_record
+  wav, headers = speech_with_origin("...", model="instant")
+  origin = headers.get("X-Fanout-Hub", "http://10.0.0.36:18080")
+  takes = history_record(task_id, model="breeze-tts", hub=origin)
+
+  # STT is hub-only: goes to the direct hub's async task API
+  ./audiocpp_client.py --direct-hub http://10.0.0.36:18080 stt sample.wav --upload
+
+  # Which backends are alive right now
+  ./audiocpp_client.py health
+
+Hub and fan-out are LAN-only, unauthenticated services — keep them off the
+public internet.
 """
 
 from __future__ import annotations
@@ -21,6 +61,7 @@ from __future__ import annotations
 import argparse
 import base64  # noqa: F401  (kept for parity with docs; STT uses server-side paths)
 import json
+import os
 import sys
 import time
 import urllib.error
@@ -28,22 +69,33 @@ import urllib.request
 import uuid
 import wave
 
-DEFAULT_HUB = "http://127.0.0.1:18080"
+# Farm entrypoint: the LAN fan-out proxy, one URL for every host + failover.
+DEFAULT_HUB = "http://10.0.0.36:18082"
+# A single real hub, for the routes the fan-out does not proxy (STT/tasks,
+# upload, voices, history). Swap in another host for that host's state.
+DEFAULT_DIRECT_HUB = "http://10.0.0.36:18080"
+# Local development: a hub on this machine answers both roles.
+LOCAL_HUB = "http://127.0.0.1:18080"
 POLL_INTERVAL = 0.5
 POLL_TIMEOUT = 600
 
 
 class HubError(RuntimeError):
-    """API/proxy error returned by the hub."""
+    """API/proxy error returned by the hub or the fan-out proxy."""
 
     def __init__(self, status: int, message: str):
         super().__init__(f"HTTP {status}: {message}")
         self.status = status
 
 
-def _request(hub: str, path: str, body=None, raw: bytes | None = None,
-             method: str | None = None, ctype: str = "application/json",
-             timeout: int = 60):
+def _request_full(hub: str, path: str, body=None, raw: bytes | None = None,
+                  method: str | None = None, ctype: str = "application/json",
+                  timeout: int = 60) -> tuple[bytes, dict]:
+    """One HTTP round trip; returns (payload, response headers).
+
+    The headers matter against the fan-out: X-Fanout-Hub / X-Fanout-Instance
+    name the hub that served a take, which is where that take is archived.
+    """
     url = hub.rstrip("/") + path
     data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
     req = urllib.request.Request(url, data=data, method=method or ("POST" if data else "GET"),
@@ -51,6 +103,7 @@ def _request(hub: str, path: str, body=None, raw: bytes | None = None,
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = resp.read()
+            headers = dict(resp.headers.items())
     except urllib.error.HTTPError as e:
         detail = e.read().decode(errors="replace")
         try:
@@ -59,7 +112,14 @@ def _request(hub: str, path: str, body=None, raw: bytes | None = None,
         except Exception:
             pass
         raise HubError(e.code, detail) from None
-    return payload
+    return payload, headers
+
+
+def _request(hub: str, path: str, body=None, raw: bytes | None = None,
+             method: str | None = None, ctype: str = "application/json",
+             timeout: int = 60) -> bytes:
+    return _request_full(hub, path, body=body, raw=raw, method=method,
+                         ctype=ctype, timeout=timeout)[0]
 
 
 def _json(hub: str, path: str, body=None, method: str | None = None, timeout: int = 60):
@@ -72,34 +132,62 @@ def _json(hub: str, path: str, body=None, method: str | None = None, timeout: in
 # --------------------------------------------------------------------------- #
 
 def instances(hub: str = DEFAULT_HUB) -> list[dict]:
+    """Instances across the farm (fan-out) or on one hub.
+
+    The fan-out tags each entry with `hub` / `hubLabel`. `id` is hub-local, so
+    it is only usable against that same hub — see instance_id().
+    """
     return _json(hub, "/api/instances")
 
 
-def instance_id(name: str, hub: str = DEFAULT_HUB) -> str:
+def instance_id(name: str, hub: str = DEFAULT_DIRECT_HUB) -> str:
+    """Resolve a hub-side service name (e.g. `citrinet`) to that hub's task id.
+
+    Hub-local by construction: instance ids mean nothing outside the hub that
+    issued them, and the fan-out does not proxy /api/tasks anyway.
+    """
     for inst in instances(hub):
         if inst.get("instanceName") == name:
             return inst["id"]
-    raise HubError(404, f"no instance with service name {name!r} (is it READY?)")
+    raise HubError(404, f"no instance with service name {name!r} on {hub} (is it READY?)")
 
 
 def models(hub: str = DEFAULT_HUB) -> list[str]:
+    """Ready model ids — fan-out aliases by default, hub service names on a hub."""
     out = _json(hub, "/v1/models")
     return [m["id"] for m in out.get("data", [])]
 
 
+def farm_health(hub: str = DEFAULT_HUB, timeout: int = 20) -> dict:
+    """`GET /farm/health`: per-hub up/down + latency, and each alias' backend.
+
+    Fan-out only; hubs have no such route, so pointing this at a hub raises a
+    HubError that says so instead of a bare 404.
+    """
+    try:
+        return _json(hub, "/farm/health", timeout=timeout)
+    except HubError as e:
+        if e.status == 404:
+            raise HubError(404, f"{hub} does not serve /farm/health — that route is on the "
+                                f"fan-out proxy (default {DEFAULT_HUB})") from None
+        raise
+
+
 # --------------------------------------------------------------------------- #
-# TTS — voice design
+# TTS — voice design (fan-out by default: one URL for the farm, with failover)
 # --------------------------------------------------------------------------- #
 
-def speech(text: str, model: str = "breeze", *, instruction: str | None = None,
-           seed: int | None = None, temperature: float | None = None,
-           voice_ref: str | None = None, reference_text: str | None = None,
-           extra_options: dict | None = None, hub: str = DEFAULT_HUB,
-           timeout: int = 600) -> bytes:
-    """Generate speech; returns raw WAV bytes (synchronous /v1/audio/speech).
+def speech_with_origin(text: str, model: str = "breeze", *, instruction: str | None = None,
+                       seed: int | None = None, temperature: float | None = None,
+                       voice_ref: str | None = None, reference_text: str | None = None,
+                       extra_options: dict | None = None, hub: str = DEFAULT_HUB,
+                       timeout: int = 600) -> tuple[bytes, dict]:
+    """Like speech(), but also returns the response headers.
 
-    voice_ref/reference_text are TOP-LEVEL body fields (engine contract), not
-    options entries — the engine rejects unknown keys inside options.
+    Against the fan-out those carry `X-Fanout-Hub` / `X-Fanout-Instance`; feed
+    the hub back to history_record() to fetch the archived take. `model` is a
+    farm alias there (`breeze`, `expressive`, `instant`, `sanotts`, ...), not a
+    `host:port:service` triple.
     """
     options = dict(extra_options or {})
     if instruction is not None:
@@ -115,7 +203,23 @@ def speech(text: str, model: str = "breeze", *, instruction: str | None = None,
         body["reference_text"] = reference_text
     if options:
         body["options"] = options
-    return _request(hub, "/v1/audio/speech", body=body, timeout=timeout)
+    return _request_full(hub, "/v1/audio/speech", body=body, timeout=timeout)
+
+
+def speech(text: str, model: str = "breeze", *, instruction: str | None = None,
+           seed: int | None = None, temperature: float | None = None,
+           voice_ref: str | None = None, reference_text: str | None = None,
+           extra_options: dict | None = None, hub: str = DEFAULT_HUB,
+           timeout: int = 600) -> bytes:
+    """Generate speech; returns raw WAV bytes (synchronous /v1/audio/speech).
+
+    voice_ref/reference_text are TOP-LEVEL body fields (engine contract), not
+    options entries — the engine rejects unknown keys inside options.
+    """
+    return speech_with_origin(text, model, instruction=instruction, seed=seed,
+                              temperature=temperature, voice_ref=voice_ref,
+                              reference_text=reference_text,
+                              extra_options=extra_options, hub=hub, timeout=timeout)[0]
 
 
 def speak(path: str, text: str, **kwargs) -> str:
@@ -126,24 +230,33 @@ def speak(path: str, text: str, **kwargs) -> str:
     return path
 
 
-def upload_wav(path_or_bytes, hub: str = DEFAULT_HUB) -> dict:
-    """Upload WAV bytes (or a file path) for server-side use; returns info with 'path'."""
+def upload_wav(path_or_bytes, hub: str = DEFAULT_DIRECT_HUB) -> dict:
+    """Upload WAV bytes (or a file path) for server-side use; returns info with 'path'.
+
+    Hub-only route: the uploaded path is meaningful on that hub alone, so this
+    takes a direct hub, never the fan-out.
+    """
     raw = open(path_or_bytes, "rb").read() if isinstance(path_or_bytes, str) else path_or_bytes
     return json.loads(_request(hub, "/api/audio/upload", raw=raw, ctype="audio/wav"))
 
 
 # --------------------------------------------------------------------------- #
 # STT — speech to text (async task API; `audio` = server-side path, NOT base64)
+# Hub-only: the fan-out proxies /v1/audio/speech only, not /api/tasks.
 # --------------------------------------------------------------------------- #
 
-def transcribe(audio: str, *, hub: str = DEFAULT_HUB, service: str = "citrinet",
+def transcribe(audio: str, *, hub: str = DEFAULT_DIRECT_HUB, service: str = "citrinet",
                upload: bool = False, wait: bool = True,
                timeout: int = POLL_TIMEOUT) -> dict:
-    """Transcribe audio.
+    """Transcribe audio (hub-side service name, e.g. `citrinet`).
 
     `audio` is a server-side WAV path, or a local file path when upload=True
     (uploaded via /api/audio/upload first). Returns the final task dict
     (`text` holds the transcript) when wait=True, else the submitted task.
+
+    Goes to a real hub by default: `/api/tasks` is not a fan-out route, and
+    `service` is a service name on that host (the fan-out's `citrinet` alias
+    only exists for /v1/audio/speech).
     """
     path = audio
     if upload:
@@ -195,20 +308,38 @@ def wav_duration(path: str) -> float:
 
 # --------------------------------------------------------------------------- #
 # Voice library + history (provenance)
+# Hub-only: each hub owns its own data/voices/ and data/history/<modelId>/.
 # --------------------------------------------------------------------------- #
 
-def voices(hub: str = DEFAULT_HUB) -> list[dict]:
-    """Registered reference voices (use entries' paths as voice_ref for cloning)."""
+def voices(hub: str = DEFAULT_DIRECT_HUB) -> list[dict]:
+    """Registered reference voices (use entries' paths as voice_ref for cloning).
+
+    Per hub, not per farm: a `voice_ref` path only resolves on the hub that
+    stores the WAV.
+    """
     return _json(hub, "/api/voices")
 
 
-def history(model: str = "breeze", hub: str = DEFAULT_HUB) -> list[dict]:
-    """Archived generations, newest first (ids + truncated text)."""
+def history(model: str = "breeze-tts", hub: str = DEFAULT_DIRECT_HUB) -> list[dict]:
+    """Archived generations, newest first.
+
+    Each entry: `taskId` (feed it to history_record), `text` (truncated),
+    `instanceName`, `result.durationSec`, `time` (epoch ms).
+
+    `model` is the hub-side modelId (`breeze-tts`, `sanotts`, `citrinet_asr`),
+    not the fan-out alias (`breeze`, `instant`, `stt`).
+    """
     return _json(hub, f"/api/history/{model}")
 
 
-def history_record(task_id: str, model: str = "breeze", hub: str = DEFAULT_HUB) -> dict:
-    """Full record of one generation, incl. the exact request (instruction, seed...)."""
+def history_record(task_id: str, model: str = "breeze-tts", hub: str = DEFAULT_DIRECT_HUB) -> dict:
+    """Full record of one generation: the take's `text`, `options` (instruction,
+    seed…) and `result`.
+
+    `task_id` is an entry's `taskId` from history(). For a take made through the
+    fan-out, pass the `X-Fanout-Hub` value from speech_with_origin() — history
+    lives on the hub that served it.
+    """
     return _json(hub, f"/api/history/{model}/{task_id}")
 
 
@@ -217,21 +348,30 @@ def history_record(task_id: str, model: str = "breeze", hub: str = DEFAULT_HUB) 
 # --------------------------------------------------------------------------- #
 
 def _main(argv=None):
-    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--hub", default=None, help="hub base URL (default $AUDIOCPP_HUB_URL or 127.0.0.1:18080)")
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0],
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--hub", default=None,
+                   help="fan-out base URL for TTS + discovery "
+                        f"(default $AUDIOCPP_HUB_URL or {DEFAULT_HUB}; "
+                        f"local dev: {LOCAL_HUB})")
+    p.add_argument("--direct-hub", default=None,
+                   help="a single hub, for the routes the fan-out does not proxy "
+                        "(STT/tasks, upload, voices, history) "
+                        f"(default $AUDIOCPP_DIRECT_HUB_URL or {DEFAULT_DIRECT_HUB}; "
+                        f"local dev: {LOCAL_HUB})")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("say", help="generate speech to a file")
+    s = sub.add_parser("say", help="generate speech to a file (via the fan-out)")
     s.add_argument("text")
     s.add_argument("-o", "--out", default="out.wav")
-    s.add_argument("-m", "--model", default="breeze")
+    s.add_argument("-m", "--model", default="breeze", help="farm alias (breeze, expressive, instant, sanotts, qwen3-vd)")
     s.add_argument("--instruction")
     s.add_argument("--seed", type=int)
     s.add_argument("--temperature", type=float)
-    s.add_argument("--voice-ref", help="server-side WAV path for voice cloning")
+    s.add_argument("--voice-ref", help="server-side WAV path for voice cloning (hub-side, not an alias)")
     s.add_argument("--reference-text", help="transcript of the reference clip (required when cloning)")
 
-    t = sub.add_parser("stt", help="transcribe a WAV")
+    t = sub.add_parser("stt", help="transcribe a WAV (hub-only: uses --direct-hub)")
     t.add_argument("audio", help="local or server-side WAV path")
     t.add_argument("--upload", action="store_true", help="audio is a local file; upload it first")
 
@@ -243,20 +383,36 @@ def _main(argv=None):
     w.add_argument("-d", "--outdir", default=".")
     w.add_argument("-m", "--model", default="breeze")
 
-    sub.add_parser("voices", help="list voice-library entries")
-    h = sub.add_parser("history", help="list archived generations")
-    h.add_argument("-m", "--model", default="breeze")
+    sub.add_parser("voices", help="list voice-library entries (hub-only: --direct-hub)")
+    h = sub.add_parser("history", help="list archived generations (hub-only: --direct-hub)")
+    h.add_argument("-m", "--model", default="breeze-tts",
+                   help="hub-side modelId, not a fan-out alias (breeze-tts, sanotts, citrinet_asr)")
+
+    sub.add_parser("health", help="fan-out view: per-hub up/down + alias routing (fan-out only)")
+    sub.add_parser("models", help="list model ids / fan-out aliases that are READY")
 
     a = p.parse_args(argv)
-    hub = a.hub or __import__("os").environ.get("AUDIOCPP_HUB_URL", DEFAULT_HUB)
+    env = os.environ
+    hub = a.hub or env.get("AUDIOCPP_HUB_URL", DEFAULT_HUB)
+    # Symmetric with the flag above on purpose: AUDIOCPP_HUB_URL is the fan-out
+    # for TTS and must NOT silently become the STT/history target, so pointing
+    # the hub-only calls elsewhere always takes an explicit --direct-hub (or
+    # AUDIOCPP_DIRECT_HUB_URL). Local dev sets both to the same localhost hub.
+    direct = a.direct_hub or env.get("AUDIOCPP_DIRECT_HUB_URL", DEFAULT_DIRECT_HUB)
 
     if a.cmd == "say":
-        path = speak(a.out, a.text, model=a.model, instruction=a.instruction,
-                     seed=a.seed, temperature=a.temperature, voice_ref=a.voice_ref,
-                     reference_text=a.reference_text, hub=hub)
-        print(f"{path} ({wav_duration(path):.2f}s)")
+        wav, headers = speech_with_origin(a.text, model=a.model, instruction=a.instruction,
+                                          seed=a.seed, temperature=a.temperature,
+                                          voice_ref=a.voice_ref,
+                                          reference_text=a.reference_text, hub=hub)
+        with open(a.out, "wb") as f:
+            f.write(wav)
+        # stderr, so stdout stays parseable; tells you which hub archived the take.
+        if origin := headers.get("X-Fanout-Hub"):
+            print(f"[fanout] {origin} / {headers.get('X-Fanout-Instance', '?')}", file=sys.stderr)
+        print(f"{a.out} ({wav_duration(a.out):.2f}s)")
     elif a.cmd == "stt":
-        task = transcribe(a.audio, hub=hub, upload=a.upload)
+        task = transcribe(a.audio, hub=direct, upload=a.upload)
         if task["status"] != "DONE":
             sys.exit(f"task {task['id']} ended as {task['status']}: {task.get('error')}")
         print(task.get("text", ""))
@@ -266,11 +422,30 @@ def _main(argv=None):
                              model=a.model, hub=hub):
             print(json.dumps(r, ensure_ascii=False))
     elif a.cmd == "voices":
-        for v in voices(hub):
-            print(f"{v['id']}: {v['name']}" + (f"  [{v.get('text','')}]" if v.get("text") else ""))
+        for v in voices(direct):
+            # hub voice entries are keyed by `vid` (docs/API.md), not `id`
+            vid = v.get("vid") or v.get("id") or "?"
+            print(f"{vid}: {v['name']}" + (f"  [{v.get('text','')}]" if v.get("text") else ""))
     elif a.cmd == "history":
-        for r in history(a.model, hub):
-            print(f"{r.get('id')}: {r.get('text','')}")
+        for r in history(a.model, direct):
+            # list entries are keyed by `taskId` (docs/API.md), not `id`
+            tid = r.get("taskId") or r.get("id") or "?"
+            dur = (r.get("result") or {}).get("durationSec")
+            print(f"{tid}: {r.get('text','')}" + (f"  [{dur}s]" if dur else ""))
+    elif a.cmd == "health":
+        info = farm_health(hub)
+        print(f"farm {info['hubsUp']}/{info['hubsTotal']} hubs up, "
+              f"{info['readyAliases']}/{len(info['knownAliases'])} aliases ready")
+        for st in info["hubs"]:
+            mark = "up  " if st["ok"] else "DOWN"
+            print(f"  [{mark}] {st['baseUrl']} ({st['label']}) "
+                  f"{st['latencyMs']}ms {st['lastError'] or ''}".rstrip())
+        for rt in info["routes"]:
+            where = rt["resolved"] or "no ready backend"
+            print(f"  {', '.join(rt['aliases'])} -> {where}")
+    elif a.cmd == "models":
+        for mid in models(hub):
+            print(mid)
 
 
 if __name__ == "__main__":

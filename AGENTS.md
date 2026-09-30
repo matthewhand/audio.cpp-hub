@@ -88,6 +88,11 @@ audio.cpp-hub 是 [audio.cpp](https://github.com/0xShug0/audio.cpp) 的 Web 管�
 │                         #   router.go(model 改写 + 目标选择 + 流式转发) / main.go(4 个端点)
 │                         #   端点：GET /farm/health、GET /api/instances、GET /v1/models、POST /v1/audio/speech
 │                         #   文档 docs/fanout-design.md，本目录 README.md 含构建/冒烟/部署；systemd user unit 模板
+clients/                  # 仓库内 Python 客户端（stdlib only，不进 Go 构建）
+└── audiocpp_client.py     #   TTS/音色设计、STT、voice sweep、音色库/历史、农场健康；两个 base URL：
+                          #   DEFAULT_HUB = fan-out :18082（TTS + 发现，--hub / AUDIOCPP_HUB_URL）；
+                          #   DEFAULT_DIRECT_HUB = :18080（fan-out 不代理的 hub 内接口，
+                          #   --direct-hub / AUDIOCPP_DIRECT_HUB_URL）；本地开发两者同指 127.0.0.1:18080
 web/                      # 前端静态文件（无构建步骤、运行时零 Node）
 ├── index.html            # 全部静态 DOM + CSP（web/index.html:7）+ 脚本加载顺序（顺序有硬约束）
 ├── style.css             # 设计系统 L1–L6（令牌 / 基础 / 布局 / 组件 / 工具 / 可访问性）
@@ -114,8 +119,9 @@ scripts/                  # 闸门与生成脚本（check-i18n-parity.js、check
 │                         # perf-budget.mjs、gen-icons.cjs、axe-audit.js、record-demos.cjs）
 package.json / package-lock.json  # DEV-ONLY 工具链与测试脚本（tsc/ESLint/Prettier/Playwright）
 tsconfig.json / eslint.config.js  # DEV-ONLY 静态闸门配置（checkJs+noEmit / ESLint flat config）
-docs/                     # 文档：API.md（路由权威参考）、diagrams/（19 张图 + CI 校验）、
-│                         # ui.md、motion.md、pwa.md、assets/、media/
+docs/                     # 文档：API.md（路由权威参考）、farm.md + agent-api.md + fanout-design.md
+│                         # （多机农场拓扑 / 客户端契约 / fan-out 设计；客户端与文档默认入口 :18082）、
+│                         # diagrams/（19 张图 + CI 校验）、ui.md、motion.md、pwa.md、assets/、media/
 .github/workflows/        # CI（build-and-release.yml 发布流水线 + ci.yml 质量/图示/前端闸门）
 ```
 

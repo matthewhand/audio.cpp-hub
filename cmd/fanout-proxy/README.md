@@ -121,3 +121,17 @@ curl -s -D - -o /tmp/t.wav -X POST localhost:18082/v1/audio/speech \
 grep -i x-fanout <(curl -s -D - -o /dev/null -X POST localhost:18082/v1/audio/speech \
   -H 'Content-Type: application/json' -d '{"model":"instant","input":"check"}')
 ```
+
+Or with the stdlib client, which defaults to this endpoint for TTS and
+discovery (`health` = the same view as `curl /farm/health`):
+
+```bash
+../../clients/audiocpp_client.py health
+../../clients/audiocpp_client.py models
+../../clients/audiocpp_client.py say "Fan-out check." -m instant -o /tmp/t.wav
+# [fanout] http://10.0.0.36:18080 / sanotts   <- stderr: which hub served it
+```
+
+STT, upload, voices and history do **not** go through the fan-out — that client
+keeps a second base URL for them (`--direct-hub`, default
+`http://10.0.0.36:18080`).

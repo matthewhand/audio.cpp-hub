@@ -18,6 +18,20 @@ Instances (each = one audiocpp_server child process, 127.0.0.1, lazy_load):
     citrinet modelId citrinet_asr port 18092  threads 4    weights models/Citrinet-ASR-GGUF (hub downloader)
 ```
 
+## Client entrypoints from this host
+
+This hub answers on `:18080`, but agents should not hard-code it:
+
+- **TTS + discovery → `http://10.0.0.36:18082`**, the fan-out proxy running on
+  this host (`cmd/fanout-proxy`, `audio-cpp-fanout.service`). One URL for the
+  whole farm with failover to `.30` / `.32`. This is the default in
+  `clients/audiocpp_client.py`.
+- **STT, upload, voice library, history → `http://10.0.0.36:18080`**: the fan-out
+  proxies `/v1/audio/speech` only, and each hub owns that state (this host also
+  holds the `persona_*` voice library and all `breeze` / `sanotts` takes).
+
+Fan-in hub for the other hosts is `farm.routes.json` in `cmd/fanout-proxy/`.
+
 ## Directory layout (host-local, not in git)
 
 | Path | Purpose |

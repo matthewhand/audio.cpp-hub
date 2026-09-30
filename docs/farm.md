@@ -4,6 +4,9 @@ Three hosts serve TTS/ASR over the LAN. All endpoints are OpenAI-flavored
 (`POST /v1/audio/speech`, `GET /v1/models`) and LAN-only, no auth — do not
 expose any of them to the public internet.
 
+**Start here:** point clients at the fan-out `http://10.0.0.36:18082` for TTS and
+discovery; the `:18080` table below is the per-host detail behind it.
+
 | Host | Hardware | Endpoint | Instances | Notes |
 |---|---|---|---|---|
 | `10.0.0.36` (ubuntu-gtx) | GTX 1080 8 GB, Vulkan | `:18080` | `breeze` (always warm), `sanotts` (always warm), `citrinet` ASR (5-min idle unload) | Host-native systemd service (`audio-cpp-hub.service`), see HOST-DEPLOYMENT.md |
@@ -31,11 +34,15 @@ they no longer hard-code `host:port:model` triples:
   resolved to; `GET /api/instances` — the whole farm's instances in one list.
 - History is **not** unified: responses carry `X-Fanout-Hub` /
   `X-Fanout-Instance` so a take can be fetched from the origin hub's
-  `/api/history/...`. STT/async tasks still go to `.36:18080` directly.
+  `/api/history/...`. Same for voice libraries and STT: the fan-out proxies
+  `/v1/audio/speech` only, so `/api/tasks`, `/api/voices` and `/api/history/*`
+  go to `.36:18080` directly. The `citrinet` alias exists for routing/health
+  coverage, but a speech call against it 503s (the engine wants an audio
+  contract, not text) — STT uses the task API.
 - The 6600 XT (`.30` DEVICE=0) is deliberately absent from the route table, and
   no hub is reconfigured by the proxy. LAN-only, no auth — same warning as
   above. Design and rationale: `docs/fanout-design.md`; ops:
-  `cmd/fanout-proxy/README.md`.
+  `cmd/fanout-proxy/README.md`; agent contract: `docs/agent-api.md`.
 
 ## 10.0.0.30 — two containers on one host
 
@@ -108,7 +115,12 @@ CPU performance is a non-issue for sanotts: ~30–300 ms per sentence.
 ## Client routing quick reference
 
 - One base URL for everything TTS: `http://10.0.0.36:18082` (fan-out, failover
-  included) — preferred for agents.
+  included) — preferred for agents and the default in
+  `clients/audiocpp_client.py` (`DEFAULT_HUB`).
+- One hub URL for the rest: `http://10.0.0.36:18080` for STT, upload, voice
+  library and history — that client's `DEFAULT_DIRECT_HUB` (`--direct-hub` /
+  `AUDIOCPP_DIRECT_HUB_URL`), because the fan-out proxies TTS only and the state
+  is per host.
 - Per-host direct access, when you want to pin a take to one box:
   - Expressive / sarcastic voice design: `.36:18080` model `breeze`
     (`options.instruction`) or `.30:18081` model `qwen3-vd` (top-level
@@ -116,3 +128,11 @@ CPU performance is a non-issue for sanotts: ~30–300 ms per sentence.
   - Instant TTS: `.36:18080` or `.32:18080`, model `sanotts`.
   - Standby breeze (if .36 is down): `.30:18080` model `breeze`.
   - STT: `.36:18080` model `citrinet` via async `POST /api/tasks`.
+
+Quick checks against the farm:
+
+```
+curl -s http://10.0.0.36:18082/farm/health | python3 -m json.tool   # who is up, where aliases resolve
+curl -s http://10.0.0.36:18082/v1/models                           # aliases with a READY backend
+./clients/audiocpp_client.py health                                 # same, readable, no deps
+```
