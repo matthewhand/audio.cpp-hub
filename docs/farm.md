@@ -31,7 +31,17 @@ they no longer hard-code `host:port:model` triples:
   name, streams the audio back and fails over on hub-down / 5xx / "instance not
   READY". `GET /v1/models` lists only aliases that currently resolve.
 - `GET /farm/health` — per-hub up/down + latency + which backend each alias
-  resolved to; `GET /api/instances` — the whole farm's instances in one list.
+  resolved to, plus `inFlightCap` / per-target `inFlight`;
+  `GET /api/instances` — the whole farm's instances in one list.
+- **Per-origin in-flight cap** (`maxInFlightPerTarget`, default `2`, `<= 0`
+  disables): at most N speech forwards may be in flight per hub+service. A hub
+  runs one engine per instance with a serial queue, so an uncapped router lets
+  one loud agent fill `.36 breeze`'s queue while everything else stalls
+  invisibly. A target at its cap is skipped, so the request spills to the
+  standby; only a route whose every target is busy answers `429` +
+  `Retry-After: 5` (not `503`). `qwen3-vd` and `citrinet` are single-target, so
+  parallel callers there get 429s past the cap — OpenAI SDKs retry those
+  automatically. Knob details: `cmd/fanout-proxy/README.md` → "Knobs".
 - History is **not** unified: responses carry `X-Fanout-Hub` /
   `X-Fanout-Instance` so a take can be fetched from the origin hub's
   `/api/history/...`. Same for voice libraries and STT: the fan-out proxies

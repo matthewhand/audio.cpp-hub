@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -30,6 +31,7 @@ import (
 type proxy struct {
 	cfg *Config
 	hub *healthStore
+	lim *limiter
 }
 
 func main() {
@@ -45,7 +47,7 @@ func main() {
 		cfg.Listen = *listenOverride
 	}
 
-	p := &proxy{cfg: cfg, hub: newHealthStore(cfg)}
+	p := &proxy{cfg: cfg, hub: newHealthStore(cfg), lim: newLimiter(cfg.MaxInFlightPerTarget)}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -66,8 +68,8 @@ func main() {
 		srv.Shutdown(shutCtx)
 	}()
 
-	log.Printf("fanout-proxy listening on %s (config %s, %d hubs, %d routes, aliases: %s)",
-		cfg.Listen, *configPath, len(cfg.Hubs), len(cfg.Routes), strings.Join(cfg.aliases(), ", "))
+	log.Printf("fanout-proxy listening on %s (config %s, %d hubs, %d routes, in-flight cap %d/target, aliases: %s)",
+		cfg.Listen, *configPath, len(cfg.Hubs), len(cfg.Routes), cfg.MaxInFlightPerTarget, strings.Join(cfg.aliases(), ", "))
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("fanout-proxy: %v", err)
 	}
@@ -149,6 +151,7 @@ func (p *proxy) handleFarmHealth(w http.ResponseWriter, r *http.Request) {
 				"hub":          c.target.Hub,
 				"instanceName": c.target.InstanceName,
 				"skipped":      c.skip,
+				"inFlight":     p.lim.inFlight(targetKey(c.target)),
 			})
 			if c.skip == "" && resolved == "" {
 				resolved = c.target.Hub + "/" + c.target.InstanceName
@@ -170,6 +173,7 @@ func (p *proxy) handleFarmHealth(w http.ResponseWriter, r *http.Request) {
 		"hubsUp":        upCount,
 		"hubsTotal":     len(states),
 		"readyAliases":  readyAliases,
+		"inFlightCap":   p.cfg.MaxInFlightPerTarget,
 		"hubs":          hubs,
 		"routes":        routes,
 		"knownAliases":  p.cfg.aliases(),
@@ -272,6 +276,7 @@ func (p *proxy) handleSpeech(w http.ResponseWriter, r *http.Request) {
 	}
 
 	attempts := []attempt{}
+	busy := 0 // targets skipped only because they sit at their in-flight cap
 	for _, c := range planTargets(rt, p.hub) {
 		if c.skip != "" {
 			attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: c.skip})
@@ -282,7 +287,18 @@ func (p *proxy) handleSpeech(w http.ResponseWriter, r *http.Request) {
 			attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: err.Error()})
 			continue
 		}
-		res, err := relaySpeech(w, r, c.target, upstream)
+		// One slot per in-flight forward on this origin instance, so a noisy
+		// client cannot pin an engine while the farm looks healthy.
+		key := targetKey(c.target)
+		if !p.lim.acquire(key) {
+			attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: busyReason(p.cfg.MaxInFlightPerTarget)})
+			busy++
+			continue
+		}
+		res, err := func() (speechResult, error) {
+			defer p.lim.release(key)
+			return relaySpeech(w, r, c.target, upstream)
+		}()
 		switch {
 		case err != nil && res.Streamed:
 			// Upstream was already streaming; the client is mid-download, so
@@ -302,6 +318,16 @@ func (p *proxy) handleSpeech(w http.ResponseWriter, r *http.Request) {
 			log.Printf("fanout: %s -> %s/%s", alias, c.target.Hub, c.target.InstanceName)
 			return
 		}
+	}
+
+	// Every usable target was busy: this is load shedding, not an outage, so
+	// say 429 with a Retry-After instead of a misleading 503.
+	if busy > 0 && busy == len(attempts) {
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+		openAIError(w, http.StatusTooManyRequests,
+			"All fan-out backends for model "+alias+" are at their in-flight cap",
+			map[string]any{"attempts": attempts, "hubs_tried": hubList(attempts), "inFlightCap": p.cfg.MaxInFlightPerTarget})
+		return
 	}
 
 	openAIError(w, http.StatusServiceUnavailable,
@@ -338,7 +364,10 @@ func hubList(attempts []attempt) []string {
 // with the fan-out specific detail in extra.
 func openAIError(w http.ResponseWriter, status int, message string, extra map[string]any) {
 	typ := "invalid_request_error"
-	if status >= 500 {
+	switch {
+	case status == http.StatusTooManyRequests:
+		typ = "rate_limit_error" // what OpenAI clients expect from a 429
+	case status >= 500:
 		typ = "server_error"
 	}
 	body := map[string]any{"message": message, "type": typ}

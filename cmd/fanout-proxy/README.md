@@ -48,7 +48,7 @@ As a service, copy `audio-cpp-fanout.service` to `~/.config/systemd/user/`
 
 | Method | Path | Behavior |
 |---|---|---|
-| `GET` | `/farm/health` | per-hub up/down, latency, last error, instance list; per-route resolution + skip reasons |
+| `GET` | `/farm/health` | per-hub up/down, latency, last error, instance list; per-route resolution + skip reasons + live `inFlight` per target |
 | `GET` | `/api/instances` | aggregated instances of every **up** hub, each tagged with `hub` / `hubLabel` |
 | `GET` | `/v1/models` | OpenAI list of the aliases that currently resolve to a READY backend |
 | `POST` | `/v1/audio/speech` | routes by `model` alias, rewrites `model` to the upstream `instanceName`, streams the response, fails over down the target list |
@@ -74,6 +74,42 @@ string is replaced with the upstream service name. Every other field —
 — is relayed byte-for-byte (`json.RawMessage` per field), so a rewrite can
 never reformat or round a caller value.
 
+## Knobs (`farm.routes.json`)
+
+`hubs` / `routes` are the topology; the rest is tuning.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `listen` | `:18082` | bind address (`-listen` overrides it) |
+| `pollIntervalMs` | `7000` | per-hub `GET /api/instances` period |
+| `pollTimeoutMs` | `3000` | per-hub poll timeout |
+| `maxBodyBytes` | `67108864` (64 MiB) | request body ceiling, same as the hub's `/api/*` limit |
+| `maxInFlightPerTarget` | `2` | concurrent speech forwards per **origin target**; `<= 0` turns the cap off |
+| `hubs` / `routes` | — | polled hubs, and alias → ordered target list |
+
+### `maxInFlightPerTarget` — the per-origin in-flight cap
+
+A hub runs one engine per instance and its task queue is serial, so without a
+cap one noisy agent fills an instance's queue while every other agent waits
+there invisibly — and the farm still looks healthy in `/farm/health`. The proxy
+therefore admits at most `maxInFlightPerTarget` in-flight forwards per origin
+target (hub base URL + service name):
+
+- A target **at its cap** counts as unusable, so the request spills to the next
+  target in the route (`.36 breeze` → `.30 breeze`).
+- Only when *every* usable target of the route is busy does the call get
+  `429 Too Many Requests` + `Retry-After: 5` + `type: rate_limit_error`. That is
+  load shedding, deliberately distinct from the `503` of a real outage. OpenAI
+  SDKs retry `429` on their own; a client that would rather queue than fail can
+  set `"maxInFlightPerTarget": -1`.
+- The default of `2` still lets one client overlap a request with its own
+  follow-up. Watch the single-target routes (`qwen3-vd`, `citrinet`): no standby
+  to spill to, so a client firing more in parallel than the cap gets 429s.
+- `GET /farm/health` reports the effective `inFlightCap` plus a live `inFlight`
+  count per target, so a target about to start shedding is visible before it
+  does. Note that `resolved` is the poll-cache answer (first READY target);
+  under load the request may still land on the next one.
+
 ## Failure behavior
 
 - A hub is polled every `pollIntervalMs` (7 s) and marked down after **2**
@@ -81,6 +117,9 @@ never reformat or round a caller value.
 - Failover happens on transport errors, `5xx`, `409` (hub: instance still
   starting) and `429`. A `4xx` is the caller's fault, so it is returned as-is
   without burning the remaining targets.
+- A target sitting at `maxInFlightPerTarget` is skipped like a down hub, so
+  traffic spills to the standby; only a route whose every usable target is busy
+  sheds load with `429` + `Retry-After: 5`.
 - Once response bytes have reached the client there is nothing to retry, so all
   retryable outcomes are detected before anything is written.
 - Total failure returns `503` with the full trail:
@@ -92,6 +131,22 @@ never reformat or round a caller value.
     "type": "server_error",
     "attempts": [{"hub": "http://10.0.0.36:18080", "instanceName": "breeze", "reason": "hub is down"}],
     "hubs_tried": ["http://10.0.0.36:18080"]
+  }
+}
+```
+
+- Load shedding (every usable target busy) returns `429` with the same trail plus
+  `inFlightCap`, so a client can tell "come back in a moment" from "the farm is
+  broken":
+
+```json
+{
+  "error": {
+    "message": "All fan-out backends for model voice-design-fast are at their in-flight cap",
+    "type": "rate_limit_error",
+    "attempts": [{"hub": "http://10.0.0.30:18081", "instanceName": "qwen3-vd", "reason": "at in-flight cap (1)"}],
+    "hubs_tried": ["http://10.0.0.30:18081"],
+    "inFlightCap": 1
   }
 }
 ```
@@ -135,3 +190,19 @@ discovery (`health` = the same view as `curl /farm/health`):
 STT, upload, voices and history do **not** go through the fan-out — that client
 keeps a second base URL for them (`--direct-hub`, default
 `http://10.0.0.36:18080`).
+
+In-flight cap, ~30 s, no config change needed: two concurrent calls on a
+two-target route must split across hosts, and a single-target route past the cap
+must answer `429` with `Retry-After`.
+
+```bash
+curl -s localhost:18082/farm/health | grep -E '"inFlightCap"|"inFlight"'   # cap + live counts
+for i in 1 2; do
+  curl -s -o /dev/null -D - --max-time 30 -X POST localhost:18082/v1/audio/speech \
+    -H 'Content-Type: application/json' -d '{"model":"instant","input":"cap check"}' \
+    | grep -i x-fanout-hub &                                    # .36 and .32, both 200
+done; wait
+curl -s -D - -o /dev/null -X POST localhost:18082/v1/audio/speech \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"instant","input":"cap check"}'                   # 200 again, slot released
+```

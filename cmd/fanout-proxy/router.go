@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -108,6 +109,79 @@ func pickTarget(rt *Route, s *healthStore) (Target, bool) {
 		}
 	}
 	return Target{}, false
+}
+
+// ---------------------------------------------------------------- 并发上限
+
+// retryAfterSeconds is the Retry-After hint on a 429. A slot frees as soon as
+// an in-flight synthesis finishes, so seconds, not minutes.
+const retryAfterSeconds = 5
+
+// limiter caps how many speech forwards may be in flight per origin target
+// (hub base URL + service name). Hub task queues are serial, so without a cap
+// one noisy agent occupies a target's single engine slot and everyone else
+// queues behind it invisibly. A target at its cap is treated like any other
+// unusable target — the request spills to the standby — so only a route whose
+// every usable target is busy answers 429 (docs/fanout-design.md follow-up 2).
+//
+// cap <= 0 means unlimited. All methods are nil-safe: a zero-value limiter
+// degrades to "no cap" rather than panicking a LAN tool.
+type limiter struct {
+	mu   sync.Mutex
+	cap  int
+	used map[string]int // target key -> forwards in flight
+}
+
+func newLimiter(maxInFlight int) *limiter {
+	return &limiter{cap: maxInFlight, used: make(map[string]int)}
+}
+
+// targetKey identifies one origin target for concurrency accounting.
+func targetKey(t Target) string { return t.Hub + "/" + t.InstanceName }
+
+// acquire reserves one slot for key. false means the target is at its cap and
+// the caller must not send anything upstream.
+func (l *limiter) acquire(key string) bool {
+	if l == nil || l.cap <= 0 {
+		return true
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.used[key] >= l.cap {
+		return false
+	}
+	l.used[key]++
+	return true
+}
+
+// release gives a slot back. An extra or unmatched release is dropped instead
+// of going negative, which would silently re-open the cap.
+func (l *limiter) release(key string) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if n := l.used[key] - 1; n > 0 {
+		l.used[key] = n
+	} else {
+		delete(l.used, key)
+	}
+}
+
+// inFlight is the current count for key, reported by GET /farm/health.
+func (l *limiter) inFlight(key string) int {
+	if l == nil {
+		return 0
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.used[key]
+}
+
+// busyReason is the skip reason recorded when a target is at its cap.
+func busyReason(cap int) string {
+	return "at in-flight cap (" + strconv.Itoa(cap) + ")"
 }
 
 // ---------------------------------------------------------------- 转发

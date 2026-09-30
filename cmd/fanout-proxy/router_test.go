@@ -22,7 +22,7 @@ func testConfig(hubs []Hub, routes []Route) *Config {
 
 func newTestProxy(hubs []Hub, routes []Route) *proxy {
 	cfg := testConfig(hubs, routes)
-	return &proxy{cfg: cfg, hub: newHealthStore(cfg)}
+	return &proxy{cfg: cfg, hub: newHealthStore(cfg), lim: newLimiter(cfg.MaxInFlightPerTarget)}
 }
 
 // breezeRoute is the real shape: one alias pair, primary + standby.
@@ -745,5 +745,243 @@ func TestCORSPreflight(t *testing.T) {
 	}
 	if rec.Header().Get("Access-Control-Allow-Origin") != "*" {
 		t.Error("preflight is missing Access-Control-Allow-Origin")
+	}
+}
+
+// ---------------------------------------------------------------- 入口并发上限
+
+func TestLimiter(t *testing.T) {
+	// ops are "<key><+|->" applied in order: key a or b, then acquire/release.
+	const a, b = "http://a:18080/breeze", "http://b:18080/breeze"
+	tests := []struct {
+		name         string
+		cap          int
+		ops          []string
+		want         []bool // expected acquire result per "+" op, in order
+		wantA, wantB int    // slots still held on each key
+		wantNext     bool   // whether one more acquire on a is admitted
+	}{
+		{name: "cap 1 admits one then refuses", cap: 1, ops: []string{"a+", "a+", "a-", "a+"}, want: []bool{true, false, true}, wantA: 1, wantNext: false},
+		{name: "cap 2 admits two then refuses", cap: 2, ops: []string{"a+", "a+", "a+"}, want: []bool{true, true, false}, wantA: 2, wantNext: false},
+		{name: "releasing frees exactly one slot", cap: 1, ops: []string{"a+", "a-", "a+"}, want: []bool{true, true}, wantA: 1, wantNext: false},
+		{name: "cap 0 is unlimited", cap: 0, ops: []string{"a+", "a+", "a+", "a+", "a+"}, want: []bool{true, true, true, true, true}, wantNext: true},
+		{name: "negative cap is unlimited", cap: -1, ops: []string{"a+", "a+", "a+"}, want: []bool{true, true, true}, wantNext: true},
+		// Surplus releases must be dropped, never counted negative, which would
+		// hand out more slots than the cap.
+		{name: "surplus release cannot go negative", cap: 2, ops: []string{"a+", "a-", "a-", "a-", "a+", "a+"}, want: []bool{true, true, true}, wantA: 2, wantNext: false},
+		{name: "keys are accounted separately", cap: 1, ops: []string{"a+", "b+", "a+"}, want: []bool{true, true, false}, wantA: 1, wantB: 1, wantNext: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			l := newLimiter(tc.cap)
+			j := 0
+			for _, op := range tc.ops {
+				key := a
+				if op[0] == 'b' {
+					key = b
+				}
+				if op[1] == '-' {
+					l.release(key)
+					continue
+				}
+				if got := l.acquire(key); got != tc.want[j] {
+					t.Errorf("op %q acquire = %v, want %v", op, got, tc.want[j])
+				}
+				j++
+			}
+			if j != len(tc.want) {
+				t.Fatalf("checked %d acquires, want %d", j, len(tc.want))
+			}
+			if got := l.inFlight(a); got != tc.wantA {
+				t.Errorf("inFlight(a) = %d, want %d", got, tc.wantA)
+			}
+			if got := l.inFlight(b); got != tc.wantB {
+				t.Errorf("inFlight(b) = %d, want %d", got, tc.wantB)
+			}
+			if got := l.acquire(a); got != tc.wantNext {
+				t.Errorf("acquire at final count = %v, want %v", got, tc.wantNext)
+			}
+		})
+	}
+}
+
+// A proxy that never had a limiter built must degrade to "no cap", not panic.
+func TestNilLimiterIsUnlimited(t *testing.T) {
+	var l *limiter
+	if !l.acquire("x") {
+		t.Error("nil limiter refused an acquire")
+	}
+	l.release("x")
+	if got := l.inFlight("x"); got != 0 {
+		t.Errorf("inFlight = %d, want 0", got)
+	}
+}
+
+func setCap(p *proxy, maxInFlight int) {
+	p.cfg.MaxInFlightPerTarget = maxInFlight
+	p.lim = newLimiter(maxInFlight)
+}
+
+// holdSlots pretends that other requests are already generating on a target,
+// which is what a noisy agent looks like from the router.
+func holdSlots(t *testing.T, p *proxy, target Target, n int) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		if !p.lim.acquire(targetKey(target)) {
+			t.Fatalf("could not hold slot %d on %s", i, targetKey(target))
+		}
+	}
+}
+
+func TestSpeechInFlightCap(t *testing.T) {
+	const wav = "RIFF-fake-wav-bytes"
+	tests := []struct {
+		name         string
+		cap          int
+		standby      bool // route has a second target to spill onto
+		holdPrimary  int  // slots taken on the primary before the POST
+		holdStandby  int  // slots taken on the standby before the POST
+		wantStatus   int
+		wantCalls    [2]int
+		wantRetryAft string
+		wantMessage  string // substring the 429 message must contain
+	}{
+		{
+			name:        "one free slot under the default cap serves the primary",
+			cap:         2,
+			standby:     true,
+			holdPrimary: 1,
+			wantStatus:  200,
+			wantCalls:   [2]int{1, 0},
+		},
+		{
+			name:        "busy primary spills over to the standby",
+			cap:         1,
+			standby:     true,
+			holdPrimary: 1,
+			wantStatus:  200,
+			wantCalls:   [2]int{0, 1},
+		},
+		{
+			name:         "every target busy answers 429, not 503",
+			cap:          1,
+			standby:      true,
+			holdPrimary:  1,
+			holdStandby:  1,
+			wantStatus:   429,
+			wantCalls:    [2]int{0, 0},
+			wantRetryAft: "5",
+			wantMessage:  "in-flight cap",
+		},
+		{
+			name:         "a lone busy target answers 429 too",
+			cap:          1,
+			holdPrimary:  1,
+			wantStatus:   429,
+			wantCalls:    [2]int{0, 0},
+			wantRetryAft: "5",
+			wantMessage:  "in-flight cap",
+		},
+		{
+			name:        "cap 0 never sheds, even when many are in flight",
+			cap:         0,
+			standby:     true,
+			holdPrimary: 5,
+			wantStatus:  200,
+			wantCalls:   [2]int{1, 0},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			primary := newFakeHub(t, 200, wav, "audio/wav")
+			standby := newFakeHub(t, 200, wav, "audio/wav")
+			hubs := []Hub{{BaseURL: primary.srv.URL}}
+			routes := []Route{{
+				Aliases: []string{"breeze", "expressive"},
+				Targets: []Target{{Hub: primary.srv.URL, InstanceName: "breeze"}},
+			}}
+			if tc.standby {
+				hubs = append(hubs, Hub{BaseURL: standby.srv.URL})
+				routes[0].Targets = append(routes[0].Targets, Target{Hub: standby.srv.URL, InstanceName: "breeze"})
+			}
+			p := newTestProxy(hubs, routes)
+			setCap(p, tc.cap)
+			markReady(p.hub, primary.srv.URL, "breeze")
+			markReady(p.hub, standby.srv.URL, "breeze")
+			holdSlots(t, p, p.cfg.Routes[0].Targets[0], tc.holdPrimary)
+			if tc.standby {
+				holdSlots(t, p, p.cfg.Routes[0].Targets[1], tc.holdStandby)
+			}
+
+			rec := post(t, p, `{"model":"breeze","input":"hi"}`)
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d (body %s)", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+			if got := [2]int{primary.calls, standby.calls}; got != tc.wantCalls {
+				t.Errorf("calls = %v, want %v", got, tc.wantCalls)
+			}
+			if tc.wantStatus == 200 {
+				return
+			}
+			if got := rec.Header().Get("Retry-After"); got != tc.wantRetryAft {
+				t.Errorf("Retry-After = %q, want %q", got, tc.wantRetryAft)
+			}
+			env := errorEnvelope(t, rec)
+			if got := env["type"]; got != "rate_limit_error" {
+				t.Errorf("type = %v, want rate_limit_error", got)
+			}
+			if got := env["message"].(string); !strings.Contains(got, tc.wantMessage) {
+				t.Errorf("message = %q, want it to contain %q", got, tc.wantMessage)
+			}
+			if got := env["inFlightCap"]; got != float64(tc.cap) {
+				t.Errorf("inFlightCap = %v, want %d", got, tc.cap)
+			}
+			attempts, _ := env["attempts"].([]any)
+			if len(attempts) != len(p.cfg.Routes[0].Targets) {
+				t.Fatalf("attempts = %v, want every target accounted for", attempts)
+			}
+			for _, a := range attempts {
+				m := a.(map[string]any)
+				if !strings.Contains(m["reason"].(string), "in-flight cap") {
+					t.Errorf("attempt reason = %v, want it to name the cap", m["reason"])
+				}
+			}
+		})
+	}
+}
+
+// A finished request must give its slot back on every path, or the cap would
+// wedge a target after a handful of requests.
+func TestSpeechReleasesInFlightSlot(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+	}{
+		{name: "after a success", status: 200},
+		{name: "after an upstream failure", status: 500},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hub := newFakeHub(t, tc.status, "wav", "audio/wav")
+			p := newTestProxy(
+				[]Hub{{BaseURL: hub.srv.URL}},
+				[]Route{{Aliases: []string{"breeze"}, Targets: []Target{{Hub: hub.srv.URL, InstanceName: "breeze"}}}},
+			)
+			setCap(p, 1) // one slot, so a leaked slot wedges the target immediately
+			markReady(p.hub, hub.srv.URL, "breeze")
+			first := post(t, p, `{"model":"breeze","input":"hi"}`)
+			key := targetKey(p.cfg.Routes[0].Targets[0])
+			if n := p.lim.inFlight(key); n != 0 {
+				t.Fatalf("inFlight(%s) = %d after the first request, want 0", key, n)
+			}
+			second := post(t, p, `{"model":"breeze","input":"hi"}`)
+			if second.Code != first.Code {
+				t.Fatalf("second status = %d, want %d (a leaked slot would answer 429)",
+					second.Code, first.Code)
+			}
+			if hub.calls != 2 {
+				t.Errorf("upstream calls = %d, want 2", hub.calls)
+			}
+		})
 	}
 }

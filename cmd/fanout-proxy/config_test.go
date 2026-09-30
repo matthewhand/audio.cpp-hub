@@ -35,6 +35,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.MaxBodyBytes != defaultMaxBodyBytes {
 		t.Errorf("maxBodyBytes = %d, want %d", cfg.MaxBodyBytes, defaultMaxBodyBytes)
 	}
+	if cfg.MaxInFlightPerTarget != defaultMaxInFlightPerTarget {
+		t.Errorf("maxInFlightPerTarget = %d, want %d", cfg.MaxInFlightPerTarget, defaultMaxInFlightPerTarget)
+	}
 	if _, ok := cfg.routeFor("breeze"); !ok {
 		t.Error("routeFor(breeze) not found")
 	}
@@ -103,6 +106,34 @@ func TestLoadConfigRejects(t *testing.T) {
 func TestLoadConfigMissingFile(t *testing.T) {
 	if _, err := LoadConfig(filepath.Join(t.TempDir(), "nope.json")); err == nil {
 		t.Fatal("expected an error for a missing file")
+	}
+}
+
+// maxInFlightPerTarget is the knob that keeps one noisy agent off a busy
+// instance, so pin both directions: absent gets the small default, an explicit
+// negative is the documented "no cap" escape hatch and must survive normalize.
+func TestLoadConfigInFlightCap(t *testing.T) {
+	const topology = `"hubs": [{"baseUrl": "http://h"}], "routes": [{"aliases": ["a"], "targets": [{"hub": "http://h", "instanceName": "x"}]}]`
+	tests := []struct {
+		name  string
+		field string
+		want  int
+	}{
+		{name: "absent defaults to the small cap", field: "", want: defaultMaxInFlightPerTarget},
+		{name: "explicit zero also gets the default", field: `"maxInFlightPerTarget": 0,`, want: defaultMaxInFlightPerTarget},
+		{name: "explicit value is kept", field: `"maxInFlightPerTarget": 4,`, want: 4},
+		{name: "negative disables the cap", field: `"maxInFlightPerTarget": -1,`, want: -1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := LoadConfig(writeConfig(t, "{"+tc.field+topology+"}"))
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.MaxInFlightPerTarget != tc.want {
+				t.Errorf("maxInFlightPerTarget = %d, want %d", cfg.MaxInFlightPerTarget, tc.want)
+			}
+		})
 	}
 }
 

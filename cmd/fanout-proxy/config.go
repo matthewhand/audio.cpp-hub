@@ -16,6 +16,12 @@ const (
 	// Same ceiling as the hub's /api/* body limit (util.go maxBodyBytes): TTS
 	// bodies are small, but reference audio may be inlined as base64.
 	defaultMaxBodyBytes int64 = 64 << 20
+	// defaultMaxInFlightPerTarget bounds concurrent speech forwards per origin
+	// target. Hub task queues are serial, so without a cap one noisy agent
+	// owns an instance's single engine slot and every other agent queues
+	// behind it. Two still lets a client overlap a request with its own
+	// cleanup; set it <= 0 to disable the cap entirely.
+	defaultMaxInFlightPerTarget = 2
 )
 
 // instanceNamePattern mirrors the hub's service-name rule (instance.go
@@ -44,15 +50,16 @@ type Route struct {
 	Targets []Target `json:"targets"`
 }
 
-// Config is farm.routes.json. Only Listen/PollIntervalMs are worth tuning;
-// everything else describes the farm topology.
+// Config is farm.routes.json. Only Listen/PollIntervalMs/MaxInFlightPerTarget
+// are worth tuning; everything else describes the farm topology.
 type Config struct {
-	Listen         string  `json:"listen"`
-	PollIntervalMs int     `json:"pollIntervalMs"`
-	PollTimeoutMs  int     `json:"pollTimeoutMs"`
-	MaxBodyBytes   int64   `json:"maxBodyBytes"`
-	Hubs           []Hub   `json:"hubs"`
-	Routes         []Route `json:"routes"`
+	Listen               string  `json:"listen"`
+	PollIntervalMs       int     `json:"pollIntervalMs"`
+	PollTimeoutMs        int     `json:"pollTimeoutMs"`
+	MaxBodyBytes         int64   `json:"maxBodyBytes"`
+	MaxInFlightPerTarget int     `json:"maxInFlightPerTarget"`
+	Hubs                 []Hub   `json:"hubs"`
+	Routes               []Route `json:"routes"`
 
 	hubURLs map[string]bool   // known hub base URLs, for target validation
 	byAlias map[string]*Route // lower-cased alias -> owning route
@@ -88,6 +95,11 @@ func (c *Config) normalize() error {
 	}
 	if c.MaxBodyBytes <= 0 {
 		c.MaxBodyBytes = defaultMaxBodyBytes
+	}
+	// Only an absent (0) key is defaulted: an explicit negative cap is the
+	// documented "no cap" escape hatch and must survive normalize.
+	if c.MaxInFlightPerTarget == 0 {
+		c.MaxInFlightPerTarget = defaultMaxInFlightPerTarget
 	}
 	if len(c.Hubs) == 0 {
 		return fmt.Errorf("hubs is empty")

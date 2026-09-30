@@ -42,8 +42,16 @@ agent can speak model **aliases** instead of `host:port:service` triples:
   `/api/tasks` on another host.
 - Successful responses add `X-Fanout-Hub` / `X-Fanout-Instance`; use the hub
   there to fetch the archived take from `/api/history/...`.
-- `GET /farm/health` — per-hub up/down, latency, and which backend each alias
-  resolved to. Fan-out only; hubs answer 404.
+- `GET /farm/health` — per-hub up/down, latency, which backend each alias
+  resolved to, and each target's live `inFlight` against `inFlightCap`.
+  Fan-out only; hubs answer 404.
+- **Fairness cap:** at most `maxInFlightPerTarget` (default 2) speech forwards
+  may be in flight per hub+service. A busy target is skipped, so the call spills
+  to the standby; when *every* target of the route is busy you get `429` +
+  `Retry-After: 5` (`type: rate_limit_error`) instead of a `503`. Treat that as
+  "retry shortly", not as an outage — OpenAI SDKs already retry `429` by default.
+  Fan out over time or raise the cap server-side; only the single-target routes
+  (`qwen3-vd` / `voice-design-fast`) have nowhere to spill to.
 - **Not proxied:** `/api/history/*`, `/api/voices/*`, `/api/audio/upload`,
   `/api/tasks*` and therefore STT. Keep using `:18080` for those. The `citrinet`
   alias exists so the route table and `/farm/health` cover the ASR box, but a
