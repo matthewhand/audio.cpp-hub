@@ -476,14 +476,14 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 
 | 端点 | 调用点 |
 | --- | --- |
-| `GET /api/models` | `web/modules/models.js:30`（`Api.list`） |
-| `GET /api/instances` | `web/modules/instances.js:52` 首屏加载 + `web/modules/instances.js:60` 2s 轮询 |
+| `GET /api/models` | `web/modules/models.js:27`（`Api.list`） |
+| `GET /api/instances` | `web/modules/instances.js:49` 首屏加载 + `web/modules/instances.js:57` 2s 轮询 |
 | `GET /api/events` | `web/modules/async-ui.js:189`（`startEventsPolling`）2s 轮询（失败静默） |
-| `GET /api/stats` | `web/modules/stats.js:40`（`loadStats`）打开 `#/stats` 时按需拉取，非轮询 |
-| `GET /api/downloads` | `web/modules/downloads.js:44` 首屏加载 + `web/modules/downloads.js:49` 2s 轮询 |
-| `POST /api/tasks` | `web/modules/tasks.js:26` |
-| `DELETE /api/tasks/{id}` | `web/modules/tasks.js:41` |
-| `GET /api/tasks?modelId=` | `web/modules/tasks.js:105`（`Api.list` + `query`，`reattachTasks` 重挂） |
-| `GET /api/tasks/{id}` | `web/modules/tasks.js:54`（每个进行中任务一个轮询句柄，到终态即 `stop()`） |
+| `GET /api/stats` | `web/modules/stats.js:46`（`loadStats`）打开 `#/stats` 时按需拉取，非轮询 |
+| `GET /api/downloads` | `web/modules/downloads-lazy.js:60` 首屏加载 + `web/modules/downloads-lazy.js:65` 2s 轮询 |
+| `POST /api/tasks` | `web/modules/tasks.js:27` |
+| `DELETE /api/tasks/{id}` | `web/modules/tasks.js:42` |
+| `GET /api/tasks?modelId=` | `web/modules/tasks.js:106`（`Api.list` + `query`，`reattachTasks` 重挂） |
+| `GET /api/tasks/{id}` | `web/modules/tasks.js:55`（每个进行中任务一个轮询句柄，到终态即 `stop()`） |
 
-全局 2s 轮询的启动顺序在 `web/app.js:110`–`112`（实例 → 事件 → 下载）。其余 `fetch` 调用（证书、executables、profiles、history、任务结果、voices、fs 等）尚未迁移；`web/api-client.js` 头部「迁移约定」一节列出了后续顺序（先 GET 列表 / 轮询，再 POST / PUT / DELETE）。
+全局 2s 轮询的启动顺序在 `web/app.js:110`–`112`（实例 → 事件 → 下载）。上表只列 2s 轮询与首屏加载涉及的端点；其余接口（证书、executables、profiles、history、任务结果、voices、fs 等）同样已全部经 `Api.*` 发出——`web/` 内除 Service Worker 自身外没有裸 `fetch`。

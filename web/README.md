@@ -16,7 +16,7 @@ Go 服务把 `web/` 当普通静态目录直接从磁盘提供（见 `api.go:165
 
 **模块图要预载**：没有打包器时，浏览器只能顺着 `app.js` 的 import 图一个个取模块。
 因此 `index.html` 的 `<head>` 里对**每一个**首屏 `web/modules/*.js` 都写了一条
-`<link rel="modulepreload">`（`web/index.html:23` 起），让浏览器在解析 head 时就并行
+`<link rel="modulepreload">`（`web/index.html:24` 起），让浏览器在解析 head 时就并行
 取完并预解析整张图，而不是等 `app.js` 执行后再一层层串行往返。`web/sw.js` 的
 `PRECACHE_URLS` 必须覆盖同一组文件（离线冷启动同样要求一次拿全）。
 **`npm run perf:budget` 会校验「模块图 ⊆ modulepreload ⊆ 预缓存」三方一致**——
@@ -74,20 +74,20 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 
 | 文件（行数） | 职责 | 入口 / 主要 API | 关键位置 |
 | --- | --- | --- | --- |
-| `index.html`（542） | 全部静态 DOM（面板、弹窗、表单）、CSP、manifest、`modulepreload` 清单、脚本加载顺序 | 页面骨架 | CSP `web/index.html:7`，预载清单 `web/index.html:23`–`39`，脚本区 `web/index.html:510`–`538` |
+| `index.html`（542） | 全部静态 DOM（面板、弹窗、表单）、CSP、manifest、`modulepreload` 清单、脚本加载顺序 | 页面骨架 | CSP `web/index.html:7`，预载清单 `web/index.html:24`–`40`，脚本区 `web/index.html:510`–`541` |
 | `boot.js`（58） | 绘制前恢复主题与语言，避免首屏闪烁（CSP 要求独立文件） | 顶层立即执行，暴露 `window.HubTheme`（三态 system/light/dark） | `web/boot.js:53` |
-| `i18n.zh.js`（611） | 中文词典（`window.I18N_ZH`），578 个键 | 纯数据 | `web/i18n.zh.js:5` |
-| `i18n.en.js`（612） | 英文词典（`window.I18N_EN`），与中文逐键对齐 | 纯数据 | `web/i18n.en.js:5` |
+| `i18n.zh.js`（638） | 中文词典（`window.I18N_ZH`），605 个键 | 纯数据 | `web/i18n.zh.js:5` |
+| `i18n.en.js`（639） | 英文词典（`window.I18N_EN`），与中文逐键对齐 | 纯数据 | `web/i18n.en.js:5` |
 | `i18n.js`（155） | 运行时 `I18N` API（不含任何文案） | `I18N.t` / `plural` / `num` / `date` / `bytes` / `percent` / `setLang` / `applyI18n` / `onChange` / `errText` / `pick` | `window.I18N` `web/i18n.js:10`，`plural` `:59`，`date` `:78`，`bytes` `:86`，`percent` `:101`，`applyI18n` `:106` |
 | `api-client.js`（459） | **唯一的 HTTP 出口**：错误信封、超时/中断、数组形状守卫、可见性感知轮询。`web/` 内唯一的 `fetch` 调用在此（`web/api-client.js:318`） | `window.AudioCppHub.api`（`Api.request/get/post/put/del/list/poll/stopAllPollers`） | `web/api-client.js:443`，`Api.poll` `:372` |
 | `legacy-globals.js`（49） | 经典脚本 ↔ ES 模块的桥（见 3.4） | 顶层立即执行，定义 `window.$` / `el` + 六个转发器 | `web/legacy-globals.js:20`、`:28`、`:39` |
 | `wav.js`（95） | 音频工具：解码、PCM16 单声道 WAV 编码、时长/体积格式化、输出设备预热 | `window.WavUtil` | `web/wav.js:2` |
-| `audio-picker.js`（655） | 音频选择组件：上传 / 录制 / 裁剪，含波形、播放，含本地路径页签 | `window.AudioPicker` | class `web/audio-picker.js:11`，`Api` `:9` |
-| `voice-select.js`（179） | 音色下拉：从音色库直选，选中即生效，返回服务器路径 | `window.VoiceSelect` / `window.refreshVoiceSelects` | class `web/voice-select.js:12`，`Api` `:10`，`refreshVoiceSelects` `:176` |
+| `audio-picker.js`（659） | 音频选择组件：上传 / 录制 / 裁剪，含波形、播放，含本地路径页签 | `window.AudioPicker` | class `web/audio-picker.js:11`，`Api` `:9` |
+| `voice-select.js`（181） | 音色下拉：从音色库直选，选中即生效，返回服务器路径 | `window.VoiceSelect` / `window.refreshVoiceSelects` | class `web/voice-select.js:12`，`Api` `:10`，`refreshVoiceSelects` `:176` |
 | `motion.js`（64） | 纯 UI 动效触发器：复制确认、主题切换、实例状态翻转 | `window.hubMotion` | `web/motion.js:30` |
-| `pwa.js`（102） | 注册 `/sw.js`、新版本提示条、`theme-color` 跟随主题 | 顶层立即执行 | `web/pwa.js:84` |
+| `pwa.js`（104） | 注册 `/sw.js`、新版本提示条、`theme-color` 跟随主题 | 顶层立即执行 | `web/pwa.js:85` |
 | `sw.js`（220） | Service Worker：`/api/*` 与 `/v1/*` 绝不缓存；导航 network-first；静态资源 cache-first + 后台再验证 | Service Worker 全局 | 预缓存清单 `web/sw.js:35`，API 豁免 `web/sw.js:150` |
-| `style.css`（2093） | 设计系统 L1–L6：令牌 / 基础 / 布局 / 组件 / 工具 / 可访问性 + 动效与 PWA 补充 | — | 令牌 `web/style.css:16` |
+| `style.css`（2187） | 设计系统 L1–L6：令牌 / 基础 / 布局 / 组件 / 工具 / 可访问性 + 动效与 PWA 补充 | — | 令牌 `web/style.css:16` |
 | `styleguide.html`（320） | 组件样式指南页（浏览器直接打开） | — | 骨架屏示例 `web/styleguide.html:219` |
 | `offline.html`（19） | Service Worker 断网兜底页 | — | — |
 | `manifest.webmanifest`（40） | PWA 清单：图标、standalone、主题色 | — | — |
@@ -97,25 +97,25 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 
 `app.js` 是**引导层**：导入各模块、承担跨模块的重画（`rerenderAll`）与最上层弹窗的 Esc / Tab
 焦点锁定，然后按原顺序建立轮询、首屏加载并应用初始 hash。业务逻辑按职责拆成 17 个模块
-（下表即**首屏静态模块图**，浏览器一定会取的那批；三个 `*-lazy.js` 是懒加载外观层，
+（下表即**首屏静态模块图**，浏览器一定会取的那批；五个 `*-lazy.js` 是懒加载外观层，
 见 3.2 的 chunk 表）：
 
 | 模块（行数） | 负责 | 关键位置 |
 | --- | --- | --- |
 | `app.js`（119） | 引导层：回填 `window.AudioCppHubApp`、`rerenderAll`、`closeTopmostOverlay`、Esc / Tab 全局键盘绑定、启动顺序 | 回填 `web/app.js:40`，`rerenderAll` `:47`，`closeTopmostOverlay` `:63`，Tab 锁定 `:81`，Esc `:93`，启动 `:110`–`119` |
 | `modules/dom.js`（48） | **基元层，零 import**：`$` / `el`（绑定自 `legacy-globals.js`）、`esc`、`safeHttpUrl`、行进入动画、`t`（绑定 `I18N.t`）、`Api`（绑定 `window.AudioCppHub.api`） | `$` `web/modules/dom.js:19`，`t` `:24`，`Api` `:27`，`esc` `:30`，`safeHttpUrl` `:36` |
-| `modules/async-ui.js`（291） | **跨功能复用的 UI 原语**：toast（`notify` / `showToast`）、列表三态（`showSkeleton` / `renderEmptyState` / `renderStateError` / `renderListError`）、`setButtonBusy`、`parseApiError`、`/api/events` → toast 轮询；弹窗栈（`OVERLAY_IDS` / `topmostOverlay`）、`focusDialog` / `restoreDialogFocus`（焦点栈 + 背景 `inert`）、`bindMenuKeys`、`dismissToast`、`showBusy` / `hideBusy` | `showToast` `web/modules/async-ui.js:57`，`parseApiError` `:62`，`showSkeleton` `:90`，`renderListError` `:136`，`setButtonBusy` `:142`，`startEventsPolling` `:188`，`OVERLAY_IDS` `:196`，`focusDialog` `:225`，`dismissToast` `:242`，`bindMenuKeys` `:251`，`showBusy` `:271` |
+| `modules/async-ui.js`（332） | **跨功能复用的 UI 原语**：toast（`notify` / `showToast`）、列表三态（`showSkeleton` / `renderEmptyState` / `renderStateError` / `renderListError`）、`setButtonBusy`、`parseApiError`、`/api/events` → toast 轮询；弹窗栈（`OVERLAY_IDS` / `topmostOverlay`）、`focusDialog` / `restoreDialogFocus`（焦点栈 + 背景 `inert`）、`bindMenuKeys`、`dismissToast`、`showBusy` / `hideBusy` | `showToast` `web/modules/async-ui.js:57`，`parseApiError` `:62`，`showSkeleton` `:90`，`renderListError` `:136`，`setButtonBusy` `:142`，`startEventsPolling` `:188`，`OVERLAY_IDS` `:196`，`focusDialog` `:225`，`dismissToast` `:242`，`bindMenuKeys` `:251`，`showBusy` `:271` |
 | `modules/state.js`（30） | 跨模块共享的可变状态：模型清单 / 可执行文件 / 启动配置 / 当前选中模型 / 当前实例 + 各自的 `setXxx()` | `models` `web/modules/state.js:11`，`setModels` `:21` |
-| `modules/routing.js`（112） | #88 hash 路由：`parseRoute` / `go` / `goPanel` / `applyRoute` + 路由意图 `pendingModelId` / `pendingInstanceId` / `pendingSettingsSection` + `window.hub*` 钩子 | `ROUTE_VIEWS` `web/modules/routing.js:25`，`parseRoute` `:41`，`go` `:58`，`applyRoute` `:80` |
-| `modules/command-palette.js`（134） | #88 命令面板（Ctrl/Cmd-K）：候选项拼装、过滤、↑↓/Enter/Esc | `paletteSources` `web/modules/command-palette.js:21`，`renderPalette` `:38` |
+| `modules/routing.js`（122） | #88 hash 路由：`parseRoute` / `go` / `goPanel` / `applyRoute` + 路由意图 `pendingModelId` / `pendingInstanceId` / `pendingSettingsSection` + `window.hub*` 钩子 | `ROUTE_VIEWS` `web/modules/routing.js:25`，`parseRoute` `:41`，`go` `:58`，`applyRoute` `:80` |
+| `modules/command-palette.js`（138） | #88 命令面板（Ctrl/Cmd-K）：候选项拼装、过滤、↑↓/Enter/Esc | `paletteSources` `web/modules/command-palette.js:21`，`renderPalette` `:38` |
 | `modules/shell.js`（45） | 主题三态循环（`window.HubTheme`）、语言切换、移动端抽屉 | — |
 | `modules/models.js`（164） | 模型列表（按 category 分组）、已配置黯淡态、空态、HF 仓库/镜像菜单（含 `role=menu` 键盘导航）、`selectModelById` | `loadModels` `web/modules/models.js:24`，`hfMirrorOf` `:55`，`renderModelList` `:109`，`selectModelById` `:147` |
-| `modules/settings-lazy.js`（194） | **可执行文件登记**（首屏必需：启动弹窗下拉 + 模型卡片已配置态 + 设备探测缓存 + 增删改表单字段）+ 设置弹窗的懒加载外观 | `deviceCache` `web/modules/settings-lazy.js:29`，`loadExecutables` `:39`，`updateLaunchExec` `:57`，`parseEnvText` `:80`，`parseSessionOptionsText` `:100`，`openSettingsModal` `:156`，`relocalizeSettings` `:182`，`wireSettingsButtons` `:189` |
-| `modules/launch.js`（426） | 启动模型弹窗：可执行文件选择、设备探测、权重路径、启动配置（Profile）、高级参数、启动请求 | `openLaunchModal` `web/modules/launch.js:17`，`probeDevices` `:90`，`loadProfiles` `:214`，`restoreWeightsPath` `:200`，`saveProfile` `:317` |
+| `modules/settings-lazy.js`（201） | **可执行文件登记**（首屏必需：启动弹窗下拉 + 模型卡片已配置态 + 设备探测缓存 + 增删改表单字段）+ 设置弹窗的懒加载外观 | `deviceCache` `web/modules/settings-lazy.js:29`，`loadExecutables` `:39`，`updateLaunchExec` `:57`，`parseEnvText` `:80`，`parseSessionOptionsText` `:100`，`openSettingsModal` `:156`，`relocalizeSettings` `:182`，`wireSettingsButtons` `:189` |
+| `modules/launch.js`（438） | 启动模型弹窗：可执行文件选择、设备探测、权重路径、启动配置（Profile）、高级参数、启动请求 | `openLaunchModal` `web/modules/launch.js:17`，`probeDevices` `:90`，`loadProfiles` `:214`，`restoreWeightsPath` `:200`，`saveProfile` `:317` |
 | `modules/instances.js`（232） | 实例列表、实例状态条、实例详情（`I18N.date`）、2s 轮询句柄 + 首屏骨架 | `startInstancePolling` `web/modules/instances.js:55`，`renderInstanceList` `:61`，`openInstanceDetail` `:165` |
-| `modules/downloads-lazy.js`（151） | **下载数据 + 页头 ⬇️ 角标与其 2s 轮询**（首屏可见，不能懒加载）+ 两个下载弹窗的懒加载外观 | `getDownloads` `web/modules/downloads-lazy.js:33`，`refreshDownloads` `:58`，`startDownloadsPolling` `:64`，`updateDlBadge` `:70`，`openDownloadsModal` `:100`，`relocalizeDownloads` `:142`，`wireDownloadsButton` `:148` |
+| `modules/downloads-lazy.js`（160） | **下载数据 + 页头 ⬇️ 角标与其 2s 轮询**（首屏可见，不能懒加载）+ 两个下载弹窗的懒加载外观 | `getDownloads` `web/modules/downloads-lazy.js:33`，`refreshDownloads` `:58`，`startDownloadsPolling` `:64`，`updateDlBadge` `:70`，`openDownloadsModal` `:100`，`relocalizeDownloads` `:142`，`wireDownloadsButton` `:148` |
 | `modules/tasks.js`（331） | 任务队列**与结果落版**：提交、跟踪、取消、完成、`reattachTasks` 重挂、侧栏任务行；`renderTaskResult` 按类别分派 + ASR / 分离 / 音乐 / 其它结果 + `clearResult` / `makeTrackRow` | `activePolls` `web/modules/tasks.js:21`，`submitTask` `:26`，`trackTask` `:48`，`reattachTasks` `:101`，`renderTaskResult` `:194`，`clearResult` `:242` |
-| `modules/sidebar.js`（632） | 操作历史侧栏：历史加载与渲染（含骨架屏 / 三态）、分组、分组菜单（键盘导航）、四要素详情、隐私模式、任务行与历史行的列表组装、「清空」批量删除（走全局等待遮罩） | `openHistoryPanel` `web/modules/sidebar.js:19`，`loadHistory` `:79`，`renderSidebarList` `:125`，`deleteFinishedTasks` `:578`，清空处理 `:593` |
+| `modules/sidebar.js`（671） | 操作历史侧栏：历史加载与渲染（含骨架屏 / 三态）、分组、分组菜单（键盘导航）、四要素详情、隐私模式、任务行与历史行的列表组装、「清空」批量删除（走全局等待遮罩） | `openHistoryPanel` `web/modules/sidebar.js:19`，`loadHistory` `:79`，`renderSidebarList` `:125`，`deleteFinishedTasks` `:578`，清空处理 `:593` |
 | `modules/panels.js`（866） | 工作区分发 + TTS / ASR / SEP / Music / Other 五类面板：`paramSchema` 渲染与收集、情感滑块、各面板提交；面板表单的 `VoiceSelect` / `AudioPicker` 实例在模块求值时一次性创建 | `voicePicker` `web/modules/panels.js:24`，`renderWorkspace` `:51`，`renderTtsPanel` `:294`，`buildEmotionSliders` `:536`，`renderAsrPanel` `:646` |
 
 ##### 懒加载 chunk（点击才打开的视图）
@@ -129,9 +129,9 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 | --- | --- | --- |
 | `modules/stats-lazy.js`（79） | `modules/stats.js`（198）：用量与性能看板（`#/stats`，页头 📊）——`GET /api/stats`，总量卡片 + 每模型卡片（任务数 / 成功率 / 音频时长 / 输出体积 / 排队与执行 P50-P95 / 实时率 RTF）。`openStatsPanel` `web/modules/stats.js:26` | `routing.js` 静态 import 外观层，点 📊 路由到 `#/stats` 时 `import("./stats.js")` |
 | `modules/file-browser-lazy.js`（48） | `modules/file-browser.js`（470）：服务器端文件 / 目录选择弹窗，overlay 在首次 `open()` 时动态创建。`open` `web/modules/file-browser.js:100`，`cancel` `:387`，`relocalize` `:421` | `launch.js`（权重目录 / GGUF / 可执行文件三个「浏览…」按钮）与经典脚本 `audio-picker.js`（本地路径页签）都经外观层的 `browseServerFile` 打开 |
-| `modules/voices-panel-lazy.js`（67） | `modules/voices-panel.js`（257）：音色库管理面板（页头 🎙）——列表 / 试听 / 行内编辑 / 删除 / 「用于 TTS」/ 添加。`openVoicesPanel` `web/modules/voices-panel.js:25`，`closeVoicesPanel` `:37` | `routing.js` 静态 import 外观层（页头 🎙 由 `wireVoicesButton` 接线、`#/voices` 路由与 Esc 走 `openVoicesPanel` / `closeVoicesPanel`）；经典脚本 `voice-select.js` 的「管理音色库」按钮经外观层挂上的 `window.openVoicesPanel` |
-| `modules/downloads-lazy.js`（151） | `modules/downloads.js`（211）：下载管理弹窗（进度 / 暂停 / 续传 / 删除 / 填入权重）+ 按模型下载弹窗（包 / token / 下载源）。`openDownloadsModal` `web/modules/downloads.js:31`，`renderDownloadList` `:44`，`loadMdlPackages` `:136`，`relocalize` `:208` | `routing.js`（页头 ⬇️ 与 `#/downloads`）与 `models.js`（模型卡片的 ⬇ 按钮）都 import 外观层；数据与角标留在外观层，chunk 经 `getDownloads()` 读 |
-| `modules/settings-lazy.js`（194） | `modules/settings.js`（208）：设置弹窗的三个分节——通用（界面语言 / 主题）、HTTPS 证书（全站唯一的 blob 下载路径）、可执行文件列表渲染。`openSettingsModal` `web/modules/settings.js:20`，`activateSettingsSection` `:32`，`loadCertStatus` `:60`，`renderExecList` `:145`，`relocalize` `:202` | `routing.js`（页头 ⚙ 与启动弹窗的「去添加程序」）import 外观层；可执行文件**数据**（启动弹窗也要用）留在外观层，chunk 经 `state.js` 的活绑定读 |
+| `modules/voices-panel-lazy.js`（68） | `modules/voices-panel.js`（257）：音色库管理面板（页头 🎙）——列表 / 试听 / 行内编辑 / 删除 / 「用于 TTS」/ 添加。`openVoicesPanel` `web/modules/voices-panel.js:25`，`closeVoicesPanel` `:37` | `routing.js` 静态 import 外观层（页头 🎙 由 `wireVoicesButton` 接线、`#/voices` 路由与 Esc 走 `openVoicesPanel` / `closeVoicesPanel`）；经典脚本 `voice-select.js` 的「管理音色库」按钮经外观层挂上的 `window.openVoicesPanel` |
+| `modules/downloads-lazy.js`（160） | `modules/downloads.js`（211）：下载管理弹窗（进度 / 暂停 / 续传 / 删除 / 填入权重）+ 按模型下载弹窗（包 / token / 下载源）。`openDownloadsModal` `web/modules/downloads.js:31`，`renderDownloadList` `:44`，`loadMdlPackages` `:136`，`relocalize` `:208` | `routing.js`（页头 ⬇️ 与 `#/downloads`）与 `models.js`（模型卡片的 ⬇ 按钮）都 import 外观层；数据与角标留在外观层，chunk 经 `getDownloads()` 读 |
+| `modules/settings-lazy.js`（201） | `modules/settings.js`（208）：设置弹窗的三个分节——通用（界面语言 / 主题）、HTTPS 证书（全站唯一的 blob 下载路径）、可执行文件列表渲染。`openSettingsModal` `web/modules/settings.js:20`，`activateSettingsSection` `:32`，`loadCertStatus` `:60`，`renderExecList` `:145`，`relocalize` `:202` | `routing.js`（页头 ⚙ 与启动弹窗的「去添加程序」）import 外观层；可执行文件**数据**（启动弹窗也要用）留在外观层，chunk 经 `state.js` 的活绑定读 |
 
 **切分线不总是「整个模块 vs 首屏」**。三块里只有音色库是纯点击视图（整块搬进 chunk）；
 下载与设置是**按「首屏可不可见」切**：页头 ⬇️ 角标要在首屏跳动、`loadExecutables` 决定模型
@@ -269,7 +269,7 @@ ES 模块的函数声明提升 + 活绑定让这种形状安全，`no-use-before
   打开 / 关闭面板与选择模型统一经 `modules/routing.js` 的 `go()` 改 hash，`applyRoute()` 是唯一应用视图的地方，
   因此前进 / 后退可自然还原，深链接刷新后也能恢复面板与选中项。`pendingModelId` / `pendingInstanceId` /
   `pendingSettingsSection` 记录「目标数据还没到」的意图，等对应模块拿到数据再兑现。
-  `applyRoute()` 在首屏末尾由 `web/app.js:121` 调一次。
+  `applyRoute()` 在首屏末尾由 `web/app.js:119` 调一次。
 - **跨组件事件**：主题切换广播 `themechange`（`web/boot.js` 与 `web/modules/shell.js` 各自 dispatch），`motion.js` / `pwa.js` / 音频组件各自监听（重绘波形、切换过渡、刷新 `theme-color`）。
 - **关键 DOM 锚点**（`index.html`）：页头按钮 `#voices-btn` / `#history-btn` / `#downloads-btn` / `#lang-toggle` / `#settings-btn` / `#theme-toggle`；左栏 `#left` 内 `#instance-list`、`#model-list`；右栏 `#right > #workspace`；五类面板 `#panel-tts`、`#panel-asr`、`#panel-sep`、`#panel-music`、`#panel-other`；历史 `#history-panel > #history-list`；音色库 `#voices-panel > #voices-list`；命令面板 `#command-palette`；若干弹窗 `#launch-modal`、`#settings-modal`、`#model-dl-modal`、`#downloads-modal`、`#instance-detail-modal`、`#busy-overlay`；以及 `#toast-root`、`#drawer-overlay`。
 
@@ -287,7 +287,7 @@ ES 模块的函数声明提升 + 活绑定让这种形状安全，`no-use-before
   - 失败按原意处理：需要提示的走 `catch` / `onError`；**原本就「忽略错误、以下一轮状态为准」的地方写显式的 `.catch(() => {})`**，不要再靠裸 `fetch` 的偶然行为。
 - **安全渲染**（防存储型 XSS）：任何服务端 / 用户可控字符串插入 HTML 前必须 `esc()`（`web/modules/dom.js:30`）；能 `textContent` 就别 `innerHTML`；拼 HTML 用 `el()`（`web/modules/dom.js:19`）；URL 属性用 `safeHttpUrl()`（`web/modules/dom.js:36`）或 `esc()`。**绝不把未转义数据塞进 `innerHTML`。**
 - **i18n**：
-  - 新文案同时写入 `web/i18n.zh.js` 与 `web/i18n.en.js`（当前 578 键），并跑 `node scripts/check-i18n-parity.js` 校验对等。该脚本除中英互相齐全外，还独立扫 `web/*.html` 的 `data-i18n*` 引用键——**两侧同时漏配**的键（页面上表现为裸 key）只有这条检查能看见。
+  - 新文案同时写入 `web/i18n.zh.js` 与 `web/i18n.en.js`（当前 605 键），并跑 `node scripts/check-i18n-parity.js` 校验对等。该脚本除中英互相齐全外，还独立扫 `web/*.html` 的 `data-i18n*` 引用键——**两侧同时漏配**的键（页面上表现为裸 key）只有这条检查能看见。
   - 动态文案用 `t()`（`web/modules/dom.js:24`，即 `I18N.t` 的模块侧入口）；静态 DOM 用 `data-i18n` / `data-i18n-placeholder` / `data-i18n-title` / `data-i18n-aria-label` 标注，由 `applyI18n()`（`web/i18n.js:106`）批量替换。
   - 自定义组件实现 `refreshLabels()` 并注册到 `window.__audioPickers` / `window.__voiceSelects`，这样 `rerenderAll`（`web/app.js:47`）能统一刷新。
   - **单例外**：服务器端文件选择器是模块级单例（overlay 只在首次 `open()` 时创建），没有实例登记表，

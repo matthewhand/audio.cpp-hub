@@ -510,7 +510,7 @@
   <!-- 经典脚本区：普通 <script> 在解析期同步执行，彼此按顺序共享 window 作用域。
        这些脚本仍各自维护 window.* 全局（I18N / WavUtil / AudioPicker /
        VoiceSelect / hubMotion），没有改成 ES 模块。
-       「点开才用得上」的三个面板（服务器端文件选择器 / 音色库 / 下载 / 设置 / 看板）
+       「点开才用得上」的五个面板（服务器端文件选择器 / 音色库 / 下载 / 设置 / 看板）
        都不在这里：它们是懒加载 chunk，只由各自的首屏外观层 import()
        （外观 /modules/*-lazy.js 在模块图里，chunk 在 web/sw.js 的预缓存里）。
        顺序有硬约束：词典必须先于 i18n.js，legacy-globals.js 必须先于所有引用
