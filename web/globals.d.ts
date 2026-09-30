@@ -7,6 +7,8 @@
  * TypeScript 的 checkJs 不会把「某个脚本里的 `window.X = ...` 赋值」推断成其它脚本
  * 可见的全局标识符，因此这里只给**经典脚本**补一份 window 环境声明；
  * 模块之间的接口由 import/export 自行校验，不在这里登记。
+ * 唯一的例外是 web/audio-picker.js 里那次 `import("./modules/file-browser-lazy.js")`：
+ * 经典脚本与模块之间的动态 import，tsc 能按相对路径解析到真模块，无需在此声明。
  *
  * 只声明各模块**被其它文件实际用到的公开成员**，内部实现一律留 any：
  * 既能捕获调用侧的拼写错误 / 参数个数错误，又不需要随实现同步维护一份类型副本。
@@ -44,7 +46,7 @@ interface I18NApi {
   setLang(next: string): void;
   /** 批量替换 data-i18n / -placeholder / -title / -aria-label 标注 */
   applyI18n(root?: ParentNode): void;
-  /** 注册语言切换回调（web/app.js 的 rerenderAll / AudioPicker / FileBrowser / VoicesPanel） */
+  /** 注册语言切换回调（web/app.js 的 rerenderAll / AudioPicker / 懒加载的 file-browser-lazy / VoicesPanel） */
   onChange(cb: () => void): void;
   /** 解析后端 {"code","params"} 错误体并翻译，无匹配 code 时原样返回 */
   errText(text: string): string;
@@ -90,28 +92,6 @@ declare interface Window {
   WavUtil: WavUtilApi;
   /** Safari 老版本前缀兜底，lib.dom 未收录 */
   webkitAudioContext?: typeof AudioContext;
-}
-
-/* ---- file-browser.js → window.FileBrowser ---- */
-interface FileBrowserOptions {
-  /** file=选文件，dir=选目录 */
-  mode: "file" | "dir";
-  title: string;
-  /** 仅 file 模式；自动附带「所有文件」选项 */
-  extensions?: string[];
-  startPath?: string;
-  defaultAll?: boolean;
-}
-interface FileBrowserApi {
-  /** 打开服务器端文件系统浏览弹窗；用户取消返回 null */
-  open(options: FileBrowserOptions): Promise<string | null>;
-  isOpen(): boolean;
-  cancel(): void;
-  relocalize(): void;
-}
-declare const FileBrowser: FileBrowserApi;
-declare interface Window {
-  FileBrowser: FileBrowserApi;
 }
 
 /* ---- audio-picker.js → window.AudioPicker ---- */

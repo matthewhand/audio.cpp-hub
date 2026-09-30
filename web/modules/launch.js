@@ -6,6 +6,7 @@
 
 import { focusDialog, restoreDialogFocus, showToast } from "./async-ui.js";
 import { $, Api, t } from "./dom.js";
+import { browseServerFile } from "./file-browser-lazy.js";
 import { refreshInstances } from "./instances.js";
 import { renderModelList } from "./models.js";
 import { go, setPendingSettingsSection } from "./routing.js";
@@ -32,7 +33,7 @@ launchModal.onclick = (e) => { if (e.target === launchModal) closeLaunchModal();
 
 /* 权重目录：服务器端文件选择器（目录模式） */
 $("weights-browse-btn").onclick = async () => {
-  const path = await FileBrowser.open({
+  const path = await browseServerFile({
     mode: "dir",
     title: t("launch.weightsBrowseTitle"),
     startPath: $("launch-weights").value.trim()
@@ -45,7 +46,7 @@ $("weights-browse-btn").onclick = async () => {
 
 /* 权重也可以是单个 GGUF 文件（audio.cpp 支持直接加载 .gguf） */
 $("weights-gguf-btn").onclick = async () => {
-  const path = await FileBrowser.open({
+  const path = await browseServerFile({
     mode: "file",
     title: t("launch.weightsGgufBrowseTitle"),
     extensions: [".gguf"],
@@ -59,7 +60,7 @@ $("weights-gguf-btn").onclick = async () => {
 
 /* 可执行文件：服务器端文件选择器（文件模式，默认过滤 .exe） */
 $("exec-browse-btn").onclick = async () => {
-  const path = await FileBrowser.open({
+  const path = await browseServerFile({
     mode: "file",
     title: t("launch.execBrowseTitle"),
     extensions: [".exe"],

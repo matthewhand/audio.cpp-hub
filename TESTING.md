@@ -24,13 +24,17 @@
 - `wav.test.mjs`：`WavUtil.audioBufferToWav`（头字段、裁剪、双声道降混、幅度钳制、空区间）、`formatDuration`、`formatSize`、`warmAudioOutput` 容错。
 - `i18n.test.mjs`：语言探测、`t()` 插值/数组值/缺失 key、`setLang` 持久化与 `onChange`、`applyI18n`、`errText`（后端 code/params → 文案）、`pick`、`bytes`（1024 进位与单位后缀）、**中英字典 key 完全对齐（parity）**。parity 直接比对 `window.I18N_ZH` / `window.I18N_EN` 两个真实对象，不再从源码刮 key。
 - `app-utils.test.mjs`：`esc`、`safeHttpUrl`、`hfMirrorOf`、`fmtBytes`、`parseEnvText`、`parseSessionOptionsText`。
-- `file-browser.test.mjs`：`formatSize`（委托 `I18N.bytes`；空值不打扰 I18N）。
+- `file-browser.test.mjs`：`formatSize`（委托 `I18N.bytes`；空值不打扰 I18N）+ 懒加载外观层的
+  转发守卫（`rerenderAll` 调 `relocalizeFileBrowser`、外观层未加载时 `relocalize` / `cancel` 空转、
+  打开路径确实经 `import("./file-browser.js")` 并发去重）。
 
-> **数字/单位排版已收口到 `I18N.bytes`（Intl）**：`app.js` 的 `fmtBytes` 与 `file-browser.js` 的 `formatSize` 现在只做「非法值兜底 + 委托」。单测因此断言**契约与兜底**，不硬编码 ICU 版本的空格 / 千分位 / `kB` vs `KB` 差异。
+> **数字/单位排版已收口到 `I18N.bytes`（Intl）**：`modules/downloads.js` 的 `fmtBytes` 与
+> `modules/file-browser.js` 的 `formatSize` 现在只做「非法值兜底 + 委托」。单测因此断言**契约与兜底**，不硬编码 ICU 版本的空格 / 千分位 / `kB` vs `KB` 差异。
 
 ### 有意不做的单元测试（DOM 重）
 
-以下属于 DOM/浏览器重逻辑，改由 e2e 覆盖，不做单元测试：面板渲染（`renderWorkspace`/`renderTtsPanel`/…）、任务轮询与结果渲染、历史/分组/侧栏 DOM 复用、AudioPicker 波形绘制与录音、FileBrowser 弹窗、下载行渲染、`I18N.applyI18n` 之外的交互。`app.js` 里内联在渲染函数中的**速度格式化**（`fmtBytes(d.speedBps) + "/s"`）也属此类，未单测。
+以下属于 DOM/浏览器重逻辑，改由 e2e 覆盖，不做单元测试：面板渲染（`renderWorkspace`/`renderTtsPanel`/…）、任务轮询与结果渲染、历史/分组/侧栏 DOM 复用、AudioPicker 波形绘制与录音、文件浏览器弹窗（改懒加载后由 `e2e/file-browser.spec.mjs` 兜住
+「首屏不取 chunk / 点开才取 / 再开不重复取 / 经典脚本的动态 import 也能开」）、下载行渲染、`I18N.applyI18n` 之外的交互。`app.js` 里内联在渲染函数中的**速度格式化**（`fmtBytes(d.speedBps) + "/s"`）也属此类，未单测。
 
 ---
 
@@ -98,15 +102,34 @@
 
 | 指标 | 预算 | 当前实测 |
 | --- | --- | --- |
-| 初始 JS raw | 330 KiB | 323.4 KiB |
-| 初始 JS gzip | 118 KiB | 113.4 KiB |
-| 初始 CSS raw | 68 KiB | 65.0 KiB |
-| 初始 CSS gzip | 18 KiB | 16.7 KiB |
-| JS+CSS gzip 合计 | 135 KiB | 130.1 KiB |
-| 初始子资源请求数 | 30 | 29 |
+| 初始 JS raw | 327 KiB | 325.6 KiB |
+| 初始 JS gzip | 118 KiB | 116.9 KiB |
+| 初始 CSS raw | 68 KiB | 67.6 KiB |
+| 初始 CSS gzip | 18 KiB | 17.2 KiB |
+| JS+CSS gzip 合计 | 135 KiB | 134.0 KiB |
+| 初始子资源请求数 | 31 | 30 |
 | TTI 目标 | ≤ 1500 ms（本地/局域网，中端笔电） | 由真实浏览器测量，不在本脚本校验 |
 
 预算定义在 `scripts/perf-budget.mjs` 的 `BUDGETS`（单一来源）。超标退出 1。
+**棘轮方向只朝下**：每次把一个「点开才用得上」的视图挪进懒加载 chunk，就按新的实测值重新收一次，
+并在 `scripts/perf-budget.mjs` 顶注留下 before → after 全量对照——**不许**为了让新功能过线而调高。
+
+### 懒加载文件浏览器（2026-09，本轮）
+
+`web/file-browser.js`（17.2 KiB raw / 5.7 KiB gzip 的经典脚本，挂在 `window.FileBrowser`）
+改成懒加载 chunk `web/modules/file-browser.js`，经首屏外观层 `web/modules/file-browser-lazy.js`
+按需 import（形状与 `stats-lazy.js` 完全一致，理由见下节）。同口径实测：
+
+| 指标 | 懒加载前（CI 失败值） | 懒加载后 | 变化 |
+| --- | --- | --- | --- |
+| 初始子资源请求数 | 30 | 30 | 0（−1 经典脚本 +1 模块） |
+| 初始 JS raw | 340.3 KiB | **325.6 KiB** | −14.7 KiB |
+| 初始 JS gzip | 121.1 KiB | **116.9 KiB** | −4.2 KiB |
+| JS+CSS gzip 合计 | 138.2 KiB | **134.0 KiB** | −4.2 KiB |
+| 首屏模块数 | 15 | 16 | +1（48 行 / 1.6 KiB 的外观层） |
+
+前 4 项全部由这一处改动换来；`e2e/file-browser.spec.mjs`（2 条）钉住契约，
+`test/unit/file-browser.test.mjs` 钉住外观层的同步空转守卫。
 
 ### 首屏请求数：ES 模块化之后（2026-09，#100 拆分 → 本次修复）
 
@@ -161,7 +184,7 @@
 安装失败（`install` 用 `allSettled`），但离线冷启动会在该脚本处断掉。两者都必须靠检查挡住。
 
 `perf:budget` 的三方一致只覆盖 **ES module 图**；`index.html` 里那些**经典脚本**
-（`i18n.zh.js` / `i18n.en.js` / `api-client.js` / `file-browser.js` / `audio-picker.js` …）
+（`i18n.zh.js` / `i18n.en.js` / `api-client.js` / `audio-picker.js` …）
 漏出预缓存时它看不见，而这批脚本缺任意一个都会让离线首屏直接崩（`i18n.js` 读不到
 `window.I18N_ZH`、模块图拿不到 `Api`）。`npm run check:sw` 补上这一段：静态遍历
 `index.html` 的 `<script src>` / `<link rel=stylesheet>` 引用 + 从这些入口出发的 ES module
@@ -180,15 +203,34 @@
 > **#100 模块拆分那一轮**把预算按 35 个请求的现状标成了 40，属于**为迁就退化而放宽**。本次
 > 修掉退化后，预算按修复后的实测值重新收紧（请求数 40 → 30），并在上文留下 before/after 全量对照。
 
-### 懒加载评估
+### 懒加载 chunk（2026-09 起，按「外观层 + 动态 import」形状逐步落地）
 
-结论：**当前不实现，留有依据的推荐**。原因：
+首屏体积里最划算的省法不是压字节，而是**不把「点开才用得上」的代码放进首屏模块图**。
+落地的两块（形状完全一致，见 `web/README.md` 3.2「懒加载 chunk」）：
 
-1. 业务逻辑已是 ES 模块，但 `app.js` 之外仍是 classic script + `window.*`（`web/i18n.zh.js` / `i18n.en.js` / `api-client.js` 等），且 `panels.js` 在模块求值时就 `new VoiceSelect(...)` / `new AudioPicker(...)`，因此 `audio-picker.js`、`voice-select.js` 属首屏必需，无法后置。
-2. 动态 `import()` 只对 ES module 生效；要懒加载 `voices-panel.js` / `file-browser.js` 需先把它们改为 ESM 并调整 `window.*` 暴露方式、`CSP script-src 'self'` 下的模块加载，以及 `#voices-btn` 的绑定时机——这是一次结构性改造。
-3. `motion.js` / `pwa.js` 都很小（2.3 / 3.5 KiB raw），且 `pwa.js` 需要在 `app.js` 之前注册 Service Worker 才能覆盖首屏资源，收益不足以换取顺序上的脆弱性。
+| 外观层（首屏） | 懒加载 chunk | 省下的首屏字节 |
+| --- | --- | --- |
+| `modules/stats-lazy.js` | `modules/stats.js` | −5.4 KiB raw / −2.7 KiB gzip |
+| `modules/file-browser-lazy.js` | `modules/file-browser.js`（原经典脚本 `web/file-browser.js`） | −14.7 KiB raw / −4.2 KiB gzip |
 
-推荐（待懒加载落地时）：把非关键面板 `voices-panel.js`、`file-browser.js`（以及仅动画需要的 `wav.js` 播放预热）改为 ESM，在首次打开对应面板时 `await import()`，`app.js` 绑定按钮时先尝试动态导入、失败回退同步加载；届时同步下调本预算的「初始 JS gzip」并把懒加载模块计入新的按需预算，同时**把动态 `import()` 的目标从 `modulepreload` 清单里移除**（否则预载会把懒加载的收益全部抵消）。
+约定（`scripts/perf-budget.mjs` 会强制）：
+
+- 动态 `import()` 的**目标不进 `modulepreload`**——预载会把收益全部抵消；
+- 动态 `import()` 的**目标必须进 `sw.js` 的 `PRECACHE_URLS`**——否则离线冷启动点开该视图会 404；
+- 懒加载 chunk **不计入**首屏体积与请求数，`ui:inventory` 则**要**扫它（否则 `docs/ui.md`
+  里的端点表会凭空少掉 `/api/stats` / `/api/fs/*`）。
+
+仍然**不做**懒加载的部分，及原因：
+
+1. `audio-picker.js` / `voice-select.js` 属首屏必需——`panels.js` 在模块求值时就
+   `new VoiceSelect(...)` / `new AudioPicker(...)`，后置会让工作区首绘缺表单。
+2. `motion.js` / `pwa.js` 都很小（2.3 / 3.8 KiB raw），且 `pwa.js` 需要在 `app.js` 之前
+   注册 Service Worker 才能覆盖首屏资源，收益不足以换取顺序上的脆弱性。
+3. `voices-panel.js`（9.2 KiB 经典脚本）还没转 ESM：它要在加载期就绑定 `#voices-btn`
+   （`window.openVoicesPanel`），改成 chunk 需要先把 `app.js` 的 Esc 关闭与 `routing.js`
+   的 `closeVoicesPanel` 都改走外观层。下一个候选，收益排在命令面板之后。
+4. `sidebar.js` / `panels.js` / `tasks.js` 互相咬合（任务行就渲染在侧栏里），
+   且首屏 `reattachTasks` 立刻要用，不具备「点击才打开」的性质。
 
 ---
 

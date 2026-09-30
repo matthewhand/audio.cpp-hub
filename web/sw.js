@@ -43,7 +43,6 @@ const PRECACHE_URLS = [
   "/i18n.js",
   "/api-client.js",
   "/wav.js",
-  "/file-browser.js",
   "/legacy-globals.js",
   "/audio-picker.js",
   "/voice-select.js",
@@ -59,6 +58,7 @@ const PRECACHE_URLS = [
   "/modules/shell.js",
   "/modules/models.js",
   "/modules/settings.js",
+  "/modules/file-browser-lazy.js",
   "/modules/launch.js",
   "/modules/instances.js",
   "/modules/downloads.js",
@@ -68,6 +68,9 @@ const PRECACHE_URLS = [
   // 看板模块是懒加载的（不在首屏），但离线冷启动点击 📊 仍要能用，
   // 因此只进预缓存、不进 index.html 的 modulepreload。
   "/modules/stats.js",
+  // 服务器端文件选择器同样是懒加载的（点「浏览…」才拉），离线冷启动时仍要能用，
+  // 因此只进预缓存、不进 index.html 的 modulepreload。
+  "/modules/file-browser.js",
   "/modules/panels.js",
   "/style.css",
   "/icons/icon-192.png",

@@ -582,8 +582,12 @@ window.AudioPicker = class AudioPicker {
   /* ---------- 本地路径 ---------- */
   /* 通过服务器端文件选择器挑选音频文件，选好后自动探测 */
   async browsePath() {
-    if (!window.FileBrowser) return;
-    const path = await FileBrowser.open({
+    /* 服务器端文件选择器是懒加载 chunk（modules/file-browser.js），点「浏览…」才拉。
+       经典脚本不能 import 只能用动态 import；说明符按**文档基址**解析（经典脚本的
+       import() 不以脚本自身为基址），index.html 全部资源都是根绝对路径，因此
+       ./modules/… 与 /modules/… 等价。chunk 只取一次。 */
+    const { browseServerFile } = await import("./modules/file-browser-lazy.js");
+    const path = await browseServerFile({
       mode: "file",
       title: t("picker.browseTitle"),
       extensions: [".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".opus"],

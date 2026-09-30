@@ -20,6 +20,7 @@ import { FOCUSABLE_SEL, focusDialog, parseApiError, renderEmptyState, renderStat
 import { closeCommandPalette } from "./modules/command-palette.js";
 import { $ } from "./modules/dom.js";
 import { closeDownloadsModal, closeModelDlModal, mdlPackages, renderDownloadList, renderMdlPackages, startDownloadsPolling } from "./modules/downloads.js";
+import { cancelFileBrowser, relocalizeFileBrowser } from "./modules/file-browser-lazy.js";
 import { closeInstanceDetail, renderInstanceList, startInstancePolling, updateInstanceBar } from "./modules/instances.js";
 import { closeLaunchModal, loadProfiles, renderLaunchProfiles } from "./modules/launch.js";
 import { loadModels, renderModelList, updateQuickLaunchTitle } from "./modules/models.js";
@@ -58,7 +59,7 @@ function rerenderAll() {
   if (!$("stats-panel").classList.contains("hidden")) reloadStats();
   (window.__audioPickers || []).forEach(p => p.refreshLabels && p.refreshLabels());
   (window.__voiceSelects || []).forEach(v => v.refreshLabels && v.refreshLabels());
-  if (window.FileBrowser && FileBrowser.relocalize) FileBrowser.relocalize();
+  relocalizeFileBrowser();
 }
 
 function closeTopmostOverlay() {
@@ -73,7 +74,7 @@ function closeTopmostOverlay() {
   else if (overlay.id === "model-dl-modal") closeModelDlModal();
   else if (overlay.id === "instance-detail-modal") closeInstanceDetail();
   else if (overlay.id === "command-palette") closeCommandPalette();
-  else if (overlay.id === "fb-overlay") { if (window.FileBrowser) FileBrowser.cancel(); }
+  else if (overlay.id === "fb-overlay") cancelFileBrowser();
   else if (overlay.id === "busy-overlay") { return; } // 忙碌遮罩不允许 Esc 关闭
   else { overlay.classList.add("hidden"); restoreDialogFocus(); }
 }

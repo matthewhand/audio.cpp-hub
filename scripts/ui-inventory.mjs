@@ -20,13 +20,21 @@ const OUT_MD = path.join(ROOT, "docs", "ui.md");
    漏项会让清单悄悄漏掉某个前端模块（i18n 拆分后新增的 i18n.zh.js /
    i18n.en.js、api-client.js、motion.js、pwa.js 都不在旧清单里）。
    app.js 改成 ES 模块后业务逻辑住进 web/modules/*.js，index.html 只写了入口，
-   因此再顺着入口的 import 图把模块一并纳入（否则事件绑定会整体漏登记）。 */
+   因此再顺着入口的 import 图把模块一并纳入（否则事件绑定会整体漏登记）。
+   动态 import() 的懒加载 chunk（stats.js / file-browser.js 等「点击才打开」的视图）
+   同样要纳入：它们不在首屏图里，但端点与快捷键是真实存在的，漏掉会让
+   /api/stats、/api/fs/* 这类调用在清单里凭空消失。 */
 const MODULE_ENTRY = /<script\b[^>]*type="module"[^>]*src="\/([^"]+)"/;
 const classicScripts = [
   ...fs
     .readFileSync(INDEX_HTML, "utf8")
     .matchAll(/<script\b(?![^>]*type="module")[^>]*src="\/([^"]+)"/g)
 ].map((m) => m[1]);
+
+/** 相对 web/ 目录的模块路径归一（统一用 "/" 分隔的 web 相对路径）。 */
+function normalizeModule(file) {
+  return path.normalize(file).split(path.sep).join("/");
+}
 
 /** 从模块入口出发，按 import 的相对路径递归收集全部模块文件。 */
 function collectModules(entry) {
@@ -43,8 +51,12 @@ function collectModules(entry) {
       const spec = m[1] || m[2];
       if (spec) queue.push(path.join(path.dirname(file), spec));
     }
+    /* 动态 import("...")：懒加载 chunk，同样要扫（只收同目录的 ./ 相对说明符） */
+    for (const m of src.matchAll(/\bimport\(\s*["'](\.\/[^"']+)["']\s*\)/g)) {
+      queue.push(path.join(path.dirname(file), m[1]));
+    }
   }
-  return [...seen];
+  return [...seen].map(normalizeModule);
 }
 
 const entry = fs.readFileSync(INDEX_HTML, "utf8").match(MODULE_ENTRY);

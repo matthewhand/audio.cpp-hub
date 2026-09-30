@@ -21,13 +21,14 @@ audio.cpp-hub 是 [audio.cpp](https://github.com/0xShug0/audio.cpp) 的 Web 管�
 - Web UI 前端（`web/`）：仍是**纯原生 HTML/CSS/JS、运行时零构建**（Go 的 `staticHandler` 直接从磁盘提供），但内部结构已系统化，与旧版单文件脚本集不同：
   - **i18n 拆成「词典 + 运行时」**：`web/i18n.zh.js`（`window.I18N_ZH`，623 行）与 `web/i18n.en.js`（`window.I18N_EN`，624 行）是纯数据词典（各 590 键，`node scripts/check-i18n-parity.js` 校验对等**并校验 `web/*.html` 里 `data-i18n*` 引用键都存在**——两侧同时漏配的键只有这条能看见）；`web/i18n.js`（155 行）不含任何文案，只在初始化时读这两个全局（`web/i18n.js:13`–`14`）并导出 `window.I18N` 契约（`web/i18n.js:154`）：`lang` / `locale` / `t` / `plural` / `num` / `date` / `bytes` / `percent` / `setLang` / `applyI18n` / `onChange` / `errText` / `pick`。词典文件必须先于 `i18n.js` 加载（顺序硬约束，见 `web/index.html:493`–`495`）
   - **HTTP 唯一出口**：`web/api-client.js`（459 行）暴露 `window.AudioCppHub.api`（`web/api-client.js:443`，下称 `Api`），集中 `fetch`、错误信封（`ApiError` 把 hub 风格与 `/v1/*` 的 OpenAI 风格归一）、`AbortController` 超时/中断、数组形状守卫与**可见性感知轮询** `Api.poll`（`web/api-client.js:372`，自调度不叠加请求、单飞、标签页隐藏时暂停并在恢复后补一次，句柄 `stop()` / `refresh()`）。业务侧统一经 `web/modules/dom.js` 绑定（`web/modules/dom.js:27`）后 `import { Api } from "./dom.js"`；**新增请求一律走 `Api.*`，不再直接写 `fetch`**
-  - **`web/app.js` 是薄引导层**（117 行：导入模块、跨模块重画 `rerenderAll` `web/app.js:43`、最上层弹窗的 Tab 焦点锁定 `web/app.js:79` 与 Esc 关闭 `web/app.js:91`、按序建立 2s 轮询 `web/app.js:108`–`110`、首屏末尾应用初始 hash `web/app.js:117`）；业务逻辑按职责拆进 `web/modules/` 的 15 个模块（`async-ui` / `command-palette` / `dom` / `downloads` / `instances` / `launch` / `models` / `panels` / `routing` / `settings` / `shell` / `sidebar` / `state` / `stats` / `tasks`）。模块是浏览器原生 ES 模块，**不打包、不转译**；经典组件脚本（`audio-picker.js` / `voice-select.js` / `voices-panel.js` / `file-browser.js`）与模块之间的桥是 `web/legacy-globals.js`。完整模块地图、状态与轮询模型、编码约定见 `web/README.md`
+  - **`web/app.js` 是薄引导层**（121 行：导入模块、跨模块重画 `rerenderAll` `web/app.js:45`、最上层弹窗的 Tab 焦点锁定 `web/app.js:83` 与 Esc 关闭 `web/app.js:95`、按序建立 2s 轮询 `web/app.js:112`–`114`、首屏末尾应用初始 hash `web/app.js:121`）；业务逻辑按职责拆进 `web/modules/` 的 16 个首屏模块（`async-ui` / `command-palette` / `dom` / `downloads` / `file-browser-lazy` / `instances` / `launch` / `models` / `panels` / `routing` / `settings` / `shell` / `sidebar` / `state` / `stats-lazy` / `tasks`）**外加 2 块懒加载 chunk**（`stats.js` / `file-browser.js`，见「懒加载外观层」条）。模块是浏览器原生 ES 模块，**不打包、不转译**；经典组件脚本（`audio-picker.js` / `voice-select.js` / `voices-panel.js`）与模块之间的桥是 `web/legacy-globals.js`。完整模块地图、状态与轮询模型、编码约定见 `web/README.md`
   - **绘制前恢复**：`web/boot.js`（58 行）在 `<head>` 中、样式表之前同步解析 `localStorage` 的 `hub-theme` / `hub-lang` 并写 `<html data-theme>`，避免首屏主题闪烁（独立文件是为满足 CSP `script-src 'self'`，不允许内联脚本），同时把解析逻辑挂成 `window.HubTheme`（三态 system/light/dark，`web/boot.js:53`）供 `web/modules/shell.js` 复用
-  - **语言切换重画**：`I18N.onChange`（`web/i18n.js:114`）登记的唯一回调是 `web/app.js` 的 `rerenderAll`（`web/app.js:100`），它负责重画全站并刷新动态文案。刷新方式分两种：**多实例组件**（`AudioPicker` / `VoiceSelect`）实现 `refreshLabels()` 并注册到 `window.__audioPickers` / `window.__voiceSelects`；**单例组件**（`FileBrowser`，overlay 只在首次 `open()` 时创建）由 `rerenderAll` 直接调 `FileBrowser.relocalize()`（`web/app.js:59`）——不要为了统一去给单例造实例登记表。`test/unit/file-browser.test.mjs` 钉住了后者这条注册关系
+  - **语言切换重画**：`I18N.onChange`（`web/i18n.js:114`）登记的唯一回调是 `web/app.js` 的 `rerenderAll`（`web/app.js:104`），它负责重画全站并刷新动态文案。刷新方式分两种：**多实例组件**（`AudioPicker` / `VoiceSelect`）实现 `refreshLabels()` 并注册到 `window.__audioPickers` / `window.__voiceSelects`；**单例组件**（服务器端文件选择器，overlay 只在首次 `open()` 时创建）由 `rerenderAll` 直接调外观层的 `relocalizeFileBrowser()`（`web/app.js:62` → `web/modules/file-browser-lazy.js:46`，chunk 未加载时 no-op）——不要为了统一去给单例造实例登记表。`test/unit/file-browser.test.mjs` 钉住了后者这条注册关系
+  - **懒加载外观层**：「点开才用得上」的视图不进首屏模块图，改为**首屏外观层 + 动态 import()**：`modules/stats-lazy.js` → `modules/stats.js`（`#/stats` 看板），`modules/file-browser-lazy.js` → `modules/file-browser.js`（服务器端文件浏览弹窗，原为经典脚本 `web/file-browser.js` / `window.FileBrowser`）。chunk 必须进 `web/sw.js` 的 `PRECACHE_URLS`（离线冷启动仍可用）、**不进** `index.html` 的 `modulepreload`（预载会抵消收益）；`scripts/perf-budget.mjs` 校验这条形状并把 chunk 排除出首屏体积/请求数，`web/README.md` 3.2 有完整说明
   - **UX 能力**：hash 路由与深链接（`web/modules/routing.js`，`#/model/<id>` / `#/instance/<id>` / `#/history` / `#/voices` / `#/downloads` / `#/stats` / `#/settings`）、命令面板 `Ctrl/Cmd-K`（`web/modules/command-palette.js`）、统一异步三态骨架/空态/错误态（`web/modules/async-ui.js`）、动效系统（`web/motion.js` + `web/style.css` 末尾，遵循 `prefers-reduced-motion`）、可访问性（跳转链接、焦点管理、背景 `inert`、WCAG AA 对比度）
   - **PWA**：`web/manifest.webmanifest` + `web/sw.js`（Service Worker，导航 network-first、静态资源 cache-first + 后台再验证，`/api/*` 与 `/v1/*` **绝不缓存** `web/sw.js:142`），注册在 `web/pwa.js`（102 行，静默降级）。详见 `docs/pwa.md`
   - **设计系统**：`web/style.css`（2093 行）分 L1–L6（令牌 / 基础 / 布局 / 组件 / 工具 / 可访问性），人工核对外观用 `web/styleguide.html`（320 行，开发用演示页，不链接自主应用）
-  - **开发期工具链与测试（DEV-ONLY，不进发行包）**：根目录 `package.json` + `tsconfig.json` + `eslint.config.js`（tsc `checkJs` + `noEmit`、ESLint flat config、Prettier）与 `e2e/`（Playwright，9 个 spec / 11 条用例，headless Chromium + mock 后端）、`test/unit/`（`node:test`，6 个测试文件）。**没有打包器**：发布物仍是「Go 二进制 + `web/` 源文件」，改完刷新浏览器即可；`npm install` 只是为了让静态闸门与测试能跑
+  - **开发期工具链与测试（DEV-ONLY，不进发行包）**：根目录 `package.json` + `tsconfig.json` + `eslint.config.js`（tsc `checkJs` + `noEmit`、ESLint flat config、Prettier）与 `e2e/`（Playwright，11 个 spec / 14 条用例，headless Chromium + mock 后端）、`test/unit/`（`node:test`，6 个测试文件）。**没有打包器**：发布物仍是「Go 二进制 + `web/` 源文件」，改完刷新浏览器即可；`npm install` 只是为了让静态闸门与测试能跑
 - 视觉文档：`docs/diagrams/` 下 19 张架构 / 时序 / 状态 / 部署 / 数据模型图（可编辑 HTML 单文件 + 明暗 PNG 预览，入口 `docs/diagrams/README.md`、清单 `docs/diagrams/INVENTORY.md`），由 `scripts/check-diagrams.py` 校验可访问性契约（`role=img` / `aria-labelledby` 解析到真实 `<title>`+`<desc>` / 无 `<script>` / 仅允许的 Google Fonts 远程引用），CI job「图示 / 可访问性契约」执行 `python3 scripts/check-diagrams.py docs/diagrams`
 
 ## 技术栈
@@ -100,15 +101,15 @@ web/                      # 前端静态文件（无构建步骤、运行时零 
 ├── legacy-globals.js     # 经典脚本 ↔ ES 模块的桥（window.$ / el + 转发器）
 ├── boot.js / motion.js / pwa.js  # 绘制前主题恢复（HubTheme）；动效触发；Service Worker 注册
 ├── sw.js / manifest.webmanifest / offline.html  # Service Worker、PWA 清单、断网兜底页
-├── audio-picker.js / voice-select.js / voices-panel.js / file-browser.js / wav.js
-│                         # 自包含经典组件（上传 / 录制 / 裁剪、音色下拉、音色库面板、文件浏览、WAV 工具）
+├── audio-picker.js / voice-select.js / voices-panel.js / wav.js
+│                         # 自包含经典组件（上传 / 录制 / 裁剪、音色下拉、音色库面板、WAV 工具）
 ├── styleguide.html       # 组件样式指南页（开发用，浏览器直接打开）
 ├── globals.d.ts          # 开发期类型声明（经典脚本的 window.* 公开接口，供 tsc checkJs）
 ├── README.md             # 前端贡献指南：硬约束、模块地图、加载顺序、状态与事件流、编码约定
 └── icons/                # PWA 图标（由 scripts/gen-icons.cjs 生成）
 test/unit/                # node:test 单元测试（wav / i18n / app-utils / api-client /
-                          # file-browser / routing）
-e2e/                      # Playwright e2e（9 个 spec / 11 条用例，headless Chromium + mock 后端，无 Go/GPU/模型）
+                          # file-browser-lazy / routing）
+e2e/                      # Playwright e2e（11 个 spec / 14 条用例，headless Chromium + mock 后端，无 Go/GPU/模型）
 scripts/                  # 闸门与生成脚本（check-i18n-parity.js、check-sw-precache.mjs、check-diagrams.py、ui-inventory*、
 │                         # perf-budget.mjs、gen-icons.cjs、axe-audit.js、record-demos.cjs）
 package.json / package-lock.json  # DEV-ONLY 工具链与测试脚本（tsc/ESLint/Prettier/Playwright）
@@ -157,7 +158,7 @@ npm run test:e2e       # Playwright：headless Chromium + mock 后端，首次�
 自动化测试已覆盖 Go 侧与前端两侧，**无外部测试框架依赖**（Go 用标准库 `testing`，前端用 `node:test` + Playwright）：
 
 - **Go**：`go test ./...`（CI 另跑 `go test -race ./...`）。`*_test.go` 覆盖 ID/路径校验（`ids_test.go` + `internal/idvalidate`）、实例生命周期与端口分配（`instance_test.go`）、安全响应头（`headers_test.go`）、`/v1/*` 代理与 model 提取（`proxy_test.go`）、下载任务（`download_test.go`）、历史落盘与分组（`history_test.go`）、用量与性能聚合（`stats_test.go`）、任务队列收敛与并发（`task_finalize_test.go` / `task_race_test.go`）、WAV 头解析（`internal/wav`）；`cmd/fanout-proxy/` 另有表驱动单测（别名解析 / 目标选择与故障转移 / 2 次失败判掉 / model 改写 / 已提交路由表）
-- **前端**：`npm run test:unit`（`test/unit/`：WAV 工具、i18n 含中英键 parity、app-utils、api-client、file-browser、routing）、`npm run test:e2e`（`e2e/`：9 个 spec / 11 条用例，Playwright + `page.route` mock 后端，覆盖实例/任务/历史/音色/下载/可执行文件/ASR/UI 切换/冒烟，**无需 Go 二进制、GPU 或模型**）
+- **前端**：`npm run test:unit`（`test/unit/`：WAV 工具、i18n 含中英键 parity、app-utils、api-client、file-browser、routing）、`npm run test:e2e`（`e2e/`：11 个 spec / 14 条用例，Playwright + `page.route` mock 后端，覆盖实例/任务/历史/音色/下载/可执行文件/ASR/文件浏览器懒加载/UI 切换/冒烟，**无需 Go 二进制、GPU 或模型**）
 - **其它闸门**：`node scripts/check-i18n-parity.js`（中英 578/578 键对等 + `web/*.html` 的 `data-i18n*` 引用键均存在）、`node scripts/check-sw-precache.mjs`（`web/sw.js` 的 `PRECACHE_URLS` 覆盖 `index.html` 本地引用与模块图传递闭包——`perf:budget` 的三方一致只管 ES module 图，管不到经典脚本）、`python3 scripts/check-diagrams.py docs/diagrams`（19/19 图示可访问性契约）、`npm run ui:inventory:check`（UI 清单防漂移）、`npm run perf:budget`（首屏体积预算）。详见 `TESTING.md` 与 `web/README.md`
 
 改动仍需手动过一遍受影响页面（中英切换 / 深浅主题 / 窄屏），自动化测试覆盖的是契约与纯函数，不替代人工看界面。

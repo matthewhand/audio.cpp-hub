@@ -28,6 +28,7 @@
   <link rel="modulepreload" href="/modules/shell.js">
   <link rel="modulepreload" href="/modules/models.js">
   <link rel="modulepreload" href="/modules/settings.js">
+  <link rel="modulepreload" href="/modules/file-browser-lazy.js">
   <link rel="modulepreload" href="/modules/launch.js">
   <link rel="modulepreload" href="/modules/instances.js">
   <link rel="modulepreload" href="/modules/downloads.js">
@@ -505,8 +506,10 @@
   </div>
 
   <!-- 经典脚本区：普通 <script> 在解析期同步执行，彼此按顺序共享 window 作用域。
-       这些脚本仍各自维护 window.* 全局（I18N / WavUtil / FileBrowser / AudioPicker /
-       VoiceSelect / openVoicesPanel / hubTheme / hubMotion），没有改成 ES 模块。
+       这些脚本仍各自维护 window.* 全局（I18N / WavUtil / AudioPicker /
+       VoiceSelect / openVoicesPanel / hubMotion），没有改成 ES 模块。
+       服务器端文件选择器（/modules/file-browser.js）不在这里：它是点击才打开的弹窗，
+       已改为懒加载 chunk（外观 /modules/file-browser-lazy.js 在模块图里）。
        顺序有硬约束：词典必须先于 i18n.js，legacy-globals.js 必须先于所有引用
        $ / el / showToast / focusDialog 的经典脚本。 -->
   <!-- 两份词典（纯数据，写入 window.I18N_ZH / I18N_EN）必须先于 i18n.js -->
@@ -516,7 +519,6 @@
   <!-- API 客户端：集中 fetch / 错误信封 / 轮询，须在 i18n.js 之后 -->
   <script src="/api-client.js"></script>
   <script src="/wav.js"></script>
-  <script src="/file-browser.js"></script>
   <!-- 经典脚本 ↔ ES 模块的桥：把 window.$ / el 定义在这里（唯一实现），
        并把 showToast / focusDialog / restoreDialogFocus / parseApiError /
        renderStateError / renderEmptyState 装成转发器（真实实现在 web/modules/*，

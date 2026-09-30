@@ -64,13 +64,37 @@ const KIB = 1024;
  * ratchet now also understands lazy chunks: they are required in sw.js's
  * PRECACHE_URLS (so #/stats still works offline) but excluded from first-load
  * size and request counts. Tighten further by moving more click-to-open panels
- * behind the same pattern. */
+ * behind the same pattern.
+ *
+ * 2026-09 (done, this ratchet step): the same pattern now covers the server-side
+ * file browser. `web/file-browser.js` (17.2 KiB raw / 5.7 KiB gzip as a classic
+ * script on window.FileBrowser) became the lazy chunk `modules/file-browser.js`,
+ * reached through the eager facade `modules/file-browser-lazy.js`; `launch.js`
+ * imports the facade, and the classic `audio-picker.js` pulls it with
+ * `import("./modules/file-browser-lazy.js")`. The facade exists for the same
+ * reason stats-lazy.js does: app.js's Esc (`cancel`) and language-switch
+ * (`relocalize`) paths are synchronous and must stay no-ops before first open.
+ * Measured before -> after (`npm run perf:budget` on this tree):
+ *
+ *   | 指标            | 懒加载前（before） | 懒加载后（after） | 变化           |
+ *   | ---------------- | ----------------- | ---------------- | -------------- |
+ *   | 初始子资源请求数 | 30                | 30               | 0（−1 经典 + 1 模块） |
+ *   | 初始 JS raw      | 340.3 KiB         | 325.6 KiB        | **−14.7 KiB**  |
+ *   | 初始 JS gzip     | 121.1 KiB         | 116.9 KiB        | **−4.2 KiB**   |
+ *   | JS+CSS gzip 合计 | 138.2 KiB         | 134.0 KiB        | **−4.2 KiB**   |
+ *   | 首屏模块数       | 15                | 16               | +1（1.7 KiB 的外观层） |
+ *
+ * The "before" row is what CI was failing on (336 / 120 / 137 KiB budgets). The
+ * budgets below are re-pinned on the same basis as every earlier step — slightly
+ * above the measured values, never above a stale one. Next candidates for the
+ * same treatment, in the order the wrapper cost justifies them: the command
+ * palette (Ctrl/Cmd-K, 6.1 KiB) and `voices-panel.js` (9.2 KiB classic). */
 export const BUDGETS = {
-  jsRawKiB: 336, // 初始 JS 未压缩合计（实测 334.6）
-  jsGzipKiB: 120, // 初始 JS gzip 传输合计（实测 119.2）
-  cssRawKiB: 68, // 初始 CSS 未压缩（实测 66.2）
-  cssGzipKiB: 18, // 初始 CSS gzip 传输（实测 16.9）
-  totalGzipKiB: 137, // JS + CSS gzip 合计（实测 136.1，不含 HTML，HTML 很小）
+  jsRawKiB: 327, // 初始 JS 未压缩合计（实测 325.6）
+  jsGzipKiB: 118, // 初始 JS gzip 传输合计（实测 116.9）
+  cssRawKiB: 68, // 初始 CSS 未压缩（实测 67.6）
+  cssGzipKiB: 18, // 初始 CSS gzip 传输（实测 17.2）
+  totalGzipKiB: 135, // JS + CSS gzip 合计（实测 134.0，不含 HTML，HTML 很小）
   subresourceRequests: 31, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 30）
   ttiTargetMs: 1500 // 目标 TTI（本地/局域网，中端笔电）——浏览器指标，本脚本不测量
 };

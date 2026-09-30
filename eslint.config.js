@@ -4,7 +4,7 @@
  * 只收「几乎不会误报 + 真的能挡住 bug」的规则，避免开发者为了消警告而写 eslint-disable。
  *
  * web/ 现在分两类，规则集相同、只差 sourceType 与 globals：
- *   - 经典脚本（i18n.zh/en.js / i18n.js / api-client.js / wav.js / file-browser.js /
+ *   - 经典脚本（i18n.zh/en.js / i18n.js / api-client.js / wav.js /
  *     legacy-globals.js / motion.js / pwa.js / audio-picker.js / voice-select.js /
  *     voices-panel.js）：sourceType "script"，跨文件靠 window.* 通信，公开接口在
  *     下方 globals 里逐个声明；
@@ -133,7 +133,6 @@ export default [
         // 各 web/*.js 挂到 window.* 的公开接口（与 web/globals.d.ts 一一对应）
         I18N: "readonly",
         WavUtil: "readonly",
-        FileBrowser: "readonly",
         AudioPicker: "readonly",
         VoiceSelect: "readonly",
         refreshVoiceSelects: "readonly",
@@ -228,13 +227,12 @@ export default [
     languageOptions: {
       sourceType: "module",
       ecmaVersion: 2022,
-      // 只给仍以 window 形式存在的运行期资产：I18N / WavUtil / FileBrowser /
-      // AudioPicker / VoiceSelect 是经典脚本挂的全局，其余一律来自 import。
+      // 只给仍以 window 形式存在的运行期资产：I18N / WavUtil / AudioPicker /
+      // VoiceSelect 是经典脚本挂的全局，其余一律来自 import。
       globals: {
         ...globals.browser,
         I18N: "readonly",
         WavUtil: "readonly",
-        FileBrowser: "readonly",
         AudioPicker: "readonly",
         VoiceSelect: "readonly",
         openVoicesPanel: "readonly",
