@@ -1,77 +1,48 @@
-/* web/modules/downloads.js — 模型权重下载
+/* web/modules/downloads.js — 下载面板渲染（**懒加载 chunk**）
  *
  * 页头 ⬇️ 的下载管理面板（进度、暂停/续传/删除、角标计数）与模型卡片上的
- * 「按模型下载」弹窗（下载源 / 包 / token / 覆盖）。下载任务状态只服务本面板，
- * 因此 download 列表与按模型弹窗状态都留在本模块。 */
+ * 「按模型下载」弹窗（下载源 / 包 / token / 覆盖）。两者都只在用户点开后用得上，
+ * 因此本模块**不在首屏模块图**里：调用方（routing.js / models.js / app.js）走
+ * 首屏外观层 modules/downloads-lazy.js，由它 import("./downloads.js") 按需拉取。
+ *
+ * 下载数据（轮询、角标、2s 轮询句柄）留在外观层——角标在首屏就要动。本模块只负责
+ * 两个弹窗的 DOM：列表渲染、包清单渲染与「开始下载」提交。
+ *
+ * 本模块曾以静态 import 参与首屏（那时连轮询与角标也在这里），随 perf:budget 的
+ * 棘轮改成懒加载 chunk，实测表见 scripts/perf-budget.mjs 顶注。 */
 
-import { focusDialog, isOpen, renderEmptyState, renderStateError, restoreDialogFocus, showSkeleton, showToast } from "./async-ui.js";
+import { focusDialog, renderEmptyState, restoreDialogFocus, showSkeleton, showToast } from "./async-ui.js";
 import { $, Api, el, esc, markRowEnter, t } from "./dom.js";
-import { go, goPanel } from "./routing.js";
+import { getDownloads, hasDownloadsLoaded, refreshDownloads } from "./downloads-lazy.js";
+import { go } from "./routing.js";
 import { models, selectedModelId } from "./state.js";
 
-/* ---------- 下载管理（任务列表 + 模型下载弹窗） ---------- */
-export let downloads = [];
-export let mdlPackages = null;
-export let mdlModel = null;
+let mdlPackages = null;
+let mdlModel = null;
 
 export function fmtBytes(n) {
   if (n == null || n < 0) return "?";
   return I18N.bytes(n);
 }
 
-export const DL_STATUS_CLASS = { RUNNING: "starting", PENDING: "starting", PAUSED: "stopped", DONE: "ready", FAILED: "error" };
-export let downloadsPoller = null;
-let downloadsLoaded = false;   // 首次成功拉取前才显示骨架屏 / 失败时才给可见错误
+const DL_STATUS_CLASS = { RUNNING: "starting", PENDING: "starting", PAUSED: "stopped", DONE: "ready", FAILED: "error" };
 
-export function applyDownloads(data) {
-  downloadsLoaded = true;
-  downloads = data;
-  updateDlBadge();
-  if (isOpen("downloads-modal")) renderDownloadList();
-}
-/* 失败处理：已加载过一次就静默（下载列表是 2s 轮询的附属信息，瞬时失败下轮自愈）；
-   从未加载成功且面板正开着时，给可见错误 + 重试，避免只剩骨架屏。 */
-export function onDownloadsError(e) {
-  if (downloadsLoaded) return;
-  if (isOpen("downloads-modal")) renderStateError($("dl-list"), e, refreshDownloads);
-}
-/* 立即拉一次：复用轮询句柄（可 await），轮询未建立时直接请求一次 */
-export function refreshDownloads() {
-  if (downloadsPoller) return downloadsPoller.refresh();
-  return Api.list("/api/downloads").then(applyDownloads).catch(onDownloadsError);
-}
-
-/* 建立 2s 轮询（由 web/app.js 在启动时调用一次）。句柄只在本模块持有。 */
-export function startDownloadsPolling() {
-  downloadsPoller = Api.poll("/api/downloads", applyDownloads, { list: true, onError: onDownloadsError });
-  return downloadsPoller;
-}
-
-/* 页头角标：进行中的任务数 */
-export function updateDlBadge() {
-  const running = downloads.filter(d => d.status === "RUNNING" || d.status === "PENDING").length;
-  const badge = $("dl-badge");
-  badge.textContent = running;
-  badge.classList.toggle("hidden", running === 0);
-}
-
+/* ---------- 下载管理弹窗 ---------- */
 export function openDownloadsModal() {
-  // 首次数据尚未返回时显示骨架并立即拉取
-  if (!downloadsLoaded) { showSkeleton($("dl-list"), 3); refreshDownloads(); }
+  // 首次数据尚未返回时显示骨架并立即拉取（数据在外观层，拉到后回调这里重画）
+  if (!hasDownloadsLoaded()) { showSkeleton($("dl-list"), 3); refreshDownloads(); }
   renderDownloadList();
-  $("downloads-modal").classList.remove("hidden");
-  focusDialog($("downloads-modal"));
 }
 export function closeDownloadsModal() {
   $("downloads-modal").classList.add("hidden");
   restoreDialogFocus();
   window.hubPanelClosed("downloads");
 }
-$("downloads-btn").onclick = () => goPanel("downloads");
 $("downloads-modal-close").onclick = closeDownloadsModal;
 $("downloads-modal").onclick = (e) => { if (e.target === $("downloads-modal")) closeDownloadsModal(); };
 
 export function renderDownloadList() {
+  const downloads = getDownloads();
   const list = $("dl-list");
   list.innerHTML = "";
   list.removeAttribute("aria-busy");
@@ -162,7 +133,7 @@ export function closeModelDlModal() {
 $("model-dl-modal-close").onclick = closeModelDlModal;
 $("model-dl-modal").onclick = (e) => { if (e.target === $("model-dl-modal")) closeModelDlModal(); };
 
-export async function loadMdlPackages(m) {
+async function loadMdlPackages(m) {
   try {
     // 包清单是对象（{packages:[...]}）而不是数组，用 get 而非 list
     mdlPackages = await Api.get("/api/models/{id}/packages", { params: { id: m.id } });
@@ -175,7 +146,7 @@ export async function loadMdlPackages(m) {
   }
 }
 
-export function renderMdlPackages() {
+function renderMdlPackages() {
   const c = $("mdl-package-list");
   c.innerHTML = "";
   const pkgs = (mdlPackages && mdlPackages.packages) || [];
@@ -231,3 +202,10 @@ $("mdl-start").onclick = async () => {
     btn.disabled = false;
   }
 };
+
+/* 语言切换重画（由外观层 downloads-lazy.js 转发，只在弹窗已开时调）：
+   两个弹窗的可见文案都来自 t()，切换语言后按原条件重画。 */
+export function relocalize() {
+  if (!$("downloads-modal").classList.contains("hidden")) renderDownloadList();
+  if (!$("model-dl-modal").classList.contains("hidden") && mdlPackages) renderMdlPackages();
+}

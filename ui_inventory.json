@@ -13,6 +13,7 @@
       "web/modules/async-ui.js",
       "web/modules/command-palette.js",
       "web/modules/dom.js",
+      "web/modules/downloads-lazy.js",
       "web/modules/downloads.js",
       "web/modules/file-browser-lazy.js",
       "web/modules/file-browser.js",
@@ -21,6 +22,7 @@
       "web/modules/models.js",
       "web/modules/panels.js",
       "web/modules/routing.js",
+      "web/modules/settings-lazy.js",
       "web/modules/settings.js",
       "web/modules/shell.js",
       "web/modules/sidebar.js",
@@ -28,10 +30,11 @@
       "web/modules/stats-lazy.js",
       "web/modules/stats.js",
       "web/modules/tasks.js",
+      "web/modules/voices-panel-lazy.js",
+      "web/modules/voices-panel.js",
       "web/motion.js",
       "web/pwa.js",
       "web/voice-select.js",
-      "web/voices-panel.js",
       "web/wav.js"
     ]
   },
@@ -348,7 +351,7 @@
       "tag": "button",
       "type": null,
       "i18n": ["dl.managerTitle", "dl.managerTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/modules/downloads.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/downloads-lazy.js"] }]
     },
     {
       "id": "downloads-modal-close",
@@ -392,7 +395,7 @@
       "tag": "button",
       "type": null,
       "i18n": ["launch.execGoto"],
-      "handlers": [{ "event": "click", "sources": ["web/modules/settings.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/settings-lazy.js"] }]
     },
     {
       "id": "exec-name",
@@ -738,7 +741,7 @@
       "tag": "button",
       "type": null,
       "i18n": ["header.settingsTitle", "header.settingsTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/modules/settings.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/settings-lazy.js"] }]
     },
     {
       "id": "settings-modal-close",
@@ -837,7 +840,7 @@
       "tag": "button",
       "type": null,
       "i18n": ["voices.add"],
-      "handlers": [{ "event": "click", "sources": ["web/voices-panel.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/voices-panel.js"] }]
     },
     {
       "id": "voice-add-name",
@@ -858,21 +861,21 @@
       "tag": "button",
       "type": null,
       "i18n": ["voices.title", "voices.title"],
-      "handlers": [{ "event": "click", "sources": ["web/voices-panel.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/voices-panel-lazy.js"] }]
     },
     {
       "id": "voices-close",
       "tag": "button",
       "type": null,
       "i18n": ["history.closeTitle", "history.closeTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/voices-panel.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/voices-panel.js"] }]
     },
     {
       "id": "voices-search",
       "tag": "input",
       "type": "search",
       "i18n": ["voices.searchPlaceholder", "voices.searchAria"],
-      "handlers": [{ "event": "input", "sources": ["web/voices-panel.js"] }]
+      "handlers": [{ "event": "input", "sources": ["web/modules/voices-panel.js"] }]
     },
     {
       "id": "weights-browse-btn",
@@ -934,7 +937,7 @@
     { "method": "POST", "path": "/api/audio/upload", "sources": ["web/audio-picker.js"] },
     { "method": "POST", "path": "/api/cert/generate", "sources": ["web/modules/settings.js"] },
     { "method": "GET", "path": "/api/cert/status", "sources": ["web/modules/settings.js"] },
-    { "method": "GET", "path": "/api/downloads", "sources": ["web/modules/downloads.js"] },
+    { "method": "GET", "path": "/api/downloads", "sources": ["web/modules/downloads-lazy.js"] },
     { "method": "POST", "path": "/api/downloads", "sources": ["web/modules/downloads.js"] },
     {
       "method": "DELETE",
@@ -947,7 +950,7 @@
       "sources": ["web/modules/downloads.js"]
     },
     { "method": "GET", "path": "/api/events", "sources": ["web/modules/async-ui.js"] },
-    { "method": "GET", "path": "/api/executables", "sources": ["web/modules/settings.js"] },
+    { "method": "GET", "path": "/api/executables", "sources": ["web/modules/settings-lazy.js"] },
     { "method": "POST", "path": "/api/executables", "sources": ["web/modules/launch.js"] },
     {
       "method": "DELETE",
@@ -1036,11 +1039,15 @@
     {
       "method": "GET",
       "path": "/api/voices",
-      "sources": ["web/audio-picker.js", "web/voice-select.js", "web/voices-panel.js"]
+      "sources": ["web/audio-picker.js", "web/modules/voices-panel.js", "web/voice-select.js"]
     },
-    { "method": "POST", "path": "/api/voices", "sources": ["web/voices-panel.js"] },
-    { "method": "DELETE", "path": "/api/voices/{param}", "sources": ["web/voices-panel.js"] },
-    { "method": "PUT", "path": "/api/voices/{param}", "sources": ["web/voices-panel.js"] },
+    { "method": "POST", "path": "/api/voices", "sources": ["web/modules/voices-panel.js"] },
+    {
+      "method": "DELETE",
+      "path": "/api/voices/{param}",
+      "sources": ["web/modules/voices-panel.js"]
+    },
+    { "method": "PUT", "path": "/api/voices/{param}", "sources": ["web/modules/voices-panel.js"] },
     { "method": "GET", "path": "/api/voices/{param}/audio", "sources": ["web/audio-picker.js"] }
   ]
 }

@@ -10,7 +10,7 @@ import { browseServerFile } from "./file-browser-lazy.js";
 import { refreshInstances } from "./instances.js";
 import { renderModelList } from "./models.js";
 import { go, setPendingSettingsSection } from "./routing.js";
-import { deviceCache, editingExecId, envToText, loadExecutables, parseEnvText, parseSessionOptionsText, resetExecForm } from "./settings.js";
+import { deviceCache, editingExecId, envToText, loadExecutables, parseEnvText, parseSessionOptionsText, resetExecForm } from "./settings-lazy.js";
 import { executables, models, profiles, selectedModelId, setProfiles } from "./state.js";
 
 /* ---------- 启动模型 modal ---------- */

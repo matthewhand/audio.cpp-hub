@@ -8,7 +8,7 @@
 
 import { bindMenuKeys, renderEmptyState, renderStateError, showSkeleton } from "./async-ui.js";
 import { $, Api, esc, safeHttpUrl, t } from "./dom.js";
-import { openModelDlModal } from "./downloads.js";
+import { openModelDlModal } from "./downloads-lazy.js";
 import { refreshInstances } from "./instances.js";
 import { restoreWeightsPath } from "./launch.js";
 import { renderWorkspace } from "./panels.js";

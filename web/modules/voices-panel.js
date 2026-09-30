@@ -1,16 +1,30 @@
-/* 音色库管理面板：页头 🎙 打开。音色是全局资源：名称（唯一）+ 音频文本内容 + 音频文件。
-   上半为音色列表（试听/行内编辑名称与文本/删除），下半为添加区（名称 + 文本 + AudioPicker 取音频）。
-   增删改成功后刷新所有 VoiceSelect（refreshVoiceSelects）。 */
-(() => {
-const t = (k, p) => I18N.t(k, p);
-/* 唯一的 HTTP 出口（web/index.html 里 api-client.js 早于本脚本求值，经典脚本按序执行） */
-const Api = window.AudioCppHub.api;
+/* web/modules/voices-panel.js — 音色库管理面板（**懒加载 chunk**）
+ *
+ * 页头 🎙 打开的全屏面板：上半为音色列表（试听 / 行内编辑名称与文本 / 删除 /
+ * 「用于 TTS」），下半为添加区（名称 + 文本 + AudioPicker 取音频）。音色是全局资源：
+ * 名称（唯一）+ 音频文本内容 + 音频文件；增删改成功后刷新所有 VoiceSelect。
+ *
+ * 所有调用场景都是「点一下 🎙 才用得上」，因此本模块**不在首屏模块图**里：
+ * 调用方经 modules/voices-panel-lazy.js 的 import("./voices-panel.js") 按需拉取
+ * （见该文件；本模块自身的字节只在真的打开音色库时才付给浏览器）。
+ *
+ * 曾经是经典脚本 web/voices-panel.js（IIFE + window.openVoicesPanel），随
+ * perf:budget 的棘轮改成 ES 模块懒加载 chunk，实测表见 scripts/perf-budget.mjs 顶注。
+ * 因此不再需要 window.renderStateError / renderEmptyState / focusDialog 之类的
+ * 桥接转发器：模块侧直接从 async-ui.js / dom.js import。
+ *
+ * 按钮与事件都在本模块求值时（即首次打开时）绑定；页头 🎙 与 #/voices 路由由外观层
+ * web/modules/voices-panel-lazy.js 接线，不依赖本模块已加载。 */
+
+import { focusDialog, renderEmptyState, renderStateError, restoreDialogFocus, showToast } from "./async-ui.js";
+import { $, Api, t } from "./dom.js";
+
 let addPicker = null;   // 添加区的 AudioPicker（延迟到首次打开时创建）
 let voices = [];
 
-window.openVoicesPanel = function () {
+export function openVoicesPanel() {
   $("voices-panel").classList.remove("hidden");
-  if (window.focusDialog) window.focusDialog($("voices-panel"));
+  focusDialog($("voices-panel"));
   if (!addPicker) {
     addPicker = new AudioPicker($("voice-add-picker"), "voices.addAudio");
     // 管理面板里添加音色时，"音色库"页签无意义（从库选库），隐藏
@@ -18,19 +32,15 @@ window.openVoicesPanel = function () {
     if (libTab) libTab.style.display = "none";
   }
   loadVoices();
-};
+}
 
-function closeVoicesPanel() {
+export function closeVoicesPanel() {
   $("voices-panel").classList.add("hidden");
-  if (window.restoreDialogFocus) window.restoreDialogFocus();
+  restoreDialogFocus();
   if (window.hubPanelClosed) window.hubPanelClosed("voices");
 }
-window.closeVoicesPanel = closeVoicesPanel;
 
-$("voices-btn").onclick = () => {
-  if (window.hubTogglePanel) window.hubTogglePanel("voices");
-  else window.openVoicesPanel();
-};
+/* ---------- 首屏不需要的接线：全部在 chunk 求值（首次打开）时绑定 ---------- */
 $("voices-close").onclick = closeVoicesPanel;
 $("voices-search").addEventListener("input", renderVoicesList);
 $("voices-panel").addEventListener("mousedown", (e) => {
@@ -43,7 +53,8 @@ async function loadVoices() {
     voices = await Api.list("/api/voices");
   } catch (e) {
     voices = [];
-    if (window.renderStateError) { window.renderStateError($("voices-list"), e, loadVoices); return; }
+    renderStateError($("voices-list"), e, loadVoices);
+    return;
   }
   renderVoicesList();
 }
@@ -58,17 +69,10 @@ function renderVoicesList() {
         v.name.toLowerCase().includes(q) || (v.text || "").toLowerCase().includes(q))
     : voices;
   if (!voices.length) {
-    if (window.renderEmptyState) {
-      window.renderEmptyState(list, t("voices.empty"), {
-        label: t("voices.addTitle"),
-        onClick: () => { const n = $("voice-add-name"); if (n) n.focus(); }
-      });
-    } else {
-      const hint = document.createElement("div");
-      hint.className = "hint history-empty";
-      hint.textContent = t("voices.empty");
-      list.appendChild(hint);
-    }
+    renderEmptyState(list, t("voices.empty"), {
+      label: t("voices.addTitle"),
+      onClick: () => { const n = $("voice-add-name"); if (n) n.focus(); }
+    });
     return;
   }
   if (!shown.length) {
@@ -148,7 +152,7 @@ function makeVoiceRow(v) {
 /* 「用于 TTS」：跳到 breeze 的克隆模式并选中该音色（breeze 是当前唯一克隆入口） */
 function useVoiceInTts(v) {
   if (window.hubNavigate) window.hubNavigate("#/model/breeze-tts");
-  if (window.closeVoicesPanel) window.closeVoicesPanel();
+  closeVoicesPanel();
   // 面板渲染是异步链（selectModelById → renderWorkspace），轮询等待 breeze 克隆控件就绪
   let tries = 0;
   const timer = setInterval(() => {
@@ -251,8 +255,3 @@ function afterChange() {
   loadVoices();
   if (window.refreshVoiceSelects) window.refreshVoiceSelects();
 }
-
-/* 本文件晚于 app.js 加载：app.js 初始化时 openVoicesPanel 尚未定义，
-   这里补跑一次路由，使 #/voices 深链接在刷新后也能打开 */
-if (window.hubApplyRoute) window.hubApplyRoute();
-})();

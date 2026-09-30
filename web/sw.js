@@ -48,7 +48,6 @@ const PRECACHE_URLS = [
   "/voice-select.js",
   "/motion.js",
   "/pwa.js",
-  "/voices-panel.js",
   "/app.js",
   "/modules/dom.js",
   "/modules/async-ui.js",
@@ -57,20 +56,22 @@ const PRECACHE_URLS = [
   "/modules/command-palette.js",
   "/modules/shell.js",
   "/modules/models.js",
-  "/modules/settings.js",
+  "/modules/settings-lazy.js",
   "/modules/file-browser-lazy.js",
   "/modules/launch.js",
   "/modules/instances.js",
-  "/modules/downloads.js",
+  "/modules/downloads-lazy.js",
   "/modules/tasks.js",
   "/modules/sidebar.js",
   "/modules/stats-lazy.js",
-  // 看板模块是懒加载的（不在首屏），但离线冷启动点击 📊 仍要能用，
-  // 因此只进预缓存、不进 index.html 的 modulepreload。
-  "/modules/stats.js",
-  // 服务器端文件选择器同样是懒加载的（点「浏览…」才拉），离线冷启动时仍要能用，
-  // 因此只进预缓存、不进 index.html 的 modulepreload。
-  "/modules/file-browser.js",
+  "/modules/voices-panel-lazy.js",
+  // 下面是懒加载 chunk（不在首屏，也不进 index.html 的 modulepreload）：各自只被对应
+  // 外观层的 import("./x.js") 拉取，但离线冷启动点开时仍要能用，因此只进预缓存。
+  "/modules/stats.js",          // 看板（#/stats）
+  "/modules/file-browser.js",   // 服务器端文件选择器
+  "/modules/voices-panel.js",   // 音色库管理面板
+  "/modules/downloads.js",      // 下载管理弹窗 + 按模型下载弹窗
+  "/modules/settings.js",       // 设置弹窗（通用 / HTTPS / 可执行文件列表）
   "/modules/panels.js",
   "/style.css",
   "/icons/icon-192.png",

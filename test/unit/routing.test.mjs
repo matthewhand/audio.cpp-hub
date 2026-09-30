@@ -30,23 +30,27 @@ function makeRouting({ hash = "", instances = [], selectedModelId = null } = {})
   const stats = panel("openStatsPanel", "closeStatsPanel", "stats-panel");
   const settings = panel("openSettingsModal", "closeSettingsModal", "settings-modal");
   const detail = panel("openInstanceDetail", "closeInstanceDetail", "instance-detail-modal");
+  const wired = [];
   const sandbox = {
-    window: {
-      location,
-      openVoicesPanel: voices.open,
-      closeVoicesPanel: voices.close
-    },
+    window: { location },
     location,
     selectedModelId,
     instances,
     isOpen: (id) => open.has(id),
     closeHistoryPanel: history.close,
     openHistoryPanel: history.open,
+    /* 四个懒加载外观（stats-lazy / voices-panel-lazy / downloads-lazy / settings-lazy）
+       各自负责自己的页头按钮接线，routing.js 把导航函数传进去以避开与它们的模块环。 */
+    wireStatsButton: (...a) => wired.push(["wireStatsButton", ...a]),
+    wireVoicesButton: (...a) => wired.push(["wireVoicesButton", ...a]),
+    wireDownloadsButton: (...a) => wired.push(["wireDownloadsButton", ...a]),
+    wireSettingsButtons: (...a) => wired.push(["wireSettingsButtons", ...a]),
+    openVoicesPanel: voices.open,
+    closeVoicesPanel: voices.close,
     closeDownloadsModal: downloads.close,
     openDownloadsModal: downloads.open,
     closeStatsPanel: stats.close,
     openStatsPanel: stats.open,
-    wireStatsButton: () => {},
     closeSettingsModal: settings.close,
     openSettingsModal: settings.open,
     closeInstanceDetail: detail.close,
@@ -65,6 +69,7 @@ function makeRouting({ hash = "", instances = [], selectedModelId = null } = {})
     location,
     open,
     log,
+    wired,
     names: () => log.map((e) => e[0]),
     /** 模拟浏览器前进/后退：改 hash 后派发 hashchange */
     navigate: (next) => {
@@ -220,14 +225,28 @@ test("routing: applyRoute 对未打开的面板不调用关闭函数", () => {
   assert.deepEqual(r.names(), ["openHistoryPanel"], "isOpen 为假 → 不关，避免误触焦点还原");
 });
 
-test("routing: applyRoute 目标视图缺实现时安全跳过（voices 走 window 全局）", () => {
+test("routing: 四个懒加载外观的页头按钮接线在模块求值时各调一次", () => {
+  /* 看板 / 音色库 / 下载 / 设置都是「点开才拉 chunk」的弹窗，页头按钮必须在 chunk
+     到位前就能用，因此由 routing.js 在求值期把 go / goPanel 交给各自外观层接线。
+     漏掉任何一个，页头按钮就会静默失灵（chunk 里绑了 onclick 也没人加载它）。 */
+  const r = makeRouting();
+  assert.deepEqual(
+    r.wired.map(([name]) => name),
+    ["wireStatsButton", "wireVoicesButton", "wireDownloadsButton", "wireSettingsButtons"]
+  );
+  // 传下去的是 routing.js 自己的导航函数（设了 window.hub* 钩子的那几个）
+  for (const [, ...args] of r.wired) {
+    for (const fn of args) assert.equal(typeof fn, "function");
+  }
+});
+
+test("routing: applyRoute 打开音色库走懒加载外观（异步 import 的那一侧）", () => {
+  /* voices-panel.js 是懒加载 chunk，routing.js 只 import 外观层：面板的打开因此是
+     「发起加载 + 异步渲染」，路由本身仍是同步的（不阻塞 hashchange 返回）。 */
   const r = makeRouting({ hash: "#/voices" });
-  delete r.sandbox.window.openVoicesPanel; // 经典脚本尚未加载
-  r.applyRoute();
-  assert.deepEqual(r.names(), [], "window.openVoicesPanel 未挂载时不抛错");
-  r.sandbox.window.openVoicesPanel = () => r.log.push(["openVoicesPanel"]);
   r.applyRoute();
   assert.deepEqual(r.names(), ["openVoicesPanel"]);
+  assert.equal(r.sandbox.window.openVoicesPanel, undefined, "不再经 window 全局转发");
 });
 
 test("routing: applyRoute 设置分节用 pendingSettingsSection 且用后即清", () => {

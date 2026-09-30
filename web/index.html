@@ -16,8 +16,9 @@
   <!-- 模块图预载：web/app.js 是 type="module"，没有打包器，浏览器只能等它执行完之后
        再顺着 import 图去取 web/modules/*.js——模块的解析与首屏可用时间被串在后面。
        这里把整张静态模块图逐条声明成 modulepreload：浏览器在解析 head 时就并行发起
-       这 14 个请求并预解析，app.js 执行时直接命中已就位的模块（不额外产生请求，
+       这 17 个请求并预解析，app.js 执行时直接命中已就位的模块（不额外产生请求，
        也因此**不减少**请求条数——条数只由模块数量决定）。
+       懒加载 chunk 刻意不在这里：预载会把「点开才付」的收益全部抵消。
        清单必须与 app.js 的 import 图、以及 web/sw.js 的 PRECACHE_URLS 三方一致，
        scripts/perf-budget.mjs 会校验这一点。 -->
   <link rel="modulepreload" href="/modules/dom.js">
@@ -27,14 +28,15 @@
   <link rel="modulepreload" href="/modules/command-palette.js">
   <link rel="modulepreload" href="/modules/shell.js">
   <link rel="modulepreload" href="/modules/models.js">
-  <link rel="modulepreload" href="/modules/settings.js">
+  <link rel="modulepreload" href="/modules/settings-lazy.js">
   <link rel="modulepreload" href="/modules/file-browser-lazy.js">
   <link rel="modulepreload" href="/modules/launch.js">
   <link rel="modulepreload" href="/modules/instances.js">
-  <link rel="modulepreload" href="/modules/downloads.js">
+  <link rel="modulepreload" href="/modules/downloads-lazy.js">
   <link rel="modulepreload" href="/modules/tasks.js">
   <link rel="modulepreload" href="/modules/sidebar.js">
   <link rel="modulepreload" href="/modules/stats-lazy.js">
+  <link rel="modulepreload" href="/modules/voices-panel-lazy.js">
   <link rel="modulepreload" href="/modules/panels.js">
 </head>
 <body>
@@ -507,9 +509,10 @@
 
   <!-- 经典脚本区：普通 <script> 在解析期同步执行，彼此按顺序共享 window 作用域。
        这些脚本仍各自维护 window.* 全局（I18N / WavUtil / AudioPicker /
-       VoiceSelect / openVoicesPanel / hubMotion），没有改成 ES 模块。
-       服务器端文件选择器（/modules/file-browser.js）不在这里：它是点击才打开的弹窗，
-       已改为懒加载 chunk（外观 /modules/file-browser-lazy.js 在模块图里）。
+       VoiceSelect / hubMotion），没有改成 ES 模块。
+       「点开才用得上」的三个面板（服务器端文件选择器 / 音色库 / 下载 / 设置 / 看板）
+       都不在这里：它们是懒加载 chunk，只由各自的首屏外观层 import()
+       （外观 /modules/*-lazy.js 在模块图里，chunk 在 web/sw.js 的预缓存里）。
        顺序有硬约束：词典必须先于 i18n.js，legacy-globals.js 必须先于所有引用
        $ / el / showToast / focusDialog 的经典脚本。 -->
   <!-- 两份词典（纯数据，写入 window.I18N_ZH / I18N_EN）必须先于 i18n.js -->
@@ -526,7 +529,6 @@
   <script src="/legacy-globals.js"></script>
   <script src="/audio-picker.js"></script>
   <script src="/voice-select.js"></script>
-  <script src="/voices-panel.js"></script>
   <!-- 动效系统：注册在 app.js 之前，保证首屏渲染即可用；只做纯 UI 反馈，不含业务逻辑 -->
   <script src="/motion.js"></script>
   <!-- PWA：注册 /sw.js + 更新提示。须在 i18n.js 之后，且不依赖 app.js -->

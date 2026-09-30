@@ -5,8 +5,8 @@
  *
  * web/ 现在分两类，规则集相同、只差 sourceType 与 globals：
  *   - 经典脚本（i18n.zh/en.js / i18n.js / api-client.js / wav.js /
- *     legacy-globals.js / motion.js / pwa.js / audio-picker.js / voice-select.js /
- *     voices-panel.js）：sourceType "script"，跨文件靠 window.* 通信，公开接口在
+ *     legacy-globals.js / motion.js / pwa.js / audio-picker.js /
+ *     voice-select.js）：sourceType "script"，跨文件靠 window.* 通信，公开接口在
  *     下方 globals 里逐个声明；
  *   - ES 模块（web/app.js + web/modules/*.js）：sourceType "module"，
  *     跨文件靠 import/export，额外启用 import/export 一致性检查。
@@ -88,7 +88,7 @@ const SHARED_RULES = {
   "no-trailing-spaces": "error",
 
   /* --- 两处刻意的手写排版（关闭理由即风格本身） ---
-   * 1) indent：IIFE 函数体不缩进（`() => {` 之后顶格，见 audio-picker.js / voices-panel.js）。
+   * 1) indent：IIFE 函数体不缩进（`() => {` 之后顶格，见 audio-picker.js）。
    *    开启会产生约 837 条违规。
    * 2) no-multi-spaces：行尾注释按列对齐（`this.value = null;          // 当前音频的服务器绝对路径`）。
    *    开启会产生 18 条违规。
@@ -136,9 +136,11 @@ export default [
         AudioPicker: "readonly",
         VoiceSelect: "readonly",
         refreshVoiceSelects: "readonly",
+        // 音色库面板是懒加载 chunk：这两个全局由首屏外观层
+        // modules/voices-panel-lazy.js 挂上，供经典脚本 voice-select.js 调用
         openVoicesPanel: "readonly",
         closeVoicesPanel: "readonly",
-        // legacy-globals.js 挂到 window 的桥接口：voices-panel.js / audio-picker.js 直接引用
+        // legacy-globals.js 挂到 window 的桥接口：audio-picker.js 直接引用
         $: "readonly",
         el: "readonly",
         showToast: "readonly",

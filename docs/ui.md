@@ -3,7 +3,7 @@
 > 由 `npm run ui:inventory` 从 `web/index.html` 与 `web/*.js`、`web/modules/*.js` 自动生成，请勿手改。
 > 漂移检查：`npm run ui:inventory:check`（CI 会跑）。
 
-来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/legacy-globals.js`、`web/modules/async-ui.js`、`web/modules/command-palette.js`、`web/modules/dom.js`、`web/modules/downloads.js`、`web/modules/file-browser-lazy.js`、`web/modules/file-browser.js`、`web/modules/instances.js`、`web/modules/launch.js`、`web/modules/models.js`、`web/modules/panels.js`、`web/modules/routing.js`、`web/modules/settings.js`、`web/modules/shell.js`、`web/modules/sidebar.js`、`web/modules/state.js`、`web/modules/stats-lazy.js`、`web/modules/stats.js`、`web/modules/tasks.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/voices-panel.js`、`web/wav.js`
+来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/legacy-globals.js`、`web/modules/async-ui.js`、`web/modules/command-palette.js`、`web/modules/dom.js`、`web/modules/downloads-lazy.js`、`web/modules/downloads.js`、`web/modules/file-browser-lazy.js`、`web/modules/file-browser.js`、`web/modules/instances.js`、`web/modules/launch.js`、`web/modules/models.js`、`web/modules/panels.js`、`web/modules/routing.js`、`web/modules/settings-lazy.js`、`web/modules/settings.js`、`web/modules/shell.js`、`web/modules/sidebar.js`、`web/modules/state.js`、`web/modules/stats-lazy.js`、`web/modules/stats.js`、`web/modules/tasks.js`、`web/modules/voices-panel-lazy.js`、`web/modules/voices-panel.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/wav.js`
 
 ## 面板地图
 
@@ -165,12 +165,12 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | POST | `/api/audio/upload` | `web/audio-picker.js` |
 | POST | `/api/cert/generate` | `web/modules/settings.js` |
 | GET | `/api/cert/status` | `web/modules/settings.js` |
-| GET | `/api/downloads` | `web/modules/downloads.js` |
+| GET | `/api/downloads` | `web/modules/downloads-lazy.js` |
 | POST | `/api/downloads` | `web/modules/downloads.js` |
 | DELETE | `/api/downloads/{param}?purge=true` | `web/modules/downloads.js` |
 | POST | `/api/downloads/{param}/{param}` | `web/modules/downloads.js` |
 | GET | `/api/events` | `web/modules/async-ui.js` |
-| GET | `/api/executables` | `web/modules/settings.js` |
+| GET | `/api/executables` | `web/modules/settings-lazy.js` |
 | POST | `/api/executables` | `web/modules/launch.js` |
 | DELETE | `/api/executables/{param}` | `web/modules/settings.js` |
 | PUT | `/api/executables/{param}` | `web/modules/launch.js` |
@@ -204,10 +204,10 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | DELETE | `/api/tasks/{param}` | `web/modules/sidebar.js`, `web/modules/tasks.js` |
 | GET | `/api/tasks/{param}` | `web/modules/tasks.js` |
 | GET | `/api/tasks/{param}/result` | `web/modules/tasks.js` |
-| GET | `/api/voices` | `web/audio-picker.js`, `web/voice-select.js`, `web/voices-panel.js` |
-| POST | `/api/voices` | `web/voices-panel.js` |
-| DELETE | `/api/voices/{param}` | `web/voices-panel.js` |
-| PUT | `/api/voices/{param}` | `web/voices-panel.js` |
+| GET | `/api/voices` | `web/audio-picker.js`, `web/modules/voices-panel.js`, `web/voice-select.js` |
+| POST | `/api/voices` | `web/modules/voices-panel.js` |
+| DELETE | `/api/voices/{param}` | `web/modules/voices-panel.js` |
+| PUT | `/api/voices/{param}` | `web/modules/voices-panel.js` |
 | GET | `/api/voices/{param}/audio` | `web/audio-picker.js` |
 
 路径中的 `{param}` 表示由运行时拼接/模板插值（如实例 id、任务 id）。

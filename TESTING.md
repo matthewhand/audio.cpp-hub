@@ -27,14 +27,21 @@
 - `file-browser.test.mjs`：`formatSize`（委托 `I18N.bytes`；空值不打扰 I18N）+ 懒加载外观层的
   转发守卫（`rerenderAll` 调 `relocalizeFileBrowser`、外观层未加载时 `relocalize` / `cancel` 空转、
   打开路径确实经 `import("./file-browser.js")` 并发去重）。
+- `stats-lazy.test.mjs`：看板外观层（先同步显示外壳再加载 chunk、关闭/重画在未加载时空转、
+  并发打开共享一次 import、import 失败收回面板、`wireStatsButton` 接线）。
+- `lazy-panels.test.mjs`：音色库 / 下载 / 设置三个外观层的同一组契约——同步关闭与语言切换
+  在 chunk 未加载时是 no-op（或只收已显示的外壳并放弃随后那次打开）、并发打开共享一次
+  import、失败不缓存、页头与入口按钮接线路由、**首屏必须可见/被依赖的东西没有被懒加载**
+  （下载角标与 2s 轮询、可执行文件登记落到启动弹窗下拉）、**形状闸门**（chunk 走 `import()`、
+  进 `PRECACHE_URLS` 而不进 `modulepreload`、旧的经典脚本标签与预缓存项已撤掉）。
 
-> **数字/单位排版已收口到 `I18N.bytes`（Intl）**：`modules/downloads.js` 的 `fmtBytes` 与
-> `modules/file-browser.js` 的 `formatSize` 现在只做「非法值兜底 + 委托」。单测因此断言**契约与兜底**，不硬编码 ICU 版本的空格 / 千分位 / `kB` vs `KB` 差异。
+> **数字/单位排版已收口到 `I18N.bytes`（Intl）**：`modules/downloads.js`（懒加载 chunk）的
+> `fmtBytes` 与 `modules/file-browser.js` 的 `formatSize` 现在只做「非法值兜底 + 委托」。单测因此断言**契约与兜底**，不硬编码 ICU 版本的空格 / 千分位 / `kB` vs `KB` 差异。
 
 ### 有意不做的单元测试（DOM 重）
 
 以下属于 DOM/浏览器重逻辑，改由 e2e 覆盖，不做单元测试：面板渲染（`renderWorkspace`/`renderTtsPanel`/…）、任务轮询与结果渲染、历史/分组/侧栏 DOM 复用、AudioPicker 波形绘制与录音、文件浏览器弹窗（改懒加载后由 `e2e/file-browser.spec.mjs` 兜住
-「首屏不取 chunk / 点开才取 / 再开不重复取 / 经典脚本的动态 import 也能开」）、下载行渲染、`I18N.applyI18n` 之外的交互。`app.js` 里内联在渲染函数中的**速度格式化**（`fmtBytes(d.speedBps) + "/s"`）也属此类，未单测。
+「首屏不取 chunk / 点开才取 / 再开不重复取 / 经典脚本的动态 import 也能开」）、下载行渲染、音色库面板与设置弹窗的 DOM 渲染（分别由 `e2e/voices.spec.mjs` / `e2e/executable.spec.mjs` 的懒加载契约用例兜住）、`I18N.applyI18n` 之外的交互。`app.js` 里内联在渲染函数中的**速度格式化**（`fmtBytes(d.speedBps) + "/s"`）也属此类，未单测。
 
 ---
 
@@ -63,13 +70,15 @@
 
 | 流程 | spec |
 | --- | --- |
-| 登记可执行文件 | `executable.spec.mjs` |
+| 登记可执行文件 + 设置懒加载契约 | `executable.spec.mjs` |
 | 启动 / 停止实例 | `instance.spec.mjs` |
 | 提交 TTS 任务并看到结果音频 | `tts.spec.mjs` |
 | 提交 ASR 任务并看到识别文本 | `asr.spec.mjs` |
 | 历史加载 / 删除 / 分组 | `history.spec.mjs` |
-| 音色库添加 | `voices.spec.mjs` |
-| 下载暂停 / 续传 | `downloads.spec.mjs` |
+| 音色库添加 + 深链接 + 懒加载契约 | `voices.spec.mjs` |
+| 下载暂停 / 续传 + 懒加载契约 | `downloads.spec.mjs` |
+| 文件浏览器懒加载（含经典脚本的动态 import） | `file-browser.spec.mjs` |
+| 看板懒加载 | `stats.spec.mjs` |
 | 模型切换 / 主题 / 语言 | `ui-switch.spec.mjs` |
 
 ### 延迟/未覆盖（诚实说明）
@@ -102,11 +111,11 @@
 
 | 指标 | 预算 | 当前实测 |
 | --- | --- | --- |
-| 初始 JS raw | 327 KiB | 325.6 KiB |
-| 初始 JS gzip | 118 KiB | 116.9 KiB |
+| 初始 JS raw | 315 KiB | 313.5 KiB |
+| 初始 JS gzip | 116 KiB | 114.4 KiB |
 | 初始 CSS raw | 68 KiB | 67.6 KiB |
 | 初始 CSS gzip | 18 KiB | 17.2 KiB |
-| JS+CSS gzip 合计 | 135 KiB | 134.0 KiB |
+| JS+CSS gzip 合计 | 133 KiB | 131.6 KiB |
 | 初始子资源请求数 | 31 | 30 |
 | TTI 目标 | ≤ 1500 ms（本地/局域网，中端笔电） | 由真实浏览器测量，不在本脚本校验 |
 
@@ -130,6 +139,35 @@
 
 前 4 项全部由这一处改动换来；`e2e/file-browser.spec.mjs`（2 条）钉住契约，
 `test/unit/file-browser.test.mjs` 钉住外观层的同步空转守卫。
+
+### 懒加载音色库 / 下载 / 设置三个面板（2026-09，本轮）
+
+把「点开才用得上」的三块面板按 `stats-lazy` / `file-browser-lazy` 的形状拆开：
+
+| 外观层（首屏） | 懒加载 chunk | 切了什么 |
+| --- | --- | --- |
+| `modules/voices-panel-lazy.js` | `modules/voices-panel.js`（原经典脚本 `web/voices-panel.js`） | 整块搬走：面板只在点 🎙 / `#/voices` 时用得上。页头按钮由外观层 `wireVoicesButton` 接线，经典脚本 `voice-select.js` 依赖的 `window.openVoicesPanel` 也由外观层挂上 |
+| `modules/downloads-lazy.js` | `modules/downloads.js` | **只搬弹窗**：页头 ⬇️ 角标与它的 2s 轮询在首屏就可见，必须留在外观层（数据也只有一份，chunk 经 `getDownloads()` 读） |
+| `modules/settings-lazy.js` | `modules/settings.js` | **只搬弹窗**：可执行文件登记被启动弹窗下拉与模型卡片的已配置态共用，必须留在外观层；搬走的是通用 / HTTPS 证书 / 可执行文件列表三个分节 |
+
+同口径实测（`npm run perf:budget` 两次）：
+
+| 指标 | 懒加载前 | 懒加载后 | 变化 |
+| --- | --- | --- | --- |
+| 初始子资源请求数 | 30 | 30 | 0（3 个 chunk 换成 3 个外观层） |
+| 初始 JS raw | 325.6 KiB | **313.5 KiB** | −12.1 KiB |
+| 初始 JS gzip | 116.9 KiB | **114.4 KiB** | −2.5 KiB |
+| JS+CSS gzip 合计 | 134.0 KiB | **131.6 KiB** | −2.4 KiB |
+| 首屏模块数 | 16 | 17 | +1（三个外观层共 17.9 KiB） |
+
+请求数不变是**故意的**：这一轮拿字节换点击，不拿请求换字节。移出首屏的 chunk 共
+26.7 KiB raw / 10.4 KiB gzip，换回首屏的外观层 17.9 KiB / 8.2 KiB（外观层不是白写的：
+它扛着首屏必须的数据，外加「Esc 落在 chunk 还在路上那一帧」的竞态守卫）。
+
+守卫网：`test/unit/lazy-panels.test.mjs`（21 条，含「chunk 只进预缓存不进 modulepreload」
+与「首屏数据不懒加载」「Esc 落在 chunk 还在路上那一帧不再打开」）、`e2e/voices.spec.mjs` /
+`e2e/downloads.spec.mjs` / `e2e/executable.spec.mjs` 各 1 条懒加载契约
+（首屏不取 chunk → 点开才取 → 再开不重复取），`e2e/voices.spec.mjs` 另有 1 条 `#/voices` 冷启动。
 
 ### 首屏请求数：ES 模块化之后（2026-09，#100 拆分 → 本次修复）
 
@@ -206,19 +244,29 @@
 ### 懒加载 chunk（2026-09 起，按「外观层 + 动态 import」形状逐步落地）
 
 首屏体积里最划算的省法不是压字节，而是**不把「点开才用得上」的代码放进首屏模块图**。
-落地的两块（形状完全一致，见 `web/README.md` 3.2「懒加载 chunk」）：
+已落地的五块（形状完全一致，见 `web/README.md` 3.2「懒加载 chunk」）：
 
 | 外观层（首屏） | 懒加载 chunk | 省下的首屏字节 |
 | --- | --- | --- |
 | `modules/stats-lazy.js` | `modules/stats.js` | −5.4 KiB raw / −2.7 KiB gzip |
 | `modules/file-browser-lazy.js` | `modules/file-browser.js`（原经典脚本 `web/file-browser.js`） | −14.7 KiB raw / −4.2 KiB gzip |
+| `modules/voices-panel-lazy.js` | `modules/voices-panel.js`（原经典脚本 `web/voices-panel.js`） | 见上节（三块合并实测 −13.4 KiB raw / −3.1 KiB gzip） |
+| `modules/downloads-lazy.js` | `modules/downloads.js` | 同上 |
+| `modules/settings-lazy.js` | `modules/settings.js` | 同上 |
 
 约定（`scripts/perf-budget.mjs` 会强制）：
 
 - 动态 `import()` 的**目标不进 `modulepreload`**——预载会把收益全部抵消；
 - 动态 `import()` 的**目标必须进 `sw.js` 的 `PRECACHE_URLS`**——否则离线冷启动点开该视图会 404；
 - 懒加载 chunk **不计入**首屏体积与请求数，`ui:inventory` 则**要**扫它（否则 `docs/ui.md`
-  里的端点表会凭空少掉 `/api/stats` / `/api/fs/*`）。
+  里的端点表会凭空少掉 `/api/stats` / `/api/fs/*`）；
+- 外观层**必须在首屏**：入口按钮的 `onclick` 与 Esc / 语言切换这些同步路径都走它，
+  chunk 未加载时保持 no-op。`test/unit/lazy-panels.test.mjs` 会钉住「chunk 用 `import()`
+  拉、且只在 `PRECACHE_URLS` 不在 `modulepreload`」。
+
+**切分线是「首屏可不可见 / 被首屏其它模块依赖」，不是「整个文件 vs 首屏」**。音色库是
+纯点击视图，整块搬走；下载与设置各有一半必须在首屏（角标轮询、可执行文件登记），
+只搬弹窗 DOM 渲染——把这两块整块搬走会直接让页头角标不跳、启动弹窗没有可执行文件可选。
 
 仍然**不做**懒加载的部分，及原因：
 
@@ -226,11 +274,9 @@
    `new VoiceSelect(...)` / `new AudioPicker(...)`，后置会让工作区首绘缺表单。
 2. `motion.js` / `pwa.js` 都很小（2.3 / 3.8 KiB raw），且 `pwa.js` 需要在 `app.js` 之前
    注册 Service Worker 才能覆盖首屏资源，收益不足以换取顺序上的脆弱性。
-3. `voices-panel.js`（9.2 KiB 经典脚本）还没转 ESM：它要在加载期就绑定 `#voices-btn`
-   （`window.openVoicesPanel`），改成 chunk 需要先把 `app.js` 的 Esc 关闭与 `routing.js`
-   的 `closeVoicesPanel` 都改走外观层。下一个候选，收益排在命令面板之后。
-4. `sidebar.js` / `panels.js` / `tasks.js` 互相咬合（任务行就渲染在侧栏里），
+3. `sidebar.js` / `panels.js` / `tasks.js` 互相咬合（任务行就渲染在侧栏里），
    且首屏 `reattachTasks` 立刻要用，不具备「点击才打开」的性质。
+4. 下两个候选：历史侧栏（`#/history`）与命令面板（`Ctrl/Cmd-K`，6.1 KiB）。
 
 ---
 
