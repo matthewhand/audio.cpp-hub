@@ -31,6 +31,8 @@ This hub answers on `:18080`, but agents should not hard-code it:
   holds the `persona_*` voice library and all `breeze` / `sanotts` takes).
 
 Fan-in hub for the other hosts is `farm.routes.json` in `cmd/fanout-proxy/`.
+Fan-out is also what Open WebUI's TTS config should point at (`:3000` on this
+host) — see [farm.md → Open WebUI TTS wiring](farm.md#open-webui--tts-wiring).
 
 ## Directory layout (host-local, not in git)
 

@@ -9,7 +9,7 @@ discovery; the `:18080` table below is the per-host detail behind it.
 
 | Host | Hardware | Endpoint | Instances | Notes |
 |---|---|---|---|---|
-| `10.0.0.36` (ubuntu-gtx) | GTX 1080 8 GB, Vulkan | `:18080` | `breeze` (always warm), `sanotts` (always warm), `citrinet` ASR (5-min idle unload) | Host-native systemd service (`audio-cpp-hub.service`), see HOST-DEPLOYMENT.md |
+| `10.0.0.36` (ubuntu-gtx) | GTX 1080 8 GB, Vulkan | `:18080` | `breeze` (always warm), `sanotts` (always warm), `citrinet` ASR (5-min idle unload) | Host-native systemd service (`audio-cpp-hub.service`), see [deployment-10.0.0.36.md](deployment-10.0.0.36.md) |
 | `10.0.0.30` (ubuntu-max) | Strix Halo iGPU (Radeon 8060S, 128 GB GTT), RX 6600 XT idle | `:18080` | `breeze` (warm via `ExecStartPost`) | Docker `audio-cpp-hub-amd`, image `audio-cpp-hub:amd` (Mesa RADV) |
 | `10.0.0.30` (second hub) | same iGPU | `:18081` | `qwen3-vd` (voice-design, `instruct` top-level) | Docker `audio-cpp-hub-amd-qwen3`, image `audio-cpp-hub:amd-a3bfac4`, state dirs `data-qwen3/ logs-qwen3/ run-qwen3/` |
 | `10.0.0.32` (WINDOWS2) | Ryzen 9 5950X, CPU only (in Docker) | `:18080` | `sanotts` (fast tiny TTS) | Docker Desktop (WSL2), container `audio-cpp-hub-cpu`, image `audio-cpp-hub:cpu-espeak` |
@@ -136,3 +136,30 @@ curl -s http://10.0.0.36:18082/farm/health | python3 -m json.tool   # who is up,
 curl -s http://10.0.0.36:18082/v1/models                           # aliases with a READY backend
 ./clients/audiocpp_client.py health                                 # same, readable, no deps
 ```
+
+## Open WebUI — TTS wiring
+
+Open WebUI (`:3000` on `.36`) has no fan-out awareness, so it must be pointed at
+`:18082` by hand. **Admin → Settings → Audio:**
+
+| Setting | Value | Why |
+|---|---|---|
+| TTS Engine | **OpenAI** | the fan-out speaks `POST /v1/audio/speech` only |
+| OpenAI API Base URL | `http://10.0.0.36:18082/v1` | **`:18082`, not `:18080`** — failover across the farm; `:18080` is one hub, so a restart of `.36` takes voice off the air |
+| TTS Model | `breeze` · `expressive` · `sanotts` · `instant` · `qwen3-vd` | fan-out aliases (the table above), not hub service names |
+| Voice | leave a placeholder | audiocpp ignores the OpenAI `voice` field entirely; a value there is noise, not an error |
+
+If the TTS model list looks empty, the base URL is wrong (`:18080` returns hub
+service names, not aliases) or the backend is down — check
+`curl -s http://10.0.0.36:18082/v1/models`.
+
+**STT does not work through this path.** The fan-out does not speak OpenAI
+`POST /v1/audio/transcriptions`, and OWUI's built-in OpenAI STT would need an
+adapter to reach `citrinet`; there is none, so don't point OWUI's STT config at
+`:18082` or `:18080` expecting it to work. Transcription stays on the hub task
+API (`.36:18080`, service `citrinet`) — the Python client's `transcribe()`, or
+`POST /api/tasks` directly. Contract: [agent-api.md §2](agent-api.md#2-speech--text-stt).
+
+Because OWUI can't set per-request `options.instruction`, keep expressive voice
+design (`qwen3-vd`, `breeze` + instruction) for API/agent use; from OWUI pick
+the alias whose default delivery you want.

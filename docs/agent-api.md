@@ -185,6 +185,13 @@ The engine also accepts a plain JSON body on its native endpoint via the proxy:
 
 which returns the engine's JSON response (`{"text", "timing"}`) directly.
 
+### STT in Open WebUI
+
+Open WebUI's built-in OpenAI STT cannot reach `citrinet` — neither shape above is
+multipart, so OWUI would need an adapter that does not exist. Leave OWUI's STT
+config alone and transcribe through the task API above. OWUI's **TTS** side does
+work against the fan-out; wiring: [farm.md → Open WebUI TTS wiring](farm.md#open-webui--tts-wiring).
+
 ## 3. Minimal agent loop (pseudocode)
 
 ```
