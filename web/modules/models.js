@@ -9,7 +9,7 @@
 import { bindMenuKeys, renderEmptyState, renderStateError, showSkeleton } from "./async-ui.js";
 import { $, Api, esc, safeHttpUrl, t } from "./dom.js";
 import { openModelDlModal } from "./downloads-lazy.js";
-import { refreshInstances } from "./instances.js";
+import { maybeAutoSelectReadyModel, refreshInstances } from "./instances.js";
 import { restoreWeightsPath } from "./launch.js";
 import { renderWorkspace } from "./panels.js";
 import { getPendingModelId, go, modelRoute, parseRoute, setPendingModelId } from "./routing.js";
@@ -47,6 +47,8 @@ export async function loadModels() {
   updateQuickLaunchTitle();
   restoreWeightsPath();
   renderWorkspace();
+  // Models may arrive after the first instances poll; finish Ready auto-select then.
+  maybeAutoSelectReadyModel();
 }
 
 export let hfMenuEl = null;

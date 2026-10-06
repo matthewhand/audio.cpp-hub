@@ -51,10 +51,19 @@ export async function loadStats() {
 }
 
 /* ---------- rendering ---------- */
+function isJunkStatsModel(m) {
+  const id = String(m && m.modelId || "");
+  // Hide synthetic / probe junk that pollutes the dashboard (#119).
+  if (!id || id === "nonexistent_model") return true;
+  if (/^nonexistent/i.test(id) || /^test[_-]?model/i.test(id)) return true;
+  return false;
+}
+
 function renderStats(data) {
   const body = $("stats-body");
   body.innerHTML = "";
-  const models = Array.isArray(data && data.models) ? data.models : [];
+  const raw = Array.isArray(data && data.models) ? data.models : [];
+  const models = raw.filter(m => !isJunkStatsModel(m));
   if (!models.length) {
     renderEmptyState(body, t("stats.empty"));
     return;
@@ -128,6 +137,7 @@ function renderModelCard(m) {
   const head = el(`<div class="stats-model-head"></div>`);
   const title = el(`<div class="stats-model-title"></div>`);
   title.textContent = m.instanceName ? m.instanceName + " · " + m.modelId : m.modelId;
+  title.title = title.textContent;
   head.appendChild(title);
   if (m.category) {
     const badge = el(`<span class="badge"></span>`);
