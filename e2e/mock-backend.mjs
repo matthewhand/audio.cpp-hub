@@ -253,6 +253,21 @@ export class MockBackend {
             runMsP95: 0,
             rtfP50: 0,
             samplesForPerf: 0
+          },
+          {
+            modelId: "nonexistent_model",
+            total: 0,
+            ok: 0,
+            failed: 0,
+            successRate: 0,
+            audioSeconds: 0,
+            outputBytes: 0,
+            lastAt: 0,
+            queueMsP50: 0,
+            runMsP50: 0,
+            runMsP95: 0,
+            rtfP50: 0,
+            samplesForPerf: 3
           }
         ]
       });

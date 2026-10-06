@@ -6,7 +6,8 @@
 import { focusDialog, renderEmptyState, renderListError, restoreDialogFocus, showSkeleton } from "./async-ui.js";
 import { $, Api, esc, t } from "./dom.js";
 import { openLaunchModal } from "./launch.js";
-import { getPendingInstanceId, go, setPendingInstanceId } from "./routing.js";
+import { selectModelById } from "./models.js";
+import { getPendingInstanceId, go, modelRoute, parseRoute, setPendingInstanceId } from "./routing.js";
 import { activeInstanceId, models, selectedModelId, setActiveInstanceId } from "./state.js";
 
 export const STATUS_CLASS = { STARTING: "starting", READY: "ready", ERROR: "error", STOPPED: "stopped" };
@@ -26,6 +27,9 @@ export let instances = [];
 /* ---------- 实例列表 + 状态条（每 2s 轮询） ---------- */
 export let instancePoller = null;
 let instancesLoaded = false;   // 首次成功拉取前显示骨架屏 / 失败时给可见错误+重试
+/* One-shot: on first instance payload, prefer a model that already has a READY
+   instance so Synthesize works without a manual model switch (issue #119). */
+let autoReadyApplied = false;
 /* 轮询数据回调：只在成功时更新视图；失败由 Api.poll 的 onError 处理 */
 export function applyInstances(data) {
   instancesLoaded = true;
@@ -36,8 +40,31 @@ export function applyInstances(data) {
     const inst = instances.find(i => i.id === want);
     if (inst) { setPendingInstanceId(null); openInstanceDetail(inst); }
   }
+  maybeAutoSelectReadyModel();
   renderInstanceList();
   updateInstanceBar();
+}
+
+/* Prefer a Ready model on first load when the current selection has none.
+   Skips deep-linked #/model/<id> so explicit navigation still wins. */
+export function maybeAutoSelectReadyModel() {
+  if (autoReadyApplied) return;
+  if (!models.length) return; // instances may arrive before models; retry next poll
+  autoReadyApplied = true;
+  const ready = instances.filter(i => i.status === "READY");
+  if (!ready.length) return;
+  const route = parseRoute(location.hash);
+  if (route.view === "model" && route.id) return; // deep link wins
+  if (ready.some(i => i.modelId === selectedModelId)) return;
+  const remembered = localStorage.getItem("hub-model");
+  const pick = ready.find(i => i.modelId === remembered)
+    || ready.find(i => models.some(m => m.id === i.modelId))
+    || ready[0];
+  if (!pick || pick.modelId === selectedModelId) return;
+  selectModelById(pick.modelId);
+  if (route.view === "home" || !location.hash || location.hash === "#/" || location.hash === "#") {
+    history.replaceState(null, "", modelRoute(pick.modelId));
+  }
 }
 /* 轮询中的瞬时失败保留上次列表，仅在从未加载成功时显示错误/重试 */
 export function onInstancesError(e) {
@@ -142,8 +169,27 @@ export function updateInstanceBar() {
 
   for (const id of SUBMIT_BTNS) {
     const btn = $(id);
+    if (!btn) continue;
     btn.disabled = !has;
-    btn.textContent = has ? submitLabel(id) : submitLabel(id) + t("instance.noReadySuffix");
+    // Keep the verb clean; the one-line ready-hint explains why it's disabled (#119).
+    btn.textContent = submitLabel(id);
+    if (!has) btn.title = t("instance.noReady");
+    else btn.removeAttribute("title");
+  }
+  const hintMap = {
+    "tts-submit": "tts-ready-hint",
+    "asr-submit": "asr-ready-hint",
+    "sep-submit": "sep-ready-hint",
+    "music-submit": "music-ready-hint",
+    "other-submit": "other-ready-hint"
+  };
+  for (const hintId of Object.values(hintMap)) {
+    const hint = $(hintId);
+    if (!hint) continue;
+    hint.classList.toggle("hidden", has);
+    if (!has) {
+      hint.textContent = hintId === "tts-ready-hint" ? t("tts.needReady") : t("submit.needReady");
+    }
   }
 }
 

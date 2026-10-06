@@ -129,6 +129,7 @@
 
           <details id="tts-advanced"><summary data-i18n="common.advanced">高级参数</summary><div class="grid" id="tts-advanced-grid"></div></details>
           <button id="tts-submit" class="btn" data-i18n="tts.submit">合成</button>
+          <p id="tts-ready-hint" class="hint ready-hint hidden" role="status" data-i18n="tts.needReady">请先在上方启动或选择一个就绪实例，才能合成。</p>
           <div id="tts-msg" class="msg" role="status" aria-live="polite"></div>
           <div id="tts-stats" class="task-stats" aria-live="polite"></div>
           <div id="tts-result" class="hidden" aria-live="polite">
@@ -145,6 +146,7 @@
           <div id="asr-text-row"></div>
           <details id="asr-advanced" class="hidden"><summary data-i18n="common.advanced">高级参数</summary><div class="grid" id="asr-advanced-grid"></div></details>
           <button id="asr-submit" class="btn" data-i18n="asr.submit">识别</button>
+          <p id="asr-ready-hint" class="hint ready-hint hidden" role="status" data-i18n="submit.needReady">请先在上方启动或选择一个就绪实例。</p>
           <div id="asr-msg" class="msg" role="status" aria-live="polite"></div>
           <div id="asr-stats" class="task-stats" aria-live="polite"></div>
           <div id="asr-result" class="hidden" aria-live="polite">
@@ -162,6 +164,7 @@
           <div class="hint" data-i18n="sep.hint">输入 44.1kHz 音乐效果最佳。</div>
           <div id="sep-audio-picker"></div>
           <button id="sep-submit" class="btn" data-i18n="sep.submit">分离</button>
+          <p id="sep-ready-hint" class="hint ready-hint hidden" role="status" data-i18n="submit.needReady">请先在上方启动或选择一个就绪实例。</p>
           <div id="sep-msg" class="msg" role="status" aria-live="polite"></div>
           <div id="sep-stats" class="task-stats" aria-live="polite"></div>
           <div id="sep-result" aria-live="polite"></div>
@@ -181,6 +184,7 @@
           <div class="hint" data-i18n="music.abcHint">需要外部旋律条件时填写内联 ABC；cot=off 时不能携带 ABC。</div>
           <details id="music-advanced"><summary data-i18n="common.advanced">高级参数</summary><div class="grid" id="music-advanced-grid"></div></details>
           <button id="music-submit" class="btn" data-i18n="music.submit">生成音乐</button>
+          <p id="music-ready-hint" class="hint ready-hint hidden" role="status" data-i18n="submit.needReady">请先在上方启动或选择一个就绪实例。</p>
           <div id="music-msg" class="msg" role="status" aria-live="polite"></div>
           <div id="music-stats" class="task-stats" aria-live="polite"></div>
           <div id="music-result" aria-live="polite"></div>
@@ -196,6 +200,7 @@
           <div id="other-fields"></div>
           <label><span data-i18n="other.extraLabel">额外参数（JSON，合并进请求）</span><textarea id="other-extra" rows="3" data-i18n-placeholder="other.extraPlaceholder" placeholder='{"seed": 42}'></textarea></label>
           <button id="other-submit" class="btn" data-i18n="other.submit">运行</button>
+          <p id="other-ready-hint" class="hint ready-hint hidden" role="status" data-i18n="submit.needReady">请先在上方启动或选择一个就绪实例。</p>
           <div id="other-msg" class="msg" role="status" aria-live="polite"></div>
           <div id="other-stats" class="task-stats" aria-live="polite"></div>
           <div id="other-result" aria-live="polite"></div>

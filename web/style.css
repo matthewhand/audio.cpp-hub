@@ -350,10 +350,17 @@ footer { flex: none; }
 .tts-card h2 { margin-top: 0; }
 
 /* ---- 用量与性能看板（#/stats） ---- */
-.stats-body { padding: var(--space-4) var(--space-5); overflow-y: auto; }
+/* Scroll region inside the constrained history-panel-card (#stats fits viewport) */
+.stats-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-3) var(--space-1) var(--space-4);
+}
 .stats-totals {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: var(--space-3);
   margin-bottom: var(--space-5);
 }
@@ -418,18 +425,43 @@ footer { flex: none; }
   outline: none;
   border-color: var(--accent);
 }
-.stats-models { display: flex; flex-direction: column; gap: var(--space-3); }
-.stats-model-head { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
-.stats-model-title { font-weight: 600; font-size: 14px; }
+.stats-models {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--space-3);
+  align-content: start;
+}
+.stats-model { min-width: 0; overflow: hidden; }
+.stats-model-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.stats-model-title {
+  font-weight: 600;
+  font-size: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-2) var(--space-3);
 }
-.stats-cell { display: flex; flex-direction: column; gap: 2px; }
+.stats-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .stats-cell-label { font-size: 12px; color: var(--text-dim); }
-.stats-cell-value { font-size: 15px; font-variant-numeric: tabular-nums; }
+.stats-cell-value {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .stats-note { margin-top: var(--space-3); }
+.ready-hint { margin: 6px 0 0; max-width: 42rem; line-height: 1.4; }
 
 /* 模型列表：紧凑展示（标题 + 家族徽标一行，描述单行省略） */
 #model-list { gap: 6px; }
@@ -1089,6 +1121,7 @@ footer { padding: 4px 24px 18px; }
 }
 
 /* ---------- 设置 modal ---------- */
+/* #119 light nav polish */
 .header-actions { display: flex; gap: 10px; }
 
 /* 对话框：.modal/.modal-overlay 为历史类名，.dialog/.dialog-overlay 为规范别名 */
@@ -1373,7 +1406,8 @@ footer { padding: 4px 24px 18px; }
 
 /* ---------- TTS 操作历史（右侧边栏） ---------- */
 #history-panel .history-panel-card,
-#voices-panel .history-panel-card {
+#voices-panel .history-panel-card,
+#stats-panel .history-panel-card {
   width: min(1100px, calc(100vw - 48px));
   height: calc(100vh - 96px);
   min-height: 0;
@@ -1389,11 +1423,13 @@ footer { padding: 4px 24px 18px; }
   transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
 }
 #history-panel:not(.hidden) .history-panel-card,
-#voices-panel:not(.hidden) .history-panel-card { opacity: 1; transform: none; }
+#voices-panel:not(.hidden) .history-panel-card,
+#stats-panel:not(.hidden) .history-panel-card { opacity: 1; transform: none; }
 @media (max-width: 1100px) {
   /* 窄屏下全屏面板进一步收紧边距 */
   #history-panel .history-panel-card,
-  #voices-panel .history-panel-card {
+  #voices-panel .history-panel-card,
+  #stats-panel .history-panel-card {
     width: calc(100vw - 16px);
     height: calc(100vh - 24px);
     border-radius: 10px;

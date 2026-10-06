@@ -127,7 +127,10 @@ export function renderSidebarList() {
   const modelId = historyModelId();
   if (!modelId) {
     sidebarRows.clear();
-    renderEmptyState(list, t("history.empty"));
+    renderEmptyState(list, t("history.empty"), {
+      label: t("history.switchModel"),
+      onClick: () => { closeHistoryPanel(); }
+    });
     return;
   }
   const tasks = [...taskViews.values()].filter(x => x.modelId === modelId);
@@ -168,7 +171,14 @@ export function renderSidebarList() {
     if (list.children[i] !== desired[i]) list.insertBefore(desired[i], list.children[i] || null);
   }
   while (list.children.length > desired.length) list.removeChild(list.lastChild);
-  if (!desired.length) renderEmptyState(list, t("history.empty"));
+  if (!desired.length) {
+    const m = selectedModel();
+    const name = m ? (I18N.pick(m, "displayName") || m.id) : modelId;
+    renderEmptyState(list, t("history.emptyScoped", { model: name }), {
+      label: t("history.switchModel"),
+      onClick: () => { closeHistoryPanel(); }
+    });
+  }
 }
 
 export function historyRowsFlattened(modelId, ctx) {
