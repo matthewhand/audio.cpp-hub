@@ -159,6 +159,8 @@ body {
 h2 { font-size: var(--text-md); font-weight: var(--weight-bold); margin: 16px 0 10px; letter-spacing: 0.02em; }
 h3 { font-size: var(--text-base); font-weight: var(--weight-semibold); margin: 0 0 12px; }
 
+/* Lucide 雪碧图零占位：内联 svg 的 hidden 不可靠（默认 300×150 会顶下整页），且不能 display:none，否则部分引擎不绘制 <use>。 */
+.icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
 .hidden { display: none !important; }
 /* 仅供读屏的文本（视觉隐藏但保留在无障碍树中） */
 .sr-only {
