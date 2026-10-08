@@ -8,12 +8,15 @@
 import { $, t } from "./dom.js";
 
 export const themeBtn = $("theme-toggle");
-/* 页头按钮在「跟随系统 / 浅色 / 深色」之间循环；图标与 title 都取自当前模式（#87） */
+/* 页头按钮在「跟随系统 / 浅色 / 深色」之间循环；图标与 title 都取自当前模式（#87）。
+   图标是 index.html 头部 Lucide 雪碧图的 <use> 引用：按模式切换 href，
+   不再写 textContent（按钮里已没有文字节点） */
 const THEME_MODES = ["system", "light", "dark"];
-const THEME_ICONS = { system: "🖥️", light: "☀️", dark: "🌙" };
+const THEME_ICON_IDS = { system: "i-monitor", light: "i-sun", dark: "i-moon" };
 export function applyThemeIcon() {
   const mode = window.HubTheme.mode();
-  themeBtn.textContent = THEME_ICONS[mode] || THEME_ICONS.system;
+  const use = themeBtn.querySelector("use");
+  if (use) use.setAttribute("href", "#" + (THEME_ICON_IDS[mode] || THEME_ICON_IDS.system));
   themeBtn.title = t("settings.general.theme") + "：" + t("settings.theme." + mode);
 }
 themeBtn.onclick = () => {
@@ -26,8 +29,13 @@ themeBtn.onclick = () => {
 applyThemeIcon();
 
 export const langBtn = $("lang-toggle");
+/* 语言按钮 = Lucide languages 图标 + #lang-label 短文字（EN / 中文）：
+   只改 label 的文字，不动按钮里的 <svg> */
 export function applyLangBtn() {
-  langBtn.textContent = I18N.lang() === "zh" ? "EN" : "中文";
+  const label = $("lang-label");
+  const text = I18N.lang() === "zh" ? "EN" : "中文";
+  if (label) label.textContent = text;
+  else langBtn.textContent = text; // 兜底：旧标记里没有 #lang-label
 }
 langBtn.onclick = () => I18N.setLang(I18N.lang() === "zh" ? "en" : "zh");
 

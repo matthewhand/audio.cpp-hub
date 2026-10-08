@@ -32,6 +32,7 @@ import { applyLangBtn, applyThemeIcon, closeDrawer } from "./modules/shell.js";
 import { closeHistoryPanel } from "./modules/sidebar.js";
 import { closeStatsPanel, reloadStats } from "./modules/stats-lazy.js";
 import { models, selectedModel } from "./modules/state.js";
+import { startTaskEvents } from "./modules/task-events.js";
 import { closeVoicesPanel } from "./modules/voices-panel-lazy.js";
 
 /* 回填经典脚本侧的转发器：audio-picker.js 的 toast 与 $ / el 在模块求值前就已从
@@ -102,12 +103,14 @@ document.addEventListener("keydown", (e) => {
 I18N.onChange(rerenderAll);
 I18N.applyI18n();
 applyLangBtn();
+applyThemeIcon();
 buildEmotionSliders();
 
 /* 全局轮询（2s）：实例 / 事件 / 下载三条独立轮询，由 Api.poll 托管（list:true 带数组守卫）。
    Api.poll 保证：上一轮结束才排下一轮（不叠加请求）、标签页隐藏时不发请求、
    重新可见立即补一次；实例与下载的句柄由各自模块持有（refresh 时复用）。 */
 startInstancePolling();
+startTaskEvents();
 startEventsPolling();
 startDownloadsPolling();
 

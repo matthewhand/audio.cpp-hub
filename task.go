@@ -24,18 +24,24 @@ import (
 // 状态落盘 data/tasks/<id>.task.json，重启回放（进行中标记 CANCELLED）；
 // 非 TTS 结果落盘 data/tasks/<id>.result.json；TTS 复用历史链路。
 type Task struct {
-	ID           string         `json:"id"`
-	InstanceID   string         `json:"instanceId"`
-	InstanceName string         `json:"instanceName"`
-	ModelID      string         `json:"modelId"`
-	Category     string         `json:"category"`
-	Status       string         `json:"status"` // QUEUED/RUNNING/DONE/FAILED/CANCELLED
-	CreatedAt    int64          `json:"createdAt"`
-	StartedAt    *int64         `json:"startedAt,omitempty"`
-	FinishedAt   *int64         `json:"finishedAt,omitempty"`
-	Error        string         `json:"error,omitempty"`
-	Text         *string        `json:"text,omitempty"`
-	Result       map[string]any `json:"result,omitempty"`
+	ID           string `json:"id"`
+	InstanceID   string `json:"instanceId"`
+	InstanceName string `json:"instanceName"`
+	ModelID      string `json:"modelId"`
+	Category     string `json:"category"`
+	Status       string `json:"status"` // QUEUED/RUNNING/DONE/FAILED/CANCELLED
+	CreatedAt    int64  `json:"createdAt"`
+	StartedAt    *int64 `json:"startedAt,omitempty"`
+	FinishedAt   *int64 `json:"finishedAt,omitempty"`
+	Error        string `json:"error,omitempty"`
+	// Memory peaks observed by the sampler while this task was RUNNING
+	// (nil = never sampled: non-Linux hub, or shorter than one sample
+	// interval). Written by NoteInstanceSample; carried on task.finished
+	// push events as peakRamBytes / peakVramBytes.
+	PeakRamBytes  *int64         `json:"peakRamBytes,omitempty"`
+	PeakVramBytes *int64         `json:"peakVramBytes,omitempty"`
+	Text          *string        `json:"text,omitempty"`
+	Result        map[string]any `json:"result,omitempty"`
 
 	// 以下不参与持久化
 	inst       *Instance
@@ -62,6 +68,7 @@ type TaskManager struct {
 	cancels   map[string]context.CancelFunc // RUNNING 任务的中断函数
 	history   *HistoryManager
 	forwarder *http.Client
+	observers []taskObserver
 }
 
 // taskQueue 每实例一个串行队列：任务由单个 worker goroutine 顺序执行。
@@ -164,20 +171,31 @@ func (m *TaskManager) Submit(inst *Instance, request map[string]any, requestRaw 
 	m.persist(t)
 	m.mu.Lock()
 	queued := m.enqueueLocked(inst.ID, t)
+	var ev taskEvent
+	evOK := false
+	if queued {
+		ev = m.eventLocked(t, eventTaskQueued)
+		evOK = true
+	} else if t.Status == "QUEUED" {
+		t.Status = "FAILED"
+		t.Error = fmt.Sprintf("TASK_QUEUE_FULL: 实例任务队列已满（上限 %d）", taskQueueSize)
+		now := time.Now().UnixMilli()
+		t.FinishedAt = &now
+		ev = m.eventLocked(t, eventTaskFailed)
+		evOK = true
+	}
 	m.mu.Unlock()
 	if !queued {
-		m.mu.Lock()
-		if t.Status == "QUEUED" {
-			t.Status = "FAILED"
-			t.Error = fmt.Sprintf("TASK_QUEUE_FULL: 实例任务队列已满（上限 %d）", taskQueueSize)
-			now := time.Now().UnixMilli()
-			t.FinishedAt = &now
-		}
-		m.mu.Unlock()
 		m.persist(t)
 		m.evictFinished()
+		if evOK {
+			m.emit(ev)
+		}
 		log.Printf("任务入队失败（队列已满）: %s (实例 %s)", t.ID, inst.Name)
 		return t
+	}
+	if evOK {
+		m.emit(ev)
 	}
 	log.Printf("任务已入队: %s (实例 %s, category %s)", t.ID, inst.Name, t.Category)
 	return t
@@ -255,17 +273,22 @@ func (m *TaskManager) StopQueue(instanceID string) {
 		close(q.ch) // 触发 runQueue 退出（收到 !ok）
 	}
 	var pending []*Task
+	var evs []taskEvent
 	for _, t := range m.tasks {
 		if t.InstanceID == instanceID && t.Status == "QUEUED" {
 			t.Status = "CANCELLED"
 			now := time.Now().UnixMilli()
 			t.FinishedAt = &now
 			pending = append(pending, t)
+			evs = append(evs, m.eventLocked(t, eventTaskCancelled))
 		}
 	}
 	m.mu.Unlock()
 	for _, t := range pending {
 		m.persist(t)
+	}
+	for _, ev := range evs {
+		m.emit(ev)
 	}
 }
 
@@ -285,8 +308,10 @@ func (m *TaskManager) Cancel(id string) bool {
 			cancel()
 			delete(m.cancels, id)
 		}
+		ev := m.eventLocked(t, eventTaskCancelled)
 		m.mu.Unlock()
 		m.persist(t)
+		m.emit(ev)
 		log.Printf("任务已取消: %s", id)
 		return true
 	}
@@ -403,6 +428,14 @@ func snapshotTaskLocked(t *Task) Task {
 		v := *t.FinishedAt
 		cp.FinishedAt = &v
 	}
+	if t.PeakRamBytes != nil {
+		v := *t.PeakRamBytes
+		cp.PeakRamBytes = &v
+	}
+	if t.PeakVramBytes != nil {
+		v := *t.PeakVramBytes
+		cp.PeakVramBytes = &v
+	}
 	return cp
 }
 
@@ -451,8 +484,10 @@ func (m *TaskManager) execute(t *Task) {
 	t.StartedAt = &now
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancels[t.ID] = cancel
+	started := m.eventLocked(t, eventTaskStarted)
 	m.mu.Unlock()
 	m.persist(t)
+	m.emit(started)
 
 	var err error
 	if t.Category == "tts" {
@@ -475,18 +510,25 @@ func (m *TaskManager) execute(t *Task) {
 	m.mu.Lock()
 	delete(m.cancels, t.ID)
 	cancel()
+	evName := ""
 	if err != nil {
-		if t.Status == "RUNNING" { // 已被 Cancel 标记的保持 CANCELLED
+		if t.Status == "RUNNING" { // 已被 Cancel 标记的保持 CANCELLED（事件由 Cancel 发出）
 			t.Status = "FAILED"
 			t.Error = summarize(err.Error())
+			evName = eventTaskFailed
 			// TTS 历史由 runTTS 统一记录（含音频提取失败详情），此处不再重复记录。
 		}
 	} else if t.Status == "RUNNING" {
 		t.Status = "DONE"
+		evName = eventTaskFinished
 	}
 	if t.FinishedAt == nil {
-		now := time.Now().UnixMilli()
-		t.FinishedAt = &now
+		fin := time.Now().UnixMilli()
+		t.FinishedAt = &fin
+	}
+	var doneEv taskEvent
+	if evName != "" {
+		doneEv = m.eventLocked(t, evName)
 	}
 	m.mu.Unlock()
 	if err != nil {
@@ -494,6 +536,9 @@ func (m *TaskManager) execute(t *Task) {
 	}
 	m.persist(t)
 	m.evictFinished()
+	if evName != "" {
+		m.emit(doneEv)
+	}
 }
 
 // runTTS 响应落盘临时文件 → 提取 audio 写成 wav → 解析 WAV 头取元数据 → 记历史。
@@ -667,6 +712,82 @@ func (m *TaskManager) evictFinished() {
 		delete(m.tasks, t.ID)
 		os.Remove(t.resultPath)
 		os.Remove(filepath.Join(taskStateDir, t.ID+taskSuffix))
+	}
+}
+
+// AddObserver 注册任务生命周期观察者（EventBus、内存采样器）。
+// 观察者在任务执行路径上同步调用，必须尽快返回且不得再锁 TaskManager。
+func (m *TaskManager) AddObserver(o taskObserver) {
+	if o == nil {
+		return
+	}
+	m.mu.Lock()
+	m.observers = append(m.observers, o)
+	m.mu.Unlock()
+}
+
+// eventLocked 在持锁状态下复制一次状态变迁。调用方须持 m.mu。
+func (m *TaskManager) eventLocked(t *Task, name string) taskEvent {
+	ev := taskEvent{
+		Name:       name,
+		TaskID:     t.ID,
+		InstanceID: t.InstanceID,
+		ModelID:    t.ModelID,
+		Category:   t.Category,
+		Status:     t.Status,
+		Error:      t.Error,
+	}
+	for _, o := range m.tasks {
+		if o.InstanceID == t.InstanceID && o.Status == "RUNNING" {
+			ev.StillRunning = true
+			break
+		}
+	}
+	if t.StartedAt != nil && t.FinishedAt != nil && *t.FinishedAt >= *t.StartedAt {
+		ev.DurationMs = *t.FinishedAt - *t.StartedAt
+	}
+	if t.PeakRamBytes != nil {
+		v := *t.PeakRamBytes
+		ev.PeakRam = &v
+	}
+	if t.PeakVramBytes != nil {
+		v := *t.PeakVramBytes
+		ev.PeakVram = &v
+	}
+	return ev
+}
+
+// emit 把一次状态变迁交给观察者。不持 m.mu，避免观察者回调用死锁。
+func (m *TaskManager) emit(ev taskEvent) {
+	if ev.Name == "" {
+		return
+	}
+	m.mu.Lock()
+	obs := append([]taskObserver(nil), m.observers...)
+	m.mu.Unlock()
+	for _, o := range obs {
+		o.OnTaskEvent(ev)
+	}
+}
+
+// NoteInstanceSample 把一次内存采样记入该实例当前 RUNNING 任务的峰值。
+// vram < 0 表示本次没有 VRAM 读数，不更新显存峰值。不落盘：任务结束时的
+// persist 会带上当时的峰值。
+func (m *TaskManager) NoteInstanceSample(instanceID string, ram, vram int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, t := range m.tasks {
+		if t.InstanceID != instanceID || t.Status != "RUNNING" {
+			continue
+		}
+		if t.PeakRamBytes == nil || ram > *t.PeakRamBytes {
+			v := ram
+			t.PeakRamBytes = &v
+		}
+		if vram >= 0 && (t.PeakVramBytes == nil || vram > *t.PeakVramBytes) {
+			v := vram
+			t.PeakVramBytes = &v
+		}
 	}
 }
 

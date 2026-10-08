@@ -30,6 +30,20 @@ Upstream license texts are available in each module's repository, e.g.
 
 ---
 
+## Vendored assets
+
+| Asset | Version | License | Full text |
+| --- | --- | --- | --- |
+| Lucide icons (inline SVG sprite in `web/index.html`) | lucide-static v1.52.0 | ISC (portions derived from Feather, MIT) | `third_party/lucide/LICENSE` |
+
+Icons used (path data copied verbatim into the hidden `<svg>` sprite at the
+top of `web/index.html`, consumed via `<use href="#i-…">`): `menu`,
+`mic-vocal`, `history`, `download`, `chart-column`, `languages`, `settings`,
+`sun`, `moon`, `monitor`, `x`. Upstream: https://lucide.dev / ISC with
+attribution, https://github.com/lucide-icons/lucide.
+
+---
+
 ## Apache License 2.0
 
 Applies to: getlantern/systray, getlantern/context, getlantern/errors,

@@ -126,6 +126,32 @@ func (m *InstanceManager) List() []*Instance {
 	return out
 }
 
+// InstancePID is one live instance and the pid of its audiocpp_server child.
+type InstancePID struct {
+	ID  string
+	PID int
+}
+
+// RunningWithPID lists instances whose child is still running. Exited
+// processes are skipped so a recycled pid is not sampled as this instance.
+func (m *InstanceManager) RunningWithPID() []InstancePID {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]InstancePID, 0, len(m.items))
+	for _, inst := range m.items {
+		if inst.cmd == nil || inst.cmd.Process == nil || inst.done == nil {
+			continue
+		}
+		select {
+		case <-inst.done:
+			continue
+		default:
+		}
+		out = append(out, InstancePID{ID: inst.ID, PID: inst.cmd.Process.Pid})
+	}
+	return out
+}
+
 func (m *InstanceManager) Get(id string) *Instance {
 	m.mu.Lock()
 	defer m.mu.Unlock()

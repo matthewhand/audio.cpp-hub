@@ -49,6 +49,7 @@ func (h *Hub) registerRoutes(mux *http.ServeMux) {
 		{"POST", "/api/instances", h.handleInstanceStart},
 		{"DELETE", "/api/instances/{id}", h.handleInstanceStop},
 		{"GET", "/api/events", h.handleEvents},
+		{"GET", "/api/events/stream", h.handleEventStream},
 		{"GET", "/api/stats", h.handleStats},
 		{"GET", "/api/executables", h.handleExecList},
 		{"POST", "/api/executables", h.handleExecAdd},
@@ -277,7 +278,14 @@ func (h *Hub) handleModels(w http.ResponseWriter, r *http.Request) {
 func (h *Hub) handleInstanceList(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for _, inst := range h.instances.List() {
-		out = append(out, h.instances.ToJSON(inst, h.tasks.ActiveCountFor(inst.ID)))
+		item := h.instances.ToJSON(inst, h.tasks.ActiveCountFor(inst.ID))
+		// Sampling never fails the list: no sample yet (or non-Linux) omits memory.
+		if h.mem != nil {
+			if mem := h.mem.MemoryJSON(inst.ID); mem != nil {
+				item["memory"] = mem
+			}
+		}
+		out = append(out, item)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

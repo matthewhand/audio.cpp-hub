@@ -2,7 +2,7 @@
 
 audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README.md`](../README.md) 配置章节）。所有接口**无鉴权**，仅适用于本机 / 局域网，详见 [`SECURITY.md`](../SECURITY.md)。
 
-本文以 `api.go` 中注册的路由为准（`registerRoutes` 的 `apiRoute` 表共 49 条；另有 `/v1/*` 代理与 `web/` 静态服务）。响应约定：
+本文以 `api.go` 中注册的路由为准（`registerRoutes` 的 `apiRoute` 表共 51 条；另有 `/v1/*` 代理与 `web/` 静态服务）。响应约定：
 
 - 绝大多数 `GET` / 增删改接口直接返回对象或数组（JSON）
 - 部分删除 / 更新接口返回包装体 `{"ok": true, "data": {...}}`
@@ -25,6 +25,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 | POST | `/api/instances` | 启动实例 |
 | DELETE | `/api/instances/{id}` | 停止实例 |
 | GET | `/api/events` | 实例事件日志 |
+| GET | `/api/events/stream` | 任务生命周期 SSE（hub 本机；fan-out 不代理） |
 | GET | `/api/stats` | 用量与性能统计（按模型聚合） |
 | GET | `/api/executables` | 可执行文件列表 |
 | POST | `/api/executables` | 添加可执行文件 |
@@ -75,7 +76,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 
 未匹配的 `/api/*` 返回 `404 UNKNOWN_API`；其余 GET 由 `web/` 静态文件服务。
 
-> 表中 49 条与 `api.go` 的 `registerRoutes` 一一对应。其中 `PUT` / `DELETE` 的 `groups/{gid}` 与 `{taskId}/group` 两条在代码里共用一个四段通配模式 `/api/history/{modelId}/{seg3}/{seg4}` 再按路径段分发（两条路径在 `http.ServeMux` 里互相冲突），对外仍是上表的两个独立端点。
+> `apiRoute` 表共 51 条（含 `GET /api/events/stream`）。上表把共用通配的端点拆开展示：`PUT` / `DELETE` 的 `groups/{gid}` 与 `{taskId}/group` 在代码里各用一条四段模式 `/api/history/{modelId}/{seg3}/{seg4}` 再按路径段分发（两条路径在 `http.ServeMux` 里互相冲突）。`/v1/models` 与 `/v1/*` 在代码里是一条 `/v1/` 代理。
 
 ---
 
@@ -98,6 +99,27 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 ### `GET /api/instances`
 
 返回实例数组（含每实例活跃任务数 `taskCount`）。
+
+采样开始后，每个实例可以多一个 `memory` 对象；第一次 RSS 采样之前（以及非 Linux，本机构建没有 `/proc`）整个字段省略，调用方要把它当可选。VRAM 从未读到时省略全部 `vram*` 字段，不写 0。平均是**时间加权**平均（每个样本按它保持到下一次采样的时长加权，不是简单算术平均），从实例启动起累计，不按任务清零。
+
+```json
+{
+  "ramBytes": 644245094,
+  "ramPeakBytes": 1073741824,
+  "ramAvgBytes": 751619277,
+  "vramBytes": 3865470566,
+  "vramPeakBytes": 4402341478,
+  "vramAvgBytes": 3972844749,
+  "vramSource": "nvidia-smi",
+  "samples": 12,
+  "sampledAt": 1756400000000,
+  "busy": false
+}
+```
+
+- `vramSource` 为 `drm`（Linux DRM fdinfo，按 `drm-client-id` 去重）或 `nvidia-smi`
+- `busy` 为真表示该实例当前有 RUNNING 任务，采样间隔约 1s；空闲约 10s
+- 采样失败不会让这个接口报错。fan-out 聚合 `GET /api/instances` 时原样带上 `memory`（多出来的字段不影响路由）
 
 ### `POST /api/instances`
 
@@ -129,7 +151,26 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 
 ### `GET /api/events`
 
-实例事件数组，元素为 `{"time","level","message"}`。
+实例事件数组，元素为 `{"time","level","message"}`。这是轮询日志，不是推送。
+
+### `GET /api/events/stream`
+
+Server-Sent Events（`Content-Type: text/event-stream`）。连接后先发一条 `event: hello` / `data: {}`，之后约每 15 秒一条 `: ping` 注释保活。任务状态变化另发命名事件，`data` 为 JSON：
+
+| 事件 | 数据 |
+| --- | --- |
+| `task.queued` | `taskId` `instanceId` `modelId` `category` `ts` |
+| `task.started` | 同上 |
+| `task.finished` | 同上，加 `ok: true`、`durationMs`，已知时还有 `peakRamBytes` / `peakVramBytes` |
+| `task.failed` | 同上，加 `ok: false`、`durationMs`、`error` |
+| `task.cancelled` | 同 `task.queued` |
+| `instance.memory` | 可选。实例正忙时每次采样一条：`instanceId` `ramBytes` `ts`，已知时还有 `vramBytes` `vramSource` |
+
+慢订阅者的缓冲满了就丢掉那一条，任务执行不会等 UI。客户端断开即退订。`EventSource` 默认会重连。`main.go` 不设 `WriteTimeout`，所以这条长连接不会被写超时掐断。
+
+**fan-out 不代理这条流**（`cmd/fanout-proxy` 只转发它文档里列出的那些路由）。要收推送就直连那台 hub。
+
+没有事件总线时（不应出现在正常进程里）返回 `503 EVENTS_UNAVAILABLE`。
 
 ### `GET /api/stats`
 
@@ -231,7 +272,7 @@ body 同上，更新后返回条目；不存在 `404 EXEC_NOT_FOUND`。
 
 ## 推理任务
 
-任务对象字段：`id`、`instanceId`、`instanceName`、`modelId`、`category`、`status`（`QUEUED` / `RUNNING` / `DONE` / `FAILED` / `CANCELLED`）、`createdAt`、`startedAt?`、`finishedAt?`、`error?`、`text?`、`result?`。同实例任务串行执行，无执行时长上限。
+任务对象字段：`id`、`instanceId`、`instanceName`、`modelId`、`category`、`status`（`QUEUED` / `RUNNING` / `DONE` / `FAILED` / `CANCELLED`）、`createdAt`、`startedAt?`、`finishedAt?`、`error?`、`text?`、`result?`，以及可选的 `peakRamBytes` / `peakVramBytes`（该任务处于 RUNNING 期间采样到的峰值；没采到就省略，不会写 0）。同实例任务串行执行，无执行时长上限。
 
 ### `POST /api/tasks`
 
@@ -479,6 +520,7 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 | `GET /api/models` | `web/modules/models.js:27`（`Api.list`） |
 | `GET /api/instances` | `web/modules/instances.js:49` 首屏加载 + `web/modules/instances.js:57` 2s 轮询 |
 | `GET /api/events` | `web/modules/async-ui.js:189`（`startEventsPolling`）2s 轮询（失败静默） |
+| `GET /api/events/stream` | `web/modules/task-events.js`（`EventSource`，不是 `fetch`；失败静默，实例列表仍靠 2s 轮询） |
 | `GET /api/stats` | `web/modules/stats.js:46`（`loadStats`）打开 `#/stats` 时按需拉取，非轮询 |
 | `GET /api/downloads` | `web/modules/downloads-lazy.js:60` 首屏加载 + `web/modules/downloads-lazy.js:65` 2s 轮询 |
 | `POST /api/tasks` | `web/modules/tasks.js:27` |
@@ -486,4 +528,4 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 | `GET /api/tasks?modelId=` | `web/modules/tasks.js:106`（`Api.list` + `query`，`reattachTasks` 重挂） |
 | `GET /api/tasks/{id}` | `web/modules/tasks.js:55`（每个进行中任务一个轮询句柄，到终态即 `stop()`） |
 
-全局 2s 轮询的启动顺序在 `web/app.js:110`–`112`（实例 → 事件 → 下载）。上表只列 2s 轮询与首屏加载涉及的端点；其余接口（证书、executables、profiles、history、任务结果、voices、fs 等）同样已全部经 `Api.*` 发出——`web/` 内除 Service Worker 自身外没有裸 `fetch`。
+全局 2s 轮询的启动顺序在 `web/app.js` 启动段（实例 → 任务事件流 → 事件日志 → 下载）。上表只列 2s 轮询与首屏加载涉及的端点；其余接口（证书、executables、profiles、history、任务结果、voices、fs 等）同样已全部经 `Api.*` 发出——`web/` 内除 Service Worker 自身外没有裸 `fetch`。任务推送是 `EventSource`，Service Worker 对 `/api/*` 不 `respondWith`，因此不会拦截或缓存这条流。

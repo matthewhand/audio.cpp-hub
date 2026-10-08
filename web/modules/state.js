@@ -28,3 +28,10 @@ export function modelConfigured(m) {
   const weightsOk = profiles.some(x => x.modelId === m.id && x.weightsPath && x.weightsExists !== false);
   return weightsOk && executables.some(e => e.exists);
 }
+
+/* 正在生成的实例 id。task-events.js 就地增删（SSE task.started / 终态），
+   instances.js 只读。放在这个叶子模块里，避免两边互相 import。 */
+export const generatingIds = new Set();
+export function isGenerating(id) {
+  return generatingIds.has(id);
+}

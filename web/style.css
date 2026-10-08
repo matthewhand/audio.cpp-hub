@@ -242,16 +242,35 @@ header {
   border-radius: 50%;
   border: 1px solid var(--border);
   background: var(--input-bg);
+  color: var(--text);
   font-size: 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
-.theme-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+/* 页头图标按钮内的 Lucide 图标（雪碧图 <use>）：统一 18px、随主题继承颜色 */
+.theme-btn .icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.theme-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+  background: var(--ring);
+}
+/* 按压反馈：回落后轻微收缩，替代图标时代的字号变化 */
+.theme-btn:active { transform: translateY(0) scale(0.94); }
 
-/* 语言切换按钮：胶囊形，容纳 EN / 中文 文字 */
+/* 语言切换按钮：胶囊形，容纳 EN / 中文 文字 + languages 图标 */
 #lang-toggle {
   width: auto;
   min-width: 38px;
@@ -260,6 +279,7 @@ header {
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0.3px;
+  gap: 6px;
 }
 
 /* ---------- 布局（左右栏各自独立滚动） ---------- */
@@ -345,6 +365,8 @@ footer { flex: none; }
 .card-title { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
 .card-family { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 .card-desc { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+/* 实例卡片内存行（RAM / VRAM：当前 · 峰值 · 平均），完整明细在 title 提示里 */
+.card-mem { font-size: 12px; color: var(--text-dim); margin-top: 4px; line-height: 1.5; }
 .card-actions { margin-top: 10px; display: flex; gap: 8px; }
 .tts-card { padding: 20px 22px; }
 .tts-card h2 { margin-top: 0; }
@@ -558,6 +580,13 @@ footer { flex: none; }
   border: 2px solid transparent;
   border-top-color: var(--accent-contrast);
   animation: spin 0.8s linear infinite;
+}
+/* 「生成中…」徽标（SSE task.started 即时出现，复用 @keyframes pulse 呼吸闪烁）；
+   与 .badge.working 的分工：working 靠 2s 轮询的 taskCount，generating 靠推送即时点亮 */
+.badge.generating {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  animation: pulse 1.2s ease-in-out infinite;
 }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
@@ -1186,6 +1215,7 @@ footer { padding: 4px 24px 18px; }
 .kv-row { display: flex; gap: 12px; align-items: baseline; }
 .kv-key { flex: none; width: 150px; color: var(--text-dim); }
 .kv-val { flex: 1; word-break: break-all; user-select: text; }
+.kv-val.pre { white-space: pre-line; }
 .kv-opts { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .kv-opts code {
   background: var(--bg);
@@ -2077,6 +2107,8 @@ footer { padding: 4px 24px 18px; }
     background-image: none;
     background-color: var(--accent);
   }
+  /* 「生成中…」呼吸闪烁降级为常亮徽标（文字本身已是状态反馈，闪烁非必要） */
+  .badge.generating { animation: none !important; }
   /* 骨架屏流光同样为装饰，降级为静态块 */
   .skeleton { animation: none !important; }
 }

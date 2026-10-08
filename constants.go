@@ -1,5 +1,7 @@
 package main
 
+import "time"
+
 // 行为常量集中定义，避免魔法数字散落在各文件里、含义漂移。
 // 注意：即使数值相同，语义不同的常量也各自命名，不合并复用。
 
@@ -23,4 +25,18 @@ const (
 
 	// 下载：单分段最小字节数，小于该值不分段。
 	dlSegmentMin = 32 * 1024 * 1024
+
+	// 内存采样（memory.go）：实例有 RUNNING 任务时 ~1s、空闲时 ~10s 一采，
+	// 基础心跳 1s（决定 pass 的最大粒度，也用于发现新实例）；
+	// nvidia-smi 单次查询超时与失败后的退避时长（缺二进制不再每秒拉进程）。
+	memSampleBusyInterval = 1 * time.Second
+	memSampleIdleInterval = 10 * time.Second
+	memSamplerTick        = 1 * time.Second
+	nvidiaQueryTimeout    = 2 * time.Second
+	nvidiaBackoff         = 5 * time.Minute
+
+	// SSE（events.go）：连接后心跳注释间隔与每订阅者事件缓冲上限
+	// （慢订阅者缓冲满即丢事件，绝不阻塞任务执行路径）。
+	ssePingInterval = 15 * time.Second
+	eventBusBuffer  = 64
 )

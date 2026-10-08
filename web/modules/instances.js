@@ -8,7 +8,75 @@ import { $, Api, esc, t } from "./dom.js";
 import { openLaunchModal } from "./launch.js";
 import { selectModelById } from "./models.js";
 import { getPendingInstanceId, go, modelRoute, parseRoute, setPendingInstanceId } from "./routing.js";
-import { activeInstanceId, models, selectedModelId, setActiveInstanceId } from "./state.js";
+import { activeInstanceId, isGenerating, models, selectedModelId, setActiveInstanceId } from "./state.js";
+
+/* 内存字节的展示口径（二进制 1024）：≥ 1 GiB 保留 1 位小数的 GB，
+   ≥ 1 MiB 取整为 MB，更小则 KB / B。不足 1 GB 不写成 0.x GB。
+   纯函数，供实例卡片与单元测试共用。 */
+export function formatMemBytes(n) {
+  const kib = 1024;
+  const mib = kib * 1024;
+  const gib = mib * 1024;
+  if (typeof n !== "number" || !Number.isFinite(n) || n < 0) return "";
+  if (n >= gib) return `${(n / gib).toFixed(1)} GB`;
+  if (n >= mib) return `${Math.round(n / mib)} MB`;
+  if (n >= kib) return `${Math.round(n / kib)} KB`;
+  return `${Math.round(n)} B`;
+}
+
+/* 峰值 / 均值与当前值同一单位时去掉单位，得到「3.6 GB · peak 4.1 · avg 3.7」。 */
+export function formatMemCompanion(n, cur) {
+  const full = formatMemBytes(n);
+  if (!full) return "";
+  const unitOf = (x) => {
+    if (typeof x !== "number" || !Number.isFinite(x) || x < 0) return "";
+    if (x >= 1024 * 1024 * 1024) return "GB";
+    if (x >= 1024 * 1024) return "MB";
+    if (x >= 1024) return "KB";
+    return "B";
+  };
+  if (unitOf(n) && unitOf(n) === unitOf(cur)) return full.slice(0, full.lastIndexOf(" "));
+  return full;
+}
+
+/* 卡片上的两行文案 + title 明细。没有 memory（旧 hub / 尚未采样）返回 null。
+   没有 VRAM 读数时 vram 为空串，调用方不画那一行。 */
+export function memoryCardLines(mem) {
+  if (!mem || typeof mem.ramBytes !== "number") return null;
+  const ram = t("instance.memRam", {
+    cur: formatMemBytes(mem.ramBytes),
+    peak: formatMemCompanion(mem.ramPeakBytes, mem.ramBytes),
+    avg: formatMemCompanion(mem.ramAvgBytes, mem.ramBytes)
+  });
+  let vram = "";
+  if (typeof mem.vramBytes === "number") {
+    vram = t("instance.memVram", {
+      cur: formatMemBytes(mem.vramBytes),
+      peak: formatMemCompanion(mem.vramPeakBytes, mem.vramBytes),
+      avg: formatMemCompanion(mem.vramAvgBytes, mem.vramBytes)
+    });
+  }
+  const tip = [
+    t("instance.memTipRam", {
+      cur: formatMemBytes(mem.ramBytes),
+      peak: formatMemBytes(mem.ramPeakBytes),
+      avg: formatMemBytes(mem.ramAvgBytes)
+    })
+  ];
+  if (vram) {
+    tip.push(t("instance.memTipVram", {
+      cur: formatMemBytes(mem.vramBytes),
+      peak: formatMemBytes(mem.vramPeakBytes),
+      avg: formatMemBytes(mem.vramAvgBytes),
+      source: t("instance.memSource." + (mem.vramSource || "none"))
+    }));
+  }
+  tip.push(t("instance.memTipMeta", {
+    n: mem.samples != null ? mem.samples : 0,
+    state: mem.busy ? t("instance.memBusy") : t("instance.memIdle")
+  }));
+  return { ram, vram, title: tip.join("\n") };
+}
 
 export const STATUS_CLASS = { STARTING: "starting", READY: "ready", ERROR: "error", STOPPED: "stopped" };
 export function statusText(s) {
@@ -109,9 +177,16 @@ export function renderInstanceList() {
     const workingBadge = (inst.taskCount || 0) > 0
       ? ` <span class="badge working">${esc(inst.taskCount > 1 ? t("instance.workingCount", { n: inst.taskCount }) : t("instance.working"))}</span>`
       : "";
-    let html = `<div class="card-title">${esc(inst.instanceName || inst.modelId)} <span class="badge ${statusClass}">${esc(statusText(inst.status))}</span>${workingBadge}</div>
+    const genBadge = isGenerating(inst.id)
+      ? ` <span class="badge generating">${esc(t("instance.generating"))}</span>`
+      : "";
+    const mem = memoryCardLines(inst.memory);
+    const memHtml = mem
+      ? `<div class="card-mem" title="${esc(mem.title)}">${esc(mem.ram)}${mem.vram ? "<br>" + esc(mem.vram) : ""}</div>`
+      : "";
+    let html = `<div class="card-title">${esc(inst.instanceName || inst.modelId)} <span class="badge ${statusClass}">${esc(statusText(inst.status))}</span>${workingBadge}${genBadge}</div>
       <div class="card-family">${esc(modelName)} ｜ #${esc(inst.id)}</div>
-      <div class="card-desc">${esc(inst.backend)}${inst.device != null ? ":" + esc(inst.device) : ""} ｜ ${esc(t("instance.port"))} ${esc(inst.port)}${inst.executableName ? " ｜ " + esc(inst.executableName) : ""}</div>`;
+      <div class="card-desc">${esc(inst.backend)}${inst.device != null ? ":" + esc(inst.device) : ""} ｜ ${esc(t("instance.port"))} ${esc(inst.port)}${inst.executableName ? " ｜ " + esc(inst.executableName) : ""}</div>${memHtml}`;
     if (inst.status === "ERROR" && inst.errorMessage) {
       html += `<div class="error-text">${esc(inst.errorMessage)}</div>`;
     }
@@ -166,6 +241,12 @@ export function updateInstanceBar() {
   const pill = $("instance-pill");
   pill.textContent = has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
+
+  const gen = $("instance-generating");
+  if (gen) {
+    gen.textContent = t("instance.generating");
+    gen.classList.toggle("hidden", !(has && isGenerating(activeInstanceId)));
+  }
 
   for (const id of SUBMIT_BTNS) {
     const btn = $(id);
@@ -252,6 +333,14 @@ export function renderInstanceDetail(inst) {
     val.className = "kv-val";
     val.textContent = v;
     addRow(k, val);
+  }
+  const memLines = memoryCardLines(inst.memory);
+  if (memLines) {
+    const val = document.createElement("span");
+    val.className = "kv-val pre";
+    val.textContent = memLines.vram ? `${memLines.ram}\n${memLines.vram}` : memLines.ram;
+    val.title = memLines.title;
+    addRow(t("instance.field.memory"), val);
   }
   const opts = inst.sessionOptions || {};
   const names = Object.keys(opts);

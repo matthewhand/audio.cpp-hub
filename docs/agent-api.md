@@ -61,10 +61,14 @@ Calling speech against `citrinet` 503s — the engine wants audio, not text.
   (`qwen3-vd` / `voice-design-fast` / `citrinet`) have nowhere to spill to. For
   `POST /api/tasks` the slot covers the *submission*; the hub's own serial queue
   is what bounds how much runs at once.
-- **Not proxied:** `/api/history/*`, `/api/voices/*`, `/api/audio/upload` and
-  `/v1/tasks/run`. Keep using `:18080` for those — the first three because each
-  hub owns that state, and `/v1/tasks/run` because it is hub-shaped
-  (`model` = service name).
+- **Not proxied:** `/api/history/*`, `/api/voices/*`, `/api/audio/upload`,
+  `/v1/tasks/run`, and `GET /api/events/stream`. Keep using the hub's own port
+  for those — the first three because each hub owns that state, `/v1/tasks/run`
+  because it is hub-shaped (`model` = service name), and the event stream
+  because it is a transient push channel, not a per-hub resource the proxy
+  can address. `GET /api/instances` through the fan-out still returns whatever
+  each hub sent, including the optional `memory` object when that hub has
+  sampled it.
 - Fan-out is LAN-only with no auth, exactly like the hubs.
 
 
@@ -258,7 +262,59 @@ Every hop is `:18082`; the `X-Fanout-Hub` header is what pins the follow-up read
 take the direct hub (`transcribe()` is hub-direct shape (b) above).
 `voice_sweep()` automates the seed loop.
 
-## 4. Operational notes
+## 4. Per-instance memory and task push (hub-direct)
+
+`GET /api/instances` on a hub may include a `memory` object once the process
+has been sampled. It is omitted entirely until the first RSS sample, and on
+builds without `/proc` (non-Linux). VRAM fields are omitted when unknown —
+never a placeholder zero.
+
+```json
+{
+  "ramBytes": 644245094,
+  "ramPeakBytes": 1073741824,
+  "ramAvgBytes": 751619277,
+  "vramBytes": 3865470566,
+  "vramPeakBytes": 4402341478,
+  "vramAvgBytes": 3972844749,
+  "vramSource": "nvidia-smi",
+  "samples": 12,
+  "sampledAt": 1756400000000,
+  "busy": true
+}
+```
+
+`ramAvgBytes` / `vramAvgBytes` are **time-weighted** (each sample is weighted by
+how long it held until the next one), accumulated since the instance started.
+`vramSource` is `drm` (Linux DRM fdinfo, de-duplicated by client id) or
+`nvidia-smi`. `busy` means a task is RUNNING, which is also when the sampler
+runs at about 1s instead of about 10s.
+
+`GET /api/tasks/{id}` adds optional `peakRamBytes` / `peakVramBytes`: the max
+seen while that task was RUNNING. Absent when the sampler never got a reading.
+
+`GET /api/events/stream` is Server-Sent Events, hub-local, **not proxied by
+fan-out**. On connect the hub sends `event: hello` with `data: {}`, then a
+`: ping` comment about every 15s. Task transitions arrive as:
+
+```text
+event: task.started
+data: {"taskId":"ab12","instanceId":"cd34","modelId":"breeze-tts","category":"tts","ts":1756400000000}
+
+event: task.finished
+data: {"taskId":"ab12","instanceId":"cd34","modelId":"breeze-tts","category":"tts","ts":1756400004200,"ok":true,"durationMs":4100,"peakRamBytes":1073741824,"peakVramBytes":4402341478}
+
+event: task.failed
+data: {"taskId":"ab12","instanceId":"cd34","modelId":"breeze-tts","category":"tts","ts":1756400004200,"ok":false,"durationMs":800,"error":"audiocpp_server 返回 500: …"}
+```
+
+Also `task.queued` and `task.cancelled` (same base fields as `task.started`;
+cancel has no `ok`). A slow client loses events instead of stalling the task.
+`EventSource` reconnects on its own. While a task is running the hub may also
+emit `instance.memory` (`instanceId`, `ramBytes`, `ts`, and `vramBytes` /
+`vramSource` when known).
+
+## 5. Operational notes
 
 - `GET /v1/models` lists READY services — aliases on the fan-out, service names
   on a hub; `GET /api/instances` shows status/port (hubs' entries carry

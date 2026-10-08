@@ -32,6 +32,7 @@
   <link rel="modulepreload" href="/modules/file-browser-lazy.js">
   <link rel="modulepreload" href="/modules/launch.js">
   <link rel="modulepreload" href="/modules/instances.js">
+  <link rel="modulepreload" href="/modules/task-events.js">
   <link rel="modulepreload" href="/modules/downloads-lazy.js">
   <link rel="modulepreload" href="/modules/tasks.js">
   <link rel="modulepreload" href="/modules/sidebar.js">
@@ -40,21 +41,38 @@
   <link rel="modulepreload" href="/modules/panels.js">
 </head>
 <body>
+  <!-- Lucide 图标雪碧图（隐藏，仅供 <use> 引用）：路径数据逐字复制自 lucide-static v1.52.0。
+       许可证：ISC（部分图标源自 Feather / MIT），全文见 third_party/lucide/LICENSE，
+       使用清单见 THIRD_PARTY_NOTICES 的「Vendored assets」。symbol 内只放几何路径；
+       描边属性（fill/stroke/stroke-width 等）统一声明在使用方的 <svg class="icon"> 上。 -->
+  <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" hidden aria-hidden="true">
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/></symbol>
+    <symbol id="i-mic-vocal" viewBox="0 0 24 24"><path d="m11 7.601-5.994 8.19a1 1 0 0 0 .1 1.298l.817.818a1 1 0 0 0 1.314.087L15.09 12"/><path d="M16.5 21.174C15.5 20.5 14.372 20 13 20c-2.058 0-3.928 2.356-6 2-2.072-.356-2.775-3.369-1.5-4.5"/><circle cx="16" cy="7" r="5"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></symbol>
+    <symbol id="i-chart-column" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+    <symbol id="i-languages" viewBox="0 0 24 24"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  </svg>
   <a id="skip-to-content" class="skip-link" href="#main-content" data-i18n="a11y.skipToContent">跳到主要内容</a>
   <header>
     <div class="brand">
-      <button id="menu-toggle" class="theme-btn" data-i18n-title="a11y.openMenu" data-i18n-aria-label="a11y.openMenu" aria-label="打开菜单" title="模型与实例菜单">☰</button>
+      <button id="menu-toggle" class="theme-btn" data-i18n-title="a11y.openMenu" data-i18n-aria-label="a11y.openMenu" aria-label="打开菜单" title="模型与实例菜单"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-menu"/></svg></button>
       <h1 class="logo">audio.cpp-hub</h1>
       <span class="subtitle" data-i18n="header.subtitle">audiocpp_server 进程管理 &amp; 音频工作台</span>
     </div>
     <div class="header-actions">
-      <button id="voices-btn" class="theme-btn" data-i18n-title="voices.title" data-i18n-aria-label="voices.title" title="音色库" aria-label="音色库">🎙</button>
-      <button id="history-btn" class="theme-btn" data-i18n-title="history.title" data-i18n-aria-label="history.title" title="操作历史" aria-label="操作历史">🕘</button>
-      <button id="downloads-btn" class="theme-btn" data-i18n-title="dl.managerTitle" data-i18n-aria-label="dl.managerTitle" title="下载管理" aria-label="下载管理">⬇️<span id="dl-badge" class="dl-badge hidden">0</span></button>
-      <button id="stats-btn" class="theme-btn" data-i18n-title="stats.title" data-i18n-aria-label="stats.title" title="用量与性能" aria-label="用量与性能">📊</button>
-      <button id="lang-toggle" class="theme-btn" data-i18n-title="header.langTitle" data-i18n-aria-label="header.langTitle" title="切换语言 / Switch language" aria-label="切换语言 / Switch language">EN</button>
-      <button id="settings-btn" class="theme-btn" data-i18n-title="header.settingsTitle" data-i18n-aria-label="header.settingsTitle" title="可执行文件设置" aria-label="可执行文件设置">⚙️</button>
-      <button id="theme-toggle" class="theme-btn" data-i18n-title="header.themeTitle" data-i18n-aria-label="header.themeTitle" title="切换主题" aria-label="切换主题">☀️</button>
+      <button id="voices-btn" class="theme-btn" data-i18n-title="voices.title" data-i18n-aria-label="voices.title" title="音色库" aria-label="音色库"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-mic-vocal"/></svg></button>
+      <button id="history-btn" class="theme-btn" data-i18n-title="history.title" data-i18n-aria-label="history.title" title="操作历史" aria-label="操作历史"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-history"/></svg></button>
+      <button id="downloads-btn" class="theme-btn" data-i18n-title="dl.managerTitle" data-i18n-aria-label="dl.managerTitle" title="下载管理" aria-label="下载管理"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-download"/></svg><span id="dl-badge" class="dl-badge hidden">0</span></button>
+      <button id="stats-btn" class="theme-btn" data-i18n-title="stats.title" data-i18n-aria-label="stats.title" title="用量与性能" aria-label="用量与性能"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-chart-column"/></svg></button>
+      <button id="lang-toggle" class="theme-btn" data-i18n-title="header.langTitle" data-i18n-aria-label="header.langTitle" title="切换语言 / Switch language" aria-label="切换语言 / Switch language"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-languages"/></svg><span id="lang-label">EN</span></button>
+      <button id="settings-btn" class="theme-btn" data-i18n-title="header.settingsTitle" data-i18n-aria-label="header.settingsTitle" title="可执行文件设置" aria-label="可执行文件设置"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-settings"/></svg></button>
+      <button id="theme-toggle" class="theme-btn" data-i18n-title="header.themeTitle" data-i18n-aria-label="header.themeTitle" title="切换主题" aria-label="切换主题"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use id="theme-icon" href="#i-sun"/></svg></button>
     </div>
   </header>
 
@@ -75,6 +93,7 @@
         <div id="instance-bar">
           <span class="bar-label" data-i18n="instance.barLabel">实例</span>
           <select id="instance-select" data-i18n-aria-label="instance.barLabel" aria-label="实例"></select>
+          <span id="instance-generating" class="badge generating hidden" data-i18n="instance.generating">生成中…</span>
           <span id="instance-pill" class="pill warn" data-i18n="instance.noReady">没有就绪实例</span>
           <button id="instance-detail" class="btn-ghost" disabled data-i18n="instance.detail">详情</button>
           <button id="instance-stop" class="stop-btn" disabled data-i18n="instance.stopCurrent">停止当前实例</button>
@@ -219,7 +238,7 @@
           <button id="history-group-new" type="button" class="btn-ghost" data-i18n="history.groupNew">新建分组</button>
           <button id="history-refresh" type="button" class="btn-ghost" data-i18n="history.refresh">刷新</button>
           <button id="history-clear" type="button" class="stop-btn" data-i18n="history.clear">清空</button>
-          <button id="history-close" type="button" class="theme-btn" data-i18n-title="history.closeTitle" data-i18n-aria-label="history.closeTitle" title="关闭">×</button>
+          <button id="history-close" type="button" class="theme-btn" data-i18n-title="history.closeTitle" data-i18n-aria-label="history.closeTitle" title="关闭"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-x"/></svg></button>
         </div>
       </div>
       <div id="history-list" role="log" aria-live="polite" aria-relevant="additions text" data-i18n-aria-label="a11y.taskStatus"></div>
@@ -233,7 +252,7 @@
         <span class="history-title" id="stats-panel-title" data-i18n="stats.title">用量与性能</span>
         <div class="history-actions">
           <button id="stats-refresh" type="button" class="btn-ghost" data-i18n="history.refresh">刷新</button>
-          <button id="stats-close" type="button" class="theme-btn" data-i18n-title="history.closeTitle" data-i18n-aria-label="history.closeTitle" title="关闭">×</button>
+          <button id="stats-close" type="button" class="theme-btn" data-i18n-title="history.closeTitle" data-i18n-aria-label="history.closeTitle" title="关闭"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-x"/></svg></button>
         </div>
       </div>
       <div id="stats-body" class="stats-body"></div>
@@ -246,7 +265,7 @@
       <div class="history-header">
         <span class="history-title" id="voices-panel-title" data-i18n="voices.title">音色库</span>
         <div class="history-actions">
-          <button id="voices-close" type="button" class="theme-btn" data-i18n-title="history.closeTitle" data-i18n-aria-label="history.closeTitle" title="关闭">×</button>
+          <button id="voices-close" type="button" class="theme-btn" data-i18n-title="history.closeTitle" data-i18n-aria-label="history.closeTitle" title="关闭"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-x"/></svg></button>
         </div>
       </div>
       <div class="voices-body">
