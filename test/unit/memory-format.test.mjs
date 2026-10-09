@@ -1,11 +1,12 @@
 /* 实例卡片两拨纯逻辑的格式化：忙碌徽标合并（resolveBusy / formatBusyElapsed）与
    内存条（memRowModel / clampPct / formatMiB / memStatsLabel / memAriaText /
-   memRowHtml / memBlockHtml）。都从真实源码里抽出来在 node:vm 里求值，
+   memRowHtml / memBlockHtml / applyMemBars）。都从真实源码里抽出来在 node:vm 里求值，
    文案经注入的 t() 桩走英文词典原文（中文由 check:i18n 的 parity 保证存在）。 */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { extractFunction, readWeb } from "./helpers/vm.mjs";
+import { createDomWorld } from "./helpers/dom-stub.mjs";
 
 const MIB = 1024 * 1024;
 const GIB = 1024 * MIB;
@@ -38,7 +39,7 @@ const NAMES = [
   // 内存条：私有小工具 + 纯函数
   "msOr", "memMiB", "numOr", "opt", "num1", "memUnitFormat",
   "formatMiB", "clampPct", "memRowModel", "memStatsLabel", "memAriaText",
-  "memRowHtml", "memBlockHtml"
+  "memRowHtml", "memBlockHtml", "applyMemBars"
 ];
 
 function load() {
@@ -60,7 +61,7 @@ function load() {
 
 const {
   resolveBusy, formatBusyElapsed, formatMiB, clampPct,
-  memRowModel, memStatsLabel, memAriaText, memRowHtml, memBlockHtml
+  memRowModel, memStatsLabel, memAriaText, memRowHtml, memBlockHtml, applyMemBars
 } = load();
 
 /* vm realm 造出来的对象原型与测试 realm 不同。本文件从 node:assert/strict 引入，
@@ -273,7 +274,10 @@ test("memRowHtml：role=meter + 填充 / 刻度线（刻度线 aria-hidden）", 
   assert.match(html, /aria-valuenow="942"/);
   assert.match(html, /aria-label="RAM 942 MiB now, peak 988, average 700 MiB"/);
   assert.match(html, /class="fill ram"/);
-  assert.match(html, /width:68\.1%/);
+  assert.doesNotMatch(html, /style=/);
+  assert.match(html, /data-w="68\.1"/);
+  assert.match(html, /data-l="71\.4"/);
+  assert.match(html, /data-l="50\.6"/);
   assert.match(html, /class="pk"[^>]*aria-hidden="true"/);
   assert.match(html, /class="avg"[^>]*aria-hidden="true"/);
   assert.match(html, /<span class="k">RAM<\/span>/);
@@ -325,4 +329,37 @@ test("memBlockHtml：只有 RAM / 隐藏条件 / VRAM 总量与 hot 渐变 / 图
 
   const hot = memBlockHtml({ ramBytes: MIB, vramBytes: 7.5 * GIB, vramTotalBytes: 8 * GIB });
   assert.match(hot, /class="fill vram hot"/);
+  assert.match(hot, /data-w="93\.8"/);
+  assert.doesNotMatch(hot, /style=/);
+
+  // 9 GiB / 8 GiB 会超出比例尺，填充与刻度都钳到 100，且仍不写 style=
+  const clamped = memBlockHtml({
+    ramBytes: 942 * MIB,
+    ramPeakBytes: 988 * MIB,
+    ramAvgBytes: 700 * MIB,
+    vramBytes: 9 * GIB,
+    vramPeakBytes: 9 * GIB,
+    vramAvgBytes: 9 * GIB,
+    vramTotalBytes: 8 * GIB
+  });
+  assert.doesNotMatch(clamped, /style=/);
+  assert.match(clamped, /data-w="68\.1"/);
+  assert.match(clamped, /data-l="71\.4"/);
+  assert.match(clamped, /data-l="50\.6"/);
+  assert.match(clamped, /class="fill vram hot" data-w="100"/);
+  assert.match(clamped, /data-l="100"/);
+});
+
+test("applyMemBars：把 data-w / data-l 写成 CSSOM 的 width / left", () => {
+  const world = createDomWorld();
+  const root = world.el(
+    '<div class="mem"><div class="fill ram" data-w="61.3"></div><div class="pk" data-l="64.3"></div><div class="avg" data-l="0"></div><i class="pk"></i></div>'
+  );
+  applyMemBars(root);
+  assert.equal(root.querySelector("[data-w]").style.width, "61.3%");
+  const ticks = root.querySelectorAll("[data-l]");
+  assert.equal(ticks[0].style.left, "64.3%");
+  assert.equal(ticks[1].style.left, "0%");
+  assert.equal(root.querySelector("i").style.left, undefined);
+  applyMemBars(null);
 });

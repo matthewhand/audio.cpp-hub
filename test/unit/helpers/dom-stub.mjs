@@ -41,7 +41,7 @@ function matchesSimple(node, selector) {
     } else if (m[3] !== undefined) {
       if (!node.classList.contains(m[3])) return false;
     } else {
-      const a = attrToken(m[4]);
+      const a = attrToken("[" + m[4] + "]");
       if (!a || !node.hasAttribute(a.name)) return false;
       if (a.op === "=" && node.getAttribute(a.name) !== a.value) return false;
     }
@@ -86,6 +86,7 @@ export class StubElement {
     this.innerHTML = "";
     this.onclick = null;
     this.onmouseenter = null;
+    this.style = {};
     const self = this;
     this.classList = {
       contains: (c) => self.classes().has(c),

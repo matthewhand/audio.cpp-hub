@@ -168,6 +168,8 @@ export function memAriaText(row) {
     : t(base, params);
 }
 
+/* 填充宽度与峰值/均值刻度只写 data-w / data-l。CSP style-src 'self'（headers.go）会丢掉
+   markup 里的 style=""；插入 DOM 后由 applyMemBars 用 CSSOM 写成 width / left。 */
 function memRowHtml(row) {
   const key = row.kind === "vram" ? t("instance.memKeyVram") : t("instance.memKeyRam");
   const total = row.total ? `<span class="of num">/ ${esc(formatMiB(row.total))}</span>` : "";
@@ -175,9 +177,9 @@ function memRowHtml(row) {
   return `<div class="mem-row">
       <div class="mem-l"><span class="k">${esc(key)}</span><span class="v num">${esc(formatMiB(row.cur))}</span>${total}<span class="of">${esc(t("instance.memNow"))}</span></div>
       <div class="bar" role="meter" aria-label="${esc(aria)}" aria-valuetext="${esc(aria)}" aria-valuemin="0" aria-valuemax="${num1(row.scale)}" aria-valuenow="${num1(row.cur)}">
-        <div class="fill ${row.kind}${row.hot ? " hot" : ""}" style="width:${row.fillPct}%"></div>
-        <div class="pk" style="left:${row.peakPct}%" aria-hidden="true"></div>
-        <div class="avg" style="left:${row.avgPct}%" aria-hidden="true"></div>
+        <div class="fill ${row.kind}${row.hot ? " hot" : ""}" data-w="${row.fillPct}"></div>
+        <div class="pk" data-l="${row.peakPct}" aria-hidden="true"></div>
+        <div class="avg" data-l="${row.avgPct}" aria-hidden="true"></div>
       </div>
       <div class="stats3">${esc(memStatsLabel(row))}</div>
     </div>`;
@@ -206,6 +208,20 @@ export function memBlockHtml(mem) {
   }));
   const legend = `<div class="mem-legend"><span><i class="pk"></i>${esc(t("instance.memStatPeak"))}</span><span><i class="avg"></i>${esc(t("instance.memStatAvg"))}</span></div>`;
   return `<div class="mem" title="${esc(tip.join("\n"))}">${rows.map(memRowHtml).join("")}${legend}</div>`;
+}
+
+/* CSP style-src 'self' 不放行 style=""（headers.go）。内存条的 data-w / data-l 在插入 DOM 后
+   由这里写成 width / left；CSSOM 赋值不受这条限制。每次重画实例列表或详情弹窗后调用。 */
+export function applyMemBars(rootEl) {
+  if (!rootEl || typeof rootEl.querySelectorAll !== "function") return;
+  for (const el of rootEl.querySelectorAll("[data-w]")) {
+    const v = el.getAttribute("data-w");
+    if (v != null && v !== "") el.style.width = v + "%";
+  }
+  for (const el of rootEl.querySelectorAll("[data-l]")) {
+    const v = el.getAttribute("data-l");
+    if (v != null && v !== "") el.style.left = v + "%";
+  }
 }
 
 export const STATUS_CLASS = { STARTING: "starting", READY: "ready", ERROR: "error", STOPPED: "stopped" };
@@ -321,6 +337,7 @@ export function renderInstanceList() {
       html += `<div class="card-actions"><button class="btn-ghost detail-btn">${t("instance.detail")}</button><button class="stop-btn">${t("instance.stop")}</button></div>`;
     }
     card.innerHTML = html;
+    applyMemBars(card);
     const detailBtn = card.querySelector(".detail-btn");
     if (detailBtn) detailBtn.onclick = () => go("#/instance/" + encodeURIComponent(inst.id));
     const stopBtn = card.querySelector(".stop-btn");
@@ -472,6 +489,7 @@ export function renderInstanceDetail(inst) {
     const val = document.createElement("span");
     val.className = "kv-val mem-kv";
     val.innerHTML = memHtml;
+    applyMemBars(val);
     addRow(t("instance.field.memory"), val);
   }
   const opts = inst.sessionOptions || {};
