@@ -73,6 +73,55 @@ export function parseTemplate(html) {
   return node;
 }
 
+const VOID_TAGS = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr"
+]);
+
+/* innerHTML 要长出可 querySelector 的子树：实例卡片把整段 markup 写进 innerHTML。
+   只覆盖这些渲染器用到的子集（标签、引号属性、自闭合、嵌套），不建文本节点。 */
+function parseHTMLInto(parent, html) {
+  const stack = [parent];
+  const re = /<!--[\s\S]*?-->|<\/([A-Za-z][\w:-]*)\s*>|<([A-Za-z][\w:-]*)([^<>]*?)(\/?)>/g;
+  for (;;) {
+    const m = re.exec(html);
+    if (!m) break;
+    if (m[0].charCodeAt(1) === 33) continue;
+    if (m[1]) {
+      const name = m[1].toLowerCase();
+      for (let i = stack.length - 1; i > 0; i--) {
+        if (stack[i].tagName.toLowerCase() === name) {
+          stack.length = i;
+          break;
+        }
+      }
+      continue;
+    }
+    const tag = m[2].toLowerCase();
+    const el = new StubElement(parent.world, tag);
+    const attrRe = /([^\s=/"']+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'))?/g;
+    for (;;) {
+      const a = attrRe.exec(m[3]);
+      if (!a) break;
+      el.setAttribute(a[1], a[2] ?? a[3] ?? "");
+    }
+    stack[stack.length - 1].appendChild(el);
+    if (m[4] !== "/" && !VOID_TAGS.has(tag)) stack.push(el);
+  }
+}
+
 export class StubElement {
   constructor(world, tagName) {
     this.world = world;
@@ -162,12 +211,15 @@ export class StubElement {
   }
 
   set innerHTML(v) {
-    if (v === "") for (const c of this.children) c.parentElement = null;
+    const html = v == null ? "" : String(v);
+    this._html = html;
+    for (const c of this.children) c.parentElement = null;
     this.children = [];
+    if (html) parseHTMLInto(this, html);
   }
 
   get innerHTML() {
-    return "";
+    return this._html || "";
   }
 
   descendants() {

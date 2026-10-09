@@ -247,17 +247,19 @@ export function pushSparkSample(series, value) {
 const sparkStore = new Map();
 
 /* 给这一拍的 memory 对象补序列：服务端给了就用服务端的（1s 一拍更密），
-   缺的那个字段用 2s 轮询攒出来的顶上。 */
+   缺的那个字段用 2s 轮询攒出来的顶上。
+   返回的是 memory 对象本身（没有 memory 时返回 null），不是实例。
+   卡片与详情弹窗同一写法：memBlockHtml(withSparkSeries(inst))。 */
 function withSparkSeries(inst) {
   const mem = inst && inst.memory;
-  if (!mem || typeof mem !== "object") return inst;
+  if (!mem || typeof mem !== "object") return null;
   const state = nextSparkState(sparkStore.get(inst.id), mem);
   sparkStore.set(inst.id, state);
-  if (Array.isArray(mem.ramSeries) && Array.isArray(mem.vramSeries)) return inst;
+  if (Array.isArray(mem.ramSeries) && Array.isArray(mem.vramSeries)) return mem;
   const next = { ...mem };
   if (!Array.isArray(mem.ramSeries) && state.ram.length >= 2) next.ramSeries = state.ram;
   if (!Array.isArray(mem.vramSeries) && state.vram.length >= 2) next.vramSeries = state.vram;
-  return { ...inst, memory: next };
+  return next;
 }
 
 /* 列表里已经没有的实例（已停止 / 启动失败）丢掉它的序列，Map 不随启停无界增长。 */
@@ -653,7 +655,7 @@ export function renderInstanceDetail(inst) {
     val.textContent = v;
     addRow(k, val);
   }
-  const memHtml = memBlockHtml(withSparkSeries(inst).memory);
+  const memHtml = memBlockHtml(withSparkSeries(inst));
   if (memHtml) {
     const val = document.createElement("span");
     val.className = "kv-val mem-kv";
