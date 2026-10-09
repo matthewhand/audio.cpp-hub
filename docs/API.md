@@ -98,7 +98,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 
 ### `GET /api/instances`
 
-返回实例数组（含每实例活跃任务数 `taskCount`）。
+返回实例数组（含每实例活跃任务数 `taskCount`）。顺序稳定：先按 `createdAt` 升序，相同时按 `id` 升序。管理器内部是 map，不能按迭代顺序返回，否则前端轮询会把卡片打乱。
 
 采样开始后，每个实例可以多一个 `memory` 对象；第一次 RSS 采样之前（以及非 Linux，本机构建没有 `/proc`）整个字段省略，调用方要把它当可选。VRAM 从未读到时省略全部 `vram*` 字段，不写 0。平均是**时间加权**平均（每个样本按它保持到下一次采样的时长加权，不是简单算术平均），从实例启动起累计，不按任务清零。
 
@@ -114,6 +114,8 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
   "vramIdleBytes": 3906249728,
   "vramTotalBytes": 8589934592,
   "vramSource": "nvidia-smi",
+  "ramSeries": [637330636, 644245094],
+  "vramSeries": [3906249728, 3865470566],
   "samples": 12,
   "sampledAt": 1756400000000,
   "busy": false
@@ -128,6 +130,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 | `ramIdleBytes` / `vramIdleBytes` | **空闲基线**：实例没有 RUNNING 任务期间观察到的最小值（「这个模型闲着时占多少」）。在采到第一个空闲样本之前省略 |
 | `vramTotalBytes` | 该进程所在 GPU 的显存总量（前端显存条的比例尺）。只有答案确定时才给：单 GPU 直接用那张卡的；多 GPU 且进程映射不到具体卡时省略（宁缺勿错） |
 | `vramSource` | `drm`（Linux DRM fdinfo，按 `drm-client-id` 去重）或 `nvidia-smi` |
+| `ramSeries` / `vramSeries` | 最近最多 60 个采样点（字节，旧→新），给 WebUI 迷你折线。不足 2 个点时整个字段省略（单点画不出线）。VRAM 从未读到时不写 `vramSeries`（未知不是 0）。环形缓冲定长，不随实例寿命增长 |
 | `samples` / `sampledAt` / `busy` | 采样次数 / 最后一次采样时间（毫秒）/ 当前是否有 RUNNING 任务 |
 
 - `busy` 为真表示该实例当前有 RUNNING 任务，采样间隔约 1s；空闲约 10s

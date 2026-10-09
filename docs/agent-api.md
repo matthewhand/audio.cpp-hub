@@ -281,6 +281,8 @@ never a placeholder zero.
   "vramIdleBytes": 3906249728,
   "vramTotalBytes": 8589934592,
   "vramSource": "nvidia-smi",
+  "ramSeries": [637330636, 644245094],
+  "vramSeries": [3906249728, 3865470566],
   "samples": 12,
   "sampledAt": 1756400000000,
   "busy": true
@@ -295,6 +297,7 @@ never a placeholder zero.
 | `ramIdleBytes` / `vramIdleBytes` | **idle baseline**: the minimum observed while the instance had no RUNNING task — what the model costs at rest. Omitted until an idle sample exists |
 | `vramTotalBytes` | total VRAM of the GPU the process runs on; it is the scale of the WebUI's VRAM bar. Only reported when the answer is certain: one GPU → that card's total; several GPUs with no process→card mapping → omitted |
 | `vramSource` | `drm` or `nvidia-smi` |
+| `ramSeries` / `vramSeries` | last at most 60 samples in bytes, oldest → newest, for the WebUI sparkline. Omitted when fewer than 2 points (one point draws no line). `vramSeries` is omitted entirely while VRAM has never been read — an unknown reading is not a zero. Each ring is a fixed 60-slot buffer, so the payload does not grow with instance lifetime |
 | `samples` / `sampledAt` / `busy` | sample count / last sample (ms) / a task is RUNNING |
 
 `ramAvgBytes` / `vramAvgBytes` are **time-weighted** (each sample is weighted by

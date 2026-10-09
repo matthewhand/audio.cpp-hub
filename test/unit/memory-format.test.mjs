@@ -39,6 +39,7 @@ const NAMES = [
   // 内存条：私有小工具 + 纯函数
   "msOr", "memMiB", "numOr", "opt", "num1", "memUnitFormat",
   "formatMiB", "clampPct", "memRowModel", "memStatsLabel", "memAriaText",
+  "memSeries", "sparkPoints", "pushSparkSample", "nextSparkState", "sparkHtml",
   "memRowHtml", "memBlockHtml", "applyMemBars"
 ];
 
@@ -53,7 +54,9 @@ function load() {
   const esc = (v) => String(v == null ? "" : v)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  const context = vm.createContext({ t, esc, MEM_MIB: 1024 * 1024 });
+  const context = vm.createContext({
+    t, esc, MEM_MIB: 1024 * 1024, SPARK_W: 74, SPARK_H: 16, SPARK_CAP: 60
+  });
   return new vm.Script(`${bundle}\n({ ${NAMES.join(", ")} })`, {
     filename: "instances-pure.js"
   }).runInContext(context);
@@ -61,7 +64,8 @@ function load() {
 
 const {
   resolveBusy, formatBusyElapsed, formatMiB, clampPct,
-  memRowModel, memStatsLabel, memAriaText, memRowHtml, memBlockHtml, applyMemBars
+  memRowModel, memStatsLabel, memAriaText, memSeries, sparkPoints,
+  pushSparkSample, nextSparkState, memRowHtml, memBlockHtml, applyMemBars
 } = load();
 
 /* vm realm 造出来的对象原型与测试 realm 不同。本文件从 node:assert/strict 引入，
@@ -324,6 +328,9 @@ test("memBlockHtml：只有 RAM / 隐藏条件 / VRAM 总量与 hot 渐变 / 图
   assert.doesNotMatch(vram, /fill hot/);
   assert.match(vram, /title="[^"]*nvidia-smi/);
   assert.match(vram, /12 samples · generating/);
+  // Idle 在统计行；VRAM 总量在标签行。生成的 markup 不写 style=
+  assert.match(vram, /Idle 3\.6/);
+  assert.doesNotMatch(vram, /style=/);
   assert.equal(vram.match(/mem-legend/g).length, 1);
   assert.equal(vram.match(/role="meter"/g).length, 2);
 
@@ -362,4 +369,71 @@ test("applyMemBars：把 data-w / data-l 写成 CSSOM 的 width / left", () => {
   assert.equal(ticks[1].style.left, "0%");
   assert.equal(root.querySelector("i").style.left, undefined);
   applyMemBars(null);
+});
+
+/* ---------- 迷你折线 ---------- */
+
+test("sparkPoints：少于两个点不画；平坦序列在中线；高低按 min..max 留边", () => {
+  assert.equal(sparkPoints([]), "");
+  assert.equal(sparkPoints([10]), "");
+  assert.equal(sparkPoints([1, NaN]), "");
+  assert.deepEqual(memSeries([1, -1, Infinity, 2, "3"]), [1, 2]);
+
+  const flat = sparkPoints([5, 5, 5], 74, 16);
+  assert.equal(flat, "0,8 37,8 74,8");
+
+  const rising = sparkPoints([0, 100], 74, 16).split(" ");
+  assert.equal(rising.length, 2);
+  const y0 = Number(rising[0].split(",")[1]);
+  const y1 = Number(rising[1].split(",")[1]);
+  // 值越大越靠上（y 越小），并且不贴 viewBox 的顶和底
+  assert.ok(y1 < y0, `${y1} < ${y0}`);
+  assert.ok(y0 < 15 && y0 > 1);
+  assert.ok(y1 > 1 && y1 < 15);
+});
+
+test("pushSparkSample / nextSparkState：上限 60，同一拍不重复，缺 VRAM 不当 0", () => {
+  let series = [];
+  for (let i = 0; i < 70; i++) series = pushSparkSample(series, i);
+  assert.equal(series.length, 60);
+  assert.equal(series[0], 10);
+  assert.equal(series[59], 69);
+  assert.deepEqual(pushSparkSample([1], -5), [1]);
+  assert.deepEqual(pushSparkSample([1], Number.NaN), [1]);
+
+  const first = nextSparkState(null, { sampledAt: 1000, ramBytes: 10, vramBytes: 20 });
+  assert.deepEqual(plain(first), { at: 1000, ram: [10], vram: [20] });
+  // 同一 sampledAt（SSE 触发的重画）不追加
+  assert.equal(nextSparkState(first, { sampledAt: 1000, ramBytes: 99, vramBytes: 99 }), first);
+  const second = nextSparkState(first, { sampledAt: 2000, ramBytes: 11 });
+  assert.deepEqual(plain(second.ram), [10, 11]);
+  assert.deepEqual(plain(second.vram), [20]);
+});
+
+test("memBlockHtml：折线是 SVG 属性，不写 style=", () => {
+  const html = memBlockHtml({
+    ramBytes: 100 * MIB,
+    ramPeakBytes: 120 * MIB,
+    ramAvgBytes: 80 * MIB,
+    ramSeries: [100, 110, 90],
+    vramBytes: 200 * MIB,
+    vramPeakBytes: 200 * MIB,
+    vramAvgBytes: 200 * MIB,
+    vramSeries: [200, 200, 200]
+  });
+  assert.match(html, /class="spark ram"/);
+  assert.match(html, /class="spark vram"/);
+  assert.match(html, /viewBox="0 0 74 16"/);
+  assert.match(html, /width="74"/);
+  assert.match(html, /height="16"/);
+  assert.match(html, /stroke-width="1\.5"/);
+  assert.match(html, /stroke-linejoin="round"/);
+  assert.match(html, /stroke-linecap="round"/);
+  assert.match(html, /aria-hidden="true"/);
+  assert.match(html, /<polyline points="[^"]+" fill="none"/);
+  assert.doesNotMatch(html, /style=/);
+  // 不足两个点：不放空 svg
+  const one = memBlockHtml({ ramBytes: MIB, ramSeries: [1] });
+  assert.doesNotMatch(one, /<svg/);
+  assert.doesNotMatch(one, /style=/);
 });

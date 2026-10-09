@@ -382,6 +382,46 @@ footer { flex: none; }
 .card-title { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
 .card-family { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 .card-desc { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+/* ---------- 左栏小节标题行（h2 + 右侧「实例台数 / 实时事件」灯） ---------- */
+/* 形状取自概念稿 .sec-h：标题左侧，右侧一组浅色小字。实例列表与模型列表共用。 */
+.sec-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 10px;
+}
+.sec-head h2 { margin: 0; }
+.sec-head-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.sec-count {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.sec-count:empty { display: none; }
+/* 「实时事件 / 轮询中」指示灯：绿点 = SSE 通着，灰点 = 只有 2s 轮询 */
+.live-events { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+.live-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.live-events[data-mode="live"] { color: var(--ok); }
+.live-events[data-mode="live"] .live-dot { background: var(--ok); }
+
 /* ---------- 实例卡片内存条（RAM / VRAM：当前 / 峰值 / 均值 / 空闲） ----------
    形状取自 docs/diagrams 之外的概念稿 concept：外层一块浅底，里面每行
    「标签行 + 进度条 + 统计行」。颜色只用本文件新增的几个 --mem-* 令牌，
@@ -398,6 +438,13 @@ footer { flex: none; }
 .mem-l .k { flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: var(--text-dim); text-transform: uppercase; }
 .mem-l .v { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 .mem-l .of { color: var(--text-dim); }
+/* 标签行右端的迷你折线（近期趋势）。颜色用内存条现成的 --mem-* 令牌，
+   两套主题各自定义；stroke 写在下面的类规则里——CSP style-src 'self'
+   不允许 inline style=""，SVG presentation 属性不受影响但颜色仍走令牌。 */
+.mem-l .spark { margin-left: auto; flex: none; align-self: center; }
+.spark.ram, .spark.ram polyline { stroke: var(--mem-ram); }
+.spark.vram, .spark.vram polyline { stroke: var(--mem-vram); }
+.spark { opacity: 0.9; }
 .bar {
   position: relative;
   height: 6px;
@@ -1225,7 +1272,48 @@ footer { padding: 4px 24px 18px; }
 
 /* ---------- 设置 modal ---------- */
 /* #119 light nav polish */
-.header-actions { display: flex; gap: 10px; }
+.header-actions { display: flex; gap: 10px; align-items: center; }
+
+/* ---------- 页头状态 chip（图标工具栏左侧，#hub-chip） ----------
+   形状取自概念稿 .chip：圆角胶囊 + 状态点 + 加粗数字 + 细分隔线。
+   选择器挂在 id 上，避免碰到样式指南里的色板 .chip。
+   只描述当前这台 hub（不发跨源请求，见 web/modules/hub-chip.js 顶部说明）。
+   点的颜色：全就绪绿、部分就绪琥珀、一台都没就绪红。0 次失败保持正文色。 */
+#hub-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+#hub-chip b { color: var(--text); font-weight: 600; }
+#hub-chip .chip-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
+}
+#hub-chip.warn .chip-dot {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 22%, transparent);
+}
+#hub-chip.err .chip-dot {
+  background: var(--err);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 22%, transparent);
+}
+#hub-chip .chip-sep { width: 1px; height: 12px; flex: none; background: var(--border); }
+#hub-chip .chip-failures { font-weight: 600; }
+#hub-chip.has-fail .chip-failures { color: var(--err); }
 
 /* 对话框：.modal/.modal-overlay 为历史类名，.dialog/.dialog-overlay 为规范别名 */
 .modal-overlay, .dialog-overlay {
@@ -1346,6 +1434,29 @@ footer { padding: 4px 24px 18px; }
   font-variant-numeric: tabular-nums;
 }
 .task-stats:empty { display: none; }
+
+/* ---------- 合成按钮下方的实时状态行（#tts-live） ----------
+   形状取自概念稿 .status：一行小字 + 「·」分隔 + 等宽数字（mono / tabular-nums）。
+   失败时整行转 danger 色；终态 20s 后由 live-ticker.js 自动清空并隐藏。 */
+.live-ticker {
+  display: block;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  min-height: 1.5em;
+  font-variant-numeric: tabular-nums;
+}
+.live-ticker .badge-elapsed {
+  color: var(--text);
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.live-ticker.ok { color: var(--ok); }
+.live-ticker.ok .badge-elapsed { color: var(--ok); }
+.live-ticker.danger { color: var(--err); }
+.live-ticker.danger .badge-elapsed { color: var(--err); }
 
 /* ---------- 服务器文件选择器 ---------- */
 .fb-overlay { z-index: 400; }
@@ -2125,6 +2236,8 @@ footer { padding: 4px 24px 18px; }
   .brand { gap: var(--space-2); }
   .subtitle { display: none; }
   .header-actions { gap: var(--space-1); }
+  /* 窄屏页头放不下状态 chip：让位给图标工具栏（数据本身不难拿，只是没地方摆） */
+  #hub-chip { display: none; }
   main { padding: var(--space-3); gap: var(--space-4); overflow-x: hidden; }
   .theme-btn { width: 44px; height: 44px; }
   #lang-toggle { min-height: 44px; border-radius: var(--radius-full); }

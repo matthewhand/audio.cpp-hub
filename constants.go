@@ -35,6 +35,11 @@ const (
 	nvidiaQueryTimeout    = 2 * time.Second
 	nvidiaBackoff         = 5 * time.Minute
 
+	// 内存采样环形缓冲（memory.go）：GET /api/instances 的 memory 对象里
+	// ramSeries / vramSeries 最多回带多少个历史采样点（旧→新）。前端画
+	// 迷你折线图用；少于此数的序列整体省略（<2 个点画不出线）。
+	memSeriesCap = 60
+
 	// SSE（events.go）：连接后心跳注释间隔与每订阅者事件缓冲上限
 	// （慢订阅者缓冲满即丢事件，绝不阻塞任务执行路径）。
 	ssePingInterval = 15 * time.Second

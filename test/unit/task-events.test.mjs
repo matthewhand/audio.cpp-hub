@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadEsModule } from "./helpers/vm.mjs";
 
-const { reduceTaskEvents, busyInstanceIds } = loadEsModule("modules/task-events.js");
+const { reduceTaskEvents, busyInstanceIds, liveEventsMode } = loadEsModule("modules/task-events.js");
 
 function busy(running) {
   return [...busyInstanceIds(running)].sort();
@@ -51,4 +51,12 @@ test("task.started 记下 ts 作为卡片计时起点（没有 ts 记 null）", 
   assert.deepEqual(busy(running), ["inst-1", "inst-2"]);
   running = reduceTaskEvents(running, "task.finished", { taskId: "a" });
   assert.equal(running.a, undefined);
+});
+
+test("liveEventsMode：连上并且收到过事件才算实时，否则轮询", () => {
+  assert.equal(liveEventsMode({ connected: true, sawEvent: true }), "live");
+  assert.equal(liveEventsMode({ connected: true, sawEvent: false }), "poll");
+  assert.equal(liveEventsMode({ connected: false, sawEvent: true }), "poll");
+  assert.equal(liveEventsMode(null), "poll");
+  assert.equal(liveEventsMode(undefined), "poll");
 });

@@ -15,6 +15,7 @@
 import { showToast } from "./async-ui.js";
 import { $, Api, el, markRowEnter, t } from "./dom.js";
 import { refreshInstances } from "./instances.js";
+import { noteTask } from "./live-ticker.js";
 import { loadHistory, privacyOn, renderSidebarList } from "./sidebar.js";
 import { activeInstanceId, runningStarts, selectedModel } from "./state.js";
 
@@ -57,6 +58,8 @@ export async function cancelTask(taskId) {
 export function trackTask(task) {
   taskViews.set(task.id, task);
   noteRunningStart(task.instanceId, task.status === "RUNNING" ? task.startedAt : null);
+  // 首屏 / 模型切换重挂时就登记：等待本轮轮询回来之前状态行已经是新的
+  noteTask(task);
   renderSidebarList();
   if (activePolls.has(task.id)) return;
   if (task.status !== "QUEUED" && task.status !== "RUNNING") return;
@@ -65,6 +68,8 @@ export function trackTask(task) {
   handle = Api.poll("/api/tasks/{id}", (cur) => {
     taskViews.set(cur.id, cur);
     noteRunningStart(cur.instanceId, cur.status === "RUNNING" ? cur.startedAt : null);
+    // 合成按钮下方的实时状态行：完整任务对象在这里最全（含 result.durationSec）
+    noteTask(cur);
     renderSidebarList();
     if (!isRunning(cur)) {
       activePolls.delete(task.id);

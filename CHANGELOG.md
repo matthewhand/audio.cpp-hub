@@ -12,6 +12,8 @@
 - `memory` 对象新增三个可选字段：`ramIdleBytes` / `vramIdleBytes`（实例没有 RUNNING 任务期间观察到的**空闲基线**，即「这个模型闲着时占多少」，采到第一个空闲样本之前省略）与 `vramTotalBytes`（该进程所在 GPU 的显存总量，前端显存条的比例尺）。总量是尽力而为且绝不猜：nvidia 用 `nvidia-smi --query-gpu=index,memory.total`（每个 hub 生命周期只查一次，与既有进程查询共用超时与失败退避，不增加每轮采样开销），AMD 用 `/sys/class/drm/card*/device/mem_info_vram_total`（同样只读一次）；统计不出「只有一张卡」就省略该字段
 - 实例卡片与实例状态条原来并排的两个忙碌徽标（轮询的「工作中」与 SSE 的「生成中…」）合并成一个「生成中…」：脉冲圆点 + 300ms 一跳的耗时计时（全部卡片共用一个定时器，没有忙碌任务时停掉）。忙碌判定由 SSE（`task.started` … 终态）与轮询（`taskCount` / 采样器 `busy` / 任务轮询的 `startedAt`）合并成一个纯函数，推送断开时自动回退到轮询
 - 实例卡片与实例详情弹窗把 RAM / VRAM 的两行文字换成进度条：填充为当前值，细刻度线标峰值与均值，下方一行「Peak · Avg · Idle」（单位在行尾出现一次，≥ 1024 MiB 统一换算成 GiB）。显存条在有 GPU 总量时按总量取比例尺，占用 ≥ 85% 时用渐变提示「快满」；进度条带 `role="meter"` 与 aria 值 / 名称（中英双语），刻度线为纯装饰
+- `memory` 对象再增加可选的 `ramSeries` / `vramSeries`：最近最多 60 个采样（字节，旧→新）给 WebUI 迷你折线。不足 2 个点省略；VRAM 从未读到时不写 `vramSeries`。采样器里是定长环形缓冲，不随实例寿命增长。旧 hub 没有这两个字段时，WebUI 用 2 秒实例轮询自己攒
+- WebUI：实例卡片标签行右端的 RAM / VRAM 折线；合成按钮下方的实时状态行（生成中耗时、完成后的墙上耗时与 RTF、失败摘要，约 20 秒后清空，不写「Streaming」）；页头 chip「Hub 就绪数/总数 · 失败次数」（失败次数是 `GET /api/stats` 的全量累计，不是最近一小时；不请求 fan-out 的 `/farm/health`）；实例标题行的「实时事件 / 轮询中」指示灯
 
 - `docs/farm.md` / `docs/agent-api.md` / `docs/deployment-10.0.0.36.md`：多机语音农场的拓扑、客户端契约与部署注意事项，入口统一指向 fan-out `http://10.0.0.36:18082`
 - Web UI：操作历史支持「复刻」上一条生成参数重新提交、音色库下拉支持按名搜索、用量看板增加近 14 天趋势
@@ -38,6 +40,7 @@
 
 ### Fixed
 
+- `GET /api/instances` 的顺序不再随 Go map 迭代抖动：按 `createdAt` 再按 `id`。前端卡片排序是全序（状态、createdAt、名称、id），不看选中态或忙碌态，2 秒轮询不会把选中的卡片在列表头尾之间跳
 - 文档：`docs/farm.md` 里 `.36` 主机一行指向不存在的 `HOST-DEPLOYMENT.md`，改为真实路径 `docs/deployment-10.0.0.36.md`
 - `clients/audiocpp_client.py`：`voices` / `history` 之前按 `id` 取值，与 hub 实际返回的 `vid`（音色库）和 `taskId`（历史列表）不符，`voices` / `history` 子命令会抛 `KeyError` 或打印 `None`；`history` 默认模型改为真实 modelId `breeze-tts`（此前是服务名 `breeze`，该路径 404）
 

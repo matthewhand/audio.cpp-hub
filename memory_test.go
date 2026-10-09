@@ -304,6 +304,108 @@ func TestInstanceListMemoryJSON(t *testing.T) {
 	}
 }
 
+// 环形缓冲：超过 memSeriesCap 时丢掉最旧的，快照按旧→新返回。
+func TestMemRingCapAndOrder(t *testing.T) {
+	var r memRing
+	if got := r.snapshot(); len(got) != 0 {
+		t.Fatalf("空环形缓冲快照 = %#v", got)
+	}
+	for i := int64(1); i <= int64(memSeriesCap); i++ {
+		r.push(i)
+	}
+	if r.n != memSeriesCap {
+		t.Fatalf("未溢出时 n = %d，期望 %d", r.n, memSeriesCap)
+	}
+	full := r.snapshot()
+	if len(full) != memSeriesCap || full[0] != 1 || full[memSeriesCap-1] != int64(memSeriesCap) {
+		t.Fatalf("满缓冲快照 = %v（len=%d）", full[:3], len(full))
+	}
+	// 继续写：最旧的被淘汰，窗口随之后移。
+	r.push(int64(memSeriesCap + 1))
+	r.push(int64(memSeriesCap + 2))
+	got := r.snapshot()
+	if len(got) != memSeriesCap {
+		t.Fatalf("溢出后长度 = %d，期望 %d", len(got), memSeriesCap)
+	}
+	if got[0] != 3 || got[len(got)-1] != int64(memSeriesCap+2) {
+		t.Fatalf("溢出后快照首尾 = %d / %d", got[0], got[len(got)-1])
+	}
+	for i, v := range got {
+		if v != int64(i+3) {
+			t.Fatalf("溢出后顺序错位：第 %d 项 = %d", i, v)
+		}
+	}
+	// 快照是副本：改写它不污染缓冲。
+	got[0] = -1
+	if r.snapshot()[0] != 3 {
+		t.Fatal("快照必须是副本")
+	}
+}
+
+// memory 对象的 ramSeries / vramSeries：少于两个点整体省略，否则按旧→新回带，
+// 且不超过 memSeriesCap。VRAM 未读到时不写 VRAM 序列（未知不是 0）。
+func TestMemoryJSONSeries(t *testing.T) {
+	chdirTemp(t)
+	im := NewInstanceManager(18090, 8080)
+	inst := &Instance{
+		ID: "ser-1", Name: "ser", ModelID: "nonexistent_model", Port: 1,
+		Backend: "cpu", Status: "READY", CreatedAt: "2026-01-01T00:00:00Z",
+		done: make(chan struct{}),
+	}
+	im.mu.Lock()
+	im.items[inst.ID] = inst
+	im.mu.Unlock()
+
+	mem := NewMemorySampler(im, NewTaskManager(NewHistoryManager()), nil)
+	t0 := time.Unix(1_700_000_000, 0)
+	mem.record(inst.ID, t0, 100, 0, false, "")
+	if m := mem.MemoryJSON(inst.ID); m != nil {
+		if _, ok := m["ramSeries"]; ok {
+			t.Fatalf("只有一个采样点不能给序列: %#v", m)
+		}
+		if _, ok := m["vramSeries"]; ok {
+			t.Fatalf("VRAM 未知时不能给序列: %#v", m)
+		}
+	}
+
+	mem.record(inst.ID, t0.Add(time.Second), 200, 4096, true, vramSourceNvidia)
+	m := mem.MemoryJSON(inst.ID)
+	ram, ok := m["ramSeries"].([]int64)
+	if !ok || len(ram) != 2 || ram[0] != 100 || ram[1] != 200 {
+		t.Fatalf("ramSeries = %#v", m["ramSeries"])
+	}
+	// 第二次采样才第一次读到 VRAM：只有一个点，序列整体省略。
+	if _, ok := m["vramSeries"]; ok {
+		t.Fatalf("只有一个 VRAM 点不能给序列: %#v", m["vramSeries"])
+	}
+
+	mem.record(inst.ID, t0.Add(2*time.Second), 300, 5000, true, vramSourceNvidia)
+	m = mem.MemoryJSON(inst.ID)
+	vram, ok := m["vramSeries"].([]int64)
+	if !ok || len(vram) != 2 || vram[0] != 4096 || vram[1] != 5000 {
+		t.Fatalf("vramSeries = %#v", m["vramSeries"])
+	}
+
+	// 超过上限后只保留最近 memSeriesCap 个点。
+	// 此时已有 3 个 RAM 样本（100、200、300）。循环再写入 i=3..cap+5，
+	// 合计 3+(cap+5-3+1) = cap+6 个，丢掉最旧的 6 个后窗口从 i=6 的 1006 开始。
+	for i := int64(3); i <= int64(memSeriesCap)+5; i++ {
+		mem.record(inst.ID, t0.Add(time.Duration(i)*time.Second), 1000+i, 8192, true, vramSourceNvidia)
+	}
+	m = mem.MemoryJSON(inst.ID)
+	ram, ok = m["ramSeries"].([]int64)
+	if !ok || len(ram) != memSeriesCap {
+		t.Fatalf("ramSeries 长度 = %d，期望 %d", len(ram), memSeriesCap)
+	}
+	if ram[0] != 1006 || ram[len(ram)-1] != 1000+int64(memSeriesCap)+5 {
+		t.Fatalf("ramSeries 窗口 = %d … %d", ram[0], ram[len(ram)-1])
+	}
+	vram, ok = m["vramSeries"].([]int64)
+	if !ok || len(vram) != memSeriesCap || vram[len(vram)-1] != 8192 {
+		t.Fatalf("vramSeries = len %d last %v", len(vram), vram)
+	}
+}
+
 func getInstances(t *testing.T, handler http.Handler) []map[string]any {
 	t.Helper()
 	rec := httptest.NewRecorder()

@@ -16,7 +16,7 @@
   <!-- 模块图预载：web/app.js 是 type="module"，没有打包器，浏览器只能等它执行完之后
        再顺着 import 图去取 web/modules/*.js——模块的解析与首屏可用时间被串在后面。
        这里把整张静态模块图逐条声明成 modulepreload：浏览器在解析 head 时就并行发起
-       这 17 个请求并预解析，app.js 执行时直接命中已就位的模块（不额外产生请求，
+       这 20 个请求并预解析，app.js 执行时直接命中已就位的模块（不额外产生请求，
        也因此**不减少**请求条数——条数只由模块数量决定）。
        懒加载 chunk 刻意不在这里：预载会把「点开才付」的收益全部抵消。
        清单必须与 app.js 的 import 图、以及 web/sw.js 的 PRECACHE_URLS 三方一致，
@@ -33,6 +33,8 @@
   <link rel="modulepreload" href="/modules/launch.js">
   <link rel="modulepreload" href="/modules/instances.js">
   <link rel="modulepreload" href="/modules/task-events.js">
+  <link rel="modulepreload" href="/modules/hub-chip.js">
+  <link rel="modulepreload" href="/modules/live-ticker.js">
   <link rel="modulepreload" href="/modules/downloads-lazy.js">
   <link rel="modulepreload" href="/modules/tasks.js">
   <link rel="modulepreload" href="/modules/sidebar.js">
@@ -66,6 +68,9 @@
       <span class="subtitle" data-i18n="header.subtitle">audiocpp_server 进程管理 &amp; 音频工作台</span>
     </div>
     <div class="header-actions">
+      <span id="hub-chip" class="chip hidden" role="status" aria-label="hub status">
+        <i id="hub-chip-dot" class="chip-dot ok" aria-hidden="true"></i><b id="hub-chip-text"></b><i id="hub-chip-sep" class="chip-sep hidden" aria-hidden="true"></i><span id="hub-chip-failures" class="chip-failures"></span>
+      </span>
       <button id="voices-btn" class="theme-btn" data-i18n-title="voices.title" data-i18n-aria-label="voices.title" title="音色库" aria-label="音色库"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-mic-vocal"/></svg></button>
       <button id="history-btn" class="theme-btn" data-i18n-title="history.title" data-i18n-aria-label="history.title" title="操作历史" aria-label="操作历史"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-history"/></svg></button>
       <button id="downloads-btn" class="theme-btn" data-i18n-title="dl.managerTitle" data-i18n-aria-label="dl.managerTitle" title="下载管理" aria-label="下载管理"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-download"/></svg><span id="dl-badge" class="dl-badge hidden">0</span></button>
@@ -79,7 +84,13 @@
   <main id="main-content" tabindex="-1">
     <!-- 左栏：模型 + 实例 -->
     <aside id="left" data-i18n-aria-label="nav.sidebarLabel" aria-label="模型与实例">
-      <h2 data-i18n="nav.instances">实例</h2>
+      <div class="sec-head">
+        <h2 data-i18n="nav.instances">实例</h2>
+        <div class="sec-head-right">
+          <span id="instance-count" class="sec-count num"></span>
+          <span id="live-events" class="live-events" data-mode="poll"><i class="live-dot" aria-hidden="true"></i><span id="live-events-text" data-i18n="live.off">轮询中</span></span>
+        </div>
+      </div>
       <div id="instance-list" class="card-list"></div>
       <h2 data-i18n="nav.models">模型</h2>
       <div id="model-list" class="card-list"></div>
@@ -148,6 +159,7 @@
 
           <details id="tts-advanced"><summary data-i18n="common.advanced">高级参数</summary><div class="grid" id="tts-advanced-grid"></div></details>
           <button id="tts-submit" class="btn" data-i18n="tts.submit">合成</button>
+          <div id="tts-live" class="live-ticker hidden" role="status" aria-live="polite"></div>
           <p id="tts-ready-hint" class="hint ready-hint hidden" role="status" data-i18n="tts.needReady">请先在上方启动或选择一个就绪实例，才能合成。</p>
           <div id="tts-msg" class="msg" role="status" aria-live="polite"></div>
           <div id="tts-stats" class="task-stats" aria-live="polite"></div>

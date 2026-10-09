@@ -188,6 +188,39 @@ func TestReserveNameAtomic(t *testing.T) {
 	}
 }
 
+// List() 的顺序必须确定：管理器用 map 存放实例，而 Go 的 map 迭代顺序是随机化的，
+// 直接遍历会让 GET /api/instances 每次返回的顺序都不同，前端 2s 轮询重画时卡片
+// 在列表里跳来跳去。这里反复调用 List()，断言顺序恒为「CreatedAt 然后 ID」。
+func TestInstanceListOrderIsDeterministic(t *testing.T) {
+	m := NewInstanceManager(45000, 8080)
+	// 刻意包含同一毫秒内启动的两个实例：此时由 ID 兜底，保证是全序。
+	items := []*Instance{
+		{ID: "cccc", Name: "d", CreatedAt: "2026-01-01T00:00:00.000Z", done: make(chan struct{})},
+		{ID: "aaaa", Name: "c", CreatedAt: "2026-01-01T00:00:00.000Z", done: make(chan struct{})},
+		{ID: "bbbb", Name: "b", CreatedAt: "2026-01-01T00:00:01.000Z", done: make(chan struct{})},
+		{ID: "dddd", Name: "a", CreatedAt: "2026-01-01T00:00:02.000Z", done: make(chan struct{})},
+	}
+	for _, inst := range items {
+		m.mu.Lock()
+		m.items[inst.ID] = inst
+		m.mu.Unlock()
+	}
+	want := []string{"aaaa", "cccc", "bbbb", "dddd"}
+	for i := 0; i < 200; i++ {
+		got := make([]string, 0, len(want))
+		for _, inst := range m.List() {
+			got = append(got, inst.ID)
+		}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Fatalf("第 %d 次 List() = %v，期望 %v", i, got, want)
+		}
+	}
+	// stopAll 等多处复用 List()，顺序同样稳定。
+	if got := m.List(); len(got) != len(items) || got[0].ID != "aaaa" {
+		t.Fatalf("List() = %#v", got)
+	}
+}
+
 // signalExit 关闭 done 后，所有等待者都能观察到退出（广播而非单值争抢），且退出码稳定、重复调用幂等。
 func TestSignalExitBroadcastsToAllObservers(t *testing.T) {
 	inst := &Instance{ID: "exitb", Name: "exitb", done: make(chan struct{})}

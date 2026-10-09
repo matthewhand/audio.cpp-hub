@@ -45,6 +45,35 @@ export function formatBusyElapsed(sec) {
   return Math.floor(t / 60) + "m " + String(Math.floor(t % 60)).padStart(2, "0") + "s";
 }
 
+/* ---------- 实例排序（全序，与选中 / 忙碌无关） ---------- */
+
+/**
+ * 实例列表排序：状态 → createdAt → name → id。
+ *
+ * 全序比较：任何两个实例都比得出结果，平级时依次用 createdAt / 名称 / id 兜底，
+ * 所以同一份输入恒得同一份输出（不依赖 Array.sort 的稳定性）。
+ * **刻意不看选中态与忙碌态**——选中只是给卡片加个 class，参与排序会让
+ * 「点哪张卡片，哪张就跳到列表顶部」，2s 轮询重画时还会来回跳。
+ * 纯函数，单测反复打乱输入断言同一输出。
+ * @param {any[]} list
+ * @returns {any[]} 新数组（不改入参）
+ */
+export function sortInstances(list) {
+  // 状态权重：就绪 > 启动中 > 其它（ERROR/STOPPED 等），只用来把可用的排在前面
+  const rank = s => (s === "READY" ? 0 : s === "STARTING" ? 1 : 2);
+  const arr = Array.isArray(list) ? list.slice() : [];
+  return arr.sort((a, b) => {
+    const ar = rank(a.status), br = rank(b.status);
+    if (ar !== br) return ar - br;
+    const ac = String(a.createdAt || ""), bc = String(b.createdAt || "");
+    if (ac !== bc) return ac < bc ? -1 : 1;
+    const an = String(a.instanceName || a.modelId || ""), bn = String(b.instanceName || b.modelId || "");
+    if (an !== bn) return an < bn ? -1 : 1;
+    const ai = String(a.id || ""), bi = String(b.id || "");
+    return ai < bi ? -1 : ai > bi ? 1 : 0;
+  });
+}
+
 /* 一个实例的忙碌状态 + 计时起点：SSE 优先，其次任务轮询的 startedAt。 */
 function busyState(inst) {
   if (!inst) return { busy: false, startMs: null, source: null };
@@ -60,7 +89,7 @@ function busyElapsedHtml(startMs) {
   return ` <span class="badge-elapsed num" data-start="${startMs}">${esc(text)}</span>`;
 }
 
-/* 所有卡片 + 实例条共用一个定时器（不按徽标建 interval，重画后也不会叠加） */
+/* 所有卡片 + 实例条 + 实时状态行共用一个定时器（不按徽标建 interval，重画后也不会叠加） */
 const BUSY_TICK_MS = 300;
 let busyTimer = null;
 
@@ -72,9 +101,11 @@ function updateBusyTimers() {
   }
 }
 
-/* 每次重画后调用：有忙碌徽标就开表，没有就停（页面没有生成任务时不走计时器） */
-function syncBusyTimer() {
-  if (!document.querySelector(".badge.generating:not(.hidden)")) {
+/* 每次重画后调用：有计时片段就开表，没有就停（页面没有生成任务时不走计时器）。
+   选择器同时覆盖「合成按钮下方的实时状态行」的计时片段（live-ticker.js 复用
+   同一个 data-start 约定，不自己开第二个定时器）。 */
+export function syncBusyTimer() {
+  if (!document.querySelector(".badge.generating:not(.hidden), .badge-elapsed[data-start]")) {
     if (busyTimer) { clearInterval(busyTimer); busyTimer = null; }
     return;
   }
@@ -82,8 +113,12 @@ function syncBusyTimer() {
   if (!busyTimer) busyTimer = setInterval(updateBusyTimers, BUSY_TICK_MS);
 }
 
-/* ---------- 实例内存条（RAM / VRAM 进度条） ---------- */
+/* ---------- 实例内存条（RAM / VRAM 进度条 + 迷你折线） ---------- */
 const MEM_MIB = 1024 * 1024;
+/* 折线图的画布尺寸与点数上限（与概念稿一致；上限与服务端 memSeriesCap 对齐） */
+const SPARK_W = 74;
+const SPARK_H = 16;
+const SPARK_CAP = 60;
 
 /* bytes → MiB；缺失 / 非法 → NaN（调用方据此判断「这一项没有」） */
 function memMiB(bytes) {
@@ -130,8 +165,106 @@ export function memRowModel(kind, mem) {
     kind, cur, peak, avg, idle, total, scale, fillPct,
     peakPct: clampPct((peak / scale) * 100),
     avgPct: clampPct((avg / scale) * 100),
-    hot: vram && fillPct >= 85
+    hot: vram && fillPct >= 85,
+    // 近期趋势（旧→新的字节序列）；服务端没给时由客户端 2s 轮询补齐
+    series: memSeries(vram ? mem.vramSeries : mem.ramSeries)
   };
+}
+
+/* 取自带序列的内存对象：只留有限数字，最多 SPARK_CAP 个（取最近的一端）。
+   少于 2 个点返回空数组（画不出线，调用方据此不渲染 svg）。纯函数。 */
+export function memSeries(series) {
+  if (!Array.isArray(series)) return [];
+  const vals = series.filter(v => typeof v === "number" && Number.isFinite(v) && v >= 0);
+  return vals.length > SPARK_CAP ? vals.slice(vals.length - SPARK_CAP) : vals;
+}
+
+/**
+ * 折线图的 polyline points。
+ *
+ * 少于 2 个点返回 ""（单点画不出趋势，调用方不渲染 svg）。
+ * 纵向范围取 min..max 并各留 ~15% 余量，让线条不贴边；完全平坦的序列画在
+ * 中线（基线）上，不放大成方波。坐标为 1 位小数。纯函数。
+ * @param {Array<number>} series 旧→新
+ * @param {number} [w] viewBox 宽
+ * @param {number} [h] viewBox 高
+ * @returns {string} "x,y x,y …" 或 ""
+ */
+export function sparkPoints(series, w, h) {
+  const vals = memSeries(series);
+  if (vals.length < 2) return "";
+  const W = Number(w) > 0 ? Number(w) : SPARK_W;
+  const H = Number(h) > 0 ? Number(h) : SPARK_H;
+  const step = W / (vals.length - 1);
+  const r1 = n => Math.round(n * 10) / 10;
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (!(hi > lo)) {
+    // 平序列：画在基线上（中线），一眼能看出「一直是这个值」
+    const y = r1(H / 2);
+    return vals.map((_, i) => `${r1(i * step)},${y}`).join(" ");
+  }
+  const pad = (hi - lo) * 0.15;
+  lo -= pad;
+  hi += pad;
+  const top = 1, bottom = H - 1;
+  return vals.map((v, i) => {
+    const y = bottom - ((v - lo) / (hi - lo)) * (bottom - top);
+    return `${r1(i * step)},${r1(Math.min(bottom, Math.max(top, y)))}`;
+  }).join(" ");
+}
+
+/**
+ * 客户端兜底序列：服务端没给 ramSeries / vramSeries（旧 hub、或没升级的部署）
+ * 时，用 2s 轮询自己攒。同一拍读数不重复追加（memory.sampledAt 不变即同一拍）。
+ * 纯函数。
+ * @param {{at:number,ram:number[],vram:number[]}|null|undefined} prev 上一拍
+ * @param {any} mem 这一拍的 memory 对象
+ * @returns {{at:number,ram:number[],vram:number[]}}
+ */
+export function nextSparkState(prev, mem) {
+  const state = prev && typeof prev === "object" ? prev : { at: 0, ram: [], vram: [] };
+  if (!mem || typeof mem !== "object") return state;
+  const at = Number(mem.sampledAt) || 0;
+  if (at > 0 && at === state.at) return state; // 同一拍读数（SSE 触发重画）不追加
+  return {
+    at,
+    ram: pushSparkSample(state.ram, mem.ramBytes),
+    vram: pushSparkSample(state.vram, mem.vramBytes)
+  };
+}
+
+/* 追加一个采样点并裁到 SPARK_CAP；非法值 / 缺失值被丢弃（VRAM 未读到不是 0）。纯函数。 */
+export function pushSparkSample(series, value) {
+  const list = Array.isArray(series) ? series.slice() : [];
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return list;
+  list.push(value);
+  return list.length > SPARK_CAP ? list.slice(list.length - SPARK_CAP) : list;
+}
+
+/* 客户端攒出来的折线序列：instanceId → {at, ram[], vram[]}。
+   只在服务端没给 series（旧 hub / 没升级的部署）时兜底，所以量很小：
+   每实例最多 60×2 个数字，实例消失即丢。 */
+const sparkStore = new Map();
+
+/* 给这一拍的 memory 对象补序列：服务端给了就用服务端的（1s 一拍更密），
+   缺的那个字段用 2s 轮询攒出来的顶上。 */
+function withSparkSeries(inst) {
+  const mem = inst && inst.memory;
+  if (!mem || typeof mem !== "object") return inst;
+  const state = nextSparkState(sparkStore.get(inst.id), mem);
+  sparkStore.set(inst.id, state);
+  if (Array.isArray(mem.ramSeries) && Array.isArray(mem.vramSeries)) return inst;
+  const next = { ...mem };
+  if (!Array.isArray(mem.ramSeries) && state.ram.length >= 2) next.ramSeries = state.ram;
+  if (!Array.isArray(mem.vramSeries) && state.vram.length >= 2) next.vramSeries = state.vram;
+  return { ...inst, memory: next };
+}
+
+/* 列表里已经没有的实例（已停止 / 启动失败）丢掉它的序列，Map 不随启停无界增长。 */
+function pruneSparkStore() {
+  for (const id of [...sparkStore.keys()]) {
+    if (!instances.some(i => i.id === id)) sparkStore.delete(id);
+  }
 }
 
 /**
@@ -172,10 +305,14 @@ export function memAriaText(row) {
    markup 里的 style=""；插入 DOM 后由 applyMemBars 用 CSSOM 写成 width / left。 */
 function memRowHtml(row) {
   const key = row.kind === "vram" ? t("instance.memKeyVram") : t("instance.memKeyRam");
-  const total = row.total ? `<span class="of num">/ ${esc(formatMiB(row.total))}</span>` : "";
+  /* 有 GPU 总量时标签行写「/ total」，不再叠一个 now；没有总量（RAM，或旧 hub
+     没给 vramTotalBytes）就只写 now。Idle 在下面的统计行，字段缺失则整项省略。 */
+  const valueTail = row.total
+    ? `<span class="of num">/ ${esc(formatMiB(row.total))}</span>`
+    : `<span class="of">${esc(t("instance.memNow"))}</span>`;
   const aria = memAriaText(row);
   return `<div class="mem-row">
-      <div class="mem-l"><span class="k">${esc(key)}</span><span class="v num">${esc(formatMiB(row.cur))}</span>${total}<span class="of">${esc(t("instance.memNow"))}</span></div>
+      <div class="mem-l"><span class="k">${esc(key)}</span><span class="v num">${esc(formatMiB(row.cur))}</span>${valueTail}${sparkHtml(row)}</div>
       <div class="bar" role="meter" aria-label="${esc(aria)}" aria-valuetext="${esc(aria)}" aria-valuemin="0" aria-valuemax="${num1(row.scale)}" aria-valuenow="${num1(row.cur)}">
         <div class="fill ${row.kind}${row.hot ? " hot" : ""}" data-w="${row.fillPct}"></div>
         <div class="pk" data-l="${row.peakPct}" aria-hidden="true"></div>
@@ -183,6 +320,15 @@ function memRowHtml(row) {
       </div>
       <div class="stats3">${esc(memStatsLabel(row))}</div>
     </div>`;
+}
+
+/* 标签行右端的迷你折线（近期趋势）。少于 2 个采样点返回 ""——一条线画不出来，
+   就不放占位空框。stroke 颜色走 style.css 的 .spark.ram / .spark.vram（CSP
+   style-src 'self' 不允许 inline style，SVG presentation 属性不受影响）。 */
+function sparkHtml(row) {
+  const pts = sparkPoints(row.series, SPARK_W, SPARK_H);
+  if (!pts) return "";
+  return `<svg class="spark ${esc(row.kind)}" width="${SPARK_W}" height="${SPARK_H}" viewBox="0 0 ${SPARK_W} ${SPARK_H}" aria-hidden="true" focusable="false"><polyline points="${pts}" fill="none" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
 
 /**
@@ -255,8 +401,14 @@ export function applyInstances(data) {
     if (inst) { setPendingInstanceId(null); openInstanceDetail(inst); }
   }
   maybeAutoSelectReadyModel();
+  pruneSparkStore();
   renderInstanceList();
   updateInstanceBar();
+  // 广播给不依赖本模块的外观层（页头 chip、实时状态行）：它们要的是「选中实例
+  // 有没有任务 / 有几台就绪」，走窗口事件而不是互相 import，避免成环。
+  if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+    window.dispatchEvent(new CustomEvent("hub-instances-updated", { detail: { instances } }));
+  }
 }
 
 /* Prefer a Ready model on first load when the current selection has none.
@@ -302,9 +454,10 @@ export function startInstancePolling() {
 export function renderInstanceList() {
   const list = $("instance-list");
   list.removeAttribute("aria-busy");
-  // 展示全部实例（不再按选中模型过滤）：就绪 > 启动中 > 其它，可用的始终排在最前
-  const order = { READY: 0, STARTING: 1 };
-  const sorted = [...instances].sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2));
+  // 展示全部实例（不再按选中模型过滤），用 sortInstances 取一个全序：
+  // 状态 → createdAt → name → id。map 迭代顺序随机的后端也据此稳定下来，
+  // 2s 轮询重画时卡片不会跳位（排序与选中 / 忙碌无关）。
+  const sorted = sortInstances(instances);
   list.innerHTML = "";
   if (instances.length === 0) {
     renderEmptyState(list, t("instance.empty"), {
@@ -326,7 +479,7 @@ export function renderInstanceList() {
     const busyBadge = busy.busy
       ? ` <span class="badge generating">${esc(t("instance.generating"))}${busyElapsedHtml(busy.startMs)}</span>`
       : "";
-    const memHtml = memBlockHtml(inst.memory);
+    const memHtml = memBlockHtml(withSparkSeries(inst));
     let html = `<div class="card-title">${esc(inst.instanceName || inst.modelId)} <span class="badge ${statusClass}">${esc(statusText(inst.status))}</span>${busyBadge}</div>
       <div class="card-family">${esc(modelName)} ｜ #${esc(inst.id)}</div>
       <div class="card-desc">${esc(inst.backend)}${inst.device != null ? ":" + esc(inst.device) : ""} ｜ ${esc(t("instance.port"))} ${esc(inst.port)}${inst.executableName ? " ｜ " + esc(inst.executableName) : ""}</div>${memHtml}`;
@@ -354,7 +507,8 @@ export function renderInstanceList() {
 }
 
 export function updateInstanceBar() {
-  const ready = instances.filter(i => i.modelId === selectedModelId && i.status === "READY");
+  /* 下拉只列当前模型的就绪实例，顺序与卡片同一套全序（不按选中态重排）。 */
+  const ready = sortInstances(instances.filter(i => i.modelId === selectedModelId && i.status === "READY"));
   const select = $("instance-select");
   select.innerHTML = "";
   for (const inst of ready) {
@@ -366,11 +520,11 @@ export function updateInstanceBar() {
   const has = ready.length > 0;
   if (has) {
     if (!ready.some(i => i.id === activeInstanceId)) {
-      setActiveInstanceId(ready[0].id);
+      selectActiveInstance(ready[0].id);
     }
     select.value = activeInstanceId;
   } else {
-    setActiveInstanceId(null);
+    selectActiveInstance(null);
   }
   // 注意：历史按 modelId 维度记录，与激活哪个实例无关，实例启停/切换不得刷新历史列表
   // （重建 DOM 会打断行内播放、折叠已展开的播放器）
@@ -386,6 +540,10 @@ export function updateInstanceBar() {
   const pill = $("instance-pill");
   pill.textContent = has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
+
+  // 左栏标题行右侧的实例台数（与「实时事件」灯并排，见 index.html 的 .sec-head）
+  const cnt = $("instance-count");
+  if (cnt) cnt.textContent = instancesLoaded ? I18N.num(instances.length) : "";
 
   // 与卡片同一个忙碌来源（resolveBusy）；徽标文案由 data-i18n 维护，计时片段
   // 每次重画后重挂（共享计时器按 .busy-elapsed 刷新）。
@@ -424,8 +582,19 @@ export function updateInstanceBar() {
   syncBusyTimer();
 }
 
+/* 选中实例的唯一写入口：变化时广播一个窗口事件。页头 chip 与「实时状态行」
+   （web/modules/hub-chip.js / live-ticker.js）要知道选中对象换没换，走事件而不是
+   互相 import——那两个模块单向依赖本模块（读 instances / formatBusyElapsed）。 */
+function selectActiveInstance(id) {
+  if (id === activeInstanceId) return;
+  setActiveInstanceId(id);
+  if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+    window.dispatchEvent(new CustomEvent("hub-active-instance", { detail: { id } }));
+  }
+}
+
 $("instance-select").onchange = (e) => {
-  setActiveInstanceId(e.target.value);
+  selectActiveInstance(e.target.value);
   renderInstanceList();
 };
 
@@ -484,7 +653,7 @@ export function renderInstanceDetail(inst) {
     val.textContent = v;
     addRow(k, val);
   }
-  const memHtml = memBlockHtml(inst.memory);
+  const memHtml = memBlockHtml(withSparkSeries(inst).memory);
   if (memHtml) {
     const val = document.createElement("span");
     val.className = "kv-val mem-kv";

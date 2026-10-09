@@ -4,10 +4,27 @@
  * 立刻拉一次实例列表，让内存峰值跟上。EventSource 不存在、连接失败、
  * 服务端 503，都静默退回 2s 轮询（浏览器会自动重连，这里不弹 toast）。
  *
- * fan-out 不代理这条流；连到 fan-out 时这里会失败，实例列表照常轮询。 */
+ * fan-out 不代理这条流；连到 fan-out 时这里会失败，实例列表照常轮询。
+ *
+ * 同一个连接还驱动左栏「Instances」标题行的那颗小灯（#live-events）：连上并
+ * 收到 hello 是「Live events」，否则「Polling」——用户能直接看出当前是推送
+ * 还是在轮询，不需要懂 SSE。 */
 
 import { refreshInstances, renderInstanceList, updateInstanceBar } from "./instances.js";
+import { $, t } from "./dom.js";
+import { noteTaskEvent } from "./live-ticker.js";
 import { busyStarts } from "./state.js";
+
+/**
+ * 「实时事件」指示灯的状态。纯函数：连上并且已经收到过至少一个事件（hello
+ * 或任何 task.*）才算「实时」——只连上还没收到东西时按轮询算，
+ * 避免连接刚建立就宣称实时。
+ * @param {{connected:boolean, sawEvent:boolean}} flags
+ * @returns {"live"|"poll"}
+ */
+export function liveEventsMode(flags) {
+  return flags && flags.connected && flags.sawEvent ? "live" : "poll";
+}
 
 /* running：taskId → {instanceId, startMs}。只在 task.started 登记，终态按 taskId 删除，
    这样「取消一条还在排队的任务」不会把同实例上仍在跑的那条误清掉。
@@ -61,10 +78,30 @@ export function applyTaskEvent(name, data) {
   syncGenerating(runningTasks);
   renderInstanceList();
   updateInstanceBar();
+  // 合成按钮下方的实时状态行（选中实例上的任务）
+  noteTaskEvent(name, data || {});
   if (TERMINAL.has(name)) refreshInstances();
 }
 
+/* ---------- 「实时事件 / 轮询」指示灯 ---------- */
+
+let sseConnected = false;
+let sseSawEvent = false;
+
+/* 按当前连接状态重画指示灯（文案与点的颜色都在 style.css 里按 data-mode 分）。
+   元素在函数里取：语言切换会再画一次，模块求值时也不依赖 DOM（单测加载本文件）。 */
+export function renderLiveEvents() {
+  const liveEl = $("live-events");
+  if (!liveEl) return;
+  const mode = liveEventsMode({ connected: sseConnected, sawEvent: sseSawEvent });
+  liveEl.dataset.mode = mode;
+  const text = $("live-events-text");
+  if (text) text.textContent = t(mode === "live" ? "live.on" : "live.off");
+  liveEl.setAttribute("aria-label", t(mode === "live" ? "live.ariaOn" : "live.ariaOff"));
+}
+
 export function startTaskEvents() {
+  renderLiveEvents();
   if (typeof EventSource !== "function") return;
   let es;
   try {
@@ -80,20 +117,35 @@ export function startTaskEvents() {
       } catch {
         return;
       }
+      sseSawEvent = true; // 收到事件即证明流是通的（hello 不到也算）
       applyTaskEvent(name, data);
+      renderLiveEvents();
     });
   };
+  // hello：连接建立后服务端第一帧，确认流真的在推东西
+  es.addEventListener("hello", () => {
+    sseSawEvent = true;
+    renderLiveEvents();
+  });
   listen("task.started");
   listen("task.finished");
   listen("task.failed");
   listen("task.cancelled");
+  es.onopen = () => {
+    sseConnected = true;
+    renderLiveEvents();
+  };
   // 连接失败不提示：EventSource 自己会重连，2s 实例轮询保持界面正确。
   // 同时清掉 SSE 侧的忙碌表——任务可能已经在流断掉期间结束了，
   // 留着会让「生成中…」永远亮着（busy 判定此后整体回退到轮询数据）。
+  // 指示灯同步退回「Polling」，并把「收到过事件」的标志一起清掉。
   es.onerror = () => {
+    sseConnected = false;
+    sseSawEvent = false;
     runningTasks = {};
     syncGenerating(runningTasks);
     renderInstanceList();
     updateInstanceBar();
+    renderLiveEvents();
   };
 }

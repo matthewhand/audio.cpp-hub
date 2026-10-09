@@ -307,6 +307,11 @@ func (s *MemorySampler) record(instanceID string, now time.Time, ram, vram int64
 // VRAM was never measured, the idle baselines until an idle sample exists and
 // vramTotalBytes when the GPU total is unknowable). Must never error because
 // of sampling.
+//
+// ramSeries / vramSeries are the last memSeriesCap readings (oldest → newest,
+// bytes) for the WebUI's sparklines. They are omitted below two points — a
+// single sample draws no line — and each ring is an inline array, so the
+// per-instance cost does not grow with instance lifetime.
 func (s *MemorySampler) MemoryJSON(instanceID string) map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -322,6 +327,9 @@ func (s *MemorySampler) MemoryJSON(instanceID string) map[string]any {
 		"sampledAt":    st.lastTime.UnixMilli(),
 		"busy":         s.busy[instanceID],
 	}
+	if ram := st.ramRing.snapshot(); len(ram) >= 2 {
+		out["ramSeries"] = ram
+	}
 	if st.ramIdleKnown {
 		out["ramIdleBytes"] = st.ramIdleBytes
 	}
@@ -330,6 +338,9 @@ func (s *MemorySampler) MemoryJSON(instanceID string) map[string]any {
 		out["vramPeakBytes"] = st.peakVRAM
 		out["vramAvgBytes"] = st.vramAvg()
 		out["vramSource"] = st.vramSource
+		if vram := st.vramRing.snapshot(); len(vram) >= 2 {
+			out["vramSeries"] = vram
+		}
 		if st.vramIdleKnown {
 			out["vramIdleBytes"] = st.vramIdleBytes
 		}
@@ -434,6 +445,11 @@ func (s *MemorySampler) nvidiaOnce(now time.Time) map[int]int64 {
 // The idle baselines are the complement: the minimum seen while no task was
 // RUNNING, i.e. what the model costs at rest. They only ever shrink, and only
 // from idle samples — a busy sample must not drag the baseline down or up.
+//
+// ramRing / vramRing keep the last memSeriesCap readings (oldest → newest) so
+// GET /api/instances can hand the WebUI a sparkline of the recent trend. They
+// are fixed-size inline arrays: the per-instance overhead is 2 × 60 × 8 bytes
+// and never grows with instance lifetime.
 type memRolling struct {
 	lastRAM       int64
 	lastVRAM      int64
@@ -452,6 +468,39 @@ type memRolling struct {
 	samples       int
 	lastTime      time.Time
 	hasSample     bool
+
+	ramRing  memRing
+	vramRing memRing
+}
+
+// memRing is a fixed-capacity ring buffer of samples: push appends and drops
+// the oldest value once full, snapshot returns the stored values oldest →
+// newest. Bounded and allocation-free while filling.
+type memRing struct {
+	buf  [memSeriesCap]int64
+	n    int // number of stored samples (≤ cap)
+	head int // index of the oldest stored sample
+}
+
+// push records one value, evicting the oldest when the buffer is full.
+func (r *memRing) push(v int64) {
+	if r.n < len(r.buf) {
+		r.buf[(r.head+r.n)%len(r.buf)] = v
+		r.n++
+		return
+	}
+	r.buf[r.head] = v
+	r.head = (r.head + 1) % len(r.buf)
+}
+
+// snapshot returns the stored values oldest → newest (a fresh slice: callers
+// hand it to the JSON encoder, so it must not alias the buffer).
+func (r *memRing) snapshot() []int64 {
+	out := make([]int64, r.n)
+	for i := 0; i < r.n; i++ {
+		out[i] = r.buf[(r.head+i)%len(r.buf)]
+	}
+	return out
 }
 
 // addSample folds one reading into the rolling stats. idle=true marks a sample
@@ -493,6 +542,12 @@ func (r *memRolling) addSample(now time.Time, ram, vram int64, vramKnown bool, s
 	r.lastTime = now
 	r.samples++
 	r.hasSample = true
+	// Recent trend for the WebUI sparklines: RAM every sample, VRAM only while
+	// a reading exists (an unknown reading is not a zero).
+	r.ramRing.push(ram)
+	if vramKnown {
+		r.vramRing.push(vram)
+	}
 }
 
 func (r *memRolling) ramAvg() int64 {

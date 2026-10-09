@@ -116,6 +116,12 @@ type StartParams struct {
 	SessionOptions map[string]string
 }
 
+// List 返回全部实例，顺序确定：先按 CreatedAt，再按 ID。
+//
+// 管理器用 map 存放实例，而 Go 的 map 迭代顺序是运行时随机化的——直接遍历
+// 会让 GET /api/instances 每次返回的顺序都不同，前端 2s 轮询重画时卡片在列表里
+// 跳来跳去（选中的卡片一会儿在顶部一会儿在底部）。只有两个实例的 CreatedAt
+// 相同（同一毫秒内启动）时才用 ID 兜底，保证排序是全序。
 func (m *InstanceManager) List() []*Instance {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -123,6 +129,12 @@ func (m *InstanceManager) List() []*Instance {
 	for _, inst := range m.items {
 		out = append(out, inst)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].CreatedAt != out[j].CreatedAt {
+			return out[i].CreatedAt < out[j].CreatedAt
+		}
+		return out[i].ID < out[j].ID
+	})
 	return out
 }
 

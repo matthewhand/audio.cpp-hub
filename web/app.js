@@ -24,6 +24,8 @@ import { closeDownloadsModal, closeModelDlModal, relocalizeDownloads, startDownl
 import { cancelFileBrowser, relocalizeFileBrowser } from "./modules/file-browser-lazy.js";
 import { closeInstanceDetail, renderInstanceList, startInstancePolling, updateInstanceBar } from "./modules/instances.js";
 import { closeLaunchModal, loadProfiles, renderLaunchProfiles } from "./modules/launch.js";
+import { renderHubChip, startHubChip } from "./modules/hub-chip.js";
+import { renderLiveTicker, startLiveTicker } from "./modules/live-ticker.js";
 import { loadModels, renderModelList, updateQuickLaunchTitle } from "./modules/models.js";
 import { buildEmotionSliders, renderWorkspace } from "./modules/panels.js";
 import { applyRoute } from "./modules/routing.js";
@@ -32,7 +34,7 @@ import { applyLangBtn, applyThemeIcon, closeDrawer } from "./modules/shell.js";
 import { closeHistoryPanel } from "./modules/sidebar.js";
 import { closeStatsPanel, reloadStats } from "./modules/stats-lazy.js";
 import { models, selectedModel } from "./modules/state.js";
-import { startTaskEvents } from "./modules/task-events.js";
+import { renderLiveEvents, startTaskEvents } from "./modules/task-events.js";
 import { closeVoicesPanel } from "./modules/voices-panel-lazy.js";
 
 /* 回填经典脚本侧的转发器：audio-picker.js 的 toast 与 $ / el 在模块求值前就已从
@@ -56,6 +58,10 @@ function rerenderAll() {
   relocalizeSettings();
   relocalizeDownloads();
   if (!$("stats-panel").classList.contains("hidden")) reloadStats();
+  /* 页头 chip、合成按钮下方的状态行、左栏实时事件灯：文案走词典，语言切换后重画一次 */
+  renderHubChip();
+  renderLiveTicker();
+  renderLiveEvents();
   (window.__audioPickers || []).forEach(p => p.refreshLabels && p.refreshLabels());
   (window.__voiceSelects || []).forEach(v => v.refreshLabels && v.refreshLabels());
   relocalizeFileBrowser();
@@ -113,6 +119,8 @@ startInstancePolling();
 startTaskEvents();
 startEventsPolling();
 startDownloadsPolling();
+startHubChip();
+startLiveTicker();
 
 loadModels();
 loadExecutables();
