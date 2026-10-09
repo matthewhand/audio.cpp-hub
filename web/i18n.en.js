@@ -40,6 +40,7 @@ window.I18N_EN = {
   "activity.empty": "No recent tasks",
   "activity.stripAria": "{n} tasks across {lanes} instances in the last 10 minutes",
   "activity.stripEmpty": "No tasks in the last 10 minutes",
+  "activity.stripCaption": "Last 10 min",
   "activity.status.queued": "Queued",
   "activity.status.running": "Running",
   "activity.status.done": "Done",

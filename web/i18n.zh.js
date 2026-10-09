@@ -40,6 +40,7 @@ window.I18N_ZH = {
   "activity.empty": "暂无最近任务",
   "activity.stripAria": "最近 10 分钟内 {lanes} 个实例上的 {n} 个任务",
   "activity.stripEmpty": "最近 10 分钟没有任务",
+  "activity.stripCaption": "最近 10 分钟",
   "activity.status.queued": "排队",
   "activity.status.running": "运行中",
   "activity.status.done": "完成",

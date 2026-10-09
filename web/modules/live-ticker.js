@@ -22,6 +22,8 @@ import { activeInstanceId } from "./state.js";
 
 /* 终态展示时长：之后自动清空，不占着状态行 */
 const TICKER_IDLE_MS = 20000;
+/* 运行中的耗时数字：比卡片徽标更密，仍落在 100–250ms 里 */
+const TICKER_TICK_MS = 200;
 /* 错误摘要截断长度：状态行只放一行，超长错误信息交给侧栏与 title */
 const TICKER_ERROR_MAX = 60;
 
@@ -55,6 +57,14 @@ export function tickerErrorText(error, max) {
   if (!s) return "";
   const cap = Number(max) > 0 ? Number(max) : TICKER_ERROR_MAX;
   return s.length > cap ? s.slice(0, cap) + "…" : s;
+}
+
+/** Elapsed seconds for the running line. Never negative: a start stamp slightly ahead of local time reads 0. */
+export function tickerElapsedSec(startMs, nowMs) {
+  const start = Number(startMs);
+  const now = Number(nowMs);
+  if (!Number.isFinite(start) || start <= 0 || !Number.isFinite(now)) return 0;
+  return Math.max(0, (now - start) / 1000);
 }
 
 /**
@@ -107,6 +117,38 @@ function clearIdleTimer() {
   if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
 }
 
+let tickerTimer = null;
+
+/* startedAt, else the event ts, else the local time the event was received. */
+function watchStartMs(w) {
+  const started = Number(w && w.startedAt);
+  if (Number.isFinite(started) && started > 0) return started;
+  const ts = Number(w && w.eventTs);
+  if (Number.isFinite(ts) && ts > 0) return ts;
+  const recv = Number(w && w.receivedAt);
+  if (Number.isFinite(recv) && recv > 0) return recv;
+  return Date.now();
+}
+
+function stopTickerTick() {
+  if (tickerTimer) { clearInterval(tickerTimer); tickerTimer = null; }
+}
+
+function paintTickerElapsed() {
+  if (!el || !watch) return;
+  if (watch.status !== "RUNNING" && watch.status !== "QUEUED") return;
+  const span = el.querySelector && el.querySelector(".badge-elapsed");
+  if (!span) return;
+  const stamped = span.getAttribute && Number(span.getAttribute("data-start"));
+  const start = Number.isFinite(stamped) && stamped > 0 ? stamped : watchStartMs(watch);
+  span.textContent = formatBusyElapsed(tickerElapsedSec(start, Date.now()));
+}
+
+function ensureTickerTick() {
+  if (tickerTimer || typeof setInterval !== "function") return;
+  tickerTimer = setInterval(paintTickerElapsed, TICKER_TICK_MS);
+}
+
 function scheduleIdleClear() {
   clearIdleTimer();
   idleTimer = setTimeout(() => { idleTimer = null; watch = null; renderLiveTicker(); }, TICKER_IDLE_MS);
@@ -128,7 +170,8 @@ function adoptActiveTask() {
     if (task.instanceId === activeInstanceId && (task.status === "RUNNING" || task.status === "QUEUED")) {
       return watch = {
         taskId: task.id, instanceId: task.instanceId, status: task.status,
-        startedAt: Number(task.startedAt) || Number(task.createdAt) || null,
+        startedAt: Number(task.startedAt) || Number(task.createdAt) || Date.now(),
+        receivedAt: Date.now(),
         startFromSse: false,
         finishedAt: null, audioSec: null, error: ""
       };
@@ -144,6 +187,7 @@ export function renderLiveTicker() {
   if (!el) return;
   if (!watch) {
     clearIdleTimer();
+    stopTickerTick();
     el.textContent = "";
     el.className = "live-ticker hidden";
     el.removeAttribute("title");
@@ -151,14 +195,16 @@ export function renderLiveTicker() {
     return;
   }
   const name = tickerInstanceName(watch, instances);
-  const started = Number(watch.startedAt) || 0;
+  const start = watchStartMs(watch);
   const doneAt = Number(watch.finishedAt) || 0;
-  // 运行中算到当前时刻；终态用 finishedAt - startedAt（墙上耗时）
-  const elapsedSec = started ? ((doneAt || Date.now()) - started) / 1000 : NaN;
-  const wallSec = doneAt && started ? (doneAt - started) / 1000 : null;
   const phase = watch.status === "FAILED" ? "failed"
     : watch.status === "CANCELLED" ? "cancelled"
       : watch.status === "RUNNING" || watch.status === "QUEUED" ? "running" : "done";
+  // 运行中从起点钳到不小于 0（起点略超前本地时钟时立刻显示 0.0s）；终态用墙上耗时。
+  const elapsedSec = phase === "running"
+    ? tickerElapsedSec(start, Date.now())
+    : (doneAt ? Math.max(0, (doneAt - start) / 1000) : NaN);
+  const wallSec = doneAt ? (doneAt - start) / 1000 : null;
   const input = {
     phase: /** @type {"running"|"done"|"failed"|"cancelled"} */ (phase),
     name,
@@ -170,18 +216,21 @@ export function renderLiveTicker() {
   const { text, tone } = liveTickerText(input);
   el.className = "live-ticker" + (tone ? " " + tone : "");
   el.title = text;
-  // 运行中的耗时只放一个 data-start 片段，交给卡片徽标共用的定时器。
-  // 纯函数文案里已经含有当前秒数；若再拼进 innerHTML 会变成「3.2s 3.2s」，
-  // 而且后半段才在跳。这里用「不含时间的句子 + · + 片段」。
-  if (input.phase === "running" && started) {
+  // 运行中的耗时放在 data-start 片段里，本模块每 TICKER_TICK_MS 重画，
+  // 卡片徽标的定时器也会写同一片段。首帧就写入钳过的秒数，不等下一拍。
+  if (input.phase === "running") {
     const base = liveTickerText({ ...input, elapsedSec: NaN });
+    const shown = formatBusyElapsed(elapsedSec);
     el.textContent = base.text + " · ";
+    el.title = base.text + " · " + shown;
     const span = document.createElement("span");
     span.className = "badge-elapsed num";
-    span.dataset.start = String(started);
-    span.textContent = formatBusyElapsed((Date.now() - started) / 1000);
+    span.setAttribute("data-start", String(start));
+    span.textContent = shown;
     el.appendChild(span);
+    ensureTickerTick();
   } else {
+    stopTickerTick();
     el.textContent = text;
   }
   syncBusyTimer();
@@ -208,14 +257,17 @@ export function noteTask(task) {
     if (!watch || watch.taskId !== task.id) {
       watch = {
         taskId: task.id, instanceId: task.instanceId, status: task.status,
-        startedAt: null, finishedAt: null, audioSec: null, error: "",
+        startedAt: null, eventTs: null, receivedAt: Date.now(),
+        finishedAt: null, audioSec: null, error: "",
         startFromSse: false
       };
       clearIdleTimer();
     }
+    if (!watch.receivedAt) watch.receivedAt = Date.now();
     // SSE task.started 的 ts 优先（规范：有推送起点就用它）；没有 ts 时才用轮询的 startedAt。
     if (!watch.startFromSse) {
-      watch.startedAt = Number(task.startedAt) || Number(task.createdAt) || watch.startedAt;
+      const polled = Number(task.startedAt) || Number(task.createdAt) || 0;
+      watch.startedAt = polled > 0 ? polled : (watch.startedAt || watch.receivedAt || Date.now());
     }
     watch.status = task.status;
   } else if (watch && watch.taskId === task.id) {
@@ -245,9 +297,12 @@ export function noteTaskEvent(name, data) {
     if (!d.instanceId || d.instanceId !== activeInstanceId) return;
     const ts = Number(d.ts);
     const hasTs = Number.isFinite(ts) && ts > 0;
+    const now = Date.now();
     watch = {
       taskId: d.taskId || null, instanceId: d.instanceId, status: "RUNNING",
-      startedAt: hasTs ? ts : null,
+      startedAt: hasTs ? ts : now,
+      eventTs: hasTs ? ts : null,
+      receivedAt: now,
       startFromSse: hasTs,
       finishedAt: null, audioSec: null, error: ""
     };
@@ -308,6 +363,7 @@ export function startLiveTicker() {
 /* 仅供测试复位模块状态用（生产路径不会调用）。 */
 export function resetLiveTicker() {
   clearIdleTimer();
+  stopTickerTick();
   watch = null;
   knownTasks.clear();
 }

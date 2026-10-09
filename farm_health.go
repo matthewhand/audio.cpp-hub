@@ -225,10 +225,10 @@ func (h *Hub) handleFarmHealth(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"available":  true,
-		"hubsUp":     sum.HubsUp,
-		"hubsTotal":  sum.HubsTotal,
-		"failures":   sum.Failures,
-		"checkedAt":  sum.CheckedAt,
+		"available": true,
+		"hubsUp":    sum.HubsUp,
+		"hubsTotal": sum.HubsTotal,
+		"failures":  sum.Failures,
+		"checkedAt": sum.CheckedAt,
 	})
 }

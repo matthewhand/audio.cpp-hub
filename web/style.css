@@ -2476,30 +2476,56 @@ html.theme-switching header {
   color: var(--text);
 }
 .activity-strip { margin: 8px 0 6px; }
+.act-strip-caption {
+  margin: 0 0 3px;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--text-dim);
+}
 .act-strip { display: block; width: 100%; height: auto; }
 .act-lane-bg { fill: var(--border); }
+.act-lane-label {
+  font-size: 3.5px;
+  fill: var(--text-dim);
+  pointer-events: none;
+}
 .act-rect.queued { fill: var(--text-dim); }
 .act-rect.running { fill: var(--mem-ram); }
 .act-rect.done { fill: var(--ok); }
 .act-rect.failed { fill: var(--err); }
 .act-rect.cancelled { fill: var(--warn); }
-.activity-list { display: flex; flex-direction: column; gap: 4px; }
-.act-row {
-  display: flex;
+.activity-list {
+  display: grid;
+  grid-template-columns: 5.5ch minmax(0, 1fr) max-content minmax(5.5ch, max-content);
+  column-gap: 8px;
+  row-gap: 4px;
   align-items: center;
-  gap: 8px;
+  min-width: 0;
   font-size: 12px;
   color: var(--text);
-  min-width: 0;
 }
-.act-time { flex: none; color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.act-row { display: contents; }
+.act-time {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
 .act-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.act-status { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--text-dim); }
+.act-status { display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim); white-space: nowrap; }
 .act-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); flex: none; }
 .act-status.queued .act-dot { background: var(--text-dim); }
 .act-status.running .act-dot { background: var(--mem-ram); animation: pulse 1.2s ease-in-out infinite; }
 .act-status.done .act-dot { background: var(--ok); }
 .act-status.failed .act-dot { background: var(--err); }
 .act-status.cancelled .act-dot { background: var(--warn); }
-.act-row .num { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.act-dur {
+  justify-self: end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.act-row .num { font-variant-numeric: tabular-nums; color: var(--text-dim); }
 .activity-panel .hint { margin: 4px 0 0; }

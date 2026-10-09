@@ -175,6 +175,11 @@ const KIB = 1024;
  * 163.9, 35 subresource requests (app.js + 22 modules). Budgets sit a little
  * above those numbers.
  *
+ * 2026-10 activity fix (measured): newest-first sort, instance names, the
+ * lane caption and the live-ticker elapsed span added about 5 KiB raw on the
+ * initial modules. JS raw 392.7 KiB, JS gzip 144.4, CSS raw 80.3, CSS gzip
+ * 21.1, JS+CSS gzip 165.5. jsRawKiB moved 390 -> 395; the other caps still hold.
+ *
  * What is left, and why none of it was done here (measured, not guessed):
  *
  *   | 候选                            | gzip   | 不做的原因                                              |
@@ -189,7 +194,7 @@ const KIB = 1024;
  *   | `pwa.js`                        | 1.7 K  | 渐进增强而非点击才用；挪走只省 1 次请求换一个形状变更。    |
  */
 export const BUDGETS = {
-  jsRawKiB: 390, // 初始 JS 未压缩合计（实测 387.4）
+  jsRawKiB: 395, // 初始 JS 未压缩合计（实测 392.7）
   jsGzipKiB: 145, // 初始 JS gzip 传输合计（实测 142.9）
   cssRawKiB: 82, // 初始 CSS 未压缩（实测 79.9）
   cssGzipKiB: 22, // 初始 CSS gzip 传输（实测 21.0）

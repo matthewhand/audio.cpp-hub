@@ -90,14 +90,15 @@ function busyElapsedHtml(startMs) {
 }
 
 /* 所有卡片 + 实例条 + 实时状态行共用一个定时器（不按徽标建 interval，重画后也不会叠加） */
-const BUSY_TICK_MS = 300;
+const BUSY_TICK_MS = 200;
 let busyTimer = null;
 
 function updateBusyTimers() {
   const now = Date.now();
   for (const node of document.querySelectorAll(".badge-elapsed")) {
     const start = Number(node.dataset.start || 0);
-    node.textContent = start > 0 ? formatBusyElapsed((now - start) / 1000) : "";
+    const elapsed = start > 0 ? Math.max(0, (now - start) / 1000) : NaN;
+    node.textContent = start > 0 ? formatBusyElapsed(elapsed) : "";
   }
 }
 

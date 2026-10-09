@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createDomWorld } from "./helpers/dom-stub.mjs";
-import { loadEsModule } from "./helpers/vm.mjs";
+import { loadEsModule, readWeb } from "./helpers/vm.mjs";
 
 const MIN = 60 * 1000;
 
@@ -11,6 +11,7 @@ function t(key, params) {
     "activity.empty": "No recent tasks",
     "activity.stripAria": "{n} tasks across {lanes} instances in the last 10 minutes",
     "activity.stripEmpty": "No tasks in the last 10 minutes",
+    "activity.stripCaption": "Last 10 min",
     "activity.status.queued": "Queued",
     "activity.status.running": "Running",
     "activity.status.done": "Done",
@@ -103,7 +104,14 @@ test("upsertEvent merges, orders newest first, and caps at 20", () => {
 test("rowsFromTasks maps hub statuses and drops unknown ones", () => {
   const mod = pure();
   const rows = mod.rowsFromTasks([
-    { id: "a", status: "DONE", instanceId: "i1", instanceName: "voice", finishedAt: 50, startedAt: 10 },
+    {
+      id: "a",
+      status: "DONE",
+      instanceId: "i1",
+      instanceName: "voice",
+      finishedAt: 50,
+      startedAt: 10
+    },
     { id: "b", status: "WEIRD" },
     { id: "", status: "QUEUED" },
     { id: "c", status: "RUNNING", instanceId: "i2", startedAt: 80, createdAt: 70 }
@@ -277,6 +285,13 @@ test("renderActivity writes status text, duration, and the strip without style a
   const svg = ui.strip.innerHTML;
   assert.match(svg, /role="img"/);
   assert.match(svg, /aria-label="3 tasks across 2 instances in the last 10 minutes"/);
+  assert.match(svg, /act-strip-caption">Last 10 min</);
+  assert.match(svg, /aria-label="voice"/);
+  assert.match(svg, /aria-label="song"/);
+  assert.match(svg, /class="act-lane-label"[^>]*>voice</);
+  assert.match(html, /class="act-name" title=/);
+  assert.equal(ui.list.querySelectorAll(".act-row").length, 3);
+  assert.equal(ui.list.querySelectorAll(".act-dur").length, 3);
   assert.match(svg, /class="act-rect done"/);
   assert.match(svg, /class="act-rect running"/);
   assert.match(svg, /class="act-rect failed"/);
@@ -286,7 +301,10 @@ test("renderActivity writes status text, duration, and the strip without style a
   assert.match(svg, /width="32"/);
   assert.doesNotMatch(svg, /style=/);
   assert.equal(ui.strip.querySelectorAll("rect.act-rect").length, 3);
-  assert.deepEqual(mod.__idle, [["i1", now - 4 * MIN], ["i1", now - 3 * MIN + 5100]]);
+  assert.deepEqual(mod.__idle, [
+    ["i1", now - 4 * MIN],
+    ["i1", now - 3 * MIN + 5100]
+  ]);
 });
 
 test("startActivity remembers a closed panel and skips DOM updates until it opens", () => {
@@ -332,4 +350,211 @@ test("startActivity remembers a closed panel and skips DOM updates until it open
     );
     mod.resetActivity();
   });
+});
+
+function shuffle(list) {
+  const a = list.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = (i * 7 + 3) % (i + 1);
+    const tmp = a[i];
+    a[i] = a[j];
+    a[j] = tmp;
+  }
+  return a;
+}
+
+test("rowsFromTasks sorts shuffled input newest-first and caps after the sort", () => {
+  const mod = pure();
+  const morning = Date.parse("2026-10-10T06:39:00Z");
+  const evening = Date.parse("2026-10-10T18:55:00Z");
+  const pair = [
+    {
+      id: "am-run",
+      status: "RUNNING",
+      instanceId: "i",
+      createdAt: morning,
+      startedAt: morning
+    },
+    {
+      id: "pm-done",
+      status: "DONE",
+      instanceId: "i",
+      createdAt: morning,
+      startedAt: evening - MIN,
+      finishedAt: evening
+    }
+  ];
+  for (const input of [pair, pair.slice().reverse(), shuffle(pair)]) {
+    const rows = mod.rowsFromTasks(input);
+    assert.deepEqual(
+      Array.from(rows, (r) => r.taskId),
+      ["pm-done", "am-run"]
+    );
+  }
+  const tied = mod.rowsFromTasks([
+    { id: "b", status: "DONE", createdAt: 10, startedAt: 10, finishedAt: 10 },
+    { id: "a", status: "DONE", createdAt: 10, startedAt: 10, finishedAt: 10 }
+  ]);
+  assert.deepEqual(
+    Array.from(tied, (r) => r.taskId),
+    ["a", "b"]
+  );
+
+  const many = [];
+  for (let i = 0; i < 25; i++) {
+    const at = 1000 + i;
+    many.push({
+      id: "t" + String(i).padStart(2, "0"),
+      status: "DONE",
+      instanceId: "a",
+      createdAt: at,
+      startedAt: at,
+      finishedAt: at
+    });
+  }
+  const capped = mod.rowsFromTasks(shuffle(many));
+  assert.equal(capped.length, 20);
+  assert.equal(capped[0].taskId, "t24");
+  assert.equal(capped[19].taskId, "t05");
+
+  let rows = mod.rowsFromTasks(pair);
+  rows = mod.upsertEvent(rows, {
+    taskId: "am-run",
+    status: "done",
+    ts: morning + 5000,
+    durationMs: 5000
+  });
+  assert.equal(rows[0].taskId, "pm-done");
+  rows = mod.upsertEvent(rows, { taskId: "am-run", status: "done", ts: evening + 999999 });
+  assert.equal(rows[0].taskId, "pm-done", "an SSE touch does not float an older row");
+  assert.equal(rows.find((r) => r.taskId === "am-run").finishedAt, morning + 5000);
+});
+
+test("activityInstanceName prefers the instances list, then a task name, never 32 hex", () => {
+  const mod = pure();
+  const hex = "a1b2c3d4".repeat(4);
+  assert.equal(hex.length, 32);
+  const row = { taskId: "t", instanceId: hex };
+  assert.equal(mod.activityInstanceName(row, [{ id: hex, instanceName: "breeze" }]), "breeze");
+  assert.equal(mod.activityInstanceName({ ...row, instanceName: "song" }, []), "song");
+  assert.equal(mod.activityInstanceName({ ...row, instanceName: hex }, []), "a1b2c3");
+  assert.equal(mod.activityInstanceName(row, []), "a1b2c3");
+  assert.doesNotMatch(mod.activityInstanceName(row, []), /[0-9a-f]{32}/i);
+});
+
+test("renderActivity orders seeded rows, resolves names, and merges an SSE row by taskId", () => {
+  const world = createDomWorld();
+  const ui = mount(world);
+  const morning = Date.parse("2026-10-10T06:39:00Z");
+  const evening = Date.parse("2026-10-10T18:55:00Z");
+  const hex = "a1b2c3d4".repeat(4);
+  const mod = worldModule(world, {
+    instances: [{ id: hex, instanceName: "breeze" }]
+  });
+  mod.seedActivity(
+    shuffle([
+      {
+        id: "am-run00",
+        instanceId: "i1",
+        instanceName: "voice",
+        modelId: "breeze",
+        category: "tts",
+        status: "RUNNING",
+        createdAt: morning,
+        startedAt: morning
+      },
+      {
+        id: "pm-done1",
+        instanceId: "i2",
+        instanceName: "song",
+        modelId: "music",
+        category: "music",
+        status: "DONE",
+        createdAt: morning,
+        startedAt: evening - MIN,
+        finishedAt: evening
+      }
+    ])
+  );
+  mod.renderActivity(evening);
+  const titles = [...ui.list.innerHTML.matchAll(/title="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(titles[0].startsWith("pm-done1"), true);
+  assert.equal(titles[1].startsWith("am-run00"), true);
+  const clocks = [...ui.list.innerHTML.matchAll(/class="act-time num">([^<]*)</g)].map((m) => m[1]);
+  assert.deepEqual(clocks, [mod.formatClock(evening), mod.formatClock(morning)]);
+
+  mod.startActivity();
+  return Promise.resolve().then(() => {
+    for (const cb of mod.__win.get("hub-task-event") || []) {
+      cb({
+        detail: {
+          name: "task.started",
+          data: { taskId: "sse-task", instanceId: hex, ts: morning }
+        }
+      });
+    }
+    assert.match(ui.list.innerHTML, />breeze</);
+    assert.doesNotMatch(ui.list.innerHTML, new RegExp(hex));
+    mod.__sandbox.instances = [];
+    mod.renderActivity(evening);
+    assert.match(ui.list.innerHTML, />a1b2c3</);
+    assert.doesNotMatch(ui.list.innerHTML, new RegExp(hex));
+    mod.seedActivity([
+      {
+        id: "sse-task",
+        instanceId: hex,
+        instanceName: "harbor",
+        modelId: "music",
+        category: "music",
+        status: "RUNNING",
+        createdAt: morning,
+        startedAt: morning
+      }
+    ]);
+    assert.equal(ui.list.querySelectorAll(".act-row").length, 3);
+    const names = [...ui.list.innerHTML.matchAll(/class="act-name"[^>]*>([^<]*)</g)].map(
+      (m) => m[1]
+    );
+    assert.equal(names.filter((n) => n === "harbor").length, 1);
+    assert.equal(ui.list.innerHTML.split("sse-task").length - 1, 1);
+    assert.doesNotMatch(ui.list.innerHTML, /style=/);
+    mod.resetActivity();
+  });
+});
+
+test("strip with no tasks in the last 10 minutes is the caption only", () => {
+  const world = createDomWorld();
+  const ui = mount(world);
+  const mod = worldModule(world);
+  const now = 1_700_000_000_000;
+  mod.seedActivity([
+    {
+      id: "oldtask1",
+      instanceId: "i1",
+      instanceName: "voice",
+      modelId: "breeze",
+      category: "tts",
+      status: "DONE",
+      createdAt: now - 30 * MIN,
+      startedAt: now - 30 * MIN,
+      finishedAt: now - 29 * MIN
+    }
+  ]);
+  mod.renderActivity(now);
+  assert.match(ui.strip.innerHTML, /act-strip-caption">Last 10 min</);
+  assert.doesNotMatch(ui.strip.innerHTML, /<svg/);
+  assert.doesNotMatch(ui.strip.innerHTML, /act-rect/);
+  assert.match(ui.list.innerHTML, />voice</);
+  assert.doesNotMatch(ui.strip.innerHTML, /style=/);
+});
+
+test("activity row grid keeps time, name, status, and duration in fixed columns", () => {
+  const css = readWeb("style.css");
+  assert.match(css, /\.activity-list\s*\{[^}]*display:\s*grid/);
+  assert.match(css, /grid-template-columns:\s*5\.5ch\s+minmax\(0,\s*1fr\)/);
+  assert.match(css, /\.act-name\s*\{[^}]*text-overflow:\s*ellipsis/);
+  assert.match(css, /\.act-time\s*\{[^}]*tabular-nums/);
+  assert.match(css, /\.act-dur\s*\{[^}]*text-align:\s*right/);
+  assert.match(css, /\.act-dur\s*\{[^}]*tabular-nums/);
+  assert.match(css, /\.act-row\s*\{\s*display:\s*contents/);
 });

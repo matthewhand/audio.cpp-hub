@@ -3,7 +3,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import { extractFunction, loadI18n, makeBrowserSandbox, readWeb } from "./helpers/vm.mjs";
+import {
+  extractFunction,
+  loadEsModule,
+  loadI18n,
+  makeBrowserSandbox,
+  makeFunction,
+  readWeb
+} from "./helpers/vm.mjs";
+import { createDomWorld, StubElement } from "./helpers/dom-stub.mjs";
 
 function load(lang) {
   const sandbox = makeBrowserSandbox({
@@ -14,13 +22,22 @@ function load(lang) {
   const ticker = readWeb("modules/live-ticker.js");
   const bundle = [
     extractFunction(readWeb("modules/instances.js"), "formatBusyElapsed"),
-    ...["tickerInstanceName", "tickerRtf", "tickerRtfText", "tickerErrorText", "liveTickerText"]
-      .map(name => extractFunction(ticker, name))
+    ...[
+      "tickerInstanceName",
+      "tickerRtf",
+      "tickerRtfText",
+      "tickerErrorText",
+      "liveTickerText",
+      "tickerElapsedSec"
+    ].map((name) => extractFunction(ticker, name))
   ].join("\n");
   const context = vm.createContext({ t: (k, p) => I18N.t(k, p), TICKER_ERROR_MAX: 60 });
-  return new vm.Script(`${bundle}\n({ tickerInstanceName, tickerRtf, tickerRtfText, tickerErrorText, liveTickerText })`, {
-    filename: "live-ticker-pure.js"
-  }).runInContext(context);
+  return new vm.Script(
+    `${bundle}\n({ tickerInstanceName, tickerRtf, tickerRtfText, tickerErrorText, liveTickerText, tickerElapsedSec })`,
+    {
+      filename: "live-ticker-pure.js"
+    }
+  ).runInContext(context);
 }
 
 const en = load("en");
@@ -41,13 +58,32 @@ test("liveTickerText：en 运行 / 完成 / 失败", () => {
     en.liveTickerText({ phase: "running", name: "breeze", elapsedSec: 3.2 }).text,
     "Streaming from breeze · 3.2s"
   );
-  assert.equal(en.liveTickerText({ phase: "running", name: "breeze" }).text, "Streaming from breeze");
+  assert.equal(
+    en.liveTickerText({ phase: "running", name: "breeze", elapsedSec: 0 }).text,
+    "Streaming from breeze · 0.0s"
+  );
+  assert.equal(
+    en.liveTickerText({ phase: "running", name: "breeze" }).text,
+    "Streaming from breeze"
+  );
+  assert.equal(en.tickerElapsedSec(5_000, 5_000), 0);
+  assert.equal(en.tickerElapsedSec(5_000, 2_000), 0);
+  assert.equal(en.tickerElapsedSec(1_000, 4_200), 3.2);
+  assert.equal(en.tickerElapsedSec(null, 4_200), 0);
   const rtf = en.liveTickerText({
-    phase: "done", name: "breeze", elapsedSec: 4.1, wallSec: 4.1, audioSec: 4.1 / 1.07
+    phase: "done",
+    name: "breeze",
+    elapsedSec: 4.1,
+    wallSec: 4.1,
+    audioSec: 4.1 / 1.07
   });
   assert.equal(rtf.text, "Done on breeze · 4.1s · RTF 1.07×");
   const done = en.liveTickerText({
-    phase: "done", name: "breeze", elapsedSec: 4.1, wallSec: 1.18, audioSec: 1
+    phase: "done",
+    name: "breeze",
+    elapsedSec: 4.1,
+    wallSec: 1.18,
+    audioSec: 1
   });
   assert.equal(done.text, "Done on breeze · 4.1s · RTF 1.18×");
   assert.equal(done.tone, "ok");
@@ -71,8 +107,17 @@ test("liveTickerText：zh 运行 / 完成 / 失败", () => {
     zh.liveTickerText({ phase: "running", name: "breeze", elapsedSec: 3.2 }).text,
     "正在从 breeze 流式生成 · 3.2s"
   );
+  assert.equal(
+    zh.liveTickerText({ phase: "running", name: "breeze", elapsedSec: 0 }).text,
+    "正在从 breeze 流式生成 · 0.0s"
+  );
+  assert.equal(zh.tickerElapsedSec(5_000, 2_000), 0);
   const done = zh.liveTickerText({
-    phase: "done", name: "breeze", elapsedSec: 4.1, wallSec: 1.18, audioSec: 1
+    phase: "done",
+    name: "breeze",
+    elapsedSec: 4.1,
+    wallSec: 1.18,
+    audioSec: 1
   });
   assert.equal(done.text, "已在 breeze 上完成 · 4.1s · RTF 1.18×");
   assert.equal(
@@ -94,4 +139,62 @@ test("tickerInstanceName：任务自带名字优先，否则实例列表，最�
   );
   assert.equal(en.tickerInstanceName({ instanceId: "ab" }, []), "#ab");
   assert.equal(en.tickerInstanceName(null, null), "");
+});
+
+test("running ticker shows 0.0s immediately and ticks within 100-250ms", () => {
+  const world = createDomWorld();
+  const live = world.el('<p id="tts-live" class="live-ticker hidden"></p>');
+  world.document.body.appendChild(live);
+  world.document.createElement = (tag) => new StubElement(world, tag);
+  const timers = [];
+  const formatBusyElapsed = makeFunction(
+    extractFunction(readWeb("modules/instances.js"), "formatBusyElapsed")
+  );
+  const i18nBox = makeBrowserSandbox({ navigator: { language: "en-US" } });
+  const I18N = loadI18n(i18nBox);
+  I18N.setLang("en");
+  const mod = loadEsModule("modules/live-ticker.js", {
+    document: world.document,
+    $: world.$,
+    t: (k, p) => I18N.t(k, p),
+    Date,
+    setInterval(fn, ms) {
+      const id = timers.length + 1;
+      timers.push({ id, fn, ms });
+      return id;
+    },
+    clearInterval(id) {
+      const i = timers.findIndex((x) => x.id === id);
+      if (i >= 0) timers.splice(i, 1);
+    },
+    setTimeout: () => 0,
+    clearTimeout() {},
+    instances: [{ id: "breeze-id", instanceName: "breeze" }],
+    activeInstanceId: "breeze-id",
+    formatBusyElapsed,
+    syncBusyTimer() {},
+    Api: { get: () => Promise.resolve(null) },
+    window: { addEventListener() {} }
+  });
+  const future = Date.now() + 2000;
+  mod.noteTaskEvent("task.started", { taskId: "t-run", instanceId: "breeze-id", ts: future });
+  const span = live.querySelector(".badge-elapsed");
+  assert.ok(span, "elapsed span is in the first paint");
+  assert.equal(live.textContent, "Streaming from breeze · ");
+  assert.equal(span.textContent, "0.0s");
+  assert.equal(span.getAttribute("data-start"), String(future));
+  assert.equal(span.className.includes("num"), true);
+  assert.ok(timers.some((x) => x.ms >= 100 && x.ms <= 250));
+  span.textContent = "";
+  for (const timer of timers) if (timer.ms >= 100 && timer.ms <= 250) timer.fn();
+  assert.equal(span.textContent, "0.0s");
+
+  mod.resetLiveTicker();
+  live.children.length = 0;
+  mod.noteTaskEvent("task.started", { taskId: "t-run2", instanceId: "breeze-id" });
+  const span2 = live.querySelector(".badge-elapsed");
+  assert.equal(span2.textContent, "0.0s");
+  const started = Number(span2.getAttribute("data-start"));
+  assert.ok(Math.abs(started - Date.now()) < 2000);
+  mod.resetLiveTicker();
 });
