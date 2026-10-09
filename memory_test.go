@@ -447,3 +447,93 @@ func TestSamplerBusyFollowsStillRunning(t *testing.T) {
 		t.Fatal("task.finished with StillRunning false should return to idle sampling")
 	}
 }
+
+func TestParseNvidiaGpuTableNames(t *testing.T) {
+	totals, names := parseNvidiaGpuTable("0, NVIDIA GeForce GTX 1080, 8192\n1, Some, Weird, Name, 4096\n2, Broken, [N/A]\n")
+	if totals[0] != 8192*1024*1024 || names[0] != "NVIDIA GeForce GTX 1080" {
+		t.Fatalf("gpu0 = %d %q", totals[0], names[0])
+	}
+	if totals[1] != 4096*1024*1024 || names[1] != "Some, Weird, Name" {
+		t.Fatalf("gpu1 = %d %q", totals[1], names[1])
+	}
+	if _, ok := totals[2]; ok {
+		t.Fatal("N/A row should be skipped")
+	}
+	totals, names = parseNvidiaGpuTable("0, 8192\n")
+	if totals[0] != 8192*1024*1024 || len(names) != 0 {
+		t.Fatalf("legacy two-field = %d names %#v", totals[0], names)
+	}
+}
+
+func TestGpuNameSingleNvidiaOnly(t *testing.T) {
+	s := NewMemorySampler(nil, nil, nil)
+	s.nvTotals = map[int]int64{0: 8 << 30}
+	s.nvNames = map[int]string{0: "GTX 1080"}
+	if name, ok := s.gpuNameLocked(vramSourceNvidia); !ok || name != "GTX 1080" {
+		t.Fatalf("name = %q ok=%v", name, ok)
+	}
+	if _, ok := s.gpuNameLocked(vramSourceDrm); ok {
+		t.Fatal("drm must not borrow the nvidia name")
+	}
+	s.nvNames[0] = "  "
+	if _, ok := s.gpuNameLocked(vramSourceNvidia); ok {
+		t.Fatal("blank name must be omitted")
+	}
+	s.nvNames[0] = "GTX 1080"
+	s.nvTotals[1] = 4 << 30
+	s.nvNames[1] = "Other"
+	if _, ok := s.gpuNameLocked(vramSourceNvidia); ok {
+		t.Fatal("multi-GPU must omit the name")
+	}
+}
+
+func TestMemoryJSONGpuNameAndIdleSince(t *testing.T) {
+	s := NewMemorySampler(nil, nil, nil)
+	s.nvTotals = map[int]int64{0: 8 << 30}
+	s.nvNames = map[int]string{0: "GTX 1080"}
+	t0 := time.UnixMilli(1_700_000_000_000)
+	s.record("a", t0, 100, 200, true, vramSourceNvidia)
+	m := s.MemoryJSON("a")
+	if m["gpuName"] != "GTX 1080" {
+		t.Fatalf("gpuName = %#v", m["gpuName"])
+	}
+	if m["idleSinceMs"] != t0.UnixMilli() {
+		t.Fatalf("never-busy idleSinceMs = %#v", m["idleSinceMs"])
+	}
+
+	s2 := NewMemorySampler(nil, nil, nil)
+	s2.nvTotals = map[int]int64{0: 8 << 30, 1: 4 << 30}
+	s2.nvNames = map[int]string{0: "A", 1: "B"}
+	s2.OnTaskEvent(taskEvent{Name: eventTaskStarted, InstanceID: "b"})
+	s2.record("b", t0, 100, 200, true, vramSourceNvidia)
+	m2 := s2.MemoryJSON("b")
+	if _, ok := m2["gpuName"]; ok {
+		t.Fatal("multi-GPU must omit gpuName")
+	}
+	if _, ok := m2["idleSinceMs"]; ok {
+		t.Fatalf("busy-from-start must omit idleSinceMs: %#v", m2["idleSinceMs"])
+	}
+	when := time.UnixMilli(1_700_000_111_000)
+	s2.mu.Lock()
+	delete(s2.busy, "b")
+	s2.markIdleLocked("b", when)
+	s2.mu.Unlock()
+	m3 := s2.MemoryJSON("b")
+	if m3["idleSinceMs"] != when.UnixMilli() {
+		t.Fatalf("transition idleSinceMs = %#v", m3["idleSinceMs"])
+	}
+
+	s3 := NewMemorySampler(nil, nil, nil)
+	pending := time.UnixMilli(1_700_000_222_000)
+	s3.mu.Lock()
+	s3.markIdleLocked("c", pending)
+	s3.mu.Unlock()
+	s3.record("c", pending.Add(time.Second), 50, 0, false, "")
+	m4 := s3.MemoryJSON("c")
+	if m4["idleSinceMs"] != pending.UnixMilli() {
+		t.Fatalf("pending idleSinceMs = %#v", m4["idleSinceMs"])
+	}
+	if _, ok := m4["gpuName"]; ok {
+		t.Fatal("unknown vram source must omit gpuName")
+	}
+}

@@ -280,7 +280,9 @@ never a placeholder zero.
   "vramAvgBytes": 3972844749,
   "vramIdleBytes": 3906249728,
   "vramTotalBytes": 8589934592,
+  "gpuName": "NVIDIA GeForce GTX 1080",
   "vramSource": "nvidia-smi",
+  "idleSinceMs": 1756390000000,
   "ramSeries": [637330636, 644245094],
   "vramSeries": [3906249728, 3865470566],
   "samples": 12,
@@ -296,7 +298,9 @@ never a placeholder zero.
 | `ramAvgBytes` / `vramAvgBytes` | time-weighted average (see below) |
 | `ramIdleBytes` / `vramIdleBytes` | **idle baseline**: the minimum observed while the instance had no RUNNING task — what the model costs at rest. Omitted until an idle sample exists |
 | `vramTotalBytes` | total VRAM of the GPU the process runs on; it is the scale of the WebUI's VRAM bar. Only reported when the answer is certain: one GPU → that card's total; several GPUs with no process→card mapping → omitted |
+| `gpuName` | that card's name. Present only when `vramSource` is `nvidia-smi`, exactly one NVIDIA GPU is installed, and the name is non-empty. Several GPUs, or a DRM reading, omit it |
 | `vramSource` | `drm` or `nvidia-smi` |
+| `idleSinceMs` | epoch ms of the last busy→idle transition. If the instance has never been busy, it is the first idle sample. Omitted until that moment exists. Stays set after the instance becomes busy again; the WebUI hides the "idle for" label while a task is generating |
 | `ramSeries` / `vramSeries` | last at most 60 samples in bytes, oldest → newest, for the WebUI sparkline. Omitted when fewer than 2 points (one point draws no line). `vramSeries` is omitted entirely while VRAM has never been read — an unknown reading is not a zero. Each ring is a fixed 60-slot buffer, so the payload does not grow with instance lifetime |
 | `samples` / `sampledAt` / `busy` | sample count / last sample (ms) / a task is RUNNING |
 
@@ -307,10 +311,22 @@ how long it held until the next one), accumulated since the instance started.
 runs at about 1s instead of about 10s.
 
 `vramTotalBytes` is best-effort and never fails the endpoint: NVIDIA reads
-`nvidia-smi --query-gpu=index,memory.total` once per hub lifetime (same timeout
-and backoff as the per-pid query — no extra spawn per pass), AMD reads
-`/sys/class/drm/card*/device/mem_info_vram_total` once, and a totals query that
-does not resolve to exactly one card leaves the field out rather than guessing.
+`nvidia-smi --query-gpu=index,name,memory.total` once per hub lifetime (same timeout
+and backoff as the per-pid query — no extra spawn per pass). Names may contain
+commas: the first field is the index, the last field is MiB, and the joined middle
+is the name. AMD reads `/sys/class/drm/card*/device/mem_info_vram_total` once, and a
+totals query that does not resolve to exactly one card leaves `vramTotalBytes` and
+`gpuName` out rather than guessing. DRM does not supply a name.
+
+`GET /api/farm/health` is a same-origin summary of the fan-out proxy. The browser
+must not call the fan-out origin (`connect-src 'self'`). The hub fetches a fixed
+URL from `AUDIOCPP_HUB_FANOUT_URL` (default `http://127.0.0.1:18082/farm/health`;
+an empty value disables the probe). The URL is process config and is never taken
+from the request. Timeout is 1.5s, success and failure are cached about 5s, and
+concurrent callers share one fetch. The body is
+`{"available":true,"hubsUp":N,"hubsTotal":M,"failures":F,"checkedAt":"..."}`
+(`failures` is the sum of `hubs[].failures`). Unreachable or invalid upstream
+bodies are still HTTP 200 `{"available":false}`.
 
 `GET /api/tasks/{id}` adds optional `peakRamBytes` / `peakVramBytes`: the max
 seen while that task was RUNNING. Absent when the sampler never got a reading.

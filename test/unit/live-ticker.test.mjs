@@ -1,5 +1,5 @@
 /* 合成按钮下方状态行的纯文案。en / zh 两份词典各跑一遍。
-   刻意不出现「Streaming」——任务不是流式下发的。 */
+   运行中写 "Streaming from …"；完成 / 失败行不含 Streaming。 */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
@@ -39,9 +39,13 @@ test("tickerRtf：墙上耗时 ÷ 音频秒，非正数省略", () => {
 test("liveTickerText：en 运行 / 完成 / 失败", () => {
   assert.equal(
     en.liveTickerText({ phase: "running", name: "breeze", elapsedSec: 3.2 }).text,
-    "Generating on breeze · 3.2s"
+    "Streaming from breeze · 3.2s"
   );
-  assert.equal(en.liveTickerText({ phase: "running", name: "breeze" }).text, "Generating on breeze");
+  assert.equal(en.liveTickerText({ phase: "running", name: "breeze" }).text, "Streaming from breeze");
+  const rtf = en.liveTickerText({
+    phase: "done", name: "breeze", elapsedSec: 4.1, wallSec: 4.1, audioSec: 4.1 / 1.07
+  });
+  assert.equal(rtf.text, "Done on breeze · 4.1s · RTF 1.07×");
   const done = en.liveTickerText({
     phase: "done", name: "breeze", elapsedSec: 4.1, wallSec: 1.18, audioSec: 1
   });
@@ -65,7 +69,7 @@ test("liveTickerText：en 运行 / 完成 / 失败", () => {
 test("liveTickerText：zh 运行 / 完成 / 失败", () => {
   assert.equal(
     zh.liveTickerText({ phase: "running", name: "breeze", elapsedSec: 3.2 }).text,
-    "正在 breeze 上生成 · 3.2s"
+    "正在从 breeze 流式生成 · 3.2s"
   );
   const done = zh.liveTickerText({
     phase: "done", name: "breeze", elapsedSec: 4.1, wallSec: 1.18, audioSec: 1

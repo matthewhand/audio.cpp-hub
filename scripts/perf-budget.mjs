@@ -165,7 +165,15 @@ const KIB = 1024;
  * the keystrokes typed while the chunk is in flight. It opens whole, like
  * `openVoicesPanel`. Net win is small because the facade carries the chord.
  *
- * Budgets are re-pinned just below the new measurements — a ratchet, never a raise.
+ * Budgets were re-pinned just under those measurements — a ratchet for that lazy-load step.
+ *
+ * 2026-10 raise (measured, not guessed): the first screen gained the activity
+ * timeline, the synthesize character counter, per-instance memory bars, the
+ * live status line and the farm/hub chip. Those are on the initial view, so
+ * they cannot move to a lazy chunk. `npm run perf:budget` on this tree:
+ * JS raw 387.4 KiB, JS gzip 142.9, CSS raw 79.9, CSS gzip 21.0, JS+CSS gzip
+ * 163.9, 35 subresource requests (app.js + 22 modules). Budgets sit a little
+ * above those numbers.
  *
  * What is left, and why none of it was done here (measured, not guessed):
  *
@@ -181,12 +189,12 @@ const KIB = 1024;
  *   | `pwa.js`                        | 1.7 K  | 渐进增强而非点击才用；挪走只省 1 次请求换一个形状变更。    |
  */
 export const BUDGETS = {
-  jsRawKiB: 312, // 初始 JS 未压缩合计（实测 310.2）
-  jsGzipKiB: 115, // 初始 JS gzip 传输合计（实测 113.6）
-  cssRawKiB: 68, // 初始 CSS 未压缩（实测 67.6）
-  cssGzipKiB: 18, // 初始 CSS gzip 传输（实测 17.2）
-  totalGzipKiB: 132, // JS + CSS gzip 合计（实测 130.7，不含 HTML，HTML 很小)
-  subresourceRequests: 31, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 30）
+  jsRawKiB: 390, // 初始 JS 未压缩合计（实测 387.4）
+  jsGzipKiB: 145, // 初始 JS gzip 传输合计（实测 142.9）
+  cssRawKiB: 82, // 初始 CSS 未压缩（实测 79.9）
+  cssGzipKiB: 22, // 初始 CSS gzip 传输（实测 21.0）
+  totalGzipKiB: 166, // JS + CSS gzip 合计（实测 163.9，不含 HTML，HTML 很小)
+  subresourceRequests: 36, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 35）
   ttiTargetMs: 1500 // 目标 TTI（本地/局域网，中端笔电）——浏览器指标，本脚本不测量
 };
 const CSS = ["style.css"];

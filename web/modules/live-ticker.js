@@ -3,22 +3,20 @@
  * 概念稿里 Synthesize 按钮旁有一条状态行（「Streaming from breeze · RTF 1.18× ·
  * 3.2s」）。本模块是它的落地版，位置在 #tts-submit 下方（#tts-live），三态：
  *
- *   running   正在 <实例名> 上生成 · 3.2s     （耗时与卡片徽标共用同一个定时器）
- *   done      已在 <实例名> 上完成 · 4.1s · RTF 1.18×
+ *   running   Streaming from <实例名> · 3.2s   （耗时与卡片徽标共用同一个定时器）
+ *   done      Done on <实例名> · 4.1s · RTF 1.18×
  *   failed    在 <实例名> 上失败 · <错误摘要>
  *   cancelled 已取消 <实例名> 上的任务
  *
- * 数据来自两个既有来源，不新增接口：
+ * 数据来自两个既有来源：
  *   - SSE task.* 事件（web/modules/task-events.js）——起手最快，带 ts 与
- *     durationMs，但不知道音频时长（算不出 RTF）；
- *   - 任务轮询的完整任务对象（web/modules/tasks.js 每拍回调一次）——带
- *     startedAt / finishedAt / result.durationSec，用来补齐 RTF；SSE 不可用
- *     （fan-out 后面连不上 /api/events/stream）时它是唯一来源。
+ *     durationMs，但不带 result.durationSec；
+ *   - 完成时补一次 GET /api/tasks/{id}（或随后的任务轮询）拿音频时长算 RTF。
+ *     音频时长仍然未知就省略 RTF。SSE 不可用时任务轮询是唯一来源。
  *
- * 终态 20s 后自动清空（TICKER_IDLE_MS）。刻意**不写「Streaming」**——任务不是
- * 流式下发的：hub 异步排队执行，跑完才落盘结果（见 task.go）。 */
+ * 终态 20s 后自动清空（TICKER_IDLE_MS）。 */
 
-import { $, t } from "./dom.js";
+import { $, Api, t } from "./dom.js";
 import { formatBusyElapsed, instances, syncBusyTimer } from "./instances.js";
 import { activeInstanceId } from "./state.js";
 
@@ -267,6 +265,25 @@ export function noteTaskEvent(name, data) {
   watch.error = d.error || "";
   scheduleIdleClear();
   renderLiveTicker();
+  // task.finished 的 SSE 载荷没有 result.durationSec。完成且还不知道音频时长时
+  // 拉一次任务详情；失败 / 取消不算 RTF。轮询若已经写过 audioSec 就不再请求。
+  if (name === "task.finished" && watch.audioSec == null) pullDuration(watch.taskId);
+}
+
+/* 完成瞬间补音频时长。只认仍在关注的那条任务。 */
+function pullDuration(taskId) {
+  if (!taskId || !Api || typeof Api.get !== "function") return;
+  Api.get("/api/tasks/{id}", { params: { id: taskId } }).then((task) => {
+    if (!watch || watch.taskId !== taskId) return;
+    const res = task && task.result && typeof task.result === "object" ? task.result : {};
+    const sec = Number(res.durationSec);
+    if (Number.isFinite(sec) && sec > 0) watch.audioSec = sec;
+    if (!watch.finishedAt) {
+      const fin = Number(task && task.finishedAt);
+      if (Number.isFinite(fin) && fin > 0) watch.finishedAt = fin;
+    }
+    renderLiveTicker();
+  }).catch(() => {});
 }
 
 /* 选中实例换了 / 实例列表刷新后重新定位（两个信号都由 instances.js 广播） */

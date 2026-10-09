@@ -1277,7 +1277,7 @@ footer { padding: 4px 24px 18px; }
 /* ---------- 页头状态 chip（图标工具栏左侧，#hub-chip） ----------
    形状取自概念稿 .chip：圆角胶囊 + 状态点 + 加粗数字 + 细分隔线。
    选择器挂在 id 上，避免碰到样式指南里的色板 .chip。
-   只描述当前这台 hub（不发跨源请求，见 web/modules/hub-chip.js 顶部说明）。
+   农场可用时显示同域 GET /api/farm/health 的摘要，否则描述当前这台 hub。浏览器不发跨源请求。
    点的颜色：全就绪绿、部分就绪琥珀、一台都没就绪红。0 次失败保持正文色。 */
 #hub-chip {
   display: inline-flex;
@@ -2297,6 +2297,7 @@ footer { padding: 4px 24px 18px; }
   /* 「生成中…」的脉冲圆点是装饰，降级为常亮点（文字与计时本身已是状态反馈） */
   .badge.generating::before { animation: none !important; }
   .badge.generating { animation: none !important; }
+  .act-status.running .act-dot { animation: none !important; }
   /* 骨架屏流光同样为装饰，降级为静态块 */
   .skeleton { animation: none !important; }
 }
@@ -2440,4 +2441,65 @@ html.theme-switching header {
     transition: none !important;
   }
   details::details-content { transition: none !important; }
+  .act-status.running .act-dot { animation: none !important; }
 }
+
+/* ---------- 实例卡片：GPU 副标题、空闲时长、页头显存合计 ---------- */
+.card-name { min-width: 0; }
+.idle-for {
+  margin-left: auto;
+  flex: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.sec-vram { font-variant-numeric: tabular-nums; font-weight: 600; }
+.sec-vram:empty { display: none; }
+
+/* 合成文本标签行：标题在左，字数在右。字数没有 data-i18n，避免 applyI18n 清掉它。 */
+.field-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.char-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+
+/* ---------- 最近活动（实例列表与模型列表之间） ---------- */
+.activity-panel {
+  margin: 14px 0 4px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 8px 10px 10px;
+}
+.activity-panel > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.activity-strip { margin: 8px 0 6px; }
+.act-strip { display: block; width: 100%; height: auto; }
+.act-lane-bg { fill: var(--border); }
+.act-rect.queued { fill: var(--text-dim); }
+.act-rect.running { fill: var(--mem-ram); }
+.act-rect.done { fill: var(--ok); }
+.act-rect.failed { fill: var(--err); }
+.act-rect.cancelled { fill: var(--warn); }
+.activity-list { display: flex; flex-direction: column; gap: 4px; }
+.act-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+  min-width: 0;
+}
+.act-time { flex: none; color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.act-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-status { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--text-dim); }
+.act-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); flex: none; }
+.act-status.queued .act-dot { background: var(--text-dim); }
+.act-status.running .act-dot { background: var(--mem-ram); animation: pulse 1.2s ease-in-out infinite; }
+.act-status.done .act-dot { background: var(--ok); }
+.act-status.failed .act-dot { background: var(--err); }
+.act-status.cancelled .act-dot { background: var(--warn); }
+.act-row .num { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.activity-panel .hint { margin: 4px 0 0; }

@@ -17,7 +17,7 @@ import { $, Api, el, markRowEnter, t } from "./dom.js";
 import { refreshInstances } from "./instances.js";
 import { noteTask } from "./live-ticker.js";
 import { loadHistory, privacyOn, renderSidebarList } from "./sidebar.js";
-import { activeInstanceId, runningStarts, selectedModel } from "./state.js";
+import { activeInstanceId, noteIdleFallback, runningStarts, selectedModel } from "./state.js";
 
 export const activePolls = new Map(); // taskId → Api.poll 句柄（stop() 即无定时器/无在途请求）
 export const taskViews = new Map(); // taskId → 已知任务（进行中 + 已完成保留展示），供侧栏渲染
@@ -60,6 +60,9 @@ export function trackTask(task) {
   noteRunningStart(task.instanceId, task.status === "RUNNING" ? task.startedAt : null);
   // 首屏 / 模型切换重挂时就登记：等待本轮轮询回来之前状态行已经是新的
   noteTask(task);
+  if (task.finishedAt && task.status !== "QUEUED" && task.status !== "RUNNING") {
+    noteIdleFallback(task.instanceId, task.finishedAt);
+  }
   renderSidebarList();
   if (activePolls.has(task.id)) return;
   if (task.status !== "QUEUED" && task.status !== "RUNNING") return;
@@ -70,6 +73,9 @@ export function trackTask(task) {
     noteRunningStart(cur.instanceId, cur.status === "RUNNING" ? cur.startedAt : null);
     // 合成按钮下方的实时状态行：完整任务对象在这里最全（含 result.durationSec）
     noteTask(cur);
+    if (cur.finishedAt && cur.status !== "QUEUED" && cur.status !== "RUNNING") {
+      noteIdleFallback(cur.instanceId, cur.finishedAt);
+    }
     renderSidebarList();
     if (!isRunning(cur)) {
       activePolls.delete(task.id);

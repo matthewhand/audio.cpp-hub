@@ -10,6 +10,7 @@
 
 import { bindMenuKeys, focusDialog, hideBusy, renderEmptyState, renderStateError, restoreDialogFocus, showBusy, showSkeleton, showToast } from "./async-ui.js";
 import { $, Api, el, markRowEnter, t } from "./dom.js";
+import { renderCharCount } from "./char-count.js";
 import { fillTtsForm } from "./panels.js";
 import { goPanel } from "./routing.js";
 import { selectedModel, selectedModelId } from "./state.js";
@@ -677,5 +678,6 @@ export async function remixHistoryRecord(taskId) {
   fillTtsForm(m, remix);
   const text = $("tts-text");
   if (text) { text.value = ""; text.focus(); }
+  renderCharCount();
   showToast("info", t("history.remixed"));
 }

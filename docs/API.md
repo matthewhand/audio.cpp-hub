@@ -2,7 +2,7 @@
 
 audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README.md`](../README.md) 配置章节）。所有接口**无鉴权**，仅适用于本机 / 局域网，详见 [`SECURITY.md`](../SECURITY.md)。
 
-本文以 `api.go` 中注册的路由为准（`registerRoutes` 的 `apiRoute` 表共 51 条；另有 `/v1/*` 代理与 `web/` 静态服务）。响应约定：
+本文以 `api.go` 中注册的路由为准（`registerRoutes` 的 `apiRoute` 表共 52 条；另有 `/v1/*` 代理与 `web/` 静态服务）。响应约定：
 
 - 绝大多数 `GET` / 增删改接口直接返回对象或数组（JSON）
 - 部分删除 / 更新接口返回包装体 `{"ok": true, "data": {...}}`
@@ -26,6 +26,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 | DELETE | `/api/instances/{id}` | 停止实例 |
 | GET | `/api/events` | 实例事件日志 |
 | GET | `/api/events/stream` | 任务生命周期 SSE（hub 本机；fan-out 不代理） |
+| GET | `/api/farm/health` | 同域农场摘要（hub 去拉配置里的 fan-out URL；浏览器不跨源） |
 | GET | `/api/stats` | 用量与性能统计（按模型聚合） |
 | GET | `/api/executables` | 可执行文件列表 |
 | POST | `/api/executables` | 添加可执行文件 |
@@ -76,7 +77,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 
 未匹配的 `/api/*` 返回 `404 UNKNOWN_API`；其余 GET 由 `web/` 静态文件服务。
 
-> `apiRoute` 表共 51 条（含 `GET /api/events/stream`）。上表把共用通配的端点拆开展示：`PUT` / `DELETE` 的 `groups/{gid}` 与 `{taskId}/group` 在代码里各用一条四段模式 `/api/history/{modelId}/{seg3}/{seg4}` 再按路径段分发（两条路径在 `http.ServeMux` 里互相冲突）。`/v1/models` 与 `/v1/*` 在代码里是一条 `/v1/` 代理。
+> `apiRoute` 表共 52 条（含 `GET /api/events/stream` 与 `GET /api/farm/health`）。上表把共用通配的端点拆开展示：`PUT` / `DELETE` 的 `groups/{gid}` 与 `{taskId}/group` 在代码里各用一条四段模式 `/api/history/{modelId}/{seg3}/{seg4}` 再按路径段分发（两条路径在 `http.ServeMux` 里互相冲突）。`/v1/models` 与 `/v1/*` 在代码里是一条 `/v1/` 代理。
 
 ---
 
@@ -113,7 +114,9 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
   "vramAvgBytes": 3972844749,
   "vramIdleBytes": 3906249728,
   "vramTotalBytes": 8589934592,
+  "gpuName": "NVIDIA GeForce GTX 1080",
   "vramSource": "nvidia-smi",
+  "idleSinceMs": 1756390000000,
   "ramSeries": [637330636, 644245094],
   "vramSeries": [3906249728, 3865470566],
   "samples": 12,
@@ -129,12 +132,14 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 | `ramAvgBytes` / `vramAvgBytes` | 时间加权平均（见上文） |
 | `ramIdleBytes` / `vramIdleBytes` | **空闲基线**：实例没有 RUNNING 任务期间观察到的最小值（「这个模型闲着时占多少」）。在采到第一个空闲样本之前省略 |
 | `vramTotalBytes` | 该进程所在 GPU 的显存总量（前端显存条的比例尺）。只有答案确定时才给：单 GPU 直接用那张卡的；多 GPU 且进程映射不到具体卡时省略（宁缺勿错） |
+| `gpuName` | 那张卡的名字。只在 `vramSource` 为 `nvidia-smi` 且整机恰好一张 NVIDIA 卡、名字非空时给出。多卡或 DRM 省略，避免标错卡 |
 | `vramSource` | `drm`（Linux DRM fdinfo，按 `drm-client-id` 去重）或 `nvidia-smi` |
+| `idleSinceMs` | 最近一次由忙转闲的时刻（epoch ms）。从未忙过则是第一次空闲采样的时刻。一直处于 RUNNING、还没采到空闲样本时省略。转忙之后不清除，界面在生成中自己藏起「空闲了多久」 |
 | `ramSeries` / `vramSeries` | 最近最多 60 个采样点（字节，旧→新），给 WebUI 迷你折线。不足 2 个点时整个字段省略（单点画不出线）。VRAM 从未读到时不写 `vramSeries`（未知不是 0）。环形缓冲定长，不随实例寿命增长 |
 | `samples` / `sampledAt` / `busy` | 采样次数 / 最后一次采样时间（毫秒）/ 当前是否有 RUNNING 任务 |
 
 - `busy` 为真表示该实例当前有 RUNNING 任务，采样间隔约 1s；空闲约 10s
-- `vramTotalBytes` 是尽力而为：nvidia 走 `nvidia-smi --query-gpu=index,memory.total`（整个 hub 生命周期只查一次，与进程查询共用超时与失败退避），AMD 走 `/sys/class/drm/card*/device/mem_info_vram_total`（同样只读一次，且只有机器上只有一张卡时才认）
+- `vramTotalBytes` 是尽力而为：nvidia 走 `nvidia-smi --query-gpu=index,name,memory.total`（整个 hub 生命周期只查一次，与进程查询共用超时与失败退避）。卡名里可以有逗号：第一个字段是序号，最后一个字段是 MiB，中间拼回去才是名字。AMD 走 `/sys/class/drm/card*/device/mem_info_vram_total`（同样只读一次，且只有机器上只有一张卡时才认）。`gpuName` 与总量用同一条「恰好一张卡」规则，DRM 不带名字
 - 采样失败不会让这个接口报错。fan-out 聚合 `GET /api/instances` 时原样带上 `memory`（多出来的字段不影响路由）
 
 ### `POST /api/instances`
@@ -187,6 +192,31 @@ Server-Sent Events（`Content-Type: text/event-stream`）。连接后先发一�
 **fan-out 不代理这条流**（`cmd/fanout-proxy` 只转发它文档里列出的那些路由）。要收推送就直连那台 hub。
 
 没有事件总线时（不应出现在正常进程里）返回 `503 EVENTS_UNAVAILABLE`。
+
+### `GET /api/farm/health`
+
+同域的农场摘要。浏览器只打这条（CSP `connect-src 'self'`），hub 自己去拉 fan-out 的 `GET /farm/health`。
+
+URL 来自进程环境变量 `AUDIOCPP_HUB_FANOUT_URL`。未设置时用 `http://127.0.0.1:18082/farm/health`。设成空字符串（或只有空白）则关闭探测。这个 URL 是进程配置，**不读请求里的 query / header / body**，所以不是 SSRF 入口。
+
+服务端超时 1.5 秒，成功和失败都缓存约 5 秒，并发请求共用一次在途拉取（single-flight）。不跟随重定向。正文超过 1 MiB 视为无效。
+
+始终 `200`。fan-out 给出可用摘要时：
+
+```json
+{"available":true,"hubsUp":3,"hubsTotal":4,"failures":1,"checkedAt":"2026-10-10T00:00:00Z"}
+```
+
+- `hubsUp` / `hubsTotal` 来自 fan-out 正文里的同名字段（必须都在，且 `0 <= hubsUp <= hubsTotal`）
+- `failures` 是 `hubs[].failures` 之和（`hubs` 可以没有；有但不是数组则整段无效）。`0` 也写出来
+- `checkedAt` 优先用 fan-out 的 `updatedAt`（非空字符串），否则是 hub 这次检查的 UTC 时间
+- fan-out 的 `ok` 若出现必须是布尔，但不决定 `available`。`available: true` 只表示「拿到了一份能用的摘要」
+
+连不上、非 200、正文不是这份形状时，同样 `200`，正文只有：
+
+```json
+{"available":false}
+```
 
 ### `GET /api/stats`
 
@@ -537,6 +567,8 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 | `GET /api/instances` | `web/modules/instances.js:49` 首屏加载 + `web/modules/instances.js:57` 2s 轮询 |
 | `GET /api/events` | `web/modules/async-ui.js:189`（`startEventsPolling`）2s 轮询（失败静默） |
 | `GET /api/events/stream` | `web/modules/task-events.js`（`EventSource`，不是 `fetch`；失败静默，实例列表仍靠 2s 轮询） |
+| `GET /api/farm/health` | `web/modules/hub-chip.js`（约 5s 轮询；不可用时 chip 退回本机实例计数） |
+| `GET /api/tasks` | `web/modules/activity.js`（最近活动面板播种；SSE 未连接且面板打开时约 5s 再拉） |
 | `GET /api/stats` | `web/modules/stats.js:46`（`loadStats`）打开 `#/stats` 时按需拉取，非轮询 |
 | `GET /api/downloads` | `web/modules/downloads-lazy.js:60` 首屏加载 + `web/modules/downloads-lazy.js:65` 2s 轮询 |
 | `POST /api/tasks` | `web/modules/tasks.js:27` |

@@ -14,6 +14,7 @@
  * 同 sidebar.js：工作区重画要刷新侧栏历史，侧栏的「载入」要回填本模块的 TTS 表单，
  * 两模块之间是一处刻意的循环依赖（只在运行期回调里互相调用）。 */
 
+import { renderCharCount } from "./char-count.js";
 import { $, el, esc, t } from "./dom.js";
 import { historyRefPath, loadHistory } from "./sidebar.js";
 import { activeInstanceId, selectedModel } from "./state.js";
@@ -624,6 +625,7 @@ export function fillTtsForm(m, rec) {
     }
     if (!lines.length && rec.text && speakerPickers[0]) speakerPickers[0].linesTa.value = rec.text;
   }
+  renderCharCount();
 }
 
 /* options 里的参数填回 paramSchema 渲染的控件：高级参数网格（adv- 前缀）+ 枚举行 */

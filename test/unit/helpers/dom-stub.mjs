@@ -210,6 +210,14 @@ export class StubElement {
     return child;
   }
 
+  /* instances.js 的工具栏「生成中」把计时片段插到胶囊末尾。只实现 beforeend。 */
+  insertAdjacentHTML(position, html) {
+    if (position !== "beforeend") throw new Error("dom-stub: unsupported insertAdjacentHTML " + position);
+    const holder = new StubElement(this.world, "div");
+    holder.innerHTML = html;
+    for (const child of holder.children.slice()) this.appendChild(child);
+  }
+
   set innerHTML(v) {
     const html = v == null ? "" : String(v);
     this._html = html;

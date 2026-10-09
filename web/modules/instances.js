@@ -8,7 +8,7 @@ import { $, Api, esc, t } from "./dom.js";
 import { openLaunchModal } from "./launch.js";
 import { selectModelById } from "./models.js";
 import { getPendingInstanceId, go, modelRoute, parseRoute, setPendingInstanceId } from "./routing.js";
-import { activeInstanceId, busyStarts, models, runningStarts, selectedModelId, setActiveInstanceId } from "./state.js";
+import { activeInstanceId, busyStarts, idleFallbacks, models, runningStarts, selectedModelId, setActiveInstanceId } from "./state.js";
 
 /* ---------- 「生成中…」徽标：SSE + 轮询合并成一个忙碌源 ---------- */
 
@@ -142,13 +142,27 @@ export function clampPct(n) {
 }
 
 /**
+ * Bar denominator, in the same unit as cur/peak/avg/total (MiB).
+ * A known positive total is the denominator.
+ * Unknown or 0 must not sit near a full fill:
+ * VRAM: max(peak, current, avg) * 1.25
+ * RAM:  max(peak, current) * 1.25 unless a positive total is supplied.
+ * A zero head falls back to 1 so the bar stays defined.
+ */
+export function memBarScale(kind, cur, peak, avg, total) {
+  if (typeof total === "number" && Number.isFinite(total) && total > 0) return total;
+  const head = kind === "vram" ? Math.max(peak, cur, avg) : Math.max(peak, cur);
+  const scale = (Number.isFinite(head) ? head : 0) * 1.25;
+  return scale > 0 ? scale : 1;
+}
+
+/**
  * 一行内存条的模型。纯函数，卡片 / 详情弹窗渲染与单测共用。
  * kind 为 "ram" / "vram"，mem 是实例的 memory 对象（字段全部可选）。
  * 返回 null 表示这一行画不出来：没有当前读数（VRAM 从未读到）或整个 memory 缺失。
  *
- * 比例尺：VRAM 已知 GPU 总量就用总量；否则 max(峰值, 当前) × 1.25。
- * RAM 永远不用系统总量（条会被压成细线），取 max(峰值, 当前) × 1.4。
- * fillPct / peakPct / avgPct 已钳制；hot = VRAM 当前值已到比例尺的 85% 以上。
+ * 比例尺见 memBarScale。fillPct / peakPct / avgPct 已钳制；
+ * hot = VRAM 当前值已到比例尺的 85% 以上。总量 ≤ 0 视为未知（不写 "/ 0"）。
  */
 export function memRowModel(kind, mem) {
   if (!mem) return null;
@@ -158,8 +172,9 @@ export function memRowModel(kind, mem) {
   const peak = numOr(memMiB(vram ? mem.vramPeakBytes : mem.ramPeakBytes), cur);
   const avg = numOr(memMiB(vram ? mem.vramAvgBytes : mem.ramAvgBytes), cur);
   const idle = opt(memMiB(vram ? mem.vramIdleBytes : mem.ramIdleBytes));
-  const total = opt(memMiB(vram ? mem.vramTotalBytes : NaN));
-  const scale = (vram && total && total > 0 ? total : Math.max(peak, cur) * (vram ? 1.25 : 1.4)) || 1;
+  const totalRaw = opt(memMiB(vram ? mem.vramTotalBytes : mem.ramTotalBytes));
+  const total = totalRaw != null && totalRaw > 0 ? totalRaw : null;
+  const scale = memBarScale(kind, cur, peak, avg, total);
   const fillPct = clampPct((cur / scale) * 100);
   return {
     kind, cur, peak, avg, idle, total, scale, fillPct,
@@ -169,6 +184,95 @@ export function memRowModel(kind, mem) {
     // 近期趋势（旧→新的字节序列）；服务端没给时由客户端 2s 轮询补齐
     series: memSeries(vram ? mem.vramSeries : mem.ramSeries)
   };
+}
+
+/** Short idle age: 12s / 4m / 3h / 2d. nowMs defaults to Date.now(). */
+export function formatIdleFor(sinceMs, nowMs) {
+  const since = Number(sinceMs);
+  const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  if (!Number.isFinite(since) || since <= 0) return "";
+  let sec = Math.floor((now - since) / 1000);
+  if (sec < 0) sec = 0;
+  if (sec < 60) return sec + "s";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return min + "m";
+  const hr = Math.floor(min / 60);
+  if (hr < 48) return hr + "h";
+  return Math.floor(hr / 24) + "d";
+}
+
+/** idleSinceMs from memory, else the client's last task finishedAt, else null. */
+export function idleSinceOf(mem, fallbackMs) {
+  const fromMem = mem && Number(mem.idleSinceMs);
+  if (Number.isFinite(fromMem) && fromMem > 0) return fromMem;
+  const fb = Number(fallbackMs);
+  return Number.isFinite(fb) && fb > 0 ? fb : null;
+}
+
+/**
+ * Second line under the instance name:
+ * "<model> · <GPU name> · vulkan:0 · :18090". Empty parts are dropped.
+ */
+export function instanceSubtitle(inst, modelName) {
+  const parts = [];
+  if (modelName) parts.push(String(modelName));
+  const gpu = inst && inst.memory && typeof inst.memory.gpuName === "string" ? inst.memory.gpuName.trim() : "";
+  if (gpu) parts.push(gpu);
+  if (inst && inst.backend) {
+    const dev = inst.device != null && inst.device !== "" ? ":" + inst.device : "";
+    parts.push(String(inst.backend) + dev);
+  }
+  if (inst && inst.port != null && inst.port !== "") parts.push(":" + inst.port);
+  return parts.join(" · ");
+}
+
+/**
+ * Sum vramBytes across instances. Total is the sum of per-GPU vramTotalBytes,
+ * de-duplicated by GPU name (instances on the same card share one total).
+ * Unnamed totals share one bucket and the first total wins — the backend only
+ * emits vramTotalBytes when exactly one GPU is present. Returns null when no
+ * instance reports a VRAM reading (a missing field is not zero).
+ */
+export function aggregateVram(list) {
+  if (!Array.isArray(list) || !list.length) return null;
+  let used = 0;
+  let saw = false;
+  const totals = new Map();
+  for (const inst of list) {
+    const mem = inst && inst.memory;
+    if (!mem || typeof mem !== "object") continue;
+    const bytes = mem.vramBytes;
+    if (typeof bytes === "number" && Number.isFinite(bytes) && bytes >= 0) {
+      used += bytes;
+      saw = true;
+    }
+    const total = mem.vramTotalBytes;
+    if (typeof total === "number" && Number.isFinite(total) && total > 0) {
+      const name = typeof mem.gpuName === "string" ? mem.gpuName.trim() : "";
+      const key = name || "anon";
+      if (!totals.has(key)) totals.set(key, total);
+    }
+  }
+  if (!saw) return null;
+  let totalBytes = null;
+  if (totals.size) {
+    totalBytes = 0;
+    for (const v of totals.values()) totalBytes += v;
+  }
+  return { usedBytes: used, totalBytes };
+}
+
+/** "3.6 / 8.0 GiB" when both sides are GiB, else separate units, or used only. */
+export function formatVramHead(agg) {
+  if (!agg) return "";
+  const usedMiB = agg.usedBytes / MEM_MIB;
+  if (!Number.isFinite(usedMiB) || usedMiB < 0) return "";
+  const totalMiB = typeof agg.totalBytes === "number" && agg.totalBytes > 0 ? agg.totalBytes / MEM_MIB : null;
+  if (totalMiB != null && usedMiB >= 1024 && totalMiB >= 1024) {
+    return `${(usedMiB / 1024).toFixed(1)} / ${(totalMiB / 1024).toFixed(1)} GiB`;
+  }
+  if (totalMiB != null) return `${formatMiB(usedMiB)} / ${formatMiB(totalMiB)}`;
+  return formatMiB(usedMiB);
 }
 
 /* 取自带序列的内存对象：只留有限数字，最多 SPARK_CAP 个（取最近的一端）。
@@ -453,6 +557,17 @@ export function startInstancePolling() {
   return instancePoller;
 }
 
+/* Right-aligned "idle 4m". Hidden while generating. Falls back to the last
+   finished task when memory.idleSinceMs is absent. */
+function idleLabelHtml(inst, busy) {
+  if (busy || !inst) return "";
+  const since = idleSinceOf(inst.memory, idleFallbacks.get(inst.id));
+  if (!since) return "";
+  const label = formatIdleFor(since);
+  if (!label) return "";
+  return `<span class="idle-for" title="${esc(t("instance.idleForTip"))}">${esc(t("instance.idleFor", { t: label }))}</span>`;
+}
+
 export function renderInstanceList() {
   const list = $("instance-list");
   list.removeAttribute("aria-busy");
@@ -478,13 +593,21 @@ export function renderInstanceList() {
     // 忙碌只有一个徽标：「生成中…」+ 脉冲圆点 + 计时。SSE 与轮询合并成同一个
     // 来源（resolveBusy），原先轮询的「工作中」徽标已合并进来。
     const busy = busyState(inst);
+    // Generating replaces the status pill (Ready / Starting / …). Idle shows
+    // the status pill only. The idle-for label is hidden while generating.
+    const statusBadge = busy.busy
+      ? ""
+      : `<span class="badge ${statusClass}">${esc(statusText(inst.status))}</span>`;
     const busyBadge = busy.busy
-      ? ` <span class="badge generating">${esc(t("instance.generating"))}${busyElapsedHtml(busy.startMs)}</span>`
+      ? `<span class="badge generating">${esc(t("instance.generating"))}${busyElapsedHtml(busy.startMs)}</span>`
       : "";
+    const idleHtml = idleLabelHtml(inst, busy.busy);
     const memHtml = memBlockHtml(withSparkSeries(inst));
-    let html = `<div class="card-title">${esc(inst.instanceName || inst.modelId)} <span class="badge ${statusClass}">${esc(statusText(inst.status))}</span>${busyBadge}</div>
-      <div class="card-family">${esc(modelName)} ｜ #${esc(inst.id)}</div>
-      <div class="card-desc">${esc(inst.backend)}${inst.device != null ? ":" + esc(inst.device) : ""} ｜ ${esc(t("instance.port"))} ${esc(inst.port)}${inst.executableName ? " ｜ " + esc(inst.executableName) : ""}</div>${memHtml}`;
+    const extra = [`#${inst.id}`];
+    if (inst.executableName) extra.push(inst.executableName);
+    let html = `<div class="card-title"><span class="card-name">${esc(inst.instanceName || inst.modelId)}</span>${statusBadge}${busyBadge}${idleHtml}</div>
+      <div class="card-family">${esc(instanceSubtitle(inst, modelName))}</div>
+      <div class="card-desc">${esc(extra.join(" · "))}</div>${memHtml}`;
     if (inst.status === "ERROR" && inst.errorMessage) {
       html += `<div class="error-text">${esc(inst.errorMessage)}</div>`;
     }
@@ -539,22 +662,33 @@ export function updateInstanceBar() {
     if (cur) renderInstanceDetail(cur); else closeInstanceDetail();
   }
 
+  const active = instances.find(i => i.id === activeInstanceId);
+  const barBusy = busyState(active);
+  // Generating replaces the Ready pill on the toolbar too. No ready instance
+  // still shows the warn pill, and never the generating pill.
+  const showGen = has && barBusy.busy;
   const pill = $("instance-pill");
   pill.textContent = has ? t("instance.ready") : t("instance.noReady");
-  pill.className = "pill " + (has ? "ok" : "warn");
+  pill.className = "pill " + (has ? "ok" : "warn") + (showGen ? " hidden" : "");
 
   // 左栏标题行右侧的实例台数（与「实时事件」灯并排，见 index.html 的 .sec-head）
   const cnt = $("instance-count");
   if (cnt) cnt.textContent = instancesLoaded ? I18N.num(instances.length) : "";
 
-  // 与卡片同一个忙碌来源（resolveBusy）；徽标文案由 data-i18n 维护，计时片段
-  // 每次重画后重挂（共享计时器按 .busy-elapsed 刷新）。
+  const vramEl = $("instance-vram");
+  if (vramEl) {
+    const text = formatVramHead(aggregateVram(instances));
+    vramEl.textContent = text ? t("instance.vramHead", { text }) : "";
+    if (text) vramEl.title = t("instance.vramHeadTip");
+    else vramEl.removeAttribute("title");
+  }
+
+  // 与卡片同一个忙碌来源（resolveBusy）。生成中时藏起 Ready 胶囊。
   const gen = $("instance-generating");
   if (gen) {
-    const busy = busyState(instances.find(i => i.id === activeInstanceId));
     gen.textContent = t("instance.generating");
-    if (busy.busy) gen.insertAdjacentHTML("beforeend", busyElapsedHtml(busy.startMs));
-    gen.classList.toggle("hidden", !(has && busy.busy));
+    if (showGen) gen.insertAdjacentHTML("beforeend", busyElapsedHtml(barBusy.startMs));
+    gen.classList.toggle("hidden", !showGen);
   }
 
   for (const id of SUBMIT_BTNS) {

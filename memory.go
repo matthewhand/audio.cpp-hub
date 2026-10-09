@@ -26,11 +26,15 @@ import (
 //
 // The idle baseline (ramIdleBytes / vramIdleBytes) is the minimum observed
 // while the instance had no RUNNING task — the "what does this model cost at
-// rest" number the WebUI bars print next to peak/average. GPU total VRAM
-// (vramTotalBytes, the scale of the VRAM bar) is a separate one-shot query:
-// nvidia-smi cannot return the compute-apps and the GPU table in a single
-// invocation, so the total is fetched once per hub with the same timeout and
-// backoff instead of on every pass.
+// rest" number the WebUI bars print next to peak/average. idleSinceMs is the
+// epoch ms of the last busy→idle transition, or of the first idle sample when
+// the instance has never been busy. GPU total VRAM (vramTotalBytes) and the
+// card name (gpuName) come from a separate one-shot query:
+// nvidia-smi --query-gpu=index,name,memory.total. nvidia-smi cannot return
+// the compute-apps and the GPU table in a single invocation, so that table is
+// fetched once per hub with the same timeout and backoff instead of on every
+// pass. gpuName is omitted unless exactly one NVIDIA GPU is present (same
+// "don't guess which card" rule as vramTotalBytes).
 //
 // Cadence: ~1s while the instance has a RUNNING task, ~10s while idle. The
 // switch is driven by the same in-process task lifecycle signal that feeds the
@@ -56,11 +60,17 @@ type MemorySampler struct {
 	// nvidiaRetryAt is only touched from the sampler goroutine.
 	nvidiaRetryAt time.Time // nvidia-smi disabled until (missing / failed)
 
-	// nvTotals is the cached GPU table (index → total VRAM bytes) behind
-	// vramTotalBytes; nvTotalsRetryAt backs its one-shot query off. Written by
-	// the sampler goroutine under mu, read by MemoryJSON under the same mu.
+	// nvTotals / nvNames are the cached GPU table (index → total VRAM bytes and
+	// the card name) behind vramTotalBytes and gpuName; nvTotalsRetryAt backs
+	// the one-shot query off. Written by the sampler goroutine under mu, read
+	// by MemoryJSON under the same mu.
 	nvTotals        map[int]int64
+	nvNames         map[int]string
 	nvTotalsRetryAt time.Time
+
+	// pendingIdle holds a busy→idle timestamp for an instance that has no
+	// rolling state yet. Applied on the next record, then dropped.
+	pendingIdle map[string]time.Time
 
 	// drmTotals is the same table for AMD (card index → bytes), read from sysfs
 	// at most once. Also mu-guarded for the same reason.
@@ -77,14 +87,15 @@ type MemorySampler struct {
 
 func NewMemorySampler(instances *InstanceManager, tasks *TaskManager, bus *EventBus) *MemorySampler {
 	return &MemorySampler{
-		instances: instances,
-		tasks:     tasks,
-		bus:       bus,
-		state:     map[string]*memRolling{},
-		busy:      map[string]bool{},
-		wake:      make(chan struct{}, 1),
-		stop:      make(chan struct{}),
-		done:      make(chan struct{}),
+		instances:   instances,
+		tasks:       tasks,
+		bus:         bus,
+		state:       map[string]*memRolling{},
+		busy:        map[string]bool{},
+		pendingIdle: map[string]time.Time{},
+		wake:        make(chan struct{}, 1),
+		stop:        make(chan struct{}),
+		done:        make(chan struct{}),
 	}
 }
 
@@ -157,15 +168,36 @@ func (s *MemorySampler) OnTaskEvent(ev taskEvent) {
 
 func (s *MemorySampler) setBusy(instanceID string, on bool) {
 	s.mu.Lock()
-	if on != s.busy[instanceID] {
+	was := s.busy[instanceID]
+	if on != was {
 		if on {
 			s.busy[instanceID] = true
+			// A new busy stretch supersedes an idle stamp that has not been
+			// applied to rolling state yet.
+			delete(s.pendingIdle, instanceID)
 		} else {
 			delete(s.busy, instanceID)
+			s.markIdleLocked(instanceID, time.Now())
 		}
 	}
 	s.mu.Unlock()
 	s.nudge()
+}
+
+// markIdleLocked records the moment an instance became idle (caller holds
+// s.mu). When rolling state does not exist yet the stamp waits in pendingIdle
+// for the first sample.
+func (s *MemorySampler) markIdleLocked(id string, now time.Time) {
+	if s.pendingIdle == nil {
+		s.pendingIdle = map[string]time.Time{}
+	}
+	st := s.state[id]
+	if st == nil {
+		s.pendingIdle[id] = now
+		return
+	}
+	st.idleSince = now
+	st.idleSinceSet = true
 }
 
 // intervalLocked returns the sampling interval for one instance (caller holds
@@ -205,6 +237,12 @@ func (s *MemorySampler) pass(now time.Time) {
 	for id := range s.state {
 		if !alive[id] {
 			delete(s.state, id)
+			delete(s.pendingIdle, id)
+		}
+	}
+	for id := range s.pendingIdle {
+		if !alive[id] {
+			delete(s.pendingIdle, id)
 		}
 	}
 	due := make([]InstancePID, 0, len(running))
@@ -275,6 +313,18 @@ func (s *MemorySampler) record(instanceID string, now time.Time, ram, vram int64
 		s.state[instanceID] = st
 	}
 	busy := s.busy[instanceID]
+	// idleSinceMs: the last busy→idle transition, or the first sample when the
+	// instance has never been busy. A pending stamp wins over "now".
+	if !st.idleSinceSet {
+		if since, ok := s.pendingIdle[instanceID]; ok {
+			st.idleSince = since
+			st.idleSinceSet = true
+			delete(s.pendingIdle, instanceID)
+		} else if !busy {
+			st.idleSince = now
+			st.idleSinceSet = true
+		}
+	}
 	st.addSample(now, ram, vram, vramKnown, source, !busy)
 	vramSticky, vramKnownSticky, vramSourceSticky := st.lastVRAM, st.vramKnown, st.vramSource
 	s.mu.Unlock()
@@ -333,6 +383,9 @@ func (s *MemorySampler) MemoryJSON(instanceID string) map[string]any {
 	if st.ramIdleKnown {
 		out["ramIdleBytes"] = st.ramIdleBytes
 	}
+	if st.idleSinceSet {
+		out["idleSinceMs"] = st.idleSince.UnixMilli()
+	}
 	if st.vramKnown {
 		out["vramBytes"] = st.lastVRAM
 		out["vramPeakBytes"] = st.peakVRAM
@@ -347,8 +400,28 @@ func (s *MemorySampler) MemoryJSON(instanceID string) map[string]any {
 		if total, ok := s.vramTotalBytesLocked(st.vramSource); ok {
 			out["vramTotalBytes"] = total
 		}
+		if name, ok := s.gpuNameLocked(st.vramSource); ok {
+			out["gpuName"] = name
+		}
 	}
 	return out
+}
+
+// gpuNameLocked returns the NVIDIA card name (caller holds s.mu). Same rule as
+// vramTotalBytes: only when exactly one NVIDIA GPU is present, so a multi-GPU
+// box never labels the wrong card. DRM totals do not carry a name. Empty
+// names are omitted.
+func (s *MemorySampler) gpuNameLocked(source string) (string, bool) {
+	if source != vramSourceNvidia || len(s.nvTotals) != 1 {
+		return "", false
+	}
+	for idx := range s.nvTotals {
+		name := strings.TrimSpace(s.nvNames[idx])
+		if name != "" {
+			return name, true
+		}
+	}
+	return "", false
 }
 
 // vramTotalBytesLocked returns the total VRAM of the GPU this instance runs on
@@ -381,11 +454,11 @@ func (s *MemorySampler) vramTotalBytesLocked(source string) (int64, bool) {
 	return 0, false
 }
 
-// nvidiaGpuTotals fills the cached GPU table (index → total VRAM bytes) by
-// querying "nvidia-smi --query-gpu=index,memory.total". Runs at most once per
-// hub lifetime: GPU total memory does not change while the box is up, and the
-// per-pid query keeps running every pass unchanged. Same timeout and backoff
-// as nvidiaOnce — a missing binary is not respawned.
+// nvidiaGpuTotals fills the cached GPU table (index → total VRAM bytes and
+// name) by querying "nvidia-smi --query-gpu=index,name,memory.total". Runs at
+// most once per hub lifetime: GPU total memory does not change while the box
+// is up, and the per-pid query keeps running every pass unchanged. Same
+// timeout and backoff as nvidiaOnce — a missing binary is not respawned.
 //
 // nvidia-smi takes one query target per invocation and cannot return the
 // compute-apps and the GPU table together, so the total costs one extra spawn
@@ -398,7 +471,7 @@ func (s *MemorySampler) nvidiaGpuTotals(now time.Time) {
 	ctx, cancel := context.WithTimeout(context.Background(), nvidiaQueryTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "nvidia-smi",
-		"--query-gpu=index,memory.total", "--format=csv,noheader,nounits")
+		"--query-gpu=index,name,memory.total", "--format=csv,noheader,nounits")
 	hideChildWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
@@ -407,9 +480,10 @@ func (s *MemorySampler) nvidiaGpuTotals(now time.Time) {
 		s.mu.Unlock()
 		return
 	}
-	totals := parseNvidiaGpuTotals(string(out))
+	totals, names := parseNvidiaGpuTable(string(out))
 	s.mu.Lock()
 	s.nvTotals = totals
+	s.nvNames = names
 	s.mu.Unlock()
 }
 
@@ -461,6 +535,8 @@ type memRolling struct {
 	ramIdleKnown  bool
 	vramIdleBytes int64
 	vramIdleKnown bool
+	idleSince     time.Time // last busy→idle, or first idle sample if never busy
+	idleSinceSet  bool
 	ramIntegral   float64 // byte·ms
 	vramIntegral  float64 // byte·ms
 	spanMs        float64 // RAM weighting span
@@ -722,30 +798,46 @@ func parseNvidiaSmiOutput(output string) map[int]int64 {
 	return out
 }
 
-// parseNvidiaGpuTotals parses the CSV of
-// "nvidia-smi --query-gpu=index,memory.total --format=csv,noheader,nounits":
-// one "index, MiB" row per GPU on the box. Unparsable rows are skipped;
-// memory.total is MiB → bytes. Pure: tests run everywhere.
-func parseNvidiaGpuTotals(output string) map[int]int64 {
-	out := map[int]int64{}
+// parseNvidiaGpuTable parses the CSV of
+// "nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader,nounits".
+// GPU names may contain commas, so the first field is the index, the last
+// field is memory.total in MiB, and the joined middle is the name. The older
+// two-field form "index, MiB" is still accepted (empty name). Unparsable rows
+// are skipped. Pure: tests run everywhere.
+func parseNvidiaGpuTable(output string) (map[int]int64, map[int]string) {
+	totals := map[int]int64{}
+	names := map[int]string{}
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
 		if line == "" {
 			continue
 		}
-		idxStr, memStr, ok := strings.Cut(line, ",")
-		if !ok {
+		parts := strings.Split(line, ",")
+		if len(parts) < 2 {
 			continue
 		}
-		idx, err := strconv.Atoi(strings.TrimSpace(idxStr))
+		idx, err := strconv.Atoi(strings.TrimSpace(parts[0]))
 		if err != nil || idx < 0 {
 			continue
 		}
-		bytes, ok := parseSmiMiB(memStr)
+		bytes, ok := parseSmiMiB(parts[len(parts)-1])
 		if !ok {
 			continue // "[N/A]" and friends
 		}
-		out[idx] = bytes
+		totals[idx] = bytes
+		if len(parts) > 2 {
+			name := strings.TrimSpace(strings.Join(parts[1:len(parts)-1], ","))
+			if name != "" {
+				names[idx] = name
+			}
+		}
 	}
-	return out
+	return totals, names
+}
+
+// parseNvidiaGpuTotals is the totals-only view of parseNvidiaGpuTable. Kept so
+// callers and tests that only need the byte map stay stable.
+func parseNvidiaGpuTotals(output string) map[int]int64 {
+	totals, _ := parseNvidiaGpuTable(output)
+	return totals
 }

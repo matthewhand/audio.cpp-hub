@@ -38,7 +38,8 @@ const NAMES = [
   "resolveBusy", "formatBusyElapsed",
   // 内存条：私有小工具 + 纯函数
   "msOr", "memMiB", "numOr", "opt", "num1", "memUnitFormat",
-  "formatMiB", "clampPct", "memRowModel", "memStatsLabel", "memAriaText",
+  "formatMiB", "clampPct", "memBarScale", "memRowModel", "memStatsLabel", "memAriaText",
+  "formatIdleFor", "idleSinceOf", "instanceSubtitle", "aggregateVram", "formatVramHead",
   "memSeries", "sparkPoints", "pushSparkSample", "nextSparkState", "sparkHtml",
   "memRowHtml", "memBlockHtml", "applyMemBars"
 ];
@@ -63,8 +64,9 @@ function load() {
 }
 
 const {
-  resolveBusy, formatBusyElapsed, formatMiB, clampPct,
+  resolveBusy, formatBusyElapsed, formatMiB, clampPct, memBarScale,
   memRowModel, memStatsLabel, memAriaText, memSeries, sparkPoints,
+  formatIdleFor, idleSinceOf, instanceSubtitle, aggregateVram, formatVramHead,
   pushSparkSample, nextSparkState, memRowHtml, memBlockHtml, applyMemBars
 } = load();
 
@@ -137,7 +139,7 @@ test("clampPct：钳到 0–100 并保留一位小数", () => {
   assert.equal(clampPct("50"), 0);
 });
 
-test("memRowModel：RAM 用 max(峰值, 当前) × 1.4，不设 GPU 总量", () => {
+test("memRowModel：RAM 用 max(峰值, 当前) × 1.25，不设总量", () => {
   const row = memRowModel("ram", {
     ramBytes: 942 * MIB,
     ramPeakBytes: 988 * MIB,
@@ -149,11 +151,19 @@ test("memRowModel：RAM 用 max(峰值, 当前) × 1.4，不设 GPU 总量", () 
   assert.equal(row.avg, 700);
   assert.equal(row.total, null);
   assert.equal(row.idle, null);
-  assert.equal(row.scale, Math.max(988, 942) * 1.4);
-  assert.equal(row.fillPct, clampPct((942 / (988 * 1.4)) * 100));
-  assert.equal(row.peakPct, clampPct((988 / (988 * 1.4)) * 100));
-  assert.equal(row.avgPct, clampPct((700 / (988 * 1.4)) * 100));
+  // avg is ignored for RAM: head is max(peak, current), then × 1.25
+  assert.equal(row.scale, Math.max(988, 942) * 1.25);
+  assert.equal(row.fillPct, clampPct((942 / (988 * 1.25)) * 100));
+  assert.equal(row.peakPct, clampPct((988 / (988 * 1.25)) * 100));
+  assert.equal(row.avgPct, clampPct((700 / (988 * 1.25)) * 100));
   assert.equal(row.hot, false);
+  const withTotal = memRowModel("ram", {
+    ramBytes: 100 * MIB,
+    ramPeakBytes: 100 * MIB,
+    ramTotalBytes: 10000 * MIB
+  });
+  assert.equal(withTotal.scale, 10000);
+  assert.equal(withTotal.total, 10000);
 });
 
 test("memRowModel：VRAM 已知总量时以总量为比例尺，未知时 × 1.25", () => {
@@ -174,6 +184,23 @@ test("memRowModel：VRAM 已知总量时以总量为比例尺，未知时 × 1.2
   });
   assert.equal(noTotal.scale, 4.2 * 1024 * 1.25);
   assert.equal(noTotal.total, null);
+  // Unknown total uses max(peak, current, avg) × 1.25, not a near-full fill.
+  const avgHeads = memRowModel("vram", {
+    vramBytes: 4 * 1024 * MIB,
+    vramPeakBytes: 4.2 * 1024 * MIB,
+    vramAvgBytes: 5 * 1024 * MIB
+  });
+  assert.equal(avgHeads.scale, 5 * 1024 * 1.25);
+  assert.equal(avgHeads.fillPct, clampPct((4 * 1024) / (5 * 1024 * 1.25) * 100));
+  assert.ok(avgHeads.fillPct < 80);
+  const zeroTotal = memRowModel("vram", {
+    vramBytes: 4 * 1024 * MIB,
+    vramPeakBytes: 4 * 1024 * MIB,
+    vramTotalBytes: 0
+  });
+  assert.equal(zeroTotal.total, null);
+  assert.equal(zeroTotal.scale, 4 * 1024 * 1.25);
+  assert.equal(zeroTotal.fillPct, 80);
 
   // 数据把当前值顶到总量之上（异常读数）时百分比仍钳在 100
   const over = memRowModel("vram", { vramBytes: 9 * GIB, vramTotalBytes: 8 * GIB });
@@ -197,7 +224,7 @@ test("memRowModel：缺失字段（没有 memory / 没有 VRAM / 没有峰值均
   assert.equal(bare.peak, 100);
   assert.equal(bare.avg, 100);
   assert.equal(bare.idle, null);
-  assert.equal(bare.scale, 140);
+  assert.equal(bare.scale, 125);
   // 空闲基线来自后端新增字段，缺失即省略
   const idle = memRowModel("ram", {
     ramBytes: 942 * MIB,
@@ -274,14 +301,14 @@ test("memRowHtml：role=meter + 填充 / 刻度线（刻度线 aria-hidden）", 
   const html = memRowHtml(row);
   assert.match(html, /role="meter"/);
   assert.match(html, /aria-valuemin="0"/);
-  assert.match(html, /aria-valuemax="1383\.2"/);
+  assert.match(html, /aria-valuemax="1235"/);
   assert.match(html, /aria-valuenow="942"/);
   assert.match(html, /aria-label="RAM 942 MiB now, peak 988, average 700 MiB"/);
   assert.match(html, /class="fill ram"/);
   assert.doesNotMatch(html, /style=/);
-  assert.match(html, /data-w="68\.1"/);
-  assert.match(html, /data-l="71\.4"/);
-  assert.match(html, /data-l="50\.6"/);
+  assert.match(html, /data-w="76\.3"/);
+  assert.match(html, /data-l="80"/);
+  assert.match(html, /data-l="56\.7"/);
   assert.match(html, /class="pk"[^>]*aria-hidden="true"/);
   assert.match(html, /class="avg"[^>]*aria-hidden="true"/);
   assert.match(html, /<span class="k">RAM<\/span>/);
@@ -350,9 +377,9 @@ test("memBlockHtml：只有 RAM / 隐藏条件 / VRAM 总量与 hot 渐变 / 图
     vramTotalBytes: 8 * GIB
   });
   assert.doesNotMatch(clamped, /style=/);
-  assert.match(clamped, /data-w="68\.1"/);
-  assert.match(clamped, /data-l="71\.4"/);
-  assert.match(clamped, /data-l="50\.6"/);
+  assert.match(clamped, /data-w="76\.3"/);
+  assert.match(clamped, /data-l="80"/);
+  assert.match(clamped, /data-l="56\.7"/);
   assert.match(clamped, /class="fill vram hot" data-w="100"/);
   assert.match(clamped, /data-l="100"/);
 });
@@ -436,4 +463,61 @@ test("memBlockHtml：折线是 SVG 属性，不写 style=", () => {
   const one = memBlockHtml({ ramBytes: MIB, ramSeries: [1] });
   assert.doesNotMatch(one, /<svg/);
   assert.doesNotMatch(one, /style=/);
+});
+
+test("memBarScale：总量优先，未知时留 1.25 倍余量", () => {
+  assert.equal(memBarScale("vram", 4, 4.2, 5, 8), 8);
+  assert.equal(memBarScale("vram", 4, 4.2, 5, 0), 5 * 1.25);
+  assert.equal(memBarScale("vram", 4, 4.2, 5, null), 5 * 1.25);
+  assert.equal(memBarScale("ram", 100, 80, 500, null), 100 * 1.25);
+  assert.equal(memBarScale("ram", 100, 80, 500, 10000), 10000);
+  assert.equal(memBarScale("ram", 0, 0, 0, 0), 1);
+});
+
+test("formatIdleFor / idleSinceOf", () => {
+  const now = 1_700_000_000_000;
+  assert.equal(formatIdleFor(now - 12_000, now), "12s");
+  assert.equal(formatIdleFor(now - 4 * 60_000, now), "4m");
+  assert.equal(formatIdleFor(now - 3 * 3600_000, now), "3h");
+  assert.equal(formatIdleFor(now - 50 * 3600_000, now), "2d");
+  assert.equal(formatIdleFor(0, now), "");
+  assert.equal(idleSinceOf({ idleSinceMs: 50 }, 40), 50);
+  assert.equal(idleSinceOf({}, 40), 40);
+  assert.equal(idleSinceOf(null, 0), null);
+});
+
+test("instanceSubtitle：有 GPU 名就插在型号和设备之间", () => {
+  assert.equal(
+    instanceSubtitle({ memory: { gpuName: "GTX 1080" }, backend: "vulkan", device: 0, port: 18090 }, "BreezeTTS 2"),
+    "BreezeTTS 2 · GTX 1080 · vulkan:0 · :18090"
+  );
+  assert.equal(
+    instanceSubtitle({ backend: "cpu", device: 0, port: 7001 }, "voice"),
+    "voice · cpu:0 · :7001"
+  );
+});
+
+test("aggregateVram：同卡去重，没有总量就省略斜杠，没有显存就省略", () => {
+  const GIB = 1024 * MIB;
+  const same = aggregateVram([
+    { memory: { vramBytes: GIB, vramTotalBytes: 8 * GIB, gpuName: "GTX 1080" } },
+    { memory: { vramBytes: 2 * GIB, vramTotalBytes: 8 * GIB, gpuName: "GTX 1080" } }
+  ]);
+  assert.equal(same.usedBytes, 3 * GIB);
+  assert.equal(same.totalBytes, 8 * GIB);
+  assert.equal(formatVramHead(same), "3.0 / 8.0 GiB");
+  const two = aggregateVram([
+    { memory: { vramBytes: GIB, vramTotalBytes: 8 * GIB, gpuName: "A" } },
+    { memory: { vramBytes: GIB, vramTotalBytes: 16 * GIB, gpuName: "B" } }
+  ]);
+  assert.equal(two.totalBytes, 24 * GIB);
+  const noTotal = aggregateVram([{ memory: { vramBytes: 512 * MIB } }]);
+  assert.equal(noTotal.totalBytes, null);
+  assert.equal(formatVramHead(noTotal), "512 MiB");
+  assert.doesNotMatch(formatVramHead(noTotal), /\//);
+  assert.equal(aggregateVram([{ memory: { ramBytes: MIB } }]), null);
+  assert.equal(formatVramHead(null), "");
+  const zero = aggregateVram([{ memory: { vramBytes: 0 } }]);
+  assert.equal(zero.usedBytes, 0);
+  assert.equal(formatVramHead(zero), "0 MiB");
 });

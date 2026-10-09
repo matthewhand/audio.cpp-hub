@@ -43,3 +43,15 @@ export function modelConfigured(m) {
    却总能从轮询数据里拿到。 */
 export const busyStarts = new Map();
 export const runningStarts = new Map();
+
+/* instanceId → last terminal task finishedAt (ms). instances.js reads this when
+   memory.idleSinceMs is absent. tasks.js and activity.js write it. */
+export const idleFallbacks = new Map();
+
+export function noteIdleFallback(instanceId, finishedAt) {
+  if (!instanceId) return;
+  const ts = Number(finishedAt);
+  if (!Number.isFinite(ts) || ts <= 0) return;
+  const prev = idleFallbacks.get(instanceId) || 0;
+  if (ts >= prev) idleFallbacks.set(instanceId, ts);
+}

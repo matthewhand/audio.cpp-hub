@@ -774,6 +774,9 @@ func (m *TaskManager) emit(ev taskEvent) {
 // vram < 0 表示本次没有 VRAM 读数，不更新显存峰值。不落盘：任务结束时的
 // persist 会带上当时的峰值。
 func (m *TaskManager) NoteInstanceSample(instanceID string, ram, vram int64) {
+	if m == nil {
+		return
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, t := range m.tasks {

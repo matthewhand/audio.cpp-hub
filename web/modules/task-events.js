@@ -73,6 +73,11 @@ function syncGenerating(running) {
 
 const TERMINAL = new Set(["task.finished", "task.failed", "task.cancelled"]);
 
+function publishTask(name, data) {
+  if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return;
+  window.dispatchEvent(new CustomEvent("hub-task-event", { detail: { name, data: data || {} } }));
+}
+
 export function applyTaskEvent(name, data) {
   runningTasks = reduceTaskEvents(runningTasks, name, data || {});
   syncGenerating(runningTasks);
@@ -80,6 +85,8 @@ export function applyTaskEvent(name, data) {
   updateInstanceBar();
   // 合成按钮下方的实时状态行（选中实例上的任务）
   noteTaskEvent(name, data || {});
+  // 最近活动时间线只听这个事件，避免 task-events ↔ activity 成环。
+  publishTask(name, data || {});
   if (TERMINAL.has(name)) refreshInstances();
 }
 
@@ -90,8 +97,19 @@ let sseSawEvent = false;
 
 /* 按当前连接状态重画指示灯（文案与点的颜色都在 style.css 里按 data-mode 分）。
    元素在函数里取：语言切换会再画一次，模块求值时也不依赖 DOM（单测加载本文件）。 */
+/** True once the SSE stream is up and has delivered at least one event. */
+export function isTaskStreamLive() {
+  return liveEventsMode({ connected: sseConnected, sawEvent: sseSawEvent }) === "live";
+}
+
+function publishStream() {
+  if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return;
+  window.dispatchEvent(new CustomEvent("hub-task-stream", { detail: { live: isTaskStreamLive() } }));
+}
+
 export function renderLiveEvents() {
   const liveEl = $("live-events");
+  publishStream();
   if (!liveEl) return;
   const mode = liveEventsMode({ connected: sseConnected, sawEvent: sseSawEvent });
   liveEl.dataset.mode = mode;
@@ -127,6 +145,7 @@ export function startTaskEvents() {
     sseSawEvent = true;
     renderLiveEvents();
   });
+  listen("task.queued");
   listen("task.started");
   listen("task.finished");
   listen("task.failed");

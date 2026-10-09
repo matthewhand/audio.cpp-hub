@@ -4,22 +4,18 @@
  * 本模块是它的落地版，元素是 index.html 里的 #hub-chip（header-actions 的第一项，
  * 即图标工具栏左边）。
  *
- * 数据全部来自 hub 自己的两个接口，**不发跨源请求**：
- *   - 就绪台数：2s 轮询的 GET /api/instances（instances.js 每次拉到数据后广播
- *     hub-instances-updated 窗口事件，本模块只消费事件，不另起轮询）；
- *   - 失败次数：GET /api/stats 的 totals.failed（历史索引口径，**全量累计**，
- *     不是最近一小时——tooltip 里写明了这一点）。30s 一拉，失败静默忽略：
- *     统计拉不到时 chip 照常显示就绪台数。
- *
- * 刻意**不请求 fan-out 的 /farm/health**：那是另一个源，而本页的 CSP
- * connect-src 只有 'self'（见 headers.go），跨源 fetch 会被浏览器直接拦掉，
- * 连错误提示都拿不到。hub 摆到 fan-out 后面时，这颗 chip 描述的就是当前这台 hub。 */
+ * 浏览器不打另一个源（CSP connect-src 'self'）。农场数字走 hub 自己的
+ * GET /api/farm/health：服务端去拉配置好的 fan-out URL，返回一小份摘要。
+ * available 为真时 chip 显示「Farm n/n · failures」；否则退回本机口径：
+ *   - 就绪台数：2s 轮询的 GET /api/instances（hub-instances-updated）；
+ *   - 失败次数：GET /api/stats 的 totals.failed（历史索引全量累计，不是最近一小时）。 */
 
 import { $, Api, t } from "./dom.js";
 import { instances } from "./instances.js";
 
-/* stats 拉取间隔：失败计数不需要 2s 级新鲜度 */
+/* stats 拉取间隔：失败计数不需要 2s 级新鲜度。农场摘要服务端缓存约 5s。 */
 const STATS_POLL_MS = 30000;
+const FARM_POLL_MS = 5000;
 
 const el = $("hub-chip");
 const dotEl = $("hub-chip-dot");
@@ -27,10 +23,12 @@ const textEl = $("hub-chip-text");
 const sepEl = $("hub-chip-sep");
 const failEl = $("hub-chip-failures");
 
-/* 实例列表是否已经到过手（没到过就整体隐藏，不显示 0/0 冒充数据） */
+/* 实例列表是否已经到过手（农场不可用时，没到过就整体隐藏，不显示 0/0） */
 let loaded = false;
 /* totals.failed；null = 还没拉到 / 拉取失败 */
 let failures = null;
+/* GET /api/farm/health 的最近一份摘要；null = 还没拉到 */
+let farm = null;
 let lastSignature = "";
 
 /**
@@ -38,7 +36,7 @@ let lastSignature = "";
  * 数据不可用（实例列表还没到过手）时调用方整行隐藏，不会走到这里——
  * 所以这里不需要「空数据」分支。
  * @param {{total:number, ready:number, failed:number|null}} input
- * @returns {{dot:"ok"|"warn"|"err", text:string, failed:string, failN:number|null, aria:string}}
+ * @returns {{dot:"ok"|"warn"|"err", text:string, failed:string, failN:number|null, aria:string, tip:string}}
  */
 export function hubChipModel(input) {
   const total = Number(input && input.total) || 0;
@@ -59,8 +57,45 @@ export function hubChipModel(input) {
     failN: failed,
     aria: failedText
       ? t("chip.ariaWithFailed", { text, failed: failedText })
-      : t("chip.aria", { text })
+      : t("chip.aria", { text }),
+    tip: failedText ? t("chip.tipWithFailed", { failed: failedText }) : t("chip.tip")
   };
+}
+
+/**
+ * 农场 chip。ok = 全部 hub 在线且失败为 0；一台都没在线或总数为 0 是 err；
+ * 部分在线或有失败是 warn。failures 用既有的 chip.failures 复数。
+ * @param {{hubsUp:number, hubsTotal:number, failures:number}} input
+ * @returns {{dot:"ok"|"warn"|"err", text:string, failed:string, failN:number|null, aria:string, tip:string}}
+ */
+export function farmChipModel(input) {
+  const up = Math.max(0, Math.trunc(Number(input && input.hubsUp) || 0));
+  const total = Math.max(0, Math.trunc(Number(input && input.hubsTotal) || 0));
+  const failN = Math.max(0, Math.trunc(Number(input && input.failures) || 0));
+  const text = t("chip.farm", { up, total });
+  const failedText = I18N.plural("chip.failures", failN);
+  const dot = total === 0 || up === 0 ? "err" : up === total && failN === 0 ? "ok" : "warn";
+  return {
+    dot,
+    text,
+    failed: failedText,
+    failN,
+    aria: failN
+      ? t("chip.farmAriaWithFailed", { text, failed: failedText })
+      : t("chip.farmAria", { text }),
+    tip: failN ? t("chip.farmTipWithFailed", { failed: failedText }) : t("chip.farmTip")
+  };
+}
+
+/**
+ * available === true 用农场摘要；否则用本机 hub chip。
+ * @returns {{source:"farm"|"hub", model:{dot:"ok"|"warn"|"err", text:string, failed:string, failN:number|null, aria:string, tip:string}}}
+ */
+export function selectChip(farmSummary, local) {
+  if (farmSummary && farmSummary.available === true) {
+    return { source: "farm", model: farmChipModel(farmSummary) };
+  }
+  return { source: "hub", model: hubChipModel(local || {}) };
 }
 
 /* 实例列表 → 就绪台数 / 总台数 */
@@ -72,13 +107,15 @@ function counts() {
 /** 按当前数据重画 chip；数据不可用时整体隐藏。 */
 export function renderHubChip() {
   if (!el) return;
-  if (!loaded) {
+  const { total, ready } = counts();
+  const choice = selectChip(farm, { total, ready, failed: failures });
+  // 农场还没答上来时，沿用「实例列表没到就藏起来」；农场可用则不必等本机列表。
+  if (choice.source === "hub" && !loaded) {
     el.classList.add("hidden");
     return;
   }
-  const { total, ready } = counts();
-  const model = hubChipModel({ total, ready, failed: failures });
-  const signature = [model.text, model.failed, model.dot].join("|");
+  const model = choice.model;
+  const signature = [choice.source, model.text, model.failed, model.dot].join("|");
   if (signature === lastSignature) return; // 数据没变就不动 DOM
   lastSignature = signature;
   el.classList.remove("hidden");
@@ -90,7 +127,7 @@ export function renderHubChip() {
   if (sepEl) sepEl.classList.toggle("hidden", !model.failed);
   if (failEl) failEl.textContent = model.failed;
   el.setAttribute("aria-label", model.aria);
-  el.title = model.failed ? t("chip.tipWithFailed", { failed: model.failed }) : t("chip.tip");
+  el.title = model.tip || "";
 }
 
 /** 由 web/app.js 在启动时调用一次。 */
@@ -105,4 +142,9 @@ export function startHubChip() {
     failures = totals && Number.isFinite(Number(totals.failed)) ? Number(totals.failed) : null;
     renderHubChip();
   }, { interval: STATS_POLL_MS, onError: () => {} });
+  // 同源摘要。服务端缓存约 5s，这里按同一节奏拉；失败就退回本机 chip。
+  Api.poll("/api/farm/health", (data) => {
+    farm = data && typeof data === "object" ? data : { available: false };
+    renderHubChip();
+  }, { interval: FARM_POLL_MS, onError: () => { farm = { available: false }; renderHubChip(); } });
 }

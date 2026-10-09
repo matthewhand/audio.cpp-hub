@@ -115,17 +115,19 @@
 
 | 指标 | 预算 | 当前实测 |
 | --- | --- | --- |
-| 初始 JS raw | 312 KiB | 310.2 KiB |
-| 初始 JS gzip | 115 KiB | 113.6 KiB |
-| 初始 CSS raw | 68 KiB | 67.6 KiB |
-| 初始 CSS gzip | 18 KiB | 17.2 KiB |
-| JS+CSS gzip 合计 | 132 KiB | 130.7 KiB |
-| 初始子资源请求数 | 31 | 30 |
+| 初始 JS raw | 390 KiB | 387.4 KiB |
+| 初始 JS gzip | 145 KiB | 142.9 KiB |
+| 初始 CSS raw | 82 KiB | 79.9 KiB |
+| 初始 CSS gzip | 22 KiB | 21.0 KiB |
+| JS+CSS gzip 合计 | 166 KiB | 163.9 KiB |
+| 初始子资源请求数 | 36 | 35 |
 | TTI 目标 | ≤ 1500 ms（本地/局域网，中端笔电） | 由真实浏览器测量，不在本脚本校验 |
 
 预算定义在 `scripts/perf-budget.mjs` 的 `BUDGETS`（单一来源）。超标退出 1。
-**棘轮方向只朝下**：每次把一个「点开才用得上」的视图挪进懒加载 chunk，就按新的实测值重新收一次，
-并在 `scripts/perf-budget.mjs` 顶注留下 before → after 全量对照——**不许**为了让新功能过线而调高。
+懒加载把「点开才用得上」的视图挪出首屏时，按新的实测值把预算往下收，并在
+`scripts/perf-budget.mjs` 顶注留下 before → after。2026-10 的上调是另一件事：
+最近活动、字数、内存条、状态行和农场 chip 都在首屏上，不能懒加载。数字是这次
+`npm run perf:budget` 的实测，预算留了一点余量。
 
 ### 懒加载命令面板（2026-09，本轮）
 

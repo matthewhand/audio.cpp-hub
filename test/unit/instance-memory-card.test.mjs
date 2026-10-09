@@ -19,8 +19,23 @@ function esc(v) {
     .replace(/'/g, "&#39;");
 }
 
+const DICT = {
+  "instance.idleFor": "idle {t}",
+  "instance.idleForTip": "Idle since the last task finished",
+  "instance.status.READY": "Ready",
+  "instance.generating": "Generating…",
+  "instance.ready": "Ready",
+  "instance.noReady": "No ready instance",
+  "instance.vramHead": "VRAM {text}",
+  "instance.vramHeadTip": "VRAM in use across instances",
+  "instance.memStatIdle": "Idle",
+  "instance.memKeyRam": "RAM",
+  "instance.memKeyVram": "VRAM",
+  "instance.memNow": "now"
+};
+
 function t(key, params) {
-  let s = key;
+  let s = Object.prototype.hasOwnProperty.call(DICT, key) ? DICT[key] : key;
   for (const [k, v] of Object.entries(params || {})) {
     s = s.split("{" + k + "}").join(String(v));
   }
@@ -41,6 +56,7 @@ function mount(world) {
   add('<button id="instance-detail"></button>');
   add('<span id="instance-pill" class="pill warn"></span>');
   add('<span id="instance-count"></span>');
+  add('<span id="instance-vram" class="sec-vram num"></span>');
   add('<span id="instance-generating" class="badge generating hidden"></span>');
   const modal = add('<div id="instance-detail-modal" class="modal-overlay hidden"></div>');
   modal.appendChild(el('<button id="instance-detail-close"></button>'));
@@ -90,6 +106,7 @@ function load(world) {
     },
     busyStarts: new Map(),
     runningStarts: new Map(),
+    idleFallbacks: new Map(),
     models: [],
     selectedModelId: null,
     location: { hash: "" },
@@ -99,7 +116,10 @@ function load(world) {
     clearInterval() {},
     Date
   };
-  return loadEsModule("modules/instances.js", sandbox);
+  const mod = loadEsModule("modules/instances.js", sandbox);
+  // models / selectedModelId / busyStarts are free bindings, not exports.
+  mod.__sandbox = sandbox;
+  return mod;
 }
 
 function inst(memory) {
@@ -157,10 +177,10 @@ test("instance card renders memory meters and client sparklines", () => {
   const card0 = poll(memory(0, 1000));
   assert.ok(card0, "poll renders a card");
   assert.equal(card0.querySelectorAll('[role="meter"]').length, 2);
-  assert.equal(card0.querySelector("[data-w]").getAttribute("data-w"), "68.1");
-  assert.equal(card0.querySelector("[data-l]").getAttribute("data-l"), "71.4");
-  assert.match(card0.innerHTML, /data-l="50\.6"/);
-  assert.equal(card0.querySelector("[data-w]").style.width, "68.1%");
+  assert.equal(card0.querySelector("[data-w]").getAttribute("data-w"), "76.3");
+  assert.equal(card0.querySelector("[data-l]").getAttribute("data-l"), "80");
+  assert.match(card0.innerHTML, /data-l="56\.7"/);
+  assert.equal(card0.querySelector("[data-w]").style.width, "76.3%");
   assert.equal(sparkPointsOf(card0, "ram"), null, "one sample is not a line");
   assert.doesNotMatch(card0.innerHTML, /style=/);
 
@@ -209,4 +229,60 @@ test("instance card renders memory meters and client sparklines", () => {
   mod.renderInstanceDetail(current);
   assert.equal(sparkPointsOf(world.$("instance-detail-body"), "ram"), frozen);
   assert.equal(world.$("instance-detail-body").querySelectorAll('[role="meter"]').length, 2);
+});
+
+test("instance card shows idle marker, VRAM total, GPU subtitle, and one badge", () => {
+  const world = createDomWorld();
+  const list = mount(world);
+  const mod = load(world);
+  const box = mod.__sandbox;
+  box.models.push({ id: "breeze", displayName: "BreezeTTS 2" });
+  box.selectedModelId = "breeze";
+  const GiB = 1024 * MIB;
+  const since = Date.now() - 4 * 60 * 1000;
+  const row = inst({
+    sampledAt: 3000,
+    ramBytes: 942 * MIB,
+    ramPeakBytes: 988 * MIB,
+    ramAvgBytes: 700 * MIB,
+    ramIdleBytes: 598 * MIB,
+    vramBytes: 3.6 * GiB,
+    vramPeakBytes: 4 * GiB,
+    vramAvgBytes: 3 * GiB,
+    vramIdleBytes: 3.6 * GiB,
+    vramTotalBytes: 8 * GiB,
+    gpuName: "GTX 1080",
+    idleSinceMs: since,
+    samples: 4,
+    busy: false,
+    vramSource: "nvidia-smi"
+  });
+  row.modelId = "breeze";
+  row.instanceName = "voice";
+  row.backend = "vulkan";
+  row.device = 0;
+  row.port = 18090;
+  mod.applyInstances([row]);
+  const shown = list.querySelector(".card");
+  assert.ok(shown);
+  assert.match(shown.innerHTML, /Idle 598/);
+  assert.match(shown.innerHTML, /\/ 8\.0 GiB/);
+  assert.match(shown.innerHTML, /BreezeTTS 2 · GTX 1080 · vulkan:0 · :18090/);
+  assert.match(shown.innerHTML, /idle 4m/);
+  assert.equal(shown.querySelectorAll(".badge.ready").length, 1);
+  assert.equal(shown.querySelectorAll(".badge.generating").length, 0);
+  assert.doesNotMatch(shown.innerHTML, /style=/);
+  const pill = world.$("instance-pill");
+  assert.equal(pill.classList.contains("hidden"), false);
+  assert.match(world.$("instance-vram").textContent, /VRAM 3\.6 \/ 8\.0 GiB/);
+
+  box.busyStarts.set(row.id, Date.now() - 3200);
+  mod.applyInstances([row]);
+  const busy = list.querySelector(".card");
+  assert.equal(busy.querySelectorAll(".badge.generating").length, 1);
+  assert.equal(busy.querySelectorAll(".badge.ready").length, 0);
+  assert.equal(busy.querySelectorAll(".idle-for").length, 0);
+  assert.equal(pill.classList.contains("hidden"), true);
+  assert.equal(world.$("instance-generating").classList.contains("hidden"), false);
+  assert.doesNotMatch(busy.innerHTML, /style=/);
 });

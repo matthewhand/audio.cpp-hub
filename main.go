@@ -63,6 +63,7 @@ type Hub struct {
 	history   *HistoryManager
 	voices    *VoiceLibrary
 	downloads *DownloadManager
+	farm      *farmHealth
 }
 
 // ensureWorkDir 定位工作目录（需要 web/ 等运行时目录）：当前目录没有 web/ 时，
@@ -107,6 +108,7 @@ func main() {
 	hub.tasks.AddObserver(hub.bus)
 	hub.tasks.AddObserver(hub.mem)
 	hub.mem.Start()
+	hub.farm = newFarmHealth(farmFanoutURL())
 
 	if _, err := os.Stat("web"); err != nil {
 		log.Printf("警告: 工作目录下没有 web/ 目录，静态页面不可用（请从项目根目录启动）")

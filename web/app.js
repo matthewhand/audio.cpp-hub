@@ -24,6 +24,8 @@ import { closeDownloadsModal, closeModelDlModal, relocalizeDownloads, startDownl
 import { cancelFileBrowser, relocalizeFileBrowser } from "./modules/file-browser-lazy.js";
 import { closeInstanceDetail, renderInstanceList, startInstancePolling, updateInstanceBar } from "./modules/instances.js";
 import { closeLaunchModal, loadProfiles, renderLaunchProfiles } from "./modules/launch.js";
+import { renderActivity, startActivity } from "./modules/activity.js";
+import { renderCharCount, startCharCount } from "./modules/char-count.js";
 import { renderHubChip, startHubChip } from "./modules/hub-chip.js";
 import { renderLiveTicker, startLiveTicker } from "./modules/live-ticker.js";
 import { loadModels, renderModelList, updateQuickLaunchTitle } from "./modules/models.js";
@@ -62,6 +64,8 @@ function rerenderAll() {
   renderHubChip();
   renderLiveTicker();
   renderLiveEvents();
+  renderActivity();
+  renderCharCount();
   (window.__audioPickers || []).forEach(p => p.refreshLabels && p.refreshLabels());
   (window.__voiceSelects || []).forEach(v => v.refreshLabels && v.refreshLabels());
   relocalizeFileBrowser();
@@ -121,6 +125,8 @@ startEventsPolling();
 startDownloadsPolling();
 startHubChip();
 startLiveTicker();
+startActivity();
+startCharCount();
 
 loadModels();
 loadExecutables();

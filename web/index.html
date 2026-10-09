@@ -16,7 +16,7 @@
   <!-- 模块图预载：web/app.js 是 type="module"，没有打包器，浏览器只能等它执行完之后
        再顺着 import 图去取 web/modules/*.js——模块的解析与首屏可用时间被串在后面。
        这里把整张静态模块图逐条声明成 modulepreload：浏览器在解析 head 时就并行发起
-       这 20 个请求并预解析，app.js 执行时直接命中已就位的模块（不额外产生请求，
+       这 22 个请求并预解析，app.js 执行时直接命中已就位的模块（不额外产生请求，
        也因此**不减少**请求条数——条数只由模块数量决定）。
        懒加载 chunk 刻意不在这里：预载会把「点开才付」的收益全部抵消。
        清单必须与 app.js 的 import 图、以及 web/sw.js 的 PRECACHE_URLS 三方一致，
@@ -35,6 +35,8 @@
   <link rel="modulepreload" href="/modules/task-events.js">
   <link rel="modulepreload" href="/modules/hub-chip.js">
   <link rel="modulepreload" href="/modules/live-ticker.js">
+  <link rel="modulepreload" href="/modules/activity.js">
+  <link rel="modulepreload" href="/modules/char-count.js">
   <link rel="modulepreload" href="/modules/downloads-lazy.js">
   <link rel="modulepreload" href="/modules/tasks.js">
   <link rel="modulepreload" href="/modules/sidebar.js">
@@ -88,10 +90,17 @@
         <h2 data-i18n="nav.instances">实例</h2>
         <div class="sec-head-right">
           <span id="instance-count" class="sec-count num"></span>
+          <span id="instance-vram" class="sec-vram num"></span>
           <span id="live-events" class="live-events" data-mode="poll"><i class="live-dot" aria-hidden="true"></i><span id="live-events-text" data-i18n="live.off">轮询中</span></span>
         </div>
       </div>
       <div id="instance-list" class="card-list"></div>
+      <details id="activity-panel" class="activity-panel" open>
+        <summary data-i18n="activity.title">最近活动</summary>
+        <div id="activity-strip" class="activity-strip"></div>
+        <div id="activity-empty" class="hint" data-i18n="activity.empty">暂无最近任务</div>
+        <div id="activity-list" class="activity-list"></div>
+      </details>
       <h2 data-i18n="nav.models">模型</h2>
       <div id="model-list" class="card-list"></div>
     </aside>
@@ -114,7 +123,7 @@
         <!-- TTS 面板 -->
         <div class="card panel-card" id="panel-tts">
           <h2 id="tts-title" data-i18n="tts.title">语音合成</h2>
-          <label id="tts-text-block"><span data-i18n="tts.textLabel">合成文本</span><textarea id="tts-text" rows="4" data-i18n-placeholder="tts.textPlaceholder" placeholder="要合成的文本"></textarea></label>
+          <label id="tts-text-block"><span class="field-label-row"><span data-i18n="tts.textLabel">合成文本</span><span id="tts-char-count" class="char-count" aria-live="polite"></span></span><textarea id="tts-text" rows="4" data-i18n-placeholder="tts.textPlaceholder" placeholder="要合成的文本"></textarea></label>
           <div id="tts-primary-instruction-row"></div>
           <div id="tts-language-row"></div>
           <div id="tts-mode-row"></div>
