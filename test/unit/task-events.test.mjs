@@ -37,3 +37,18 @@ test("queued and unknown events do not mark an instance busy", () => {
   assert.deepEqual(busy(reduceTaskEvents(running, "instance.memory", { instanceId: "inst-1" })), []);
   assert.deepEqual(busy(reduceTaskEvents(null, "task.started", {})), []);
 });
+
+test("task.started 记下 ts 作为卡片计时起点（没有 ts 记 null）", () => {
+  let running = reduceTaskEvents(
+    {},
+    "task.started",
+    { taskId: "a", instanceId: "inst-1", ts: 1756400000000 }
+  );
+  assert.equal(running.a.startMs, 1756400000000);
+  running = reduceTaskEvents(running, "task.started", { taskId: "b", instanceId: "inst-2" });
+  assert.equal(running.b.startMs, null);
+  // 计时起点缺失不影响忙碌集合本身
+  assert.deepEqual(busy(running), ["inst-1", "inst-2"]);
+  running = reduceTaskEvents(running, "task.finished", { taskId: "a" });
+  assert.equal(running.a, undefined);
+});

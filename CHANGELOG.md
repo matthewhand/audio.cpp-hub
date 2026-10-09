@@ -9,6 +9,9 @@
 - Web UI 页头按钮改用内嵌 Lucide 图标雪碧图（`menu`、`mic-vocal`、`history`、`download`、`chart-column`、`languages`、`settings`，主题为 `sun` / `moon` / `monitor`，面板关闭为 `x`）。路径数据来自 lucide-static，许可证全文在 `third_party/lucide/LICENSE`（ISC，部分图标源自 Feather / MIT）
 - 每个运行中的实例采样 RSS，并尽力读取 VRAM（Linux DRM fdinfo，否则 `nvidia-smi`，失败则退避）。`GET /api/instances` 在第一次采样后带上可选的 `memory`（当前 / 峰值 / 时间加权平均）；任务结束时把 RUNNING 期间的峰值写成 `peakRamBytes` / `peakVramBytes`。非 Linux 省略 `memory`
 - `GET /api/events/stream`：任务生命周期的 Server-Sent Events（连接时 `hello`，约 15 秒一条 `: ping`，以及 `task.queued` / `task.started` / `task.finished` / `task.failed` / `task.cancelled`）。Web UI 在对应实例上显示「生成中…」，推送不可用时仍靠原来的 2 秒轮询。fan-out 不代理这条流
+- `memory` 对象新增三个可选字段：`ramIdleBytes` / `vramIdleBytes`（实例没有 RUNNING 任务期间观察到的**空闲基线**，即「这个模型闲着时占多少」，采到第一个空闲样本之前省略）与 `vramTotalBytes`（该进程所在 GPU 的显存总量，前端显存条的比例尺）。总量是尽力而为且绝不猜：nvidia 用 `nvidia-smi --query-gpu=index,memory.total`（每个 hub 生命周期只查一次，与既有进程查询共用超时与失败退避，不增加每轮采样开销），AMD 用 `/sys/class/drm/card*/device/mem_info_vram_total`（同样只读一次）；统计不出「只有一张卡」就省略该字段
+- 实例卡片与实例状态条原来并排的两个忙碌徽标（轮询的「工作中」与 SSE 的「生成中…」）合并成一个「生成中…」：脉冲圆点 + 300ms 一跳的耗时计时（全部卡片共用一个定时器，没有忙碌任务时停掉）。忙碌判定由 SSE（`task.started` … 终态）与轮询（`taskCount` / 采样器 `busy` / 任务轮询的 `startedAt`）合并成一个纯函数，推送断开时自动回退到轮询
+- 实例卡片与实例详情弹窗把 RAM / VRAM 的两行文字换成进度条：填充为当前值，细刻度线标峰值与均值，下方一行「Peak · Avg · Idle」（单位在行尾出现一次，≥ 1024 MiB 统一换算成 GiB）。显存条在有 GPU 总量时按总量取比例尺，占用 ≥ 85% 时用渐变提示「快满」；进度条带 `role="meter"` 与 aria 值 / 名称（中英双语），刻度线为纯装饰
 
 - `docs/farm.md` / `docs/agent-api.md` / `docs/deployment-10.0.0.36.md`：多机语音农场的拓扑、客户端契约与部署注意事项，入口统一指向 fan-out `http://10.0.0.36:18082`
 - Web UI：操作历史支持「复刻」上一条生成参数重新提交、音色库下拉支持按名搜索、用量看板增加近 14 天趋势

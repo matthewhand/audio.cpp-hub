@@ -13,3 +13,7 @@ const memRSSSupported = false
 func procStatusRSSBytes(pid int) (int64, bool) { return 0, false }
 
 func procDrmVRAMBytes(pid int) (int64, bool) { return 0, false }
+
+// procDrmVramTotals has no sysfs source here (see memory_proc_linux.go), so the
+// GPU total behind vramTotalBytes is always unknown.
+func procDrmVramTotals() map[int]int64 { return nil }

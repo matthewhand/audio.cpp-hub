@@ -274,9 +274,12 @@ never a placeholder zero.
   "ramBytes": 644245094,
   "ramPeakBytes": 1073741824,
   "ramAvgBytes": 751619277,
+  "ramIdleBytes": 637330636,
   "vramBytes": 3865470566,
   "vramPeakBytes": 4402341478,
   "vramAvgBytes": 3972844749,
+  "vramIdleBytes": 3906249728,
+  "vramTotalBytes": 8589934592,
   "vramSource": "nvidia-smi",
   "samples": 12,
   "sampledAt": 1756400000000,
@@ -284,11 +287,27 @@ never a placeholder zero.
 }
 ```
 
+| field | meaning |
+| --- | --- |
+| `ramBytes` / `vramBytes` | current reading (process RSS / process VRAM) |
+| `ramPeakBytes` / `vramPeakBytes` | maximum since the instance started |
+| `ramAvgBytes` / `vramAvgBytes` | time-weighted average (see below) |
+| `ramIdleBytes` / `vramIdleBytes` | **idle baseline**: the minimum observed while the instance had no RUNNING task — what the model costs at rest. Omitted until an idle sample exists |
+| `vramTotalBytes` | total VRAM of the GPU the process runs on; it is the scale of the WebUI's VRAM bar. Only reported when the answer is certain: one GPU → that card's total; several GPUs with no process→card mapping → omitted |
+| `vramSource` | `drm` or `nvidia-smi` |
+| `samples` / `sampledAt` / `busy` | sample count / last sample (ms) / a task is RUNNING |
+
 `ramAvgBytes` / `vramAvgBytes` are **time-weighted** (each sample is weighted by
 how long it held until the next one), accumulated since the instance started.
 `vramSource` is `drm` (Linux DRM fdinfo, de-duplicated by client id) or
 `nvidia-smi`. `busy` means a task is RUNNING, which is also when the sampler
 runs at about 1s instead of about 10s.
+
+`vramTotalBytes` is best-effort and never fails the endpoint: NVIDIA reads
+`nvidia-smi --query-gpu=index,memory.total` once per hub lifetime (same timeout
+and backoff as the per-pid query — no extra spawn per pass), AMD reads
+`/sys/class/drm/card*/device/mem_info_vram_total` once, and a totals query that
+does not resolve to exactly one card leaves the field out rather than guessing.
 
 `GET /api/tasks/{id}` adds optional `peakRamBytes` / `peakVramBytes`: the max
 seen while that task was RUNNING. Absent when the sampler never got a reading.

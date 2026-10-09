@@ -18,11 +18,19 @@ import (
 // fallback, unknown when neither source is available.
 //
 // The samples feed three consumers:
-//   - rolling per-instance stats (current / peak / time-weighted average)
-//     surfaced on GET /api/instances as the optional "memory" object;
+//   - rolling per-instance stats (current / peak / time-weighted average / idle
+//     baseline) surfaced on GET /api/instances as the optional "memory" object;
 //   - per-task peaks (TaskManager.NoteInstanceSample) that land on the task
 //     record as peakRamBytes / peakVramBytes;
 //   - "instance.memory" push events for busy instances (SSE).
+//
+// The idle baseline (ramIdleBytes / vramIdleBytes) is the minimum observed
+// while the instance had no RUNNING task — the "what does this model cost at
+// rest" number the WebUI bars print next to peak/average. GPU total VRAM
+// (vramTotalBytes, the scale of the VRAM bar) is a separate one-shot query:
+// nvidia-smi cannot return the compute-apps and the GPU table in a single
+// invocation, so the total is fetched once per hub with the same timeout and
+// backoff instead of on every pass.
 //
 // Cadence: ~1s while the instance has a RUNNING task, ~10s while idle. The
 // switch is driven by the same in-process task lifecycle signal that feeds the
@@ -47,6 +55,17 @@ type MemorySampler struct {
 
 	// nvidiaRetryAt is only touched from the sampler goroutine.
 	nvidiaRetryAt time.Time // nvidia-smi disabled until (missing / failed)
+
+	// nvTotals is the cached GPU table (index → total VRAM bytes) behind
+	// vramTotalBytes; nvTotalsRetryAt backs its one-shot query off. Written by
+	// the sampler goroutine under mu, read by MemoryJSON under the same mu.
+	nvTotals        map[int]int64
+	nvTotalsRetryAt time.Time
+
+	// drmTotals is the same table for AMD (card index → bytes), read from sysfs
+	// at most once. Also mu-guarded for the same reason.
+	drmTotals     map[int]int64
+	drmTotalsDone bool
 
 	wake      chan struct{} // busy-state changes nudge an immediate pass
 	stop      chan struct{} // closed by Stop
@@ -234,13 +253,20 @@ func (s *MemorySampler) pass(now time.Time) {
 		samples[i].vramKnown = true
 		samples[i].source = vramSourceNvidia
 	}
+	// GPU totals (the scale of the VRAM bar) need a second table that nvidia-smi
+	// cannot return together with the compute apps, so it is a one-shot side
+	// query — only when the nvidia path is alive, at most once per hub.
+	if nvQueried && nv != nil {
+		s.nvidiaGpuTotals(now)
+	}
 	for _, sm := range samples {
 		s.record(sm.instanceID, now, sm.ram, sm.vram, sm.vramKnown, sm.source)
 	}
 }
 
 // record applies one sample: rolling stats, per-task peaks, and (for busy
-// instances) an instance.memory push event.
+// instances) an instance.memory push event. Samples taken while no task is
+// RUNNING (idle) also feed the idle baselines.
 func (s *MemorySampler) record(instanceID string, now time.Time, ram, vram int64, vramKnown bool, source string) {
 	s.mu.Lock()
 	st := s.state[instanceID]
@@ -249,7 +275,7 @@ func (s *MemorySampler) record(instanceID string, now time.Time, ram, vram int64
 		s.state[instanceID] = st
 	}
 	busy := s.busy[instanceID]
-	st.addSample(now, ram, vram, vramKnown, source)
+	st.addSample(now, ram, vram, vramKnown, source, !busy)
 	vramSticky, vramKnownSticky, vramSourceSticky := st.lastVRAM, st.vramKnown, st.vramSource
 	s.mu.Unlock()
 
@@ -278,7 +304,9 @@ func (s *MemorySampler) record(instanceID string, now time.Time, ram, vram int64
 // MemoryJSON returns the optional "memory" object for GET /api/instances.
 // nil until the first successful RSS sample — old hubs, non-Linux platforms
 // and not-yet-sampled instances omit it entirely (VRAM fields are omitted when
-// VRAM was never measured). Must never error because of sampling.
+// VRAM was never measured, the idle baselines until an idle sample exists and
+// vramTotalBytes when the GPU total is unknowable). Must never error because
+// of sampling.
 func (s *MemorySampler) MemoryJSON(instanceID string) map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -294,13 +322,84 @@ func (s *MemorySampler) MemoryJSON(instanceID string) map[string]any {
 		"sampledAt":    st.lastTime.UnixMilli(),
 		"busy":         s.busy[instanceID],
 	}
+	if st.ramIdleKnown {
+		out["ramIdleBytes"] = st.ramIdleBytes
+	}
 	if st.vramKnown {
 		out["vramBytes"] = st.lastVRAM
 		out["vramPeakBytes"] = st.peakVRAM
 		out["vramAvgBytes"] = st.vramAvg()
 		out["vramSource"] = st.vramSource
+		if st.vramIdleKnown {
+			out["vramIdleBytes"] = st.vramIdleBytes
+		}
+		if total, ok := s.vramTotalBytesLocked(st.vramSource); ok {
+			out["vramTotalBytes"] = total
+		}
 	}
 	return out
+}
+
+// vramTotalBytesLocked returns the total VRAM of the GPU this instance runs on
+// (caller holds s.mu). Best-effort: it scales the WebUI's VRAM bar and is
+// omitted whenever the answer would be a guess. A single GPU needs no
+// process→GPU mapping, so a lone card's total is trusted; with several cards
+// the process could sit on any of them, so the field stays omitted rather than
+// showing a wrong ceiling.
+func (s *MemorySampler) vramTotalBytesLocked(source string) (int64, bool) {
+	var totals map[int]int64
+	switch source {
+	case vramSourceNvidia:
+		totals = s.nvTotals
+	case vramSourceDrm:
+		if !s.drmTotalsDone {
+			s.drmTotals, s.drmTotalsDone = procDrmVramTotals(), true
+		}
+		totals = s.drmTotals
+	default:
+		return 0, false
+	}
+	if len(totals) != 1 {
+		return 0, false
+	}
+	for _, v := range totals {
+		if v > 0 {
+			return v, true
+		}
+	}
+	return 0, false
+}
+
+// nvidiaGpuTotals fills the cached GPU table (index → total VRAM bytes) by
+// querying "nvidia-smi --query-gpu=index,memory.total". Runs at most once per
+// hub lifetime: GPU total memory does not change while the box is up, and the
+// per-pid query keeps running every pass unchanged. Same timeout and backoff
+// as nvidiaOnce — a missing binary is not respawned.
+//
+// nvidia-smi takes one query target per invocation and cannot return the
+// compute-apps and the GPU table together, so the total costs one extra spawn
+// once instead of an extra column on an every-pass query. Called from the
+// sampler goroutine only; readers take s.mu.
+func (s *MemorySampler) nvidiaGpuTotals(now time.Time) {
+	if len(s.nvTotals) > 0 || now.Before(s.nvTotalsRetryAt) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), nvidiaQueryTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "nvidia-smi",
+		"--query-gpu=index,memory.total", "--format=csv,noheader,nounits")
+	hideChildWindow(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		s.mu.Lock()
+		s.nvTotalsRetryAt = now.Add(nvidiaBackoff)
+		s.mu.Unlock()
+		return
+	}
+	totals := parseNvidiaGpuTotals(string(out))
+	s.mu.Lock()
+	s.nvTotals = totals
+	s.mu.Unlock()
 }
 
 // nvidiaOnce runs nvidia-smi and returns pid -> VRAM bytes for every compute
@@ -331,23 +430,33 @@ func (s *MemorySampler) nvidiaOnce(now time.Time) map[int]int64 {
 // honest mean of a piecewise-constant signal — a 1s busy spike does not count
 // as much as 10s of idle, and uneven sampling intervals do not skew it. It is
 // NOT reset per task; it spans the instance lifetime.
+//
+// The idle baselines are the complement: the minimum seen while no task was
+// RUNNING, i.e. what the model costs at rest. They only ever shrink, and only
+// from idle samples — a busy sample must not drag the baseline down or up.
 type memRolling struct {
-	lastRAM      int64
-	lastVRAM     int64
-	vramKnown    bool   // sticky: a failed VRAM probe keeps the last known value
-	vramSource   string // "drm" | "nvidia-smi"
-	peakRAM      int64
-	peakVRAM     int64
-	ramIntegral  float64 // byte·ms
-	vramIntegral float64 // byte·ms
-	spanMs       float64 // RAM weighting span
-	vramSpanMs   float64 // only intervals where VRAM was already known
-	samples      int
-	lastTime     time.Time
-	hasSample    bool
+	lastRAM       int64
+	lastVRAM      int64
+	vramKnown     bool   // sticky: a failed VRAM probe keeps the last known value
+	vramSource    string // "drm" | "nvidia-smi"
+	peakRAM       int64
+	peakVRAM      int64
+	ramIdleBytes  int64 // min while idle (ramIdleKnown = an idle sample exists)
+	ramIdleKnown  bool
+	vramIdleBytes int64
+	vramIdleKnown bool
+	ramIntegral   float64 // byte·ms
+	vramIntegral  float64 // byte·ms
+	spanMs        float64 // RAM weighting span
+	vramSpanMs    float64 // only intervals where VRAM was already known
+	samples       int
+	lastTime      time.Time
+	hasSample     bool
 }
 
-func (r *memRolling) addSample(now time.Time, ram, vram int64, vramKnown bool, source string) {
+// addSample folds one reading into the rolling stats. idle=true marks a sample
+// taken while the instance had no RUNNING task (it updates the idle baselines).
+func (r *memRolling) addSample(now time.Time, ram, vram int64, vramKnown bool, source string, idle bool) {
 	if r.hasSample {
 		dt := float64(now.Sub(r.lastTime).Milliseconds())
 		if dt > 0 {
@@ -369,6 +478,16 @@ func (r *memRolling) addSample(now time.Time, ram, vram int64, vramKnown bool, s
 		r.vramSource = source
 		if vram > r.peakVRAM {
 			r.peakVRAM = vram
+		}
+	}
+	if idle {
+		if !r.ramIdleKnown || ram < r.ramIdleBytes {
+			r.ramIdleBytes = ram
+			r.ramIdleKnown = true
+		}
+		if vramKnown && (!r.vramIdleKnown || vram < r.vramIdleBytes) {
+			r.vramIdleBytes = vram
+			r.vramIdleKnown = true
 		}
 	}
 	r.lastTime = now
@@ -492,6 +611,33 @@ func sumDrmVRAMBytes(fdinfoByName map[string]string) (int64, bool) {
 	return total * 1024, true
 }
 
+// parseDrmVramTotal reads one /sys/class/drm/card*/device/mem_info_vram_total
+// value: a bare byte count published by amdgpu. ok=false when the file is
+// empty or not a positive number (the node also exists on cards without VRAM
+// accounting). Pure: tests run everywhere.
+func parseDrmVramTotal(content string) (int64, bool) {
+	n, err := strconv.ParseInt(strings.TrimSpace(content), 10, 64)
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
+}
+
+// parseSmiMiB reads one nvidia-smi memory column: a plain MiB number, with an
+// optional " MiB" suffix, "N/A" style placeholders rejected. Pure: tests run
+// everywhere.
+func parseSmiMiB(s string) (int64, bool) {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexAny(s, " \t"); i > 0 {
+		s = s[:i] // tolerate a "3690 MiB" suffix
+	}
+	mib, err := strconv.ParseFloat(s, 64)
+	if err != nil || mib < 0 {
+		return 0, false
+	}
+	return int64(mib * 1024 * 1024), true
+}
+
 // parseNvidiaSmiOutput parses the CSV of
 // "nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits":
 // one "pid, MiB" row per compute app. Unparsable rows ("[N/A]",
@@ -512,15 +658,39 @@ func parseNvidiaSmiOutput(output string) map[int]int64 {
 		if err != nil || pid <= 0 {
 			continue
 		}
-		memStr = strings.TrimSpace(memStr)
-		if i := strings.IndexAny(memStr, " \t"); i > 0 {
-			memStr = memStr[:i] // tolerate a "3690 MiB" suffix
-		}
-		mib, err := strconv.ParseFloat(memStr, 64)
-		if err != nil {
+		bytes, ok := parseSmiMiB(memStr)
+		if !ok {
 			continue // "[N/A]" and friends
 		}
-		out[pid] = int64(mib * 1024 * 1024)
+		out[pid] = bytes
+	}
+	return out
+}
+
+// parseNvidiaGpuTotals parses the CSV of
+// "nvidia-smi --query-gpu=index,memory.total --format=csv,noheader,nounits":
+// one "index, MiB" row per GPU on the box. Unparsable rows are skipped;
+// memory.total is MiB → bytes. Pure: tests run everywhere.
+func parseNvidiaGpuTotals(output string) map[int]int64 {
+	out := map[int]int64{}
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+		if line == "" {
+			continue
+		}
+		idxStr, memStr, ok := strings.Cut(line, ",")
+		if !ok {
+			continue
+		}
+		idx, err := strconv.Atoi(strings.TrimSpace(idxStr))
+		if err != nil || idx < 0 {
+			continue
+		}
+		bytes, ok := parseSmiMiB(memStr)
+		if !ok {
+			continue // "[N/A]" and friends
+		}
+		out[idx] = bytes
 	}
 	return out
 }

@@ -8,66 +8,195 @@ import { $, Api, esc, t } from "./dom.js";
 import { openLaunchModal } from "./launch.js";
 import { selectModelById } from "./models.js";
 import { getPendingInstanceId, go, modelRoute, parseRoute, setPendingInstanceId } from "./routing.js";
-import { activeInstanceId, isGenerating, models, selectedModelId, setActiveInstanceId } from "./state.js";
+import { activeInstanceId, busyStarts, models, runningStarts, selectedModelId, setActiveInstanceId } from "./state.js";
 
-/* 内存字节的展示口径（二进制 1024）：≥ 1 GiB 保留 1 位小数的 GB，
-   ≥ 1 MiB 取整为 MB，更小则 KB / B。不足 1 GB 不写成 0.x GB。
-   纯函数，供实例卡片与单元测试共用。 */
-export function formatMemBytes(n) {
-  const kib = 1024;
-  const mib = kib * 1024;
-  const gib = mib * 1024;
-  if (typeof n !== "number" || !Number.isFinite(n) || n < 0) return "";
-  if (n >= gib) return `${(n / gib).toFixed(1)} GB`;
-  if (n >= mib) return `${Math.round(n / mib)} MB`;
-  if (n >= kib) return `${Math.round(n / kib)} KB`;
-  return `${Math.round(n)} B`;
+/* ---------- 「生成中…」徽标：SSE + 轮询合并成一个忙碌源 ---------- */
+
+/* 毫秒时间戳，非法 / 缺失 → null */
+function msOr(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-/* 峰值 / 均值与当前值同一单位时去掉单位，得到「3.6 GB · peak 4.1 · avg 3.7」。 */
-export function formatMemCompanion(n, cur) {
-  const full = formatMemBytes(n);
-  if (!full) return "";
-  const unitOf = (x) => {
-    if (typeof x !== "number" || !Number.isFinite(x) || x < 0) return "";
-    if (x >= 1024 * 1024 * 1024) return "GB";
-    if (x >= 1024 * 1024) return "MB";
-    if (x >= 1024) return "KB";
-    return "B";
-  };
-  if (unitOf(n) && unitOf(n) === unitOf(cur)) return full.slice(0, full.lastIndexOf(" "));
-  return full;
+/**
+ * 卡片与实例条共用的忙碌判定。纯函数，单测直接注入 sse / 轮询实例。
+ *
+ * @param {{startMs:number|null}|null} sse SSE 侧对这一实例的观测：非空即「SSE
+ *        说它在忙」，startMs 是 task.started 的 ts（事件没带 ts 时为 null）。
+ *        流断开时调用方传 null（task-events.js 已清表）。
+ * @param {Object|null} inst 2s 轮询拿到的实例对象；可带 runningStartedAt
+ *        （该实例当前 RUNNING 任务的 startedAt，由 tasks.js 从任务轮询补上）。
+ * @returns {{busy:boolean,startMs:number|null,source:"sse"|"poll"|null}}
+ *         source 说明这一拍是谁说的（null = 不忙）。
+ */
+export function resolveBusy(sse, inst) {
+  if (sse) return { busy: true, startMs: msOr(sse.startMs), source: "sse" };
+  const count = inst ? Number(inst.taskCount) : NaN;
+  const busy = (Number.isFinite(count) && count > 0) || Boolean(inst && inst.memory && inst.memory.busy);
+  if (!busy) return { busy: false, startMs: null, source: null };
+  return { busy: true, startMs: msOr(inst && inst.runningStartedAt), source: "poll" };
 }
 
-/* 卡片上的两行文案 + title 明细。没有 memory（旧 hub / 尚未采样）返回 null。
-   没有 VRAM 读数时 vram 为空串，调用方不画那一行。 */
-export function memoryCardLines(mem) {
-  if (!mem || typeof mem.ramBytes !== "number") return null;
-  const ram = t("instance.memRam", {
-    cur: formatMemBytes(mem.ramBytes),
-    peak: formatMemCompanion(mem.ramPeakBytes, mem.ramBytes),
-    avg: formatMemCompanion(mem.ramAvgBytes, mem.ramBytes)
-  });
-  let vram = "";
-  if (typeof mem.vramBytes === "number") {
-    vram = t("instance.memVram", {
-      cur: formatMemBytes(mem.vramBytes),
-      peak: formatMemCompanion(mem.vramPeakBytes, mem.vramBytes),
-      avg: formatMemCompanion(mem.vramAvgBytes, mem.vramBytes)
-    });
+/* 忙碌计时：60s 内保留 1 位小数（3.2s），之后按分秒（1m 05s）。纯函数。 */
+export function formatBusyElapsed(sec) {
+  if (typeof sec !== "number" || !Number.isFinite(sec) || sec < 0) return "";
+  const t = Math.round(sec * 10) / 10; // 到 60.0s 之前不写「60.0s」，直接进位到分秒
+  if (t < 60) return t.toFixed(1) + "s";
+  return Math.floor(t / 60) + "m " + String(Math.floor(t % 60)).padStart(2, "0") + "s";
+}
+
+/* 一个实例的忙碌状态 + 计时起点：SSE 优先，其次任务轮询的 startedAt。 */
+function busyState(inst) {
+  if (!inst) return { busy: false, startMs: null, source: null };
+  const sse = busyStarts.has(inst.id) ? { startMs: busyStarts.get(inst.id) } : null;
+  return resolveBusy(sse, { ...inst, runningStartedAt: runningStarts.get(inst.id) });
+}
+
+/* 计时片段：没有起点就不渲染（data-start 由共享计时器读取；类名刻意不叫 busy-elapsed——
+   那个名字已被忙碌遮罩 #busy-elapsed 占用，撞名会被它的 100ms 计时器互相清空） */
+function busyElapsedHtml(startMs) {
+  if (!startMs) return "";
+  const text = formatBusyElapsed((Date.now() - startMs) / 1000);
+  return ` <span class="badge-elapsed num" data-start="${startMs}">${esc(text)}</span>`;
+}
+
+/* 所有卡片 + 实例条共用一个定时器（不按徽标建 interval，重画后也不会叠加） */
+const BUSY_TICK_MS = 300;
+let busyTimer = null;
+
+function updateBusyTimers() {
+  const now = Date.now();
+  for (const node of document.querySelectorAll(".badge-elapsed")) {
+    const start = Number(node.dataset.start || 0);
+    node.textContent = start > 0 ? formatBusyElapsed((now - start) / 1000) : "";
   }
-  const tip = [
-    t("instance.memTipRam", {
-      cur: formatMemBytes(mem.ramBytes),
-      peak: formatMemBytes(mem.ramPeakBytes),
-      avg: formatMemBytes(mem.ramAvgBytes)
-    })
-  ];
+}
+
+/* 每次重画后调用：有忙碌徽标就开表，没有就停（页面没有生成任务时不走计时器） */
+function syncBusyTimer() {
+  if (!document.querySelector(".badge.generating:not(.hidden)")) {
+    if (busyTimer) { clearInterval(busyTimer); busyTimer = null; }
+    return;
+  }
+  updateBusyTimers();
+  if (!busyTimer) busyTimer = setInterval(updateBusyTimers, BUSY_TICK_MS);
+}
+
+/* ---------- 实例内存条（RAM / VRAM 进度条） ---------- */
+const MEM_MIB = 1024 * 1024;
+
+/* bytes → MiB；缺失 / 非法 → NaN（调用方据此判断「这一项没有」） */
+function memMiB(bytes) {
+  return typeof bytes === "number" && Number.isFinite(bytes) && bytes >= 0 ? bytes / MEM_MIB : NaN;
+}
+function numOr(v, dflt) { return Number.isFinite(v) ? v : dflt; }
+function opt(v) { return Number.isFinite(v) ? v : null; }
+/* 属性里用的数值：保留 1 位小数 */
+function num1(v) { return Math.round(v * 10) / 10; }
+
+/* 人类可读的 MiB 值：≥ 1024 MiB 用 1 位小数的 GiB，否则取整 MiB。纯函数。 */
+export function formatMiB(mib) {
+  if (typeof mib !== "number" || !Number.isFinite(mib) || mib < 0) return "";
+  return mib >= 1024 ? `${(mib / 1024).toFixed(1)} GiB` : `${Math.round(mib)} MiB`;
+}
+
+/* 百分比钳制到 0–100（保留 1 位小数）。纯函数。 */
+export function clampPct(n) {
+  if (typeof n !== "number" || !Number.isFinite(n) || n <= 0) return 0;
+  return n >= 100 ? 100 : Math.round(n * 10) / 10;
+}
+
+/**
+ * 一行内存条的模型。纯函数，卡片 / 详情弹窗渲染与单测共用。
+ * kind 为 "ram" / "vram"，mem 是实例的 memory 对象（字段全部可选）。
+ * 返回 null 表示这一行画不出来：没有当前读数（VRAM 从未读到）或整个 memory 缺失。
+ *
+ * 比例尺：VRAM 已知 GPU 总量就用总量；否则 max(峰值, 当前) × 1.25。
+ * RAM 永远不用系统总量（条会被压成细线），取 max(峰值, 当前) × 1.4。
+ * fillPct / peakPct / avgPct 已钳制；hot = VRAM 当前值已到比例尺的 85% 以上。
+ */
+export function memRowModel(kind, mem) {
+  if (!mem) return null;
+  const vram = kind === "vram";
+  const cur = memMiB(vram ? mem.vramBytes : mem.ramBytes);
+  if (!Number.isFinite(cur)) return null;
+  const peak = numOr(memMiB(vram ? mem.vramPeakBytes : mem.ramPeakBytes), cur);
+  const avg = numOr(memMiB(vram ? mem.vramAvgBytes : mem.ramAvgBytes), cur);
+  const idle = opt(memMiB(vram ? mem.vramIdleBytes : mem.ramIdleBytes));
+  const total = opt(memMiB(vram ? mem.vramTotalBytes : NaN));
+  const scale = (vram && total && total > 0 ? total : Math.max(peak, cur) * (vram ? 1.25 : 1.4)) || 1;
+  const fillPct = clampPct((cur / scale) * 100);
+  return {
+    kind, cur, peak, avg, idle, total, scale, fillPct,
+    peakPct: clampPct((peak / scale) * 100),
+    avgPct: clampPct((avg / scale) * 100),
+    hot: vram && fillPct >= 85
+  };
+}
+
+/**
+ * 一行的取值单位：行内最大值 ≥ 1024 MiB 时整行统一用 GiB（1 位小数），
+ * 否则用 MiB（取整）。统计行与无障碍文本共用它，避免同一行里混单位。
+ * 纯函数。
+ */
+export function memUnitFormat(values) {
+  const vals = values.filter(v => Number.isFinite(v));
+  const unit = vals.length && Math.max(...vals) >= 1024 ? "GiB" : "MiB";
+  return { unit, fmt: v => (unit === "GiB" ? (v / 1024).toFixed(1) : String(Math.round(v))) };
+}
+
+/**
+ * 条形下方那行统计：「Peak 988 · Avg 700 · Idle 598 MiB」。
+ * 单位只在行尾出现一次；idle 未知时整项省略。纯函数（文案走 t()）。
+ */
+export function memStatsLabel(row) {
+  const { unit, fmt } = memUnitFormat([row.peak, row.avg, row.idle]);
+  const parts = [`${t("instance.memStatPeak")} ${fmt(row.peak)}`, `${t("instance.memStatAvg")} ${fmt(row.avg)}`];
+  if (Number.isFinite(row.idle)) parts.push(`${t("instance.memStatIdle")} ${fmt(row.idle)}`);
+  return `${parts.join(" · ")} ${unit}`;
+}
+
+/* 进度条的无障碍名称 / 值文本（两者同文），并作为整块的 title 提示。
+   例：VRAM 4.1 GiB now, peak 4.2, average 3.7, idle 3.6 GiB——当前值自带单位，
+   峰值 / 均值 / 空闲共用行尾那一个。纯函数。 */
+export function memAriaText(row) {
+  const base = row.kind === "vram" ? "instance.memAriaVram" : "instance.memAriaRam";
+  const { unit, fmt } = memUnitFormat([row.peak, row.avg, row.idle]);
+  const params = { cur: formatMiB(row.cur), peak: fmt(row.peak), avg: fmt(row.avg), unit };
+  return Number.isFinite(row.idle)
+    ? t(base + "Idle", { ...params, idle: fmt(row.idle) })
+    : t(base, params);
+}
+
+function memRowHtml(row) {
+  const key = row.kind === "vram" ? t("instance.memKeyVram") : t("instance.memKeyRam");
+  const total = row.total ? `<span class="of num">/ ${esc(formatMiB(row.total))}</span>` : "";
+  const aria = memAriaText(row);
+  return `<div class="mem-row">
+      <div class="mem-l"><span class="k">${esc(key)}</span><span class="v num">${esc(formatMiB(row.cur))}</span>${total}<span class="of">${esc(t("instance.memNow"))}</span></div>
+      <div class="bar" role="meter" aria-label="${esc(aria)}" aria-valuetext="${esc(aria)}" aria-valuemin="0" aria-valuemax="${num1(row.scale)}" aria-valuenow="${num1(row.cur)}">
+        <div class="fill ${row.kind}${row.hot ? " hot" : ""}" style="width:${row.fillPct}%"></div>
+        <div class="pk" style="left:${row.peakPct}%" aria-hidden="true"></div>
+        <div class="avg" style="left:${row.avgPct}%" aria-hidden="true"></div>
+      </div>
+      <div class="stats3">${esc(memStatsLabel(row))}</div>
+    </div>`;
+}
+
+/**
+ * 一个实例的内存条 HTML（实例卡片与详情弹窗共用）。没有 memory（旧 hub /
+ * 尚未采样）或没有当前读数时返回 ""；VRAM 从未读到时只画 RAM 行。
+ * 整块挂 title 提示：无障碍文本 + 采样来源 / 采样次数明细。
+ */
+export function memBlockHtml(mem) {
+  const ramp = memRowModel("ram", mem);
+  const vram = memRowModel("vram", mem);
+  const rows = [ramp, vram].filter(Boolean);
+  if (!rows.length) return "";
+  const tip = rows.map(memAriaText);
   if (vram) {
     tip.push(t("instance.memTipVram", {
-      cur: formatMemBytes(mem.vramBytes),
-      peak: formatMemBytes(mem.vramPeakBytes),
-      avg: formatMemBytes(mem.vramAvgBytes),
+      cur: formatMiB(vram.cur), peak: formatMiB(vram.peak), avg: formatMiB(vram.avg),
       source: t("instance.memSource." + (mem.vramSource || "none"))
     }));
   }
@@ -75,7 +204,8 @@ export function memoryCardLines(mem) {
     n: mem.samples != null ? mem.samples : 0,
     state: mem.busy ? t("instance.memBusy") : t("instance.memIdle")
   }));
-  return { ram, vram, title: tip.join("\n") };
+  const legend = `<div class="mem-legend"><span><i class="pk"></i>${esc(t("instance.memStatPeak"))}</span><span><i class="avg"></i>${esc(t("instance.memStatAvg"))}</span></div>`;
+  return `<div class="mem" title="${esc(tip.join("\n"))}">${rows.map(memRowHtml).join("")}${legend}</div>`;
 }
 
 export const STATUS_CLASS = { STARTING: "starting", READY: "ready", ERROR: "error", STOPPED: "stopped" };
@@ -165,6 +295,7 @@ export function renderInstanceList() {
       label: t("instance.create"),
       onClick: openLaunchModal
     });
+    syncBusyTimer();
     return;
   }
   for (const inst of sorted) {
@@ -173,18 +304,14 @@ export function renderInstanceList() {
     const card = document.createElement("div");
     const statusClass = STATUS_CLASS[inst.status] || "stopped";
     card.className = "card" + (inst.id === activeInstanceId ? " selected" : "");
-    // 有活跃任务（QUEUED/RUNNING）时追加转圈“工作中”徽标，随 2s 轮询自动出现/消失
-    const workingBadge = (inst.taskCount || 0) > 0
-      ? ` <span class="badge working">${esc(inst.taskCount > 1 ? t("instance.workingCount", { n: inst.taskCount }) : t("instance.working"))}</span>`
+    // 忙碌只有一个徽标：「生成中…」+ 脉冲圆点 + 计时。SSE 与轮询合并成同一个
+    // 来源（resolveBusy），原先轮询的「工作中」徽标已合并进来。
+    const busy = busyState(inst);
+    const busyBadge = busy.busy
+      ? ` <span class="badge generating">${esc(t("instance.generating"))}${busyElapsedHtml(busy.startMs)}</span>`
       : "";
-    const genBadge = isGenerating(inst.id)
-      ? ` <span class="badge generating">${esc(t("instance.generating"))}</span>`
-      : "";
-    const mem = memoryCardLines(inst.memory);
-    const memHtml = mem
-      ? `<div class="card-mem" title="${esc(mem.title)}">${esc(mem.ram)}${mem.vram ? "<br>" + esc(mem.vram) : ""}</div>`
-      : "";
-    let html = `<div class="card-title">${esc(inst.instanceName || inst.modelId)} <span class="badge ${statusClass}">${esc(statusText(inst.status))}</span>${workingBadge}${genBadge}</div>
+    const memHtml = memBlockHtml(inst.memory);
+    let html = `<div class="card-title">${esc(inst.instanceName || inst.modelId)} <span class="badge ${statusClass}">${esc(statusText(inst.status))}</span>${busyBadge}</div>
       <div class="card-family">${esc(modelName)} ｜ #${esc(inst.id)}</div>
       <div class="card-desc">${esc(inst.backend)}${inst.device != null ? ":" + esc(inst.device) : ""} ｜ ${esc(t("instance.port"))} ${esc(inst.port)}${inst.executableName ? " ｜ " + esc(inst.executableName) : ""}</div>${memHtml}`;
     if (inst.status === "ERROR" && inst.errorMessage) {
@@ -206,6 +333,7 @@ export function renderInstanceList() {
     }
     list.appendChild(card);
   }
+  syncBusyTimer();
 }
 
 export function updateInstanceBar() {
@@ -242,10 +370,14 @@ export function updateInstanceBar() {
   pill.textContent = has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
 
+  // 与卡片同一个忙碌来源（resolveBusy）；徽标文案由 data-i18n 维护，计时片段
+  // 每次重画后重挂（共享计时器按 .busy-elapsed 刷新）。
   const gen = $("instance-generating");
   if (gen) {
+    const busy = busyState(instances.find(i => i.id === activeInstanceId));
     gen.textContent = t("instance.generating");
-    gen.classList.toggle("hidden", !(has && isGenerating(activeInstanceId)));
+    if (busy.busy) gen.insertAdjacentHTML("beforeend", busyElapsedHtml(busy.startMs));
+    gen.classList.toggle("hidden", !(has && busy.busy));
   }
 
   for (const id of SUBMIT_BTNS) {
@@ -272,6 +404,7 @@ export function updateInstanceBar() {
       hint.textContent = hintId === "tts-ready-hint" ? t("tts.needReady") : t("submit.needReady");
     }
   }
+  syncBusyTimer();
 }
 
 $("instance-select").onchange = (e) => {
@@ -334,12 +467,11 @@ export function renderInstanceDetail(inst) {
     val.textContent = v;
     addRow(k, val);
   }
-  const memLines = memoryCardLines(inst.memory);
-  if (memLines) {
+  const memHtml = memBlockHtml(inst.memory);
+  if (memHtml) {
     const val = document.createElement("span");
-    val.className = "kv-val pre";
-    val.textContent = memLines.vram ? `${memLines.ram}\n${memLines.vram}` : memLines.ram;
-    val.title = memLines.title;
+    val.className = "kv-val mem-kv";
+    val.innerHTML = memHtml;
     addRow(t("instance.field.memory"), val);
   }
   const opts = inst.sessionOptions || {};

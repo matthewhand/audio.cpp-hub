@@ -31,7 +31,15 @@ export function modelConfigured(m) {
 
 /* 正在生成的实例 id。task-events.js 就地增删（SSE task.started / 终态），
    instances.js 只读。放在这个叶子模块里，避免两边互相 import。 */
-export const generatingIds = new Set();
-export function isGenerating(id) {
-  return generatingIds.has(id);
-}
+
+/* SSE 已知的「正在生成」状态（task-events.js 写，instances.js 只读）：
+   busyStarts —— instanceId → 该实例当前 RUNNING 任务的 task.started 时间戳
+   （毫秒；事件没带 ts 时为 null），有键即「SSE 说这个实例在忙」；流断开时
+   整表清空（任务可能已经在断流期间结束，留着会让徽标永远亮着），busy 判定
+   此后整体回退到轮询数据；
+   runningStarts —— instanceId → RUNNING 任务的 startedAt，来自任务轮询
+   （tasks.js 写），SSE 不可用时给「生成中…」补一个计时起点。
+   两份表同源互补：busyStarts 即时但不覆盖重连前的任务，runningStarts 慢一点
+   却总能从轮询数据里拿到。 */
+export const busyStarts = new Map();
+export const runningStarts = new Map();

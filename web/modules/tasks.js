@@ -16,12 +16,21 @@ import { showToast } from "./async-ui.js";
 import { $, Api, el, markRowEnter, t } from "./dom.js";
 import { refreshInstances } from "./instances.js";
 import { loadHistory, privacyOn, renderSidebarList } from "./sidebar.js";
-import { activeInstanceId, selectedModel } from "./state.js";
+import { activeInstanceId, runningStarts, selectedModel } from "./state.js";
 
 export const activePolls = new Map(); // taskId → Api.poll 句柄（stop() 即无定时器/无在途请求）
 export const taskViews = new Map(); // taskId → 已知任务（进行中 + 已完成保留展示），供侧栏渲染
 export const taskDetails = new Map(); // taskId → 已展开的完整结果文本（侧栏「详情」缓存，随任务记录清除）
 export const TASK_VERB = { tts: "tts.verb", asr: "asr.verb", sep: "sep.verb", music: "music.verb", other: "other.verb" };
+
+/* 实例卡片「生成中…」计时的兜底起点：本模块轮询任务时顺带把 RUNNING 任务的
+   startedAt 登记到 state.runningStarts（SSE 不可用时 resolveBusy 用它）。
+   同实例任务串行，终态即删——不会删掉同实例另一条 RUNNING 的起点。 */
+function noteRunningStart(instanceId, startedAt) {
+  if (!instanceId) return;
+  if (startedAt) runningStarts.set(instanceId, startedAt);
+  else runningStarts.delete(instanceId);
+}
 
 export async function submitTask(req) {
   const task = await Api.post("/api/tasks", { instanceId: activeInstanceId, request: req });
@@ -47,6 +56,7 @@ export async function cancelTask(taskId) {
 
 export function trackTask(task) {
   taskViews.set(task.id, task);
+  noteRunningStart(task.instanceId, task.status === "RUNNING" ? task.startedAt : null);
   renderSidebarList();
   if (activePolls.has(task.id)) return;
   if (task.status !== "QUEUED" && task.status !== "RUNNING") return;
@@ -54,6 +64,7 @@ export function trackTask(task) {
   let handle = null; // 句柄在 poll() 返回后才有值；回调（微任务）触发时已赋值
   handle = Api.poll("/api/tasks/{id}", (cur) => {
     taskViews.set(cur.id, cur);
+    noteRunningStart(cur.instanceId, cur.status === "RUNNING" ? cur.startedAt : null);
     renderSidebarList();
     if (!isRunning(cur)) {
       activePolls.delete(task.id);
@@ -67,8 +78,10 @@ export function trackTask(task) {
         // 任务记录已被淘汰/删除：停止轮询并移出侧栏
         handle.stop();
         activePolls.delete(task.id);
+        const gone = taskViews.get(task.id);
         taskViews.delete(task.id);
         taskDetails.delete(task.id);
+        noteRunningStart(gone && gone.instanceId, null);
         renderSidebarList();
       }
       // 其余错误（网络抖动 / 5xx / 超时）视为瞬时，下轮再试

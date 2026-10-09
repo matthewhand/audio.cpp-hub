@@ -107,9 +107,12 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
   "ramBytes": 644245094,
   "ramPeakBytes": 1073741824,
   "ramAvgBytes": 751619277,
+  "ramIdleBytes": 637330636,
   "vramBytes": 3865470566,
   "vramPeakBytes": 4402341478,
   "vramAvgBytes": 3972844749,
+  "vramIdleBytes": 3906249728,
+  "vramTotalBytes": 8589934592,
   "vramSource": "nvidia-smi",
   "samples": 12,
   "sampledAt": 1756400000000,
@@ -117,8 +120,18 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 }
 ```
 
-- `vramSource` 为 `drm`（Linux DRM fdinfo，按 `drm-client-id` 去重）或 `nvidia-smi`
+| 字段 | 含义 |
+| --- | --- |
+| `ramBytes` / `vramBytes` | 当前读数（进程 RSS / 进程占用的显存） |
+| `ramPeakBytes` / `vramPeakBytes` | 自实例启动以来的最大值 |
+| `ramAvgBytes` / `vramAvgBytes` | 时间加权平均（见上文） |
+| `ramIdleBytes` / `vramIdleBytes` | **空闲基线**：实例没有 RUNNING 任务期间观察到的最小值（「这个模型闲着时占多少」）。在采到第一个空闲样本之前省略 |
+| `vramTotalBytes` | 该进程所在 GPU 的显存总量（前端显存条的比例尺）。只有答案确定时才给：单 GPU 直接用那张卡的；多 GPU 且进程映射不到具体卡时省略（宁缺勿错） |
+| `vramSource` | `drm`（Linux DRM fdinfo，按 `drm-client-id` 去重）或 `nvidia-smi` |
+| `samples` / `sampledAt` / `busy` | 采样次数 / 最后一次采样时间（毫秒）/ 当前是否有 RUNNING 任务 |
+
 - `busy` 为真表示该实例当前有 RUNNING 任务，采样间隔约 1s；空闲约 10s
+- `vramTotalBytes` 是尽力而为：nvidia 走 `nvidia-smi --query-gpu=index,memory.total`（整个 hub 生命周期只查一次，与进程查询共用超时与失败退避），AMD 走 `/sys/class/drm/card*/device/mem_info_vram_total`（同样只读一次，且只有机器上只有一张卡时才认）
 - 采样失败不会让这个接口报错。fan-out 聚合 `GET /api/instances` 时原样带上 `memory`（多出来的字段不影响路由）
 
 ### `POST /api/instances`

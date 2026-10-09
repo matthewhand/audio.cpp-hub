@@ -36,9 +36,9 @@ audio.cpp-hub 前端为无构建的原生 HTML/CSS/JS，动效全部由 CSS 令�
 | 按钮按压 | `button:active { transform: scale(.97) }`，`.btn` 叠加 `translateY` | 所有按钮 |
 | 复制确认 | `button.copied` + `copy-pop`（由 `motion.js` 触发，边框转 `--ok`） | ASR 复制等复制按钮 |
 | 实例状态强调 | `.state-flip`（`motion.js` 观察 `#instance-pill` class 变化） | 无就绪 → 就绪等状态翻转 |
-| 任务状态反馈 | `.badge.working` 旋转 + `.task-row .history-meta` 主色文字；状态由轮询替换行内容 | 排队 → 运行 → 完成/失败 |
+| 任务状态反馈 | `.badge.generating` 的脉冲圆点 + `.busy-elapsed` 计时 + `.task-row .history-meta` 主色文字；状态由轮询 / SSE 替换行内容 | 排队 → 运行 → 完成/失败 |
 | 主题切换过渡 | `html.theme-switching` 下主要面板补 `background/border/color` 过渡 | 切换深浅色 |
-| 加载旋转 | `.spinner` / `.badge.working::before` 的 `spin` | 任务等待、实例工作中 |
+| 加载旋转 | `.spinner` 的 `spin`（`.badge.working::before` 同款，保留给 styleguide 的组件示例） | 任务等待、实例工作中 |
 | 启动脉冲 | `.badge.starting` 的 `pulse` | 实例 STARTING |
 | 不确定进度 | `.dl-progress-fill.indeterminate` 的 `shimmer` 流光 | 大小未知的下载 |
 | 进度增长 | `.dl-progress-fill` 的 `width` 过渡 + `.row-enter` 的 `bar-grow` | 已知百分比的下载 |
@@ -62,7 +62,7 @@ audio.cpp-hub 前端为无构建的原生 HTML/CSS/JS，动效全部由 CSS 令�
 避免整列表反复闪动，进入动画只对「首次出现」的行播放（`markRowEnter` 记录
 `enteredRows`）。因此**行内的状态文字/徽标切换无法用 CSS transition 平滑过渡**
 （节点常被替换），状态变化改由颜色（`.badge.ready/.starting/.error`）、
-`.badge.working` 旋转、`.state-flip`（实例状态条）等「无过渡但清晰」的方式表达。
+`.badge.generating` 的脉冲圆点、`.state-flip`（实例状态条）等「无过渡但清晰」的方式表达。
 这是刻意的动效预算取舍，不是缺陷。
 
 ## 无障碍 / 减少动态效果
@@ -72,6 +72,8 @@ audio.cpp-hub 前端为无构建的原生 HTML/CSS/JS，动效全部由 CSS 令�
 - 全局把 `animation-duration` / `transition-duration` 压到 `0.01ms`，迭代次数 1。
 - **例外保留**（必要反馈，略放慢而非静止）：`.spinner`、`.badge.working::before`、
   `.badge.starting`。
+- 「生成中…」的脉冲圆点（`.badge.generating::before` 的 `badge-dot`）是装饰，
+  与其它纯装饰一样 `animation: none` 降级为常亮点——徽标文字与计时本身已是状态反馈。
 - 纯装饰（流光 `.skeleton`、`expand-soft`、`state-flip`、`copy-pop`、PWA 提示条）
   一律 `animation: none`。
 - `motion.js` 在减少动态效果时不加运动类（只保留颜色/文本变化）。
