@@ -165,7 +165,7 @@ export function updateInstanceBar() {
       const element = $(id);
       if (element.textContent !== message) element.textContent = message;
     }
-    const switchButton = $("instance-context-switch");
+    const switchButton = context.querySelector(".instance-context-switch");
     switchButton.classList.toggle("hidden", !alternative);
     switchButton.onclick = alternative ? () => go("#/model/" + encodeURIComponent(alternative.id)) : null;
     if (alternative) switchButton.textContent = t("instance.readiness.switch", { model: altName });
