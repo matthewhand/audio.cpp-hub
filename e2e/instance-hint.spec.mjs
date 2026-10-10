@@ -46,9 +46,7 @@ test("two other models ready: show a count", async ({ page }) => {
     instances: [makeInstance("index_tts2"), makeInstance("miotts")]
   });
   await openApp(page, backend, { modelId: selectedModelId, lang: "en" });
-  await expect(page.locator("#instance-context-hint")).toContainText(
-    "2 other instances are ready"
-  );
+  await expect(page.locator("#instance-context-hint")).toContainText("2 other instances are ready");
 });
 
 test("matching ready instance: hint disappears and submission enables", async ({ page }) => {
