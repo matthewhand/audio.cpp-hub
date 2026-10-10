@@ -140,6 +140,18 @@ export function updateInstanceBar() {
   pill.textContent = has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
 
+  // Explain the mismatch between ready instances in the sidebar and the
+  // selected model's empty selector, without announcing every poll.
+  const hint = $("instance-context-hint");
+  const selected = models.find(m => m.id === selectedModelId);
+  const modelName = selected ? I18N.pick(selected, "displayName") : selectedModelId;
+  const otherReady = instances.filter(i => i.status === "READY" && i.modelId !== selectedModelId).length;
+  const key = otherReady === 0 ? "instance.hintNoReady"
+    : otherReady === 1 ? "instance.hintOtherReadyOne" : "instance.hintOtherReadyMany";
+  const message = !has && selectedModelId ? t(key, { model: modelName, count: otherReady }) : "";
+  if (hint.textContent !== message) hint.textContent = message;
+  hint.classList.toggle("hidden", !message);
+
   for (const id of SUBMIT_BTNS) {
     const btn = $(id);
     btn.disabled = !has;
