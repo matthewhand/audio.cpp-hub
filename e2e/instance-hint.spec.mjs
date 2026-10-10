@@ -29,9 +29,7 @@ test("no ready instances: clearly explain how to start selected model", async ({
   await expect(page.locator("#instance-pill")).toHaveClass(/warn/);
 });
 
-test("one other model ready: explain mismatch, offer switch, capture UI", async ({
-  page
-}, testInfo) => {
+test("other model ready: offer switch and capture UI", async ({ page }, testInfo) => {
   const backend = new MockBackend({ instances: [makeInstance("index_tts2")] });
   await openApp(page, backend, { modelId: selectedModelId, lang: "en" });
   const card = page.locator("#instance-context");
