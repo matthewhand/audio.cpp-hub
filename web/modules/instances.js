@@ -156,7 +156,10 @@ export function updateInstanceBar() {
     }
     const choices = context.querySelector(".instance-context-choices");
     choices.classList.toggle("hidden", options.length === 0);
+    const heading = t("instance.readiness.available");
+    choices.querySelector(".instance-context-choices-heading").textContent = heading;
     const list = context.querySelector(".instance-context-options");
+    list.setAttribute("aria-label", heading);
     const signature = I18N.lang() + JSON.stringify(options.map(([id, i]) =>
       [id, i.backend, i.port]));
     if (list.dataset.signature !== signature) {
