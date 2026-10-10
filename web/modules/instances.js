@@ -20,7 +20,7 @@ export function submitLabel(id) {
 
 export let instances = [];
 
-/* ---------- 实例列表 + 状态条（每 2s 轮询） ---------- */
+
 export let instancePoller = null;
 let instancesLoaded = false;
 
@@ -36,7 +36,7 @@ export function applyInstances(data) {
   renderInstanceList();
   updateInstanceBar();
 }
-/* Keep prior data on transient polling failures. */
+
 export function onInstancesError(e) {
   if (instances.length === 0) renderListError($("instance-list"), t("common.loadFailed") + t("common.colon") + e.message, refreshInstances);
 }
@@ -46,7 +46,7 @@ export function refreshInstances() {
   return Api.list("/api/instances").then(applyInstances).catch(onInstancesError);
 }
 
-/* Api.poll retains single-flight and visibility-aware refresh semantics. */
+
 export function startInstancePolling() {
   if (!instancesLoaded) showSkeleton($("instance-list"), 3);
   instancePoller = Api.poll("/api/instances", applyInstances, { list: true, onError: onInstancesError });
@@ -56,7 +56,7 @@ export function startInstancePolling() {
 export function renderInstanceList() {
   const list = $("instance-list");
   list.removeAttribute("aria-busy");
-  // Keep ready instances first.
+  
   const order = { READY: 0, STARTING: 1 };
   const sorted = [...instances].sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2));
   list.innerHTML = "";
@@ -120,7 +120,7 @@ export function updateInstanceBar() {
   } else {
     setActiveInstanceId(null);
   }
-  // History is model-scoped: changing instances must not refresh history DOM.
+  
   select.disabled = !has;
   $("instance-stop").disabled = !has;
   $("instance-detail").disabled = !has;
@@ -134,7 +134,7 @@ export function updateInstanceBar() {
   pill.textContent = has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
 
-  // Keep ready alternatives selectable by model; never select one automatically.
+  
   const context = $("instance-context");
   const selected = models.find(m => m.id === selectedModelId);
   const showContext = !has && !!selected;
@@ -160,8 +160,7 @@ export function updateInstanceBar() {
     choices.querySelector(".instance-context-choices-heading").textContent = heading;
     const list = context.querySelector(".instance-context-options");
     list.setAttribute("aria-label", heading);
-    const signature = I18N.lang() + JSON.stringify(options.map(([id, i]) =>
-      [id, i.backend, i.port]));
+    const signature = I18N.lang() + options.map(([id, i]) => id + i.port + i.backend).join('|');
     if (list.dataset.signature !== signature) {
       list.dataset.signature = signature;
       list.replaceChildren();
@@ -200,7 +199,7 @@ $("instance-stop").onclick = async () => {
   refreshInstances();
 };
 
-/* ---------- 实例详情弹窗 ---------- */
+
 export const instanceDetailModal = $("instance-detail-modal");
 export let detailInstanceId = null;
 export function openInstanceDetail(inst) {
