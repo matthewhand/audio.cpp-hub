@@ -569,9 +569,6 @@ footer { flex: none; }
   border: 1px solid var(--warn);
   border-radius: 10px;
   background: rgba(251, 191, 36, 0.07);
-  color: var(--text-dim);
-  font-size: 13px;
-  line-height: 1.5;
 }
 .instance-context-hint::before {
   content: "ⓘ";
