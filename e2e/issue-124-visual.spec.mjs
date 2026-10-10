@@ -49,7 +49,10 @@ function baselineCss(css) {
     "header { padding: 10px 14px;gap: var(--space-2);flex-wrap:wrap; }",
     "header { padding: 10px 14px; gap: var(--space-2); }"
   );
-  return result;
+  const studioMarker = "/* #124 Audio Studio v2:";
+  const studioIndex = result.indexOf(studioMarker);
+  if (studioIndex < 0) throw new Error("Missing Audio Studio v2 stylesheet");
+  return result.slice(0, studioIndex);
 }
 
 test("issue #124: baseline vs improved TTS workspace (desktop and mobile)", async ({
@@ -59,7 +62,7 @@ test("issue #124: baseline vs improved TTS workspace (desktop and mobile)", asyn
     { name: "desktop", width: 1440, height: 900 },
     { name: "mobile", width: 390, height: 844 }
   ]) {
-    for (const variant of ["before", "after"]) {
+    for (const variant of ["before", "after", "after-dark"]) {
       const context = await browser.newContext({
         viewport: { width: layout.width, height: layout.height },
         deviceScaleFactor: 1,
@@ -99,7 +102,11 @@ test("issue #124: baseline vs improved TTS workspace (desktop and mobile)", asyn
           }
         ]
       });
-      await openApp(page, backend, { modelId: "breeze-tts", lang: "en", theme: "light" });
+      await openApp(page, backend, {
+        modelId: "breeze-tts",
+        lang: "en",
+        theme: variant === "after-dark" ? "dark" : "light"
+      });
       await expect(page.locator("#panel-tts")).toBeVisible();
       await expect(page.locator("#instance-pill")).toHaveClass(/ok/);
       await page
@@ -107,6 +114,21 @@ test("issue #124: baseline vs improved TTS workspace (desktop and mobile)", asyn
         .fill(
           "The morning light enters quietly through the window. Each word finds its own rhythm, and the voice follows."
         );
+      await expect(page.locator("#tts-text")).toBeFocused();
+      await expect(page.locator("#tts-submit")).toBeVisible();
+      if (variant !== "before") {
+        const editorBox = await page.locator("#tts-text").boundingBox();
+        const generateBox = await page.locator("#tts-submit").boundingBox();
+        const toolbarBox = await page.locator("#instance-bar").boundingBox();
+        expect(editorBox).not.toBeNull();
+        expect(generateBox).not.toBeNull();
+        expect(toolbarBox).not.toBeNull();
+        expect(editorBox.height).toBeGreaterThan(layout.name === "mobile" ? 180 : 225);
+        expect(toolbarBox.x + toolbarBox.width).toBeLessThanOrEqual(layout.width + 1);
+        if (layout.name === "mobile") {
+          expect(generateBox.width).toBeGreaterThan(260);
+        }
+      }
       await testInfo.attach(`issue124-${variant}-${layout.name}.png`, {
         body: await page.screenshot({ animations: "disabled", fullPage: true }),
         contentType: "image/png"
