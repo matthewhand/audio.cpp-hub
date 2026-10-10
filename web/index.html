@@ -81,7 +81,15 @@
           <button id="launch-open-btn" class="btn" data-i18n="instance.create">启动模型</button>
         </div>
 
-        <p id="instance-context-hint" class="instance-context-hint hidden" role="status" aria-live="polite" aria-atomic="true"></p>
+        <section id="instance-context" class="card instance-context hidden" role="status" aria-live="polite" aria-atomic="true">
+          <span class="instance-context-mark" aria-hidden="true">!</span>
+          <div class="instance-context-content">
+            <div id="instance-context-kicker" class="instance-context-eyebrow"></div>
+            <strong id="instance-context-title" class="instance-context-title"></strong>
+            <p id="instance-context-copy" class="instance-context-copy"></p>
+          </div>
+          <button id="instance-context-switch" type="button" class="btn-ghost hidden"></button>
+        </section>
 
         <!-- TTS 面板 -->
         <div class="card panel-card" id="panel-tts">
