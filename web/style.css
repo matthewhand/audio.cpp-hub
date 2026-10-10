@@ -2185,3 +2185,71 @@ html.theme-switching header {
   }
   details::details-content { transition: none !important; }
 }
+
+/* Issue #124: TTS workspace hierarchy (presentation only, theme-safe). */
+#workspace { max-width: 960px; }
+
+#instance-bar {
+  flex-wrap: wrap;
+  column-gap: var(--space-3);
+  row-gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--accent);
+}
+#instance-select { min-width: 0; flex: 1 1 210px; }
+#instance-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+}
+#instance-detail, #instance-stop, #launch-open-btn { min-height: 36px; }
+
+#panel-tts { padding: var(--space-6); }
+#panel-tts > h2 {
+  margin: 0 0 var(--space-5);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.025em;
+}
+#tts-text-block {
+  display: block;
+  margin-bottom: var(--space-5);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+#tts-text {
+  display: block;
+  width: 100%;
+  min-height: 176px;
+  margin-top: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+}
+#tts-text::placeholder { color: var(--text-dim); opacity: 1; }
+#panel-tts #tts-advanced {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+#tts-submit { min-height: 44px; min-width: 160px; margin-top: var(--space-3); }
+
+@media (max-width: 720px) {
+  #instance-bar { gap: var(--space-2); }
+  #instance-bar .bar-label { flex: 1 1 auto; }
+  #instance-select { order: 2; flex: 1 1 100%; }
+  #instance-detail, #instance-stop, #launch-open-btn {
+    order: 3;
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+  #panel-tts { padding: var(--space-4); }
+  #panel-tts > h2 { margin-bottom: var(--space-4); }
+  #tts-text { min-height: 160px; padding: var(--space-3); }
+  #tts-submit { width: 100%; }
+}
