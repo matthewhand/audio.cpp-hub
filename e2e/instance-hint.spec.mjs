@@ -48,7 +48,7 @@ test("two different models ready: offer both and capture UI", async ({ page }, t
   await openApp(page, backend, { modelId: selectedModelId, lang: "en" });
   const options = page.locator(".instance-context-option");
   await expect(options).toHaveCount(2);
-  await expect(page.locator("#instance-context")).toContainText("2 ready instances");
+  await expect(page.locator("#instance-context")).toContainText("2 other instances are ready");
   await testInfo.attach("readiness-multi-model-after", {
     body: await page.screenshot({ fullPage: true }),
     contentType: "image/png"
@@ -62,7 +62,7 @@ test("two different models ready: offer both and capture UI", async ({ page }, t
 test("unregistered ready model: never offer a broken model switch", async ({ page }) => {
   const backend = new MockBackend({ instances: [makeInstance("unknown-model")] });
   await openApp(page, backend, { modelId: selectedModelId, lang: "en" });
-  await expect(page.locator("#instance-context")).toContainText("not listed here");
+  await expect(page.locator("#instance-context")).toContainText("not listed");
   await expect(page.locator(".instance-context-option")).toHaveCount(0);
 });
 
