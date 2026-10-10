@@ -140,17 +140,36 @@ export function updateInstanceBar() {
   pill.textContent = has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
 
-  // Explain the mismatch between ready instances in the sidebar and the
-  // selected model's empty selector, without announcing every poll.
-  const hint = $("instance-context-hint");
+  // A selected model cannot use another model's READY instance. Show the
+  // available alternative and a route-safe switch, but never change selection
+  // automatically. Avoid changing unchanged text on each 2-second poll.
+  const context = $("instance-context");
   const selected = models.find(m => m.id === selectedModelId);
-  const modelName = selected ? I18N.pick(selected, "displayName") : selectedModelId;
-  const otherReady = instances.filter(i => i.status === "READY" && i.modelId !== selectedModelId).length;
-  const key = otherReady === 0 ? "instance.hintNoReady"
-    : otherReady === 1 ? "instance.hintOtherReadyOne" : "instance.hintOtherReadyMany";
-  const message = !has && selectedModelId ? t(key, { model: modelName, count: otherReady }) : "";
-  if (hint.textContent !== message) hint.textContent = message;
-  hint.classList.toggle("hidden", !message);
+  const showContext = !has && !!selected;
+  context.classList.toggle("hidden", !showContext);
+  if (showContext) {
+    const modelName = I18N.pick(selected, "displayName");
+    const otherReady = instances.filter(i => i.status === "READY" && i.modelId !== selectedModelId);
+    const otherModelIds = [...new Set(otherReady.map(i => i.modelId))];
+    const alternative = otherModelIds.length === 1
+      ? models.find(m => m.id === otherModelIds[0]) : null;
+    const altName = alternative ? I18N.pick(alternative, "displayName") : "";
+    const copyKey = alternative ? "instance.readiness.alternative"
+      : otherReady.length ? "instance.readiness.others" : "instance.readiness.none";
+    const values = { model: modelName, alternative: altName, count: otherReady.length };
+    for (const [id, message] of [
+      ["instance-context-kicker", t("instance.readiness.kicker")],
+      ["instance-context-title", t("instance.readiness.title", values)],
+      ["instance-context-copy", t(copyKey, values)]
+    ]) {
+      const element = $(id);
+      if (element.textContent !== message) element.textContent = message;
+    }
+    const switchButton = $("instance-context-switch");
+    switchButton.classList.toggle("hidden", !alternative);
+    switchButton.onclick = alternative ? () => go("#/model/" + encodeURIComponent(alternative.id)) : null;
+    if (alternative) switchButton.textContent = t("instance.readiness.switch", { model: altName });
+  }
 
   for (const id of SUBMIT_BTNS) {
     const btn = $(id);
