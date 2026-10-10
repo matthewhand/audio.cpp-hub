@@ -28,7 +28,7 @@ import { renderActivity, startActivity } from "./modules/activity.js";
 import { renderCharCount, startCharCount } from "./modules/char-count.js";
 import { renderHubChip, startHubChip } from "./modules/hub-chip.js";
 import { renderLiveTicker, startLiveTicker } from "./modules/live-ticker.js";
-import { loadModels, renderModelList, updateQuickLaunchTitle } from "./modules/models.js";
+import { loadModels, renderModelList, startModelsPanel, updateQuickLaunchTitle } from "./modules/models.js";
 import { buildEmotionSliders, renderWorkspace } from "./modules/panels.js";
 import { applyRoute } from "./modules/routing.js";
 import { closeSettingsModal, loadExecutables, relocalizeSettings, updateLaunchExec } from "./modules/settings-lazy.js";
@@ -126,6 +126,7 @@ startDownloadsPolling();
 startHubChip();
 startLiveTicker();
 startActivity();
+startModelsPanel();
 startCharCount();
 
 loadModels();

@@ -16,7 +16,9 @@ export async function openApp(page, backend, prefs = {}) {
     }
   }, prefs);
   await page.goto("/" + (prefs.hash || ""));
-  await expect(page.locator("#model-list .card-title").first()).toBeVisible();
+  /* 只等「挂上文档」：左栏模型区是可折叠的 <details>（有实例时默认收起），
+     卡片在折叠态下不可见但已渲染。展开态由各用例按需点开。 */
+  await expect(page.locator("#model-list .card-title").first()).toBeAttached();
 }
 
 /** 等待指定实例就绪、且工作区提交按钮可用（updateInstanceBar 异步完成）。 */

@@ -201,7 +201,7 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | DELETE | `/api/profiles/{param}` | `web/modules/launch.js` |
 | PUT | `/api/profiles/{param}` | `web/modules/launch.js` |
 | GET | `/api/stats` | `web/modules/hub-chip.js`, `web/modules/stats.js` |
-| GET | `/api/tasks` | `web/modules/activity.js` |
+| GET | `/api/tasks` | `web/modules/activity.js`, `web/modules/live-ticker.js` |
 | POST | `/api/tasks` | `web/modules/tasks.js` |
 | GET | `/api/tasks?modelId={param}` | `web/modules/tasks.js` |
 | DELETE | `/api/tasks/{param}` | `web/modules/sidebar.js`, `web/modules/tasks.js` |

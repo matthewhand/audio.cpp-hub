@@ -196,6 +196,15 @@ const KIB = 1024;
  * Budgets sit a little above those numbers; CSS grew with the tokens and the
  * strip geometry, JS with medianRtf / the RTF cache and the new strip builder.
  *
+ * 2026-10 concept v2 round (measured): the text counter learned word counting
+ * (Intl.Segmenter when available), the memory bars gained the idle hollow
+ * circle + the marker legend line above the instance list, ready cards show
+ * the idle as a clock pill, and the left rail's Models section became a
+ * collapsible <details> with a count badge. All of it is on the initial view.
+ * `npm run perf:budget` on this tree: JS raw 434.1 KiB, JS gzip 159.7,
+ * CSS raw 87.8, CSS gzip 23.6, JS+CSS gzip 183.2, 37 subresource requests.
+ * Budgets sit a little above those numbers.
+ *
  * What is left, and why none of it was done here (measured, not guessed):
  *
  *   | 候选                            | gzip   | 不做的原因                                              |
@@ -210,11 +219,11 @@ const KIB = 1024;
  *   | `pwa.js`                        | 1.7 K  | 渐进增强而非点击才用；挪走只省 1 次请求换一个形状变更。    |
  */
 export const BUDGETS = {
-  jsRawKiB: 430, // 初始 JS 未压缩合计（实测 428.3）
-  jsGzipKiB: 159, // 初始 JS gzip 传输合计（实测 157.4）
-  cssRawKiB: 86, // 初始 CSS 未压缩（实测 84.6）
-  cssGzipKiB: 23, // 初始 CSS gzip 传输（实测 22.6）
-  totalGzipKiB: 182, // JS + CSS gzip 合计（实测 180.0，不含 HTML，HTML 很小)
+  jsRawKiB: 437, // 初始 JS 未压缩合计（实测 434.1）
+  jsGzipKiB: 162, // 初始 JS gzip 传输合计（实测 159.7）
+  cssRawKiB: 89, // 初始 CSS 未压缩（实测 87.8）
+  cssGzipKiB: 24, // 初始 CSS gzip 传输（实测 23.6）
+  totalGzipKiB: 185, // JS + CSS gzip 合计（实测 183.2，不含 HTML，HTML 很小)
   subresourceRequests: 38, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 37）
   ttiTargetMs: 1500 // 目标 TTI（本地/局域网，中端笔电）——浏览器指标，本脚本不测量
 };

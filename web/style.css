@@ -474,16 +474,65 @@ footer { flex: none; }
 .bar .fill.vram { background: var(--mem-vram); }
 /* 显存吃到比例尺 85% 以上：渐变提示「快满了」 */
 .bar .fill.hot { background: linear-gradient(90deg, var(--mem-vram), var(--mem-vram-hot)); }
+/* 极小但非零的占用（11 MiB / 8 GiB ≈ 0.1%）在 300px 宽的条上不足一像素：
+   给了 data-w 就保留 2px 的最小可见宽度；data-w="0"（真的没有占用）不给，
+   不假装有一小道填充。data-w="0" 时 applyMemBars 仍会写 width:0%。 */
+.bar .fill[data-w]:not([data-w="0"]) { min-width: 2px; }
 /* 峰值（深）/ 均值（灰）刻度线：纯装饰，aria-hidden，略微高出条身 */
 .bar .avg, .bar .pk { position: absolute; top: -3px; bottom: -3px; width: 2px; border-radius: 2px; }
 .bar .avg { background: var(--mem-avg); }
 .bar .pk { background: var(--mem-peak); }
+/* 空闲基线（空心圆）：同一比例尺下的「这个模型闲着时占多少」。有填充才能看出
+   空心，所以底色取内存块的底色，描边走弱化色；采到第一个空闲样本才渲染。 */
+.bar .idle {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1.5px solid var(--text-dim);
+  box-sizing: border-box;
+}
+.bar .avg, .bar .pk, .bar .idle { z-index: 2; }
 .stats3 { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 10.5px; color: var(--text-dim); }
 /* 刻度线图例：每张卡片只在内存块末尾出现一次 */
-.mem-legend { display: flex; gap: 10px; margin-top: 6px; font-size: 10px; color: var(--text-dim); }
+.mem-legend { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 6px; font-size: 10px; color: var(--text-dim); }
 .mem-legend i { display: inline-block; width: 2px; height: 8px; margin-right: 4px; vertical-align: -1px; border-radius: 1px; }
 .mem-legend .pk { background: var(--mem-peak); }
 .mem-legend .avg { background: var(--mem-avg); }
+/* 图例里的空闲记号与条上的空心圆同形 */
+.mem-legend i.id {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-dim);
+  box-sizing: border-box;
+  background: none;
+}
+/* 实例列表上方的记号图例（整行只在真的画出内存条时出现，见 instances.js） */
+.mem-markers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+  margin: 0 2px 8px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+.mem-markers .mk-label { font-weight: 600; }
+.mem-markers i { display: inline-block; margin-right: 4px; vertical-align: -1px; }
+.mem-markers i.pk, .mem-markers i.avg { width: 2px; height: 9px; border-radius: 1px; }
+.mem-markers i.pk { background: var(--mem-peak); }
+.mem-markers i.avg { background: var(--mem-avg); }
+.mem-markers i.id {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-dim);
+  box-sizing: border-box;
+}
 /* 详情弹窗里的同一块： kv-val 默认是行内文本，这里整块占满剩余宽度 */
 .kv-val.mem-kv { display: block; }
 .kv-val .mem { margin-top: 0; }.card-actions { margin-top: 10px; display: flex; gap: 8px; }
@@ -2479,20 +2528,13 @@ html.theme-switching header {
     transition: none !important;
   }
   details::details-content { transition: none !important; }
+  .model-panel > summary .chev { transition: none !important; }
   .act-status.running .act-dot { animation: none !important; }
 }
 
-/* ---------- 实例卡片：GPU 副标题、空闲时长、生成中耗时、页头显存合计 ---------- */
+/* ---------- 实例卡片：GPU 副标题、页头显存合计 ---------- */
 .card-name { min-width: 0; }
-.idle-for {
-  margin-left: auto;
-  flex: none;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-}
-/* 卡片标题行右端的「活动图标 + 耗时」：生成中时顶替 idle 标签的位置。
+/* 卡片标题行右端的「活动图标 + 耗时」：生成中时顶替 idle 胶囊的位置。
    颜色走 --accent-live（与生成中卡片描边同一支），图标 stroke=currentColor 自动跟随。
    数字与左栏徽标 / 状态行共用 elapsed.js 的表与同一个计时器（data-elapsed-id）。 */
 .card-elapsed {
@@ -2507,6 +2549,26 @@ html.theme-switching header {
   font-variant-numeric: tabular-nums;
 }
 .card-elapsed .icon { width: 13px; height: 13px; flex: none; }
+/* 空闲时长小胶囊：时钟图标 + 「idle 6h」，弱化配色，生成中整块让位给耗时。
+   图标走 index.html 雪碧图的 #i-clock，stroke 由 currentColor 给。 */
+.idle-for {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--card-border);
+  background: var(--bg);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.idle-for .icon { width: 12px; height: 12px; flex: none; }
 .sec-vram { font-variant-numeric: tabular-nums; font-weight: 600; }
 .sec-vram:empty { display: none; }
 
@@ -2528,6 +2590,38 @@ html.theme-switching header {
   font-weight: 600;
   color: var(--text);
 }
+/* 左栏模型区：与「最近活动」同一形状的 <details>。模型清单很长，默认收起
+   （有实例时）才不会把上面的活动面板挤出屏幕；展开时内部列表行为不变。 */
+.model-panel {
+  margin: 10px 0 0;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 8px 10px 10px;
+}
+.model-panel > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.model-panel > summary .model-panel-title { min-width: 0; }
+/* 计数徽标 + 箭头：箭头在 summary 右侧，展开时翻转 */
+.model-panel > summary .sec-count { flex: none; }
+.model-panel > summary .chev {
+  margin-left: auto;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--text-dim);
+  transition: transform var(--dur-2) var(--ease-in-out);
+}
+.model-panel[open] > summary .chev { transform: rotate(180deg); }
+.model-panel > summary:hover .chev { color: var(--text); }
+.model-panel #model-list { margin-top: 8px; }
 .activity-strip { margin: 8px 0 6px; }
 .act-strip-caption {
   margin: 0 0 3px;

@@ -203,8 +203,9 @@ export function memBarScale(kind, cur, peak, avg, total) {
  * kind 为 "ram" / "vram"，mem 是实例的 memory 对象（字段全部可选）。
  * 返回 null 表示这一行画不出来：没有当前读数（VRAM 从未读到）或整个 memory 缺失。
  *
- * 比例尺见 memBarScale。fillPct / peakPct / avgPct 已钳制；
- * hot = VRAM 当前值已到比例尺的 85% 以上。总量 ≤ 0 视为未知（不写 "/ 0"）。
+ * 比例尺见 memBarScale。fillPct / peakPct / avgPct / idlePct 已钳制；
+ * idlePct 在采到空闲基线（ramIdleBytes / vramIdleBytes）之前是 null，调用方
+ * 据此不画空心圆。hot = VRAM 当前值已到比例尺的 85% 以上。总量 ≤ 0 视为未知。
  */
 export function memRowModel(kind, mem) {
   if (!mem) return null;
@@ -222,6 +223,7 @@ export function memRowModel(kind, mem) {
     kind, cur, peak, avg, idle, total, scale, fillPct,
     peakPct: clampPct((peak / scale) * 100),
     avgPct: clampPct((avg / scale) * 100),
+    idlePct: idle == null ? null : clampPct((idle / scale) * 100),
     hot: vram && fillPct >= 85,
     // 近期趋势（旧→新的字节序列）；服务端没给时由客户端 2s 轮询补齐
     series: memSeries(vram ? mem.vramSeries : mem.ramSeries)
@@ -465,6 +467,7 @@ function memRowHtml(row) {
         <div class="fill ${row.kind}${row.hot ? " hot" : ""}" data-w="${row.fillPct}"></div>
         <div class="pk" data-l="${row.peakPct}" aria-hidden="true"></div>
         <div class="avg" data-l="${row.avgPct}" aria-hidden="true"></div>
+        ${row.idlePct == null ? "" : `<div class="idle" data-l="${row.idlePct}" aria-hidden="true"></div>`}
       </div>
       <div class="stats3">${esc(memStatsLabel(row))}</div>
     </div>`;
@@ -500,8 +503,30 @@ export function memBlockHtml(mem) {
     n: mem.samples != null ? mem.samples : 0,
     state: mem.busy ? t("instance.memBusy") : t("instance.memIdle")
   }));
-  const legend = `<div class="mem-legend"><span><i class="pk"></i>${esc(t("instance.memStatPeak"))}</span><span><i class="avg"></i>${esc(t("instance.memStatAvg"))}</span></div>`;
+  const legend = `<div class="mem-legend"><span><i class="pk"></i>${esc(t("instance.memStatPeak"))}</span><span><i class="avg"></i>${esc(t("instance.memStatAvg"))}</span>${hasIdle(rows) ? `<span><i class="id"></i>${esc(t("instance.memStatIdle"))}</span>` : ""}</div>`;
   return `<div class="mem" title="${esc(tip.join("\n"))}">${rows.map(memRowHtml).join("")}${legend}</div>`;
+}
+
+/* 图例里的 Idle 项只在真的会画空心圆时出现：两行都没有空闲基线就不放这一项，
+   免得图例承诺一个页面上看不见的记号。纯函数。 */
+function hasIdle(rows) {
+  return rows.some(r => Number.isFinite(r.idle));
+}
+
+/* 实例列表上方的一行图例（见 concept v2）：解释内存条上三种记号的形状。
+   只在列表里真的画出了内存条时出现——没有 memory 读数（旧 hub / 从未采样）时
+   不放一行装饰。内容由 JS 生成，语言切换的重画由 renderInstanceList 触发。 */
+function renderMemMarkers(list) {
+  const el = $("mem-markers");
+  if (!el) return;
+  const shown = !!list && typeof list.querySelector === "function" && !!list.querySelector(".mem");
+  el.classList.toggle("hidden", !shown);
+  if (!shown) return;
+  const entry = (cls, key) => `<span><i class="${cls}"></i>${esc(t(key))}</span>`;
+  el.innerHTML = `<span class="mk-label">${esc(t("instance.memLegendTitle"))}</span>`
+    + entry("pk", "instance.memStatPeak")
+    + entry("avg", "instance.memStatAvg")
+    + entry("id", "instance.memStatIdle");
 }
 
 /* CSP style-src 'self' 不放行 style=""（headers.go）。内存条的 data-w / data-l 在插入 DOM 后
@@ -599,15 +624,19 @@ export function startInstancePolling() {
   return instancePoller;
 }
 
-/* Right-aligned "idle 4m". Hidden while generating. Falls back to the last
-   finished task when memory.idleSinceMs is absent. */
+/* Right-aligned "idle 4m" pill (clock icon + text). Hidden while generating.
+   Falls back to the last finished task when memory.idleSinceMs is absent. */
 function idleLabelHtml(inst, busy) {
   if (busy || !inst) return "";
   const since = idleSinceOf(inst.memory, idleFallbacks.get(inst.id));
   if (!since) return "";
   const label = formatIdleFor(since);
   if (!label) return "";
-  return `<span class="idle-for" title="${esc(t("instance.idleForTip"))}">${esc(t("instance.idleFor", { t: label }))}</span>`;
+  // 图标走雪碧图，stroke 由 currentColor 给（CSP style-src 'self' 不许 inline style）
+  return `<span class="idle-for" title="${esc(t("instance.idleForTip"))}">`
+    + `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-clock"/></svg>`
+    + esc(t("instance.idleFor", { t: label }))
+    + `</span>`;
 }
 
 export function renderInstanceList() {
@@ -623,6 +652,7 @@ export function renderInstanceList() {
       label: t("instance.create"),
       onClick: openLaunchModal
     });
+    renderMemMarkers(list);
     syncBusyTimer();
     return;
   }
@@ -672,6 +702,7 @@ export function renderInstanceList() {
     }
     list.appendChild(card);
   }
+  renderMemMarkers(list);
   syncBusyTimer();
 }
 

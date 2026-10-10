@@ -9,7 +9,7 @@
 import { bindMenuKeys, renderEmptyState, renderStateError, showSkeleton } from "./async-ui.js";
 import { $, Api, esc, safeHttpUrl, t } from "./dom.js";
 import { openModelDlModal } from "./downloads-lazy.js";
-import { maybeAutoSelectReadyModel, refreshInstances } from "./instances.js";
+import { maybeAutoSelectReadyModel, instances, refreshInstances } from "./instances.js";
 import { restoreWeightsPath } from "./launch.js";
 import { renderWorkspace } from "./panels.js";
 import { getPendingModelId, go, modelRoute, parseRoute, setPendingModelId } from "./routing.js";
@@ -21,6 +21,55 @@ export function categoryName(cat) {
   return t("category." + cat);
 }
 
+/* ---------- 模型区折叠（左栏 <details id="model-panel">） ----------
+   模型清单按 category 分组展开有几十张卡片，会把上面的「最近活动」面板挤出屏幕，
+   所以整区做成可折叠的 <details>：默认有实例时收起、没有实例时展开（那时候
+   模型清单正是要找东西的地方），用户手动开合过就按用户记的来。展开 / 收起
+   只改显隐，列表的下载 / HF 菜单、选中、骨架屏等行为一概不变。 */
+const MODELS_OPEN_KEY = "hub-models-open";
+
+/** 默认开合：有实例就收起。纯函数。 */
+export function defaultModelsOpen(instanceCount) {
+  return !(Number(instanceCount) > 0);
+}
+
+function modelsPanel() { return $("model-panel"); }
+
+function storedModelsOpen() {
+  try {
+    if (typeof localStorage !== "undefined") return localStorage.getItem(MODELS_OPEN_KEY);
+  } catch { /* private mode */ }
+  return null;
+}
+
+/** 套用开合状态：用户显式开合过（localStorage 有记录）就按记录的来，否则按默认
+    值。模型清单与实例列表谁先到都能得到正确结果，重复调用是幂等的。 */
+export function applyModelsPanelState(instanceCount) {
+  const panel = modelsPanel();
+  if (!panel) return null;
+  const stored = storedModelsOpen();
+  panel.open = stored === null ? defaultModelsOpen(instanceCount) : stored === "1";
+  return panel.open === true;
+}
+
+/** 建立模型区的开合记忆 + 首次状态。由 app.js 在启动时调用一次。
+    实例列表就绪后会再套一次（那时才知道有没有实例），走已有的
+    hub-instances-updated 窗口事件，不新增模块间的 import 边。 */
+export function startModelsPanel() {
+  const panel = modelsPanel();
+  if (panel && panel.addEventListener) {
+    panel.addEventListener("toggle", () => {
+      try {
+        if (typeof localStorage !== "undefined") localStorage.setItem(MODELS_OPEN_KEY, panel.open ? "1" : "0");
+      } catch { /* private mode */ }
+    });
+  }
+  if (typeof window !== "undefined" && window.addEventListener) {
+    window.addEventListener("hub-instances-updated", () => applyModelsPanelState(instances.length));
+  }
+  applyModelsPanelState(instances.length);
+}
+
 export async function loadModels() {
   showSkeleton($("model-list"), 5);
   try {
@@ -29,6 +78,9 @@ export async function loadModels() {
     renderStateError($("model-list"), e, loadModels);
     return;
   }
+  // 模型清单可能比实例列表先到：先按当前已知实例数定一次开合状态，
+  // 实例列表就绪后由 hub-instances-updated 再确认一次
+  applyModelsPanelState(instances.length);
   if (models.length && !selectedModelId) {
     // 路由优先（深链接），其次恢复上次选中的模型（localStorage 仅作默认落地）
     const r = parseRoute(location.hash);
@@ -112,6 +164,9 @@ export function renderModelList() {
   closeHfMenu();
   const list = $("model-list");
   list.removeAttribute("aria-busy");
+  // 折叠时 summary 上的计数徽标要跟着清单走（不展开也知道有几个模型）
+  const count = $("model-count");
+  if (count) count.textContent = I18N.num(models.length);
   list.innerHTML = "";
   if (models.length === 0) {
     renderEmptyState(list, t("model.empty"), { label: t("common.retry"), onClick: loadModels });

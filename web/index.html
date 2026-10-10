@@ -64,6 +64,8 @@
     <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
     <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
   </svg>
   <a id="skip-to-content" class="skip-link" href="#main-content" data-i18n="a11y.skipToContent">跳到主要内容</a>
   <header>
@@ -97,6 +99,8 @@
           <span id="live-events" class="live-events" data-mode="poll"><i class="live-dot" aria-hidden="true"></i><span id="live-events-text" data-i18n="live.off">轮询中</span></span>
         </div>
       </div>
+      <!-- 内存条记号图例：内容由 instances.js 生成，只在真的画出内存条时取消隐藏 -->
+      <div id="mem-markers" class="mem-markers hidden"></div>
       <div id="instance-list" class="card-list"></div>
       <details id="activity-panel" class="activity-panel" open>
         <summary data-i18n="activity.title">最近活动</summary>
@@ -105,8 +109,10 @@
         <div id="activity-list" class="activity-list"></div>
         <div class="activity-foot"><button type="button" id="activity-junk-toggle" class="act-junk-toggle hidden"></button></div>
       </details>
-      <h2 data-i18n="nav.models">模型</h2>
-      <div id="model-list" class="card-list"></div>
+      <details id="model-panel" class="model-panel" open>
+        <summary><span class="model-panel-title" data-i18n="nav.models">模型</span><span id="model-count" class="sec-count num"></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-chevron-down"/></svg></summary>
+        <div id="model-list" class="card-list"></div>
+      </details>
     </aside>
 
     <!-- 右栏：常驻工作区 -->

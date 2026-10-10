@@ -1062,7 +1062,11 @@
       "path": "/api/stats",
       "sources": ["web/modules/hub-chip.js", "web/modules/stats.js"]
     },
-    { "method": "GET", "path": "/api/tasks", "sources": ["web/modules/activity.js"] },
+    {
+      "method": "GET",
+      "path": "/api/tasks",
+      "sources": ["web/modules/activity.js", "web/modules/live-ticker.js"]
+    },
     { "method": "POST", "path": "/api/tasks", "sources": ["web/modules/tasks.js"] },
     { "method": "GET", "path": "/api/tasks?modelId={param}", "sources": ["web/modules/tasks.js"] },
     {

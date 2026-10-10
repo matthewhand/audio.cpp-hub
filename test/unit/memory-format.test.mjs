@@ -35,28 +35,59 @@ const DICT = {
 
 const NAMES = [
   // 忙碌徽标
-  "resolveBusy", "formatBusyElapsed",
+  "resolveBusy",
+  "formatBusyElapsed",
   // 内存条：私有小工具 + 纯函数
-  "msOr", "memMiB", "numOr", "opt", "num1", "memUnitFormat",
-  "formatMiB", "clampPct", "memBarScale", "memRowModel", "memStatsLabel", "memAriaText",
-  "formatIdleFor", "idleSinceOf", "instanceSubtitle", "aggregateVram", "formatVramHead",
-  "memSeries", "sparkPoints", "pushSparkSample", "nextSparkState", "sparkHtml",
-  "memRowHtml", "memBlockHtml", "applyMemBars"
+  "msOr",
+  "memMiB",
+  "numOr",
+  "opt",
+  "num1",
+  "memUnitFormat",
+  "formatMiB",
+  "clampPct",
+  "memBarScale",
+  "memRowModel",
+  "memStatsLabel",
+  "memAriaText",
+  "formatIdleFor",
+  "idleSinceOf",
+  "instanceSubtitle",
+  "aggregateVram",
+  "formatVramHead",
+  "memSeries",
+  "sparkPoints",
+  "pushSparkSample",
+  "nextSparkState",
+  "sparkHtml",
+  "memRowHtml",
+  "memBlockHtml",
+  "applyMemBars",
+  "hasIdle"
 ];
 
 function load() {
   const src = readWeb("modules/instances.js");
-  const bundle = NAMES.map(n => extractFunction(src, n)).join("\n");
+  const bundle = NAMES.map((n) => extractFunction(src, n)).join("\n");
   const t = (key, params) => {
     let s = DICT[key] || key;
     for (const [k, v] of Object.entries(params || {})) s = s.split("{" + k + "}").join(String(v));
     return s;
   };
-  const esc = (v) => String(v == null ? "" : v)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  const esc = (v) =>
+    String(v == null ? "" : v)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   const context = vm.createContext({
-    t, esc, MEM_MIB: 1024 * 1024, SPARK_W: 74, SPARK_H: 16, SPARK_CAP: 60
+    t,
+    esc,
+    MEM_MIB: 1024 * 1024,
+    SPARK_W: 74,
+    SPARK_H: 16,
+    SPARK_CAP: 60
   });
   return new vm.Script(`${bundle}\n({ ${NAMES.join(", ")} })`, {
     filename: "instances-pure.js"
@@ -64,10 +95,26 @@ function load() {
 }
 
 const {
-  resolveBusy, formatBusyElapsed, formatMiB, clampPct, memBarScale,
-  memRowModel, memStatsLabel, memAriaText, memSeries, sparkPoints,
-  formatIdleFor, idleSinceOf, instanceSubtitle, aggregateVram, formatVramHead,
-  pushSparkSample, nextSparkState, memRowHtml, memBlockHtml, applyMemBars
+  resolveBusy,
+  formatBusyElapsed,
+  formatMiB,
+  clampPct,
+  memBarScale,
+  memRowModel,
+  memStatsLabel,
+  memAriaText,
+  memSeries,
+  sparkPoints,
+  formatIdleFor,
+  idleSinceOf,
+  instanceSubtitle,
+  aggregateVram,
+  formatVramHead,
+  pushSparkSample,
+  nextSparkState,
+  memRowHtml,
+  memBlockHtml,
+  applyMemBars
 } = load();
 
 /* vm realm 造出来的对象原型与测试 realm 不同。本文件从 node:assert/strict 引入，
@@ -82,8 +129,11 @@ test("resolveBusy：SSE 说在忙就用 SSE，起点取 task.started 的 ts", ()
   const busy = resolveBusy({ startMs: 1756400000000 }, { taskCount: 0 });
   assert.deepEqual(plain(busy), { busy: true, startMs: 1756400000000, source: "sse" });
   // 事件没带 ts：徽标照常亮，计时省略
-  assert.deepEqual(plain(resolveBusy({ startMs: null }, { taskCount: 0 })),
-    { busy: true, startMs: null, source: "sse" });
+  assert.deepEqual(plain(resolveBusy({ startMs: null }, { taskCount: 0 })), {
+    busy: true,
+    startMs: null,
+    source: "sse"
+  });
 });
 
 test("resolveBusy：没有 SSE 时回退到轮询（taskCount 或采样器 busy）", () => {
@@ -97,12 +147,18 @@ test("resolveBusy：没有 SSE 时回退到轮询（taskCount 或采样器 busy�
 });
 
 test("resolveBusy：不忙时三个字段都干净", () => {
-  assert.deepEqual(plain(resolveBusy(null, { taskCount: 0, memory: { busy: false } })),
-    { busy: false, startMs: null, source: null });
+  assert.deepEqual(plain(resolveBusy(null, { taskCount: 0, memory: { busy: false } })), {
+    busy: false,
+    startMs: null,
+    source: null
+  });
   assert.deepEqual(plain(resolveBusy(null, null)), { busy: false, startMs: null, source: null });
   // taskCount 不是数字（旧 hub / 异常数据）时不误判成忙碌
-  assert.deepEqual(plain(resolveBusy(null, { taskCount: "x" })),
-    { busy: false, startMs: null, source: null });
+  assert.deepEqual(plain(resolveBusy(null, { taskCount: "x" })), {
+    busy: false,
+    startMs: null,
+    source: null
+  });
 });
 
 test("formatBusyElapsed：60s 内一位小数，之后分秒", () => {
@@ -175,7 +231,7 @@ test("memRowModel：VRAM 已知总量时以总量为比例尺，未知时 × 1.2
   });
   assert.equal(withTotal.scale, 8192);
   assert.equal(withTotal.total, 8192);
-  assert.equal(withTotal.fillPct, clampPct((4.2 * 1024 / 8192) * 100));
+  assert.equal(withTotal.fillPct, clampPct(((4.2 * 1024) / 8192) * 100));
   assert.equal(withTotal.hot, false);
 
   const noTotal = memRowModel("vram", {
@@ -191,7 +247,7 @@ test("memRowModel：VRAM 已知总量时以总量为比例尺，未知时 × 1.2
     vramAvgBytes: 5 * 1024 * MIB
   });
   assert.equal(avgHeads.scale, 5 * 1024 * 1.25);
-  assert.equal(avgHeads.fillPct, clampPct((4 * 1024) / (5 * 1024 * 1.25) * 100));
+  assert.equal(avgHeads.fillPct, clampPct(((4 * 1024) / (5 * 1024 * 1.25)) * 100));
   assert.ok(avgHeads.fillPct < 80);
   const zeroTotal = memRowModel("vram", {
     vramBytes: 4 * 1024 * MIB,
@@ -311,10 +367,38 @@ test("memRowHtml：role=meter + 填充 / 刻度线（刻度线 aria-hidden）", 
   assert.match(html, /data-l="56\.7"/);
   assert.match(html, /class="pk"[^>]*aria-hidden="true"/);
   assert.match(html, /class="avg"[^>]*aria-hidden="true"/);
+  // 没有空闲基线就不画空心圆
+  assert.doesNotMatch(html, /class="idle"/);
   assert.match(html, /<span class="k">RAM<\/span>/);
   assert.match(html, /<span class="of">now<\/span>/);
   // 没有 GPU 总量就不出现「/ total」
   assert.doesNotMatch(html, /class="of num"/);
+});
+
+test("memRowHtml：空闲基线画成空心圆，位置同一条 data-l 通路", () => {
+  const mem = {
+    ramBytes: 942 * MIB,
+    ramPeakBytes: 988 * MIB,
+    ramAvgBytes: 700 * MIB,
+    ramIdleBytes: 598 * MIB
+  };
+  const html = memRowHtml(memRowModel("ram", mem));
+  // 598 / 1235（max(peak,cur)×1.25）= 48.4%
+  assert.match(html, /class="idle" data-l="48\.4" aria-hidden="true"/);
+  assert.doesNotMatch(html, /style=/);
+
+  // 空闲值超过分母（异常读数 / 比例尺偏小）：钳到 100，不画到条外
+  const over = memRowHtml(
+    memRowModel("ram", {
+      ramBytes: 10 * MIB,
+      ramPeakBytes: 20 * MIB,
+      ramIdleBytes: 100 * 1024 * MIB
+    })
+  );
+  assert.match(over, /class="idle" data-l="100"/);
+  // 0 MiB 空闲：仍是真实读数，画在最左端
+  const zero = memRowHtml(memRowModel("ram", { ramBytes: 10 * MIB, ramIdleBytes: 0 }));
+  assert.match(zero, /class="idle" data-l="0"/);
 });
 
 test("memBlockHtml：只有 RAM / 隐藏条件 / VRAM 总量与 hot 渐变 / 图例一次", () => {
@@ -360,6 +444,9 @@ test("memBlockHtml：只有 RAM / 隐藏条件 / VRAM 总量与 hot 渐变 / 图
   assert.doesNotMatch(vram, /style=/);
   assert.equal(vram.match(/mem-legend/g).length, 1);
   assert.equal(vram.match(/role="meter"/g).length, 2);
+  // 有空闲基线时每卡图例多一项 Idle 空心圆；统计行与图例同一组词
+  assert.match(vram, /class="idle" data-l="45"/);
+  assert.match(vram, /<i class="id"><\/i>Idle<\/span>/);
 
   const hot = memBlockHtml({ ramBytes: MIB, vramBytes: 7.5 * GIB, vramTotalBytes: 8 * GIB });
   assert.match(hot, /class="fill vram hot"/);
@@ -488,7 +575,10 @@ test("formatIdleFor / idleSinceOf", () => {
 
 test("instanceSubtitle：有 GPU 名就插在型号和设备之间", () => {
   assert.equal(
-    instanceSubtitle({ memory: { gpuName: "GTX 1080" }, backend: "vulkan", device: 0, port: 18090 }, "BreezeTTS 2"),
+    instanceSubtitle(
+      { memory: { gpuName: "GTX 1080" }, backend: "vulkan", device: 0, port: 18090 },
+      "BreezeTTS 2"
+    ),
     "BreezeTTS 2 · GTX 1080 · vulkan:0 · :18090"
   );
   assert.equal(
