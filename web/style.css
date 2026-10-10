@@ -1,4 +1,4 @@
-/* audio.cpp-hub monochrome design system; tokens, layout, components, accessibility. */
+/* audio.cpp-hub monochrome design syst */
 
 /* ============================ L1: TOKENS ============================ */
 
@@ -593,8 +593,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; filter: none; }
 .btn-ghost:hover { background: var(--ring); }
 .btn-ghost:active { transform: scale(0.97); }
 
-/* 危险按钮：.stop-btn 为历史类名，.btn-danger 为规范别名；悬停底色用 --accent-contrast
-   保证浅/深两套主题下的文字对比度都达标（WCAG AA） */
+/* 危险按钮：.stop-btn 为历史类名，.btn-danger 为规范 */
 .stop-btn, .btn-danger { background: transparent; border-color: var(--err); color: var(--err); }
 .stop-btn:hover, .btn-danger:hover { background: var(--err); color: var(--accent-contrast); }
 
@@ -1100,8 +1099,7 @@ footer { padding: 4px 24px 18px; }
   visibility: visible;
   transition: opacity var(--dur-2) var(--ease-out), visibility var(--dur-2);
 }
-/* 覆盖全局 .hidden 的 display:none：保留布局盒（fixed 不影响文档流），
-   让遮罩与对话框在关闭时淡出/缩放退出，而非瞬间消失 */
+/* 覆盖全局 .hidden 的 display:none：保留布局盒（fi */
 .modal-overlay.hidden, .dialog-overlay.hidden {
   display: flex !important;
   opacity: 0;
@@ -1685,7 +1683,7 @@ footer { padding: 4px 24px 18px; }
 .dl-row-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .dl-row-title { font-weight: 600; font-size: 13.5px; min-width: 0; }
 .dl-row-dir { font-weight: 400; font-size: 12px; color: var(--text-dim); }
-/* 进度条：.dl-progress/.dl-progress-fill 为历史类名，.progress/.progress-fill 为规范别名 */
+/* 进度条：.dl-progress/.dl-progress-fill 为 */
 .dl-progress, .progress {
   margin-top: 8px;
   height: 6px;
@@ -1711,8 +1709,7 @@ footer { padding: 4px 24px 18px; }
   from { background-position: -45% 0; }
   to { background-position: 145% 0; }
 }
-/* 进度条宽度变化时平滑过渡；新建行的进度条从 0 生长到当前值
-   （用 scaleX 未知宽度也能生长，且不依赖 @starting-style 的浏览器支持） */
+/* 进度条宽度变化时平滑过渡；新建行的进度条从 0 生长到当前值 （用 sc */
 .dl-row.row-enter .dl-progress-fill {
   transform-origin: left center;
   animation: bar-grow var(--dur-3) var(--ease-out);
@@ -2038,7 +2035,7 @@ footer { padding: 4px 24px 18px; }
   .skeleton { animation: none !important; }
 }
 
-/* Motion additions; accessibility follows existing reduced-motion rules. */
+/* Motion additions; accessibility foll */
 
 /* ---------- 模式：对话框淡入 + 缩放（.modal-overlay/.modal 已有基础，见上文） ---------- */
 /* ---------- 模式：抽屉滑入（#left + .drawer-overlay，见窄屏媒体查询） ---------- */
@@ -2075,7 +2072,7 @@ button.copied,
 }
 button.copied { border-color: var(--ok); color: var(--ok); }
 
-/* ---------- 模式：实例状态变化强调（motion.js 给 #instance-pill 加 .state-flip） ---------- */
+/* ---------- 模式：实例状态变化强调（motion.js 给 # */
 .state-flip { animation: state-flip var(--dur-3) var(--ease-out); }
 @keyframes state-flip {
   0% { transform: scale(0.94); }
@@ -2083,7 +2080,7 @@ button.copied { border-color: var(--ok); color: var(--ok); }
   100% { transform: scale(1); }
 }
 
-/* ---------- 模式：主题切换平滑过渡（motion.js 给 html 加 .theme-switching） ---------- */
+/* ---------- 模式：主题切换平滑过渡（motion.js 给 h */
 html.theme-switching .card,
 html.theme-switching .modal,
 html.theme-switching .history-panel-card,
@@ -2146,8 +2143,7 @@ html.theme-switching header {
 .offline-text { color: var(--text-dim); font-size: 13px; margin: 6px 0; }
 .offline-retry { display: inline-block; margin-top: 18px; text-decoration: none; }
 
-/* bubble 通用可见焦点：L5 UTILITIES 已有等价的 :where(...) 焦点环，
-   此处不再重复声明（:where 权重为 0，重复声明只会制造维护分叉）。 */
+/* bubble 通用可见焦点：L5 UTILITIES 已有等价的 :wh */
 
 /* ---------- 无障碍：关闭上述补充动效 ---------- */
 @media (prefers-reduced-motion: reduce) {
@@ -2168,24 +2164,31 @@ html.theme-switching header {
   }
   details::details-content { transition: none !important; }
 }
-/* #124 Audio Studio v2: hierarchy without altering inference. */
-#left{flex-basis:318px}
-#workspace{max-width:1020px}
-#instance-bar{border-left:1px solid var(--card-border);background:var(--bg-elevated);box-shadow:none;padding:12px 16px}
-#instance-stop{margin-left:auto}
-#panel-tts{position:relative;padding:28px 32px}
-#panel-tts>h2{margin:0 0 20px;padding-right:196px;min-height:46px;font-size:clamp(20px,1.7vw,25px);letter-spacing:-.03em}
-#tts-text-block{display:block;margin-bottom:20px;padding:18px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--bg-elevated);color:var(--text);font-weight:600}
-#tts-text{min-height:240px;padding:18px;font-size:15px;line-height:1.7;border-radius:8px;background:var(--card);box-shadow:none}
-#tts-text:focus{box-shadow:0 0 0 3px var(--ring)}
-#tts-primary-instruction-row{margin:16px 0;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--bg-elevated)}
-#tts-submit{display:block;position:absolute;top:26px;right:32px;margin:0;min-width:180px;min-height:46px}
-@media(max-width:720px){
- #instance-stop{margin-left:0}
- #panel-tts{padding:18px}
- #tts-text-block{padding:12px}
- #tts-text{min-height:190px;padding:14px}
- #tts-primary-instruction-row{padding:12px}
- #panel-tts>h2{padding-right:0;min-height:0}
- #tts-submit{position:static;width:100%;margin:20px 0 0}
-}
+/* #124 Audio Studio v3: script-first workspace. */
+#left{flex-basis:300px}
+#workspace{max-width:1080px}
+#instance-bar{border-left:1px solid var(--card-border);background:var(--bg-elevated);box-shadow:none}
+#panel-tts{position:static;padding:24px 28px;box-shadow:none}
+#panel-tts>.studio-heading{margin-bottom:20px;padding:0 0 20px;border-bottom:1px solid var(--border)}
+.studio-overline{display:block;color:var(--text-dim);font-size:11px;font-weight:700;letter-spacing:.18em}
+#panel-tts>.studio-heading h2{margin:6px 0 4px;padding:0;min-height:0;font-size:26px;letter-spacing:-.04em}
+.studio-intro{margin:0;color:var(--text-dim);font-size:13px}
+.studio-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,340px);gap:18px;align-items:start}
+.studio-script,.studio-controls{min-width:0;padding:20px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--bg-elevated)}
+.studio-script{display:flex;flex-direction:column;min-height:500px}
+.studio-section-heading{display:flex;align-items:center;gap:11px;padding:0 0 16px;margin-bottom:16px;border-bottom:1px solid var(--border)}
+.studio-section-heading h3{margin:0;font-size:15px;letter-spacing:-.02em}
+.studio-index{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--text-dim)}
+#panel-tts #tts-text-block{flex:1;display:flex;flex-direction:column;margin:0;padding:0;border:0;background:transparent;font-weight:500}
+#tts-text-block>span{margin:0 0 8px;font-size:12px;color:var(--text-dim)}
+#panel-tts #tts-text{flex:1;min-height:390px;margin:0;padding:18px;font-size:15px;line-height:1.8;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--card);resize:vertical}
+#panel-tts #tts-primary-instruction-row{margin:0 0 12px;padding:0;border:0;background:transparent}
+#panel-tts #tts-advanced{margin-top:12px}
+.studio-render{display:flex;align-items:center;gap:14px;margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+.studio-render>.studio-index{margin-right:auto}
+#panel-tts #tts-submit{position:static;top:auto;right:auto;display:block;min-width:145px;margin:0;min-height:46px}
+.studio-feedback{margin-top:12px}
+.studio-feedback #tts-result:not(.hidden){display:flex;align-items:center;gap:14px;padding:16px;border:1px solid var(--border);border-radius:var(--radius-lg)}
+.studio-feedback #tts-player{flex:1;min-width:0}
+@media(max-width:850px){.studio-grid{grid-template-columns:1fr}.studio-script{min-height:300px}#panel-tts #tts-text{min-height:240px}}
+@media(max-width:720px){#panel-tts{padding:14px}.studio-script,.studio-controls{padding:15px}.studio-section-heading{margin-bottom:14px}#panel-tts #tts-text{min-height:220px}.studio-render{flex-wrap:wrap}#panel-tts #tts-submit{flex:1;min-width:0}}
