@@ -56,7 +56,7 @@ export function startInstancePolling() {
 export function renderInstanceList() {
   const list = $("instance-list");
   list.removeAttribute("aria-busy");
-  
+
   const order = { READY: 0, STARTING: 1 };
   const sorted = [...instances].sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2));
   list.innerHTML = "";
@@ -120,7 +120,7 @@ export function updateInstanceBar() {
   } else {
     setActiveInstanceId(null);
   }
-  
+
   select.disabled = !has;
   $("instance-stop").disabled = !has;
   $("instance-detail").disabled = !has;
@@ -134,7 +134,7 @@ export function updateInstanceBar() {
   pill.textContent = has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
 
-  
+
   const context = $("instance-context");
   const selected = models.find(m => m.id === selectedModelId);
   const showContext = !has && !!selected;
@@ -160,7 +160,7 @@ export function updateInstanceBar() {
     choices.querySelector(".instance-context-choices-heading").textContent = heading;
     const list = context.querySelector(".instance-context-options");
     list.setAttribute("aria-label", heading);
-    const signature = I18N.lang() + options.map(([id, i]) => id + i.port + i.backend).join('|');
+    const signature = I18N.lang() + options.map(([id, i]) => id + i.port + i.backend).join("|");
     if (list.dataset.signature !== signature) {
       list.dataset.signature = signature;
       list.replaceChildren();
