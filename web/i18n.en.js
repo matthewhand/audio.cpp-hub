@@ -3,6 +3,11 @@
    - Keep in sync with i18n.zh.js; run scripts/check-i18n-parity.js to verify parity
    - {name} placeholders are interpolated by I18N.t(key, params) */
 window.I18N_EN = {
+  /* ---------- TTS studio workspace ---------- */
+  "studio.kicker": "VOICE STUDIO",
+  "studio.intro": "Write your script, shape the voice, and generate audio.",
+  "studio.script": "Script",
+  "studio.controls": "Voice & delivery",
   /* ---------- header / nav ---------- */
   "header.subtitle": "audiocpp_server process manager & audio workbench",
   "header.settingsTitle": "Settings",
