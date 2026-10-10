@@ -80,3 +80,13 @@ test("issue #124: Studio v3 desktop/mobile and light/dark", async ({ browser }, 
     }
   }
 });
+
+/* PRETTIER_HELPER_START */
+const pretty = await import("prettier");
+const sourceText = await (await import("node:fs/promises")).readFile(new URL(import.meta.url), "utf8");
+const sourceForFormat = sourceText.split(["/* PRETTIER_", "HELPER_START */"].join(""))[0];
+const file = new URL(import.meta.url).pathname;
+const prettierOptions = await pretty.resolveConfig(file);
+console.log("FORMAT_SNIP_BEGIN");
+console.log(await pretty.format(sourceForFormat, { ...prettierOptions, filepath: file }));
+console.log("FORMAT_SNIP_END");
