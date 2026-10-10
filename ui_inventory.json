@@ -168,7 +168,7 @@
     {
       "id": "panel-tts",
       "kind": "panel",
-      "label": "tts.title",
+      "label": "studio.kicker",
       "i18n": [
         "common.advanced",
         "emotion.alphaLabel",
@@ -181,6 +181,10 @@
         "emotion.tabsLabel",
         "emotion.textLabel",
         "emotion.textPlaceholder",
+        "studio.controls",
+        "studio.intro",
+        "studio.kicker",
+        "studio.script",
         "tts.download",
         "tts.speakerAdd",
         "tts.speakersHint",
@@ -894,7 +898,7 @@
     }
   ],
   "dataHooks": [
-    { "name": "data-i18n", "count": 128 },
+    { "name": "data-i18n", "count": 132 },
     { "name": "data-i18n-aria-label", "count": 27 },
     { "name": "data-i18n-placeholder", "count": 24 },
     { "name": "data-i18n-title", "count": 11 },
