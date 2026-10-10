@@ -549,7 +549,7 @@ footer { flex: none; }
 #instance-stop { flex: none; white-space: nowrap; padding: 5px 14px; font-size: 12.5px; }
 #launch-open-btn { flex: none; white-space: nowrap; padding: 6px 18px; font-size: 12.5px; }
 
-/* Active model readiness and one-click switch to a compatible running model. */
+/* Model readiness */
 #instance-context { display: flex; align-items: center; gap: 14px; margin: -4px 0 16px; border-left: 4px solid var(--warn); }
 .instance-context-mark { padding: 8px 14px; border-radius: 9px; background: rgba(251,191,36,.10); color: var(--warn); font-size: 24px; font-weight: 800; }
 .instance-context-content { flex: 1; min-width: 0; }
@@ -557,6 +557,11 @@ footer { flex: none; }
 .instance-context-title { display: block; margin-top: 4px; font-size: 16px; }
 .instance-context-copy { margin: 5px 0 0; color: var(--text-dim); font-size: 12px; line-height: 1.5; }
 @media (max-width: 900px) { #instance-context { flex-wrap: wrap; } }
+.instance-context-choices-heading {margin-top:12px;font-size:11px;color:var(--text-dim)}
+.instance-context-options {display:flex;flex-wrap:wrap;gap:8px;margin-top:7px}
+.instance-context-option {padding:9px 12px;border:1px solid var(--border);border-radius:8px;color:var(--text);background:var(--input-bg);cursor:pointer}
+.instance-context-option::after {content:" →";color:var(--accent)}
+.instance-context-option:hover {border-color:var(--accent)}
 
 /* ---------- 按钮 ---------- */
 button {
