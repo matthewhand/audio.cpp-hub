@@ -278,7 +278,7 @@ main {
   padding: 2px 4px 2px 2px;
 }
 #right { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; }
-#workspace { max-width: 860px; margin: 0 auto; }
+#workspace { max-width: 960px; margin: 0 auto; }
 footer { flex: none; }
 
 /* 移动端菜单按钮：桌面端隐藏 */
@@ -546,19 +546,21 @@ footer { flex: none; }
 /* ---------- 实例状态条 ---------- */
 #instance-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
   margin-bottom: 16px;
   background: var(--card);
   border: 1px solid var(--card-border);
+  border-left: 3px solid var(--accent);
   border-radius: 12px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
 .bar-label { font-size: 13px; font-weight: 600; color: var(--text-dim); }
-#instance-select { flex: 1; margin-top: 0; }
+#instance-select { min-width: 0; flex: 1 1 210px; margin-top: 0; }
 #instance-stop { flex: none; white-space: nowrap; padding: 5px 14px; font-size: 12.5px; }
 #launch-open-btn { flex: none; white-space: nowrap; padding: 6px 18px; font-size: 12.5px; }
 
@@ -632,6 +634,14 @@ input[type="text"]:focus, input[type="number"]:focus, textarea:focus, select:foc
 textarea { resize: vertical; }
 select option { background: var(--bg-elevated); color: var(--text); }
 
+#panel-tts{padding:var(--space-6)}
+#panel-tts>h2{margin-top:0;font-size:var(--text-xl)}
+#tts-text{min-height:176px;padding:var(--space-4);font-size:15px;line-height:1.7}
+@media(max-width:720px){
+  #panel-tts{padding:var(--space-4)}
+  #tts-text{min-height:160px}
+  #tts-submit{width:100%}
+}
 #tts-primary-instruction-row textarea {
   min-height: 96px;
   line-height: 1.55;
@@ -2184,72 +2194,4 @@ html.theme-switching header {
     transition: none !important;
   }
   details::details-content { transition: none !important; }
-}
-
-/* Issue #124: TTS workspace hierarchy (presentation only, theme-safe). */
-#workspace { max-width: 960px; }
-
-#instance-bar {
-  flex-wrap: wrap;
-  column-gap: var(--space-3);
-  row-gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border-left: 3px solid var(--accent);
-}
-#instance-select { min-width: 0; flex: 1 1 210px; }
-#instance-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-}
-#instance-detail, #instance-stop, #launch-open-btn { min-height: 36px; }
-
-#panel-tts { padding: var(--space-6); }
-#panel-tts > h2 {
-  margin: 0 0 var(--space-5);
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border);
-  font-size: var(--text-xl);
-  line-height: var(--leading-tight);
-  letter-spacing: -0.025em;
-}
-#tts-text-block {
-  display: block;
-  margin-bottom: var(--space-5);
-  font-weight: var(--weight-semibold);
-  color: var(--text);
-}
-#tts-text {
-  display: block;
-  width: 100%;
-  min-height: 176px;
-  margin-top: var(--space-2);
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-md);
-  line-height: var(--leading-relaxed);
-}
-#tts-text::placeholder { color: var(--text-dim); opacity: 1; }
-#panel-tts #tts-advanced {
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-elevated);
-}
-#tts-submit { min-height: 44px; min-width: 160px; margin-top: var(--space-3); }
-
-@media (max-width: 720px) {
-  #instance-bar { gap: var(--space-2); }
-  #instance-bar .bar-label { flex: 1 1 auto; }
-  #instance-select { order: 2; flex: 1 1 100%; }
-  #instance-detail, #instance-stop, #launch-open-btn {
-    order: 3;
-    flex: 1 1 auto;
-    min-height: 44px;
-  }
-  #panel-tts { padding: var(--space-4); }
-  #panel-tts > h2 { margin-bottom: var(--space-4); }
-  #tts-text { min-height: 160px; padding: var(--space-3); }
-  #tts-submit { width: 100%; }
 }
