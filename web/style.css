@@ -562,6 +562,24 @@ footer { flex: none; }
 #instance-stop { flex: none; white-space: nowrap; padding: 5px 14px; font-size: 12.5px; }
 #launch-open-btn { flex: none; white-space: nowrap; padding: 6px 18px; font-size: 12.5px; }
 
+/* Contextual help when a different model owns the ready instances. */
+.instance-context-hint {
+  margin: -8px 0 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--warn);
+  border-radius: 10px;
+  background: rgba(251, 191, 36, 0.07);
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.instance-context-hint::before {
+  content: "ⓘ";
+  margin-right: 8px;
+  color: var(--warn);
+  font-weight: 700;
+}
+
 /* ---------- 按钮 ---------- */
 button {
   font-family: inherit;
