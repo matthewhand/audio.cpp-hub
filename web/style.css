@@ -2173,18 +2173,19 @@ html.theme-switching header {
 #workspace{max-width:1020px}
 #instance-bar{border-left:1px solid var(--card-border);background:var(--bg-elevated);box-shadow:none;padding:12px 16px}
 #instance-stop{margin-left:auto}
-#panel-tts{padding:28px 32px}
-#panel-tts>h2{margin:0 0 20px;font-size:clamp(20px,1.7vw,25px);letter-spacing:-.03em}
+#panel-tts{position:relative;padding:28px 32px}
+#panel-tts>h2{margin:0 0 20px;padding-right:196px;min-height:46px;font-size:clamp(20px,1.7vw,25px);letter-spacing:-.03em}
 #tts-text-block{display:block;margin-bottom:20px;padding:18px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--bg-elevated);color:var(--text);font-weight:600}
 #tts-text{min-height:240px;padding:18px;font-size:15px;line-height:1.7;border-radius:8px;background:var(--card);box-shadow:none}
 #tts-text:focus{box-shadow:0 0 0 3px var(--ring)}
 #tts-primary-instruction-row{margin:16px 0;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--bg-elevated)}
-#tts-submit{display:block;margin:20px 0 0 auto;min-width:180px;min-height:46px}
+#tts-submit{display:block;position:absolute;top:26px;right:32px;margin:0;min-width:180px;min-height:46px}
 @media(max-width:720px){
  #instance-stop{margin-left:0}
  #panel-tts{padding:18px}
  #tts-text-block{padding:12px}
  #tts-text{min-height:190px;padding:14px}
  #tts-primary-instruction-row{padding:12px}
- #tts-submit{width:100%}
+ #panel-tts>h2{padding-right:0;min-height:0}
+ #tts-submit{position:static;width:100%;margin:20px 0 0}
 }
