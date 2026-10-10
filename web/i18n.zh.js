@@ -61,6 +61,12 @@ window.I18N_ZH = {
   /* ---------- 实例条 ---------- */
   "instance.barLabel": "实例",
   "instance.noReady": "没有就绪实例",
+  "instance.readiness.kicker": "工作区就绪状态",
+  "instance.readiness.title": "{model} 需要独立的实例",
+  "instance.readiness.none": "目前没有就绪实例。请使用上方按钮启动 {model}。",
+  "instance.readiness.alternative": "{alternative} 已就绪。你可以切换到该模型，或使用上方按钮启动 {model}。",
+  "instance.readiness.others": "其他模型有 {count} 个就绪实例。启动 {model} 才能运行它的任务。",
+  "instance.readiness.switch": "切换到 {model} →",
   "instance.noReadySuffix": "（无就绪实例）",
   "instance.ready": "就绪",
   "instance.stopCurrent": "停止当前实例",
