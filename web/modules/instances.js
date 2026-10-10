@@ -134,33 +134,48 @@ export function updateInstanceBar() {
   pill.textContent = has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
 
-  // Only offer an explicit route-safe switch to a single alternative model.
+  // Keep ready alternatives selectable by model; never select one automatically.
   const context = $("instance-context");
   const selected = models.find(m => m.id === selectedModelId);
   const showContext = !has && !!selected;
   context.classList.toggle("hidden", !showContext);
   if (showContext) {
-    const modelName = I18N.pick(selected, "displayName");
-    const otherReady = instances.filter(i => i.status === "READY" && i.modelId !== selectedModelId);
-    const otherModelIds = [...new Set(otherReady.map(i => i.modelId))];
-    const alternative = otherModelIds.length === 1
-      ? models.find(m => m.id === otherModelIds[0]) : null;
-    const altName = alternative ? I18N.pick(alternative, "displayName") : "";
-    const copyKey = alternative ? "instance.readiness.alternative"
-      : otherReady.length ? "instance.readiness.others" : "instance.readiness.none";
-    const values = { model: modelName, alternative: altName, count: otherReady.length };
-    for (const [id, message] of [
+    const name = I18N.pick(selected, "displayName");
+    const others = instances.filter(i => i.status === "READY" && i.modelId !== selectedModelId);
+    const options = [...new Map(others.map(i => [i.modelId, i])).entries()]
+      .filter(([id]) => models.some(m => m.id === id));
+    const key = !others.length ? "none" : options.length ? "others" : "unlisted";
+    const values = { model: name, count: others.length };
+    for (const [id, value] of [
       ["instance-context-kicker", t("instance.readiness.kicker")],
       ["instance-context-title", t("instance.readiness.title", values)],
-      ["instance-context-copy", t(copyKey, values)]
+      ["instance-context-copy", t("instance.readiness." + key, values)]
     ]) {
-      const element = $(id);
-      if (element.textContent !== message) element.textContent = message;
+      const node = $(id);
+      if (node.textContent !== value) node.textContent = value;
     }
-    const switchButton = context.querySelector(".instance-context-switch");
-    switchButton.classList.toggle("hidden", !alternative);
-    switchButton.onclick = alternative ? () => go("#/model/" + encodeURIComponent(alternative.id)) : null;
-    if (alternative) switchButton.textContent = t("instance.readiness.switch", { model: altName });
+    const choices = context.querySelector(".instance-context-choices");
+    choices.classList.toggle("hidden", options.length === 0);
+    const list = context.querySelector(".instance-context-options");
+    const signature = I18N.lang() + JSON.stringify(options.map(([id, i]) =>
+      [id, i.backend, i.port]));
+    if (list.dataset.signature !== signature) {
+      list.dataset.signature = signature;
+      list.replaceChildren();
+      for (const [id, inst] of options) {
+        const m = models.find(x => x.id === id);
+        const modelName = I18N.pick(m, "displayName");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "instance-context-option";
+        btn.textContent = t("instance.readiness.choice", {
+          model: modelName, backend: inst.backend, port: inst.port
+        });
+        btn.setAttribute("aria-label", t("instance.readiness.switch", { model: modelName }));
+        btn.onclick = () => go("#/model/" + encodeURIComponent(id));
+        list.appendChild(btn);
+      }
+    }
   }
 
   for (const id of SUBMIT_BTNS) {
