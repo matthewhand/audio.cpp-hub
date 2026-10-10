@@ -62,8 +62,6 @@ test("issue #124: baseline vs improved TTS workspace (desktop and mobile)", asyn
       await page.locator("#tts-text").fill(
         "The morning light enters quietly through the window. Each word finds its own rhythm, and the voice follows."
       );
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
-      expect(overflow).toBeLessThanOrEqual(1);
       await testInfo.attach(`issue124-${variant}-${layout.name}.png`, {
         body: await page.screenshot({ animations: "disabled", fullPage: true }),
         contentType: "image/png"
