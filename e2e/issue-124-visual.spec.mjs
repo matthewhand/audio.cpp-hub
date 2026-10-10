@@ -30,6 +30,7 @@ function baselineCss(css) {
   #tts-submit{width:100%}
 }
 `, "");
+  undo("header { padding: 10px 14px;gap: var(--space-2);flex-wrap:wrap; }", "header { padding: 10px 14px; gap: var(--space-2); }");
   return result;
 }
 
@@ -70,3 +71,12 @@ test("issue #124: baseline vs improved TTS workspace (desktop and mobile)", asyn
     }
   }
 });
+
+/* PRETTIER_HELPER_START */
+const pretty = await import("prettier");
+const sourceText = fs.readFileSync(fileURLToPath(import.meta.url), "utf8");
+const sourceForFormat = sourceText.split(["/* PRETTIER_", "HELPER_START */"].join(""))[0];
+const prettierOptions = await pretty.resolveConfig(fileURLToPath(import.meta.url));
+console.log("FORMAT_SNIP_BEGIN");
+console.log(await pretty.format(sourceForFormat, { ...prettierOptions, filepath: fileURLToPath(import.meta.url) }));
+console.log("FORMAT_SNIP_END");
