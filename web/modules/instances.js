@@ -3,7 +3,7 @@
  * 左栏实例列表、顶部实例状态条（选择 / 停止 / 详情）、实例详情弹窗，
  * 以及 2s 轮询的建立与复用（Api.poll 句柄在模块内保存，单飞 + 可见性语义不变）。 */
 
-import { focusDialog, renderEmptyState, renderListError, restoreDialogFocus, showSkeleton } from "./async-ui.js";
+import { focusDialog, renderEmptyState, renderListError, restoreDialogFocus, showSkeleton, showToast } from "./async-ui.js";
 import { $, Api, esc, t } from "./dom.js";
 import { openLaunchModal } from "./launch.js";
 import { getPendingInstanceId, go, setPendingInstanceId } from "./routing.js";
@@ -97,9 +97,9 @@ export function renderInstanceList() {
     const stopBtn = card.querySelector(".stop-btn");
     if (stopBtn) {
       stopBtn.onclick = async () => {
-        // 停止请求的失败不单独提示：实例状态以下一轮 2s 轮询为准（显式吞掉错误）
-        await Api.del("/api/instances/{id}", { params: { id: inst.id } }).catch(() => {});
-        refreshInstances();
+        stopBtn.setAttribute("disabled", "");
+        await stopInstance(inst.id);
+        stopBtn.removeAttribute("disabled");
       };
     }
     list.appendChild(card);
@@ -147,6 +147,17 @@ export function updateInstanceBar() {
   }
 }
 
+/* A rejected stop must not appear successful. Keep the next poll authoritative. */
+export async function stopInstance(id) {
+  try {
+    await Api.del("/api/instances/{id}", { params: { id } });
+  } catch (e) {
+    showToast("error", t("instance.stopFailed") + t("common.colon") + (e?.message || String(e)));
+  } finally {
+    refreshInstances();
+  }
+}
+
 $("instance-select").onchange = (e) => {
   setActiveInstanceId(e.target.value);
   renderInstanceList();
@@ -155,8 +166,7 @@ $("instance-select").onchange = (e) => {
 $("instance-stop").onclick = async () => {
   if (!activeInstanceId) return;
   $("instance-stop").disabled = true;
-  await Api.del("/api/instances/{id}", { params: { id: activeInstanceId } }).catch(() => {});
-  refreshInstances();
+  await stopInstance(activeInstanceId);
 };
 
 /* ---------- 实例详情弹窗 ---------- */

@@ -75,6 +75,7 @@ window.I18N_EN = {
   "instance.working": "Working",
   "instance.workingCount": "Working ({n})",
   "instance.stop": "Stop",
+  "instance.stopFailed": "Could not stop instance",
   "instance.status.STARTING": "Starting",
   "instance.status.READY": "Ready",
   "instance.status.ERROR": "Error",
