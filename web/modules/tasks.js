@@ -14,7 +14,8 @@
 
 import { showToast } from "./async-ui.js";
 import { $, Api, el, markRowEnter, t } from "./dom.js";
-import { refreshInstances } from "./instances.js";
+import { clearTaskStart, rememberStart } from "./elapsed.js";
+import { refreshInstances, syncBusyTimer } from "./instances.js";
 import { noteTask } from "./live-ticker.js";
 import { loadHistory, privacyOn, renderSidebarList } from "./sidebar.js";
 import { activeInstanceId, noteIdleFallback, runningStarts, selectedModel } from "./state.js";
@@ -24,13 +25,29 @@ export const taskViews = new Map(); // taskId → 已知任务（进行中 + 已
 export const taskDetails = new Map(); // taskId → 已展开的完整结果文本（侧栏「详情」缓存，随任务记录清除）
 export const TASK_VERB = { tts: "tts.verb", asr: "asr.verb", sep: "sep.verb", music: "music.verb", other: "other.verb" };
 
-/* 实例卡片「生成中…」计时的兜底起点：本模块轮询任务时顺带把 RUNNING 任务的
-   startedAt 登记到 state.runningStarts（SSE 不可用时 resolveBusy 用它）。
-   同实例任务串行，终态即删——不会删掉同实例另一条 RUNNING 的起点。 */
-function noteRunningStart(instanceId, startedAt) {
-  if (!instanceId) return;
-  if (startedAt) runningStarts.set(instanceId, startedAt);
-  else runningStarts.delete(instanceId);
+/* 实例卡片「生成中…」计时的兜底起点：RUNNING 的 startedAt 登记到
+   state.runningStarts（SSE 不可用时 resolveBusy 用它），同时并进 elapsed.js
+   的表。排队没有 startedAt，只记第一次的客户端时间。
+   终态不在这里清表——live-ticker 的 noteTask 要先用起点算墙上耗时。
+   一条 QUEUED 的轮询不得删掉同实例上另一条 RUNNING 的 runningStarts。 */
+function noteTaskAnchor(task) {
+  if (!task || !task.instanceId) return;
+  if (task.status === "RUNNING" || task.status === "QUEUED") {
+    if (task.status === "RUNNING" && task.startedAt) runningStarts.set(task.instanceId, task.startedAt);
+    rememberStart({ taskId: task.id, instanceId: task.instanceId }, {
+      startedAt: task.status === "RUNNING" ? task.startedAt : null,
+      now: Date.now()
+    });
+    return;
+  }
+  // 终态：同实例上若还有另一条 RUNNING，保留它的 startedAt。
+  let sibling = null;
+  for (const other of taskViews.values()) {
+    if (!other || other.id === task.id || other.instanceId !== task.instanceId) continue;
+    if (other.status === "RUNNING" && other.startedAt) { sibling = other; break; }
+  }
+  if (sibling) runningStarts.set(task.instanceId, sibling.startedAt);
+  else runningStarts.delete(task.instanceId);
 }
 
 export async function submitTask(req) {
@@ -57,7 +74,7 @@ export async function cancelTask(taskId) {
 
 export function trackTask(task) {
   taskViews.set(task.id, task);
-  noteRunningStart(task.instanceId, task.status === "RUNNING" ? task.startedAt : null);
+  noteTaskAnchor(task);
   // 首屏 / 模型切换重挂时就登记：等待本轮轮询回来之前状态行已经是新的
   noteTask(task);
   if (task.finishedAt && task.status !== "QUEUED" && task.status !== "RUNNING") {
@@ -70,7 +87,7 @@ export function trackTask(task) {
   let handle = null; // 句柄在 poll() 返回后才有值；回调（微任务）触发时已赋值
   handle = Api.poll("/api/tasks/{id}", (cur) => {
     taskViews.set(cur.id, cur);
-    noteRunningStart(cur.instanceId, cur.status === "RUNNING" ? cur.startedAt : null);
+    noteTaskAnchor(cur);
     // 合成按钮下方的实时状态行：完整任务对象在这里最全（含 result.durationSec）
     noteTask(cur);
     if (cur.finishedAt && cur.status !== "QUEUED" && cur.status !== "RUNNING") {
@@ -92,7 +109,9 @@ export function trackTask(task) {
         const gone = taskViews.get(task.id);
         taskViews.delete(task.id);
         taskDetails.delete(task.id);
-        noteRunningStart(gone && gone.instanceId, null);
+        if (gone && gone.instanceId) runningStarts.delete(gone.instanceId);
+        clearTaskStart({ taskId: task.id, instanceId: gone && gone.instanceId });
+        syncBusyTimer();
         renderSidebarList();
       }
       // 其余错误（网络抖动 / 5xx / 超时）视为瞬时，下轮再试

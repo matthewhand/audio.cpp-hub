@@ -11,6 +11,7 @@
  * I18N formatters for numbers / percentages / byte sizes. */
 
 import { $, el, t, Api } from "./dom.js";
+import { isJunkStatsModel } from "./junk.js";
 import {
   showSkeleton,
   renderEmptyState,
@@ -51,14 +52,6 @@ export async function loadStats() {
 }
 
 /* ---------- rendering ---------- */
-function isJunkStatsModel(m) {
-  const id = String(m && m.modelId || "");
-  // Hide synthetic / probe junk that pollutes the dashboard (#119).
-  if (!id || id === "nonexistent_model") return true;
-  if (/^nonexistent/i.test(id) || /^test[_-]?model/i.test(id)) return true;
-  return false;
-}
-
 function renderStats(data) {
   const body = $("stats-body");
   body.innerHTML = "";

@@ -5,6 +5,7 @@
 
 import { focusDialog, renderEmptyState, renderListError, restoreDialogFocus, showSkeleton } from "./async-ui.js";
 import { $, Api, esc, t } from "./dom.js";
+import { ELAPSED_TICK_MS, hasActiveStarts, rawStartMs, rememberStart, taskStartMs } from "./elapsed.js";
 import { openLaunchModal } from "./launch.js";
 import { selectModelById } from "./models.js";
 import { getPendingInstanceId, go, modelRoute, parseRoute, setPendingInstanceId } from "./routing.js";
@@ -81,37 +82,49 @@ function busyState(inst) {
   return resolveBusy(sse, { ...inst, runningStartedAt: runningStarts.get(inst.id) });
 }
 
-/* 计时片段：没有起点就不渲染（data-start 由共享计时器读取；类名刻意不叫 busy-elapsed——
-   那个名字已被忙碌遮罩 #busy-elapsed 占用，撞名会被它的 100ms 计时器互相清空） */
-function busyElapsedHtml(startMs) {
-  if (!startMs) return "";
-  const text = formatBusyElapsed((Date.now() - startMs) / 1000);
-  return ` <span class="badge-elapsed num" data-start="${startMs}">${esc(text)}</span>`;
+/* 把这一拍的忙碌起点并进唯一的表。已有更早的锚不会被更晚的 startedAt 盖掉。 */
+function noteBusyAnchor(inst, busy) {
+  if (!inst || !busy || !busy.busy) return;
+  rememberStart({ instanceId: inst.id }, { startedAt: busy.startMs, now: Date.now() });
 }
 
-/* 所有卡片 + 实例条 + 实时状态行共用一个定时器（不按徽标建 interval，重画后也不会叠加） */
-const BUSY_TICK_MS = 200;
+/* 计时片段：起点来自 elapsed.js 的表，不来自这一帧的 Date.now()。
+   类名刻意不叫 busy-elapsed——那个名字已被忙碌遮罩 #busy-elapsed 占用。
+   data-elapsed-id 是计时器的查找键；data-start 只是存下来的原始锚（展示时再钳）。 */
+function busyElapsedHtml(instId) {
+  const now = Date.now();
+  const shown = taskStartMs(instId, now);
+  if (shown == null) return "";
+  const raw = rawStartMs(instId);
+  const text = formatBusyElapsed((now - shown) / 1000);
+  const startAttr = raw != null ? raw : shown;
+  return ` <span class="badge-elapsed num" data-elapsed-id="${esc(instId)}" data-start="${startAttr}">${esc(text)}</span>`;
+}
+
+/* 卡片、工具栏、状态行共用这一个定时器。重画只换节点，不换表里的起点，
+   所以每拍都按 data-elapsed-id 现查现画。表还在、节点暂时没了（innerHTML
+   清空的间隙）也不停表，避免停在旧数字上再跳。表和节点都没了才停。 */
 let busyTimer = null;
 
 function updateBusyTimers() {
   const now = Date.now();
-  for (const node of document.querySelectorAll(".badge-elapsed")) {
-    const start = Number(node.dataset.start || 0);
-    const elapsed = start > 0 ? Math.max(0, (now - start) / 1000) : NaN;
-    node.textContent = start > 0 ? formatBusyElapsed(elapsed) : "";
+  for (const node of document.querySelectorAll("[data-elapsed-id]")) {
+    const id = node.getAttribute("data-elapsed-id");
+    const shown = taskStartMs(id, now);
+    if (shown == null) continue;
+    node.textContent = formatBusyElapsed((now - shown) / 1000);
   }
 }
 
-/* 每次重画后调用：有计时片段就开表，没有就停（页面没有生成任务时不走计时器）。
-   选择器同时覆盖「合成按钮下方的实时状态行」的计时片段（live-ticker.js 复用
-   同一个 data-start 约定，不自己开第二个定时器）。 */
+/* 每次重画后调用：立刻刷一帧（不会留下 0.0s / 旧数字），有任务才保持 interval。 */
 export function syncBusyTimer() {
-  if (!document.querySelector(".badge.generating:not(.hidden), .badge-elapsed[data-start]")) {
+  const nodes = document.querySelectorAll("[data-elapsed-id]");
+  if (!nodes.length && !hasActiveStarts()) {
     if (busyTimer) { clearInterval(busyTimer); busyTimer = null; }
     return;
   }
   updateBusyTimers();
-  if (!busyTimer) busyTimer = setInterval(updateBusyTimers, BUSY_TICK_MS);
+  if (!busyTimer) busyTimer = setInterval(updateBusyTimers, ELAPSED_TICK_MS);
 }
 
 /* ---------- 实例内存条（RAM / VRAM 进度条 + 迷你折线） ---------- */
@@ -594,13 +607,14 @@ export function renderInstanceList() {
     // 忙碌只有一个徽标：「生成中…」+ 脉冲圆点 + 计时。SSE 与轮询合并成同一个
     // 来源（resolveBusy），原先轮询的「工作中」徽标已合并进来。
     const busy = busyState(inst);
+    noteBusyAnchor(inst, busy);
     // Generating replaces the status pill (Ready / Starting / …). Idle shows
     // the status pill only. The idle-for label is hidden while generating.
     const statusBadge = busy.busy
       ? ""
       : `<span class="badge ${statusClass}">${esc(statusText(inst.status))}</span>`;
     const busyBadge = busy.busy
-      ? `<span class="badge generating">${esc(t("instance.generating"))}${busyElapsedHtml(busy.startMs)}</span>`
+      ? `<span class="badge generating">${esc(t("instance.generating"))}${busyElapsedHtml(inst.id)}</span>`
       : "";
     const idleHtml = idleLabelHtml(inst, busy.busy);
     const memHtml = memBlockHtml(withSparkSeries(inst));
@@ -687,8 +701,10 @@ export function updateInstanceBar() {
   // 与卡片同一个忙碌来源（resolveBusy）。生成中时藏起 Ready 胶囊。
   const gen = $("instance-generating");
   if (gen) {
-    gen.textContent = t("instance.generating");
-    if (showGen) gen.insertAdjacentHTML("beforeend", busyElapsedHtml(barBusy.startMs));
+    if (showGen && active) noteBusyAnchor(active, barBusy);
+    // innerHTML 一次换掉旧片段。textContent 会先清掉子节点，重绘间隙里
+    // 共享计时器会看见「没有 .badge-elapsed」而把 interval 停掉。
+    gen.innerHTML = esc(t("instance.generating")) + (showGen && active ? busyElapsedHtml(active.id) : "");
     gen.classList.toggle("hidden", !showGen);
   }
 

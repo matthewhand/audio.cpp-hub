@@ -24,6 +24,7 @@
   <link rel="modulepreload" href="/modules/dom.js">
   <link rel="modulepreload" href="/modules/async-ui.js">
   <link rel="modulepreload" href="/modules/state.js">
+  <link rel="modulepreload" href="/modules/elapsed.js">
   <link rel="modulepreload" href="/modules/routing.js">
   <link rel="modulepreload" href="/modules/command-palette-lazy.js">
   <link rel="modulepreload" href="/modules/shell.js">
@@ -35,6 +36,7 @@
   <link rel="modulepreload" href="/modules/task-events.js">
   <link rel="modulepreload" href="/modules/hub-chip.js">
   <link rel="modulepreload" href="/modules/live-ticker.js">
+  <link rel="modulepreload" href="/modules/junk.js">
   <link rel="modulepreload" href="/modules/activity.js">
   <link rel="modulepreload" href="/modules/char-count.js">
   <link rel="modulepreload" href="/modules/downloads-lazy.js">
@@ -98,8 +100,9 @@
       <details id="activity-panel" class="activity-panel" open>
         <summary data-i18n="activity.title">最近活动</summary>
         <div id="activity-strip" class="activity-strip"></div>
-        <div id="activity-empty" class="hint" data-i18n="activity.empty">暂无最近任务</div>
+        <div id="activity-empty" class="hint">暂无最近任务</div>
         <div id="activity-list" class="activity-list"></div>
+        <div class="activity-foot"><button type="button" id="activity-junk-toggle" class="act-junk-toggle hidden"></button></div>
       </details>
       <h2 data-i18n="nav.models">模型</h2>
       <div id="model-list" class="card-list"></div>

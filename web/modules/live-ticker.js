@@ -3,7 +3,8 @@
  * 概念稿里 Synthesize 按钮旁有一条状态行（「Streaming from breeze · RTF 1.18× ·
  * 3.2s」）。本模块是它的落地版，位置在 #tts-submit 下方（#tts-live），三态：
  *
- *   running   Streaming from <实例名> · 3.2s   （耗时与卡片徽标共用同一个定时器）
+ *   running   Streaming from <实例名> · 3.2s   （耗时读 elapsed.js 的同一张表，
+ *                                        由 instances.js 的唯一计时器重画；本模块不开第二个 interval）
  *   done      Done on <实例名> · 4.1s · RTF 1.18×
  *   failed    在 <实例名> 上失败 · <错误摘要>
  *   cancelled 已取消 <实例名> 上的任务
@@ -17,13 +18,12 @@
  * 终态 20s 后自动清空（TICKER_IDLE_MS）。 */
 
 import { $, Api, t } from "./dom.js";
+import { clearTaskStart, rawStartMs, rememberStart, resetElapsed, taskStartMs } from "./elapsed.js";
 import { formatBusyElapsed, instances, syncBusyTimer } from "./instances.js";
 import { activeInstanceId } from "./state.js";
 
 /* 终态展示时长：之后自动清空，不占着状态行 */
 const TICKER_IDLE_MS = 20000;
-/* 运行中的耗时数字：比卡片徽标更密，仍落在 100–250ms 里 */
-const TICKER_TICK_MS = 200;
 /* 错误摘要截断长度：状态行只放一行，超长错误信息交给侧栏与 title */
 const TICKER_ERROR_MAX = 60;
 
@@ -117,36 +117,16 @@ function clearIdleTimer() {
   if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
 }
 
-let tickerTimer = null;
-
-/* startedAt, else the event ts, else the local time the event was received. */
-function watchStartMs(w) {
-  const started = Number(w && w.startedAt);
-  if (Number.isFinite(started) && started > 0) return started;
-  const ts = Number(w && w.eventTs);
-  if (Number.isFinite(ts) && ts > 0) return ts;
-  const recv = Number(w && w.receivedAt);
-  if (Number.isFinite(recv) && recv > 0) return recv;
-  return Date.now();
+function anchorFor(taskId, instanceId) {
+  const byTask = taskId ? rawStartMs(taskId) : null;
+  if (byTask != null) return byTask;
+  return instanceId ? rawStartMs(instanceId) : null;
 }
 
-function stopTickerTick() {
-  if (tickerTimer) { clearInterval(tickerTimer); tickerTimer = null; }
-}
-
-function paintTickerElapsed() {
-  if (!el || !watch) return;
-  if (watch.status !== "RUNNING" && watch.status !== "QUEUED") return;
-  const span = el.querySelector && el.querySelector(".badge-elapsed");
-  if (!span) return;
-  const stamped = span.getAttribute && Number(span.getAttribute("data-start"));
-  const start = Number.isFinite(stamped) && stamped > 0 ? stamped : watchStartMs(watch);
-  span.textContent = formatBusyElapsed(tickerElapsedSec(start, Date.now()));
-}
-
-function ensureTickerTick() {
-  if (tickerTimer || typeof setInterval !== "function") return;
-  tickerTimer = setInterval(paintTickerElapsed, TICKER_TICK_MS);
+function shownFor(taskId, instanceId, now) {
+  const byTask = taskId ? taskStartMs(taskId, now) : null;
+  if (byTask != null) return byTask;
+  return instanceId ? taskStartMs(instanceId, now) : null;
 }
 
 function scheduleIdleClear() {
@@ -168,11 +148,13 @@ function remember(task) {
 function adoptActiveTask() {
   for (const task of knownTasks.values()) {
     if (task.instanceId === activeInstanceId && (task.status === "RUNNING" || task.status === "QUEUED")) {
+      rememberStart({ taskId: task.id, instanceId: task.instanceId }, {
+        startedAt: task.status === "RUNNING" ? task.startedAt : null,
+        now: Date.now()
+      });
       return watch = {
         taskId: task.id, instanceId: task.instanceId, status: task.status,
-        startedAt: Number(task.startedAt) || Number(task.createdAt) || Date.now(),
-        receivedAt: Date.now(),
-        startFromSse: false,
+        startedAt: anchorFor(task.id, task.instanceId),
         finishedAt: null, audioSec: null, error: ""
       };
     }
@@ -183,11 +165,27 @@ function adoptActiveTask() {
 /* ---------- 渲染 ---------- */
 
 /** 渲染状态行；没有要显示的内容时整行隐藏（不留空壳）。导出供语言切换时重画。 */
+function paintRunningSpan(baseText, elapsedSec, raw) {
+  const shown = formatBusyElapsed(elapsedSec);
+  // 先清掉上一帧的片段，再写入。textContent 单独赋值会在清空和插入之间
+  // 让共享计时器看不见节点。
+  el.innerHTML = "";
+  el.textContent = baseText + " · ";
+  el.title = baseText + " · " + shown;
+  const span = document.createElement("span");
+  span.className = "badge-elapsed num";
+  const id = watch.taskId || watch.instanceId;
+  span.setAttribute("data-elapsed-id", String(id));
+  span.setAttribute("data-start", String(raw));
+  span.textContent = shown;
+  el.appendChild(span);
+}
+
 export function renderLiveTicker() {
   if (!el) return;
   if (!watch) {
     clearIdleTimer();
-    stopTickerTick();
+    el.innerHTML = "";
     el.textContent = "";
     el.className = "live-ticker hidden";
     el.removeAttribute("title");
@@ -195,16 +193,18 @@ export function renderLiveTicker() {
     return;
   }
   const name = tickerInstanceName(watch, instances);
-  const start = watchStartMs(watch);
+  const now = Date.now();
+  const raw = anchorFor(watch.taskId, watch.instanceId) || finitePositive(watch.startedAt);
+  const shownStart = shownFor(watch.taskId, watch.instanceId, now);
   const doneAt = Number(watch.finishedAt) || 0;
   const phase = watch.status === "FAILED" ? "failed"
     : watch.status === "CANCELLED" ? "cancelled"
       : watch.status === "RUNNING" || watch.status === "QUEUED" ? "running" : "done";
-  // 运行中从起点钳到不小于 0（起点略超前本地时钟时立刻显示 0.0s）；终态用墙上耗时。
+  // 运行中用表里钳过的起点（未来锚显示 0.0s，不把钳制写回表）。终态用墙上耗时。
   const elapsedSec = phase === "running"
-    ? tickerElapsedSec(start, Date.now())
-    : (doneAt ? Math.max(0, (doneAt - start) / 1000) : NaN);
-  const wallSec = doneAt ? (doneAt - start) / 1000 : null;
+    ? (shownStart != null ? (now - shownStart) / 1000 : NaN)
+    : (doneAt && raw ? Math.max(0, (doneAt - raw) / 1000) : NaN);
+  const wallSec = doneAt && raw ? (doneAt - raw) / 1000 : null;
   const input = {
     phase: /** @type {"running"|"done"|"failed"|"cancelled"} */ (phase),
     name,
@@ -216,24 +216,21 @@ export function renderLiveTicker() {
   const { text, tone } = liveTickerText(input);
   el.className = "live-ticker" + (tone ? " " + tone : "");
   el.title = text;
-  // 运行中的耗时放在 data-start 片段里，本模块每 TICKER_TICK_MS 重画，
-  // 卡片徽标的定时器也会写同一片段。首帧就写入钳过的秒数，不等下一拍。
-  if (input.phase === "running") {
+  // 运行中的数字放进 data-elapsed-id 片段，由 instances.js 的唯一计时器重画。
+  // 本模块不再 setInterval。首帧就写入钳过的秒数，不等下一拍。
+  if (input.phase === "running" && shownStart != null && raw) {
     const base = liveTickerText({ ...input, elapsedSec: NaN });
-    const shown = formatBusyElapsed(elapsedSec);
-    el.textContent = base.text + " · ";
-    el.title = base.text + " · " + shown;
-    const span = document.createElement("span");
-    span.className = "badge-elapsed num";
-    span.setAttribute("data-start", String(start));
-    span.textContent = shown;
-    el.appendChild(span);
-    ensureTickerTick();
+    paintRunningSpan(base.text, elapsedSec, raw);
   } else {
-    stopTickerTick();
+    el.innerHTML = "";
     el.textContent = text;
   }
   syncBusyTimer();
+}
+
+function finitePositive(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 /* ---------- 入口：任务轮询与 SSE ---------- */
@@ -246,32 +243,36 @@ export function renderLiveTicker() {
 export function noteTask(task) {
   if (!task || !task.id) return;
   remember(task);
+  const running = task.status === "RUNNING" || task.status === "QUEUED";
+  if (running) {
+    // 只把服务端 startedAt（运行中）并进表。排队没有 startedAt，表里记下
+    // 第一次看到的客户端时间，之后的轮询不会把它改晚。
+    rememberStart({ taskId: task.id, instanceId: task.instanceId }, {
+      startedAt: task.status === "RUNNING" ? task.startedAt : null,
+      now: Date.now()
+    });
+  }
   if (task.instanceId !== activeInstanceId) {
-    // 不是选中实例：正在关注的那条被换走就收起状态行
+    // 不是选中实例：正在关注的那条被换走就收起状态行。起点仍留给那张卡片。
     if (watch && watch.taskId === task.id) watch = null;
     renderLiveTicker();
+    if (!running) clearTaskStart({ taskId: task.id, instanceId: task.instanceId });
     return;
   }
-  const running = task.status === "RUNNING" || task.status === "QUEUED";
   if (running) {
     if (!watch || watch.taskId !== task.id) {
       watch = {
         taskId: task.id, instanceId: task.instanceId, status: task.status,
-        startedAt: null, eventTs: null, receivedAt: Date.now(),
-        finishedAt: null, audioSec: null, error: "",
-        startFromSse: false
+        startedAt: anchorFor(task.id, task.instanceId),
+        finishedAt: null, audioSec: null, error: ""
       };
       clearIdleTimer();
     }
-    if (!watch.receivedAt) watch.receivedAt = Date.now();
-    // SSE task.started 的 ts 优先（规范：有推送起点就用它）；没有 ts 时才用轮询的 startedAt。
-    if (!watch.startFromSse) {
-      const polled = Number(task.startedAt) || Number(task.createdAt) || 0;
-      watch.startedAt = polled > 0 ? polled : (watch.startedAt || watch.receivedAt || Date.now());
-    }
     watch.status = task.status;
+    watch.startedAt = anchorFor(task.id, task.instanceId) || watch.startedAt;
   } else if (watch && watch.taskId === task.id) {
-    // 终态：只汇报状态行正在关注的那条。页面加载时带出的历史任务不翻出来。
+    // 终态：先读表里的起点算墙上耗时，再清表。页面加载时带出的历史任务不翻出来。
+    watch.startedAt = anchorFor(task.id, task.instanceId) || watch.startedAt;
     watch.status = task.status;
     watch.finishedAt = Number(task.finishedAt) || null;
     const res = task.result && typeof task.result === "object" ? task.result : {};
@@ -282,6 +283,10 @@ export function noteTask(task) {
     scheduleIdleClear();
   }
   renderLiveTicker();
+  if (!running) {
+    clearTaskStart({ taskId: task.id, instanceId: task.instanceId });
+    syncBusyTimer();
+  }
 }
 
 /**
@@ -293,27 +298,33 @@ export function noteTask(task) {
  */
 export function noteTaskEvent(name, data) {
   const d = data || {};
-  if (name === "task.started") {
+  if (name === "task.queued" || name === "task.started") {
     if (!d.instanceId || d.instanceId !== activeInstanceId) return;
-    const ts = Number(d.ts);
-    const hasTs = Number.isFinite(ts) && ts > 0;
     const now = Date.now();
+    rememberStart({ taskId: d.taskId, instanceId: d.instanceId }, {
+      sseTs: name === "task.started" ? d.ts : null,
+      live: name === "task.started",
+      now
+    });
+    const status = name === "task.started" ? "RUNNING" : "QUEUED";
+    // 排队事件不把正在跑的那条换成自己。
+    if (status === "QUEUED" && watch && watch.status === "RUNNING" && watch.taskId !== d.taskId) return;
     watch = {
-      taskId: d.taskId || null, instanceId: d.instanceId, status: "RUNNING",
-      startedAt: hasTs ? ts : now,
-      eventTs: hasTs ? ts : null,
-      receivedAt: now,
-      startFromSse: hasTs,
+      taskId: d.taskId || null, instanceId: d.instanceId, status,
+      startedAt: anchorFor(d.taskId, d.instanceId),
       finishedAt: null, audioSec: null, error: ""
     };
     clearIdleTimer();
-    // 记一份占位任务，任务轮询的完整对象到了会覆盖它（用于补齐 RTF）
-    remember({ id: d.taskId, instanceId: d.instanceId, status: "RUNNING", startedAt: watch.startedAt, createdAt: watch.startedAt });
+    remember({
+      id: d.taskId, instanceId: d.instanceId, status,
+      startedAt: watch.startedAt, createdAt: watch.startedAt
+    });
     renderLiveTicker();
     return;
   }
   if (name !== "task.finished" && name !== "task.failed" && name !== "task.cancelled") return;
   if (!d.taskId || !watch || d.taskId !== watch.taskId) return;
+  watch.startedAt = anchorFor(watch.taskId, watch.instanceId) || watch.startedAt;
   watch.status = name === "task.failed" ? "FAILED" : name === "task.cancelled" ? "CANCELLED" : "DONE";
   const dur = Number(d.durationMs);
   if (Number.isFinite(dur) && dur >= 0 && watch.startedAt) watch.finishedAt = watch.startedAt + dur;
@@ -363,7 +374,7 @@ export function startLiveTicker() {
 /* 仅供测试复位模块状态用（生产路径不会调用）。 */
 export function resetLiveTicker() {
   clearIdleTimer();
-  stopTickerTick();
   watch = null;
   knownTasks.clear();
+  resetElapsed();
 }

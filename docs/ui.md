@@ -3,7 +3,7 @@
 > 由 `npm run ui:inventory` 从 `web/index.html` 与 `web/*.js`、`web/modules/*.js` 自动生成，请勿手改。
 > 漂移检查：`npm run ui:inventory:check`（CI 会跑）。
 
-来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/legacy-globals.js`、`web/modules/async-ui.js`、`web/modules/command-palette-lazy.js`、`web/modules/command-palette.js`、`web/modules/dom.js`、`web/modules/downloads-lazy.js`、`web/modules/downloads.js`、`web/modules/file-browser-lazy.js`、`web/modules/file-browser.js`、`web/modules/instances.js`、`web/modules/launch.js`、`web/modules/models.js`、`web/modules/panels.js`、`web/modules/routing.js`、`web/modules/settings-lazy.js`、`web/modules/settings.js`、`web/modules/shell.js`、`web/modules/sidebar.js`、`web/modules/state.js`、`web/modules/stats-lazy.js`、`web/modules/stats.js`、`web/modules/tasks.js`、`web/modules/voices-panel-lazy.js`、`web/modules/voices-panel.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/wav.js`
+来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/legacy-globals.js`、`web/modules/activity.js`、`web/modules/async-ui.js`、`web/modules/char-count.js`、`web/modules/command-palette-lazy.js`、`web/modules/command-palette.js`、`web/modules/dom.js`、`web/modules/downloads-lazy.js`、`web/modules/downloads.js`、`web/modules/elapsed.js`、`web/modules/file-browser-lazy.js`、`web/modules/file-browser.js`、`web/modules/hub-chip.js`、`web/modules/instances.js`、`web/modules/junk.js`、`web/modules/launch.js`、`web/modules/live-ticker.js`、`web/modules/models.js`、`web/modules/panels.js`、`web/modules/routing.js`、`web/modules/settings-lazy.js`、`web/modules/settings.js`、`web/modules/shell.js`、`web/modules/sidebar.js`、`web/modules/state.js`、`web/modules/stats-lazy.js`、`web/modules/stats.js`、`web/modules/task-events.js`、`web/modules/tasks.js`、`web/modules/voices-panel-lazy.js`、`web/modules/voices-panel.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/wav.js`
 
 ## 面板地图
 
@@ -16,11 +16,11 @@
 | `instance-detail-modal` | modal | `instance.detailTitle` | 2 |
 | `launch-modal` | modal | `launch.title` | 28 |
 | `model-dl-modal` | modal | `dl.title` | 11 |
-| `panel-asr` | panel | `asr.title` | 5 |
-| `panel-music` | panel | `music.title` | 14 |
-| `panel-other` | panel | `other.title` | 4 |
-| `panel-sep` | panel | `sep.title` | 3 |
-| `panel-tts` | panel | `tts.title` | 19 |
+| `panel-asr` | panel | `asr.title` | 6 |
+| `panel-music` | panel | `music.title` | 15 |
+| `panel-other` | panel | `other.title` | 5 |
+| `panel-sep` | panel | `sep.title` | 4 |
+| `panel-tts` | panel | `tts.title` | 20 |
 | `settings-modal` | modal | `settings.title` | 43 |
 | `settings-pane-executables` | settings-pane | `exec.listTitle` | 13 |
 | `settings-pane-general` | settings-pane | `settings.general.language` | 7 |
@@ -32,6 +32,7 @@
 
 | id | 标签 | 类型 | i18n key | 事件 |
 | --- | --- | --- | --- | --- |
+| `activity-junk-toggle` | button | — | — | `click` |
 | `asr-copy` | button | — | `asr.copy` | `click` |
 | `asr-submit` | button | — | `asr.submit` | `click` |
 | `command-palette-input` | input | text | `palette.placeholder`<br>`palette.title` | `input`, `keydown` |
@@ -108,7 +109,7 @@
 | `tts-emotion-text` | input | text | `emotion.textPlaceholder` | — |
 | `tts-speaker-add` | button | — | `tts.speakerAdd` | `click` |
 | `tts-submit` | button | — | `tts.submit` | `click` |
-| `tts-text` | textarea | — | `tts.textPlaceholder` | — |
+| `tts-text` | textarea | — | `tts.textPlaceholder` | `input` |
 | `ui-language` | select | — | `settings.general.language` | `change` |
 | `ui-theme` | select | — | `settings.general.theme` | `change` |
 | `voice-add-btn` | button | — | `voices.add` | `click` |
@@ -175,6 +176,7 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | DELETE | `/api/executables/{param}` | `web/modules/settings.js` |
 | PUT | `/api/executables/{param}` | `web/modules/launch.js` |
 | GET | `/api/executables/{param}/devices` | `web/modules/launch.js` |
+| GET | `/api/farm/health` | `web/modules/hub-chip.js` |
 | GET | `/api/fs/list` | `web/modules/file-browser.js` |
 | GET | `/api/fs/list?path={param}` | `web/modules/file-browser.js` |
 | POST | `/api/fs/mkdir` | `web/modules/file-browser.js` |
@@ -198,11 +200,12 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | POST | `/api/profiles` | `web/modules/launch.js` |
 | DELETE | `/api/profiles/{param}` | `web/modules/launch.js` |
 | PUT | `/api/profiles/{param}` | `web/modules/launch.js` |
-| GET | `/api/stats` | `web/modules/stats.js` |
+| GET | `/api/stats` | `web/modules/hub-chip.js`, `web/modules/stats.js` |
+| GET | `/api/tasks` | `web/modules/activity.js` |
 | POST | `/api/tasks` | `web/modules/tasks.js` |
 | GET | `/api/tasks?modelId={param}` | `web/modules/tasks.js` |
 | DELETE | `/api/tasks/{param}` | `web/modules/sidebar.js`, `web/modules/tasks.js` |
-| GET | `/api/tasks/{param}` | `web/modules/tasks.js` |
+| GET | `/api/tasks/{param}` | `web/modules/live-ticker.js`, `web/modules/tasks.js` |
 | GET | `/api/tasks/{param}/result` | `web/modules/tasks.js` |
 | GET | `/api/voices` | `web/audio-picker.js`, `web/modules/voices-panel.js`, `web/voice-select.js` |
 | POST | `/api/voices` | `web/modules/voices-panel.js` |
@@ -216,10 +219,10 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 
 | 属性 | 静态出现次数 |
 | --- | --- |
-| `data-i18n` | 128 |
+| `data-i18n` | 136 |
 | `data-i18n-aria-label` | 27 |
 | `data-i18n-placeholder` | 24 |
 | `data-i18n-title` | 11 |
-| `data-mode` | 4 |
+| `data-mode` | 5 |
 | `data-section` | 3 |
 | `data-theme` | 1 |

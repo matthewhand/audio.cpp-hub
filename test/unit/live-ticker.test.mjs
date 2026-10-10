@@ -141,7 +141,7 @@ test("tickerInstanceName：任务自带名字优先，否则实例列表，最�
   assert.equal(en.tickerInstanceName(null, null), "");
 });
 
-test("running ticker shows 0.0s immediately and ticks within 100-250ms", () => {
+test("running ticker paints 0.0s immediately and does not start its own interval", () => {
   const world = createDomWorld();
   const live = world.el('<p id="tts-live" class="live-ticker hidden"></p>');
   world.document.body.appendChild(live);
@@ -150,6 +150,7 @@ test("running ticker shows 0.0s immediately and ticks within 100-250ms", () => {
   const formatBusyElapsed = makeFunction(
     extractFunction(readWeb("modules/instances.js"), "formatBusyElapsed")
   );
+  const elapsed = loadEsModule("modules/elapsed.js", { Date });
   const i18nBox = makeBrowserSandbox({ navigator: { language: "en-US" } });
   const I18N = loadI18n(i18nBox);
   I18N.setLang("en");
@@ -173,6 +174,11 @@ test("running ticker shows 0.0s immediately and ticks within 100-250ms", () => {
     activeInstanceId: "breeze-id",
     formatBusyElapsed,
     syncBusyTimer() {},
+    rememberStart: elapsed.rememberStart,
+    taskStartMs: elapsed.taskStartMs,
+    rawStartMs: elapsed.rawStartMs,
+    clearTaskStart: elapsed.clearTaskStart,
+    resetElapsed: elapsed.resetElapsed,
     Api: { get: () => Promise.resolve(null) },
     window: { addEventListener() {} }
   });
@@ -184,9 +190,7 @@ test("running ticker shows 0.0s immediately and ticks within 100-250ms", () => {
   assert.equal(span.textContent, "0.0s");
   assert.equal(span.getAttribute("data-start"), String(future));
   assert.equal(span.className.includes("num"), true);
-  assert.ok(timers.some((x) => x.ms >= 100 && x.ms <= 250));
-  span.textContent = "";
-  for (const timer of timers) if (timer.ms >= 100 && timer.ms <= 250) timer.fn();
+  assert.equal(timers.length, 0, "status line must not start a second interval");
   assert.equal(span.textContent, "0.0s");
 
   mod.resetLiveTicker();

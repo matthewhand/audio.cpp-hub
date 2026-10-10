@@ -66,6 +66,7 @@ function mount(world) {
 }
 
 function load(world) {
+  const elapsed = loadEsModule("modules/elapsed.js", { Date });
   const sandbox = {
     document: world.document,
     window: { dispatchEvent() {}, addEventListener() {} },
@@ -106,6 +107,11 @@ function load(world) {
     },
     busyStarts: new Map(),
     runningStarts: new Map(),
+    rememberStart: elapsed.rememberStart,
+    taskStartMs: elapsed.taskStartMs,
+    rawStartMs: elapsed.rawStartMs,
+    hasActiveStarts: elapsed.hasActiveStarts,
+    ELAPSED_TICK_MS: elapsed.ELAPSED_TICK_MS,
     idleFallbacks: new Map(),
     models: [],
     selectedModelId: null,

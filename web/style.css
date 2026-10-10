@@ -2496,7 +2496,7 @@ html.theme-switching header {
 .act-rect.cancelled { fill: var(--warn); }
 .activity-list {
   display: grid;
-  grid-template-columns: 5.5ch minmax(0, 1fr) max-content minmax(5.5ch, max-content);
+  grid-template-columns: minmax(5.5ch, max-content) minmax(0, 1fr) max-content minmax(5.5ch, max-content);
   column-gap: 8px;
   row-gap: 4px;
   align-items: center;
@@ -2528,4 +2528,18 @@ html.theme-switching header {
   white-space: nowrap;
 }
 .act-row .num { font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.activity-list .junk { opacity: 0.45; }
+.act-tick { stroke: var(--text-dim); stroke-width: 0.4; }
+.act-axis, .act-fallback-time { font-size: 3.2px; fill: var(--text-dim); }
+.act-axis-end { text-anchor: end; }
+.activity-foot { margin-top: 6px; }
+.act-junk-toggle {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
 .activity-panel .hint { margin: 4px 0 0; }

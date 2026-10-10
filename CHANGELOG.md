@@ -10,13 +10,13 @@
 - 每个运行中的实例采样 RSS，并尽力读取 VRAM（Linux DRM fdinfo，否则 `nvidia-smi`，失败则退避）。`GET /api/instances` 在第一次采样后带上可选的 `memory`（当前 / 峰值 / 时间加权平均）；任务结束时把 RUNNING 期间的峰值写成 `peakRamBytes` / `peakVramBytes`。非 Linux 省略 `memory`
 - `GET /api/events/stream`：任务生命周期的 Server-Sent Events（连接时 `hello`，约 15 秒一条 `: ping`，以及 `task.queued` / `task.started` / `task.finished` / `task.failed` / `task.cancelled`）。Web UI 在对应实例上显示「生成中…」，推送不可用时仍靠原来的 2 秒轮询。fan-out 不代理这条流
 - `memory` 对象新增三个可选字段：`ramIdleBytes` / `vramIdleBytes`（实例没有 RUNNING 任务期间观察到的**空闲基线**，即「这个模型闲着时占多少」，采到第一个空闲样本之前省略）与 `vramTotalBytes`（该进程所在 GPU 的显存总量，前端显存条的比例尺）。总量是尽力而为且绝不猜：nvidia 用 `nvidia-smi --query-gpu=index,name,memory.total`（每个 hub 生命周期只查一次，与既有进程查询共用超时与失败退避，不增加每轮采样开销；卡名允许逗号：首字段是序号、末字段是 MiB、中间拼回名字），AMD 用 `/sys/class/drm/card*/device/mem_info_vram_total`（同样只读一次）；统计不出「只有一张卡」就省略该字段。单卡且名字非空时另给 `gpuName`（多卡或 DRM 省略）。`idleSinceMs` 是最近一次忙→闲的时刻（epoch ms）；从未忙过则取第一次空闲采样，还没出现过空闲样本时省略
-- 实例卡片与实例状态条原来并排的两个忙碌徽标（轮询的「工作中」与 SSE 的「生成中…」）合并成一个「生成中…」：脉冲圆点 + 300ms 一跳的耗时计时（全部卡片共用一个定时器，没有忙碌任务时停掉）。忙碌判定由 SSE（`task.started` … 终态）与轮询（`taskCount` / 采样器 `busy` / 任务轮询的 `startedAt`）合并成一个纯函数，推送断开时自动回退到轮询
+- 实例卡片与实例状态条原来并排的两个忙碌徽标（轮询的「工作中」与 SSE 的「生成中…」）合并成一个「生成中…」：脉冲圆点 + 200ms 一跳的耗时计时（卡片、工具栏、合成状态行共用一个定时器，没有任务时停掉）。忙碌判定由 SSE（`task.started` … 终态）与轮询（`taskCount` / 采样器 `busy` / 任务轮询的 `startedAt`）合并成一个纯函数，推送断开时自动回退到轮询
 - 实例卡片与实例详情弹窗把 RAM / VRAM 的两行文字换成进度条：填充为当前值，细刻度线标峰值与均值，下方一行「Peak · Avg · Idle」（单位在行尾出现一次，≥ 1024 MiB 统一换算成 GiB）。显存条在有 GPU 总量时按总量取比例尺，占用 ≥ 85% 时用渐变提示「快满」；进度条带 `role="meter"` 与 aria 值 / 名称（中英双语），刻度线为纯装饰。总量未知或为 0 时比例尺是 max(峰值, 当前) × 1.25（显存把均值也算进这个 max），不再画成近满；总量已知时分母就是总量。RAM 在提供了正的总量时同样用总量
 - `memory` 对象再增加可选的 `ramSeries` / `vramSeries`：最近最多 60 个采样（字节，旧→新）给 WebUI 迷你折线。不足 2 个点省略；VRAM 从未读到时不写 `vramSeries`。采样器里是定长环形缓冲，不随实例寿命增长。旧 hub 没有这两个字段时，WebUI 用 2 秒实例轮询自己攒
 - WebUI：实例卡片标签行右端的 RAM / VRAM 折线；合成按钮下方的实时状态行（生成中写「Streaming from <实例> · <耗时>」，等宽数字跳动；完成后写墙上耗时，音频时长已知时再加 RTF = (durationMs/1000) / result.durationSec，SSE 的 `task.finished` 不带 `durationSec`，完成时补拉一次 `GET /api/tasks/{id}`，仍未知就省略 RTF；失败用错误样式；约 20 秒后清空）；页头 chip 优先显示农场「Farm 在线/总数 · 失败次数」（浏览器只打同域 `GET /api/farm/health`；URL 来自 `AUDIOCPP_HUB_FANOUT_URL`，默认 `http://127.0.0.1:18082/farm/health`，空字符串关闭；超时 1.5s、缓存约 5s、单飞；不可达时 `200 {"available":false}` 并退回本机「Hub 就绪数/总数」，失败次数仍是 `GET /api/stats` 的全量累计）；实例标题行保留「实时事件 / 轮询中」指示灯，并在旁边加合计显存（各实例 `vramBytes` 相加；总量按 GPU 名去重，同一张卡只计一次；没有任何总量时省略「/ 总量」，完全没有显存读数时整段省略）
 - 实例正在生成时只保留「生成中…」胶囊（脉冲圆点 + 耗时），藏起绿色 Ready；空闲时反过来。实例卡片和合成区上方的实例条用同一条规则。卡片副标题在原有型号 / 后端 / 端口上补 GPU 名（有 `gpuName` 时），右侧「idle 4m」来自 `idleSinceMs`，没有则退回最近一条任务的 `finishedAt`，生成中隐藏
 - 合成文本框右下角字数（hub 没有最大文本长度常量，只显示「N 字 / N chars」）
-- 左栏实例与模型之间的「最近活动」：`<details>` 默认展开，开合记在 `localStorage`（`hub-activity-open`）。最近约 20 条任务，时间、实例名、状态（圆点加文字，不是只靠颜色）、耗时；直播走任务 SSE（`task.queued` / `started` / `finished` / `failed` / `cancelled` 按 taskId 合并）。首屏用 `GET /api/tasks` 播种；SSE 没连上且面板打开时约 5 秒再拉一次。顶部一条最近 10 分钟的横条，每个实例一条泳道
+- 左栏实例与模型之间的「最近活动」：`<details>` 默认展开，开合记在 `localStorage`（`hub-activity-open`）。按完整时间戳跨天倒序，过滤测试任务之后最多 20 条；今天只显示钟点，昨天和更早带日期。直播走任务 SSE。首屏用 `GET /api/tasks` 播种；SSE 没连上且面板打开时约 5 秒再拉一次。顶部一条最近 1 小时的横条（每 10 分钟一刻度，每个真实实例一条泳道）；这一小时没有真实任务时均匀铺最近 10 条
 
 - `docs/farm.md` / `docs/agent-api.md` / `docs/deployment-10.0.0.36.md`：多机语音农场的拓扑、客户端契约与部署注意事项，入口统一指向 fan-out `http://10.0.0.36:18082`
 - Web UI：操作历史支持「复刻」上一条生成参数重新提交、音色库下拉支持按名搜索、用量看板增加近 14 天趋势
@@ -35,6 +35,7 @@
 
 ### Changed
 
+- 首屏性能预算再按实测上调：`elapsed.js` 与 `junk.js` 进入首屏模块图（子资源 37，预算 38），共用计时与最近 1 小时横条使 JS raw 412.2 KiB、gzip 151.2、合计 gzip 172.4。预算改为 JS raw 415、gzip 154、合计 gzip 175。CSS 预算不变
 - 首屏性能预算按实测上调（JS raw 387.4 KiB、gzip 142.9、CSS raw 79.9、gzip 21.0、合计 gzip 163.9、子资源 35）。最近活动、字数、内存条、状态行和农场 chip 都在首屏，不能拆成懒加载
 - 首屏体积优化：「点开才用得上」的六个视图（服务器端文件浏览器、音色库、下载管理、设置、用量看板、Ctrl/Cmd-K 命令面板）改为动态 `import()` 的懒加载 chunk，首屏外观层（角标、按钮、启动弹窗下拉、命令面板和弦）留在首屏模块图内；实测首屏 JS raw 313.5 → 310.2 KiB、gzip 114.4 → 113.6 KiB，预算按同一口径同步收紧
 - 客户端与文档入口统一指向农场 fan-out：`clients/audiocpp_client.py` 的 `DEFAULT_HUB` 改为 `http://10.0.0.36:18082`（TTS 与发现走 fan-out），新增 `DEFAULT_DIRECT_HUB`（`http://10.0.0.36:18080`）供 fan-out 不代理的 hub 内接口使用（`/api/tasks` STT、`/api/audio/upload`、`/api/voices`、`/api/history/*`），对应 `--direct-hub` / `AUDIOCPP_DIRECT_HUB_URL`；本地开发仍可两个 URL 同指 `http://127.0.0.1:18080`
@@ -44,6 +45,8 @@
 
 ### Fixed
 
+- 生成耗时（卡片「生成中…」、工具栏徽标、合成按钮下的状态行）会间歇性停在 0.0s、冻住几秒再跳、或比墙上时钟少一截。根因是两套 `setInterval` 同时写 `.badge-elapsed`：`instances.js` 的 busyTimer 读 DOM 上的 `data-start`，`live-ticker.js` 另有 tickerTimer，用 `watch.startedAt` / SSE `ts` / 收到时间另一套锚。每 2 秒轮询和 SSE 重画会把 `data-start` 换成更晚的锚：SSE 的 `busyStarts` 只记第一次的 ts（空 ts 会挡住轮询的 `startedAt`）；任务一离开 RUNNING（排队阶段，或同实例上的排队兄弟）就删掉 `runningStarts`；状态行每次轮询用 `startedAt || createdAt || Date.now()` 覆盖。更晚的锚再经 `Math.max(0, now-start)` 就显示 0.0s，或少掉中途被拨后的那一段（徽标出现约 2.6s 时读数停在 1.2s）。重画瞬间若匹配不到徽标节点，`syncBusyTimer` 会 `clearInterval`，数字冻住，下一帧再跳。不重画的探针只有一个锚，所以是准的。现改为 `elapsed.js` 一张表：服务端 `startedAt`，否则 SSE ts，否则第一次客户端时间；同一任务只保留更早的锚；服务端时间超前、或 live SSE 与本地钟差超过 2 秒，则改用收到时间；展示时把未来锚钳到 now，不写回。三处显示由同一个 200ms interval 重画，重画后立刻补一帧。任务结束清表。`live-ticker.js` 不再自己 `setInterval`
+- 最近活动默认隐藏测试任务（空身份、`nonexistent` / `test model` / `race` / `probe` / `bench` / `dummy` / `tmp`，以及不在当前实例列表且不在模型目录里的任务；目录还没到就跳过这一条）。页脚可「显示测试任务（已隐藏 N 条）」，展开后变淡，记在 `localStorage`（`hub-activity-show-junk`）。判定与用量看板共用 `web/modules/junk.js`
 - `GET /api/instances` 的顺序不再随 Go map 迭代抖动：按 `createdAt` 再按 `id`。前端卡片排序是全序（状态、createdAt、名称、id），不看选中态或忙碌态，2 秒轮询不会把选中的卡片在列表头尾之间跳
 - 文档：`docs/farm.md` 里 `.36` 主机一行指向不存在的 `HOST-DEPLOYMENT.md`，改为真实路径 `docs/deployment-10.0.0.36.md`
 - `clients/audiocpp_client.py`：`voices` / `history` 之前按 `id` 取值，与 hub 实际返回的 `vid`（音色库）和 `taskId`（历史列表）不符，`voices` / `history` 子命令会抛 `KeyError` 或打印 `None`；`history` 默认模型改为真实 modelId `breeze-tts`（此前是服务名 `breeze`，该路径 404）

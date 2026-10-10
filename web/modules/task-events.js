@@ -10,8 +10,9 @@
  * 收到 hello 是「Live events」，否则「Polling」——用户能直接看出当前是推送
  * 还是在轮询，不需要懂 SSE。 */
 
-import { refreshInstances, renderInstanceList, updateInstanceBar } from "./instances.js";
 import { $, t } from "./dom.js";
+import { clearTaskStart, rememberStart } from "./elapsed.js";
+import { refreshInstances, renderInstanceList, syncBusyTimer, updateInstanceBar } from "./instances.js";
 import { noteTaskEvent } from "./live-ticker.js";
 import { busyStarts } from "./state.js";
 
@@ -79,14 +80,26 @@ function publishTask(name, data) {
 }
 
 export function applyTaskEvent(name, data) {
-  runningTasks = reduceTaskEvents(runningTasks, name, data || {});
+  const d = data || {};
+  runningTasks = reduceTaskEvents(runningTasks, name, d);
   syncGenerating(runningTasks);
+  if (name === "task.queued" || name === "task.started") {
+    rememberStart({ taskId: d.taskId, instanceId: d.instanceId }, {
+      sseTs: name === "task.started" ? d.ts : null,
+      live: name === "task.started",
+      now: Date.now()
+    });
+  }
   renderInstanceList();
   updateInstanceBar();
-  // 合成按钮下方的实时状态行（选中实例上的任务）
-  noteTaskEvent(name, data || {});
+  // 合成按钮下方的实时状态行（选中实例上的任务）。终态要先读起点再清表。
+  noteTaskEvent(name, d);
+  if (TERMINAL.has(name)) {
+    clearTaskStart({ taskId: d.taskId, instanceId: d.instanceId });
+    syncBusyTimer();
+  }
   // 最近活动时间线只听这个事件，避免 task-events ↔ activity 成环。
-  publishTask(name, data || {});
+  publishTask(name, d);
   if (TERMINAL.has(name)) refreshInstances();
 }
 
