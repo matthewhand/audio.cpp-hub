@@ -75,6 +75,7 @@ window.I18N_ZH = {
   "instance.working": "工作中",
   "instance.workingCount": "工作中（{n}）",
   "instance.stop": "停止",
+  "instance.stopFailed": "停止实例失败",
   "instance.status.STARTING": "启动中",
   "instance.status.READY": "就绪",
   "instance.status.ERROR": "错误",
