@@ -178,6 +178,80 @@ func TestFarmHealthSingleFlight(t *testing.T) {
 	}
 }
 
+func TestFarmHealthHubLabel(t *testing.T) {
+	// The fan-out mirrors each up hub's GET /api/instances under hubs[].instances
+	// and echoes the hub's configured label. hubLabel is the entry whose instance
+	// ids include one of THIS hub's own instances; absent when none matches.
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"hubsUp": 3, "hubsTotal": 3,
+			"hubs": []map[string]any{
+				{
+					"label":    "gtx1080-primary",
+					"failures": 0,
+					"instances": []map[string]any{
+						{"id": "deadbeef", "instanceName": "breeze"},
+						{"id": "cafe1234", "instanceName": "sanotts"},
+					},
+				},
+				{
+					"label":     "rtx4090-backup",
+					"failures":  0,
+					"instances": []map[string]any{{"id": "other9999", "instanceName": "breeze"}},
+				},
+			},
+		})
+	}))
+	defer up.Close()
+
+	h := &Hub{farm: newFarmHealth(up.URL), instances: NewInstanceManager(19000, 18080)}
+	h.instances.mu.Lock()
+	for _, id := range []string{"cafe1234", "mine0001"} {
+		h.instances.items[id] = &Instance{ID: id}
+	}
+	h.instances.mu.Unlock()
+
+	body := farmBody(t, h.newHandler())
+	if body["hubLabel"] != "gtx1080-primary" {
+		t.Fatalf("hubLabel = %#v, want the entry that owns a local instance", body["hubLabel"])
+	}
+}
+
+func TestFarmHealthHubLabelNoMatch(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"hubsUp": 2, "hubsTotal": 2,
+			"hubs": []map[string]any{
+				{"label": "gtx1080-primary", "failures": 0, "instances": []map[string]any{{"id": "abc12345"}}},
+				{"label": "", "failures": 1, "instances": []map[string]any{{"id": "none0000"}}},
+			},
+		})
+	}))
+	defer up.Close()
+
+	h := &Hub{farm: newFarmHealth(up.URL), instances: NewInstanceManager(19000, 18080)}
+	h.instances.mu.Lock()
+	h.instances.items["mine0001"] = &Instance{ID: "mine0001"}
+	h.instances.mu.Unlock()
+
+	body := farmBody(t, h.newHandler())
+	if _, ok := body["hubLabel"]; ok {
+		t.Fatalf("hubLabel must be omitted when no entry matches: %#v", body)
+	}
+}
+
+func TestFarmHealthHubLabelNoInstances(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"hubsUp": 1, "hubsTotal": 1})
+	}))
+	defer up.Close()
+	h := &Hub{farm: newFarmHealth(up.URL), instances: NewInstanceManager(19000, 18080)}
+	body := farmBody(t, h.newHandler())
+	if _, ok := body["hubLabel"]; ok {
+		t.Fatalf("no instances anywhere must omit hubLabel: %#v", body)
+	}
+}
+
 type statusErr int
 
 func (e statusErr) Error() string { return http.StatusText(int(e)) }

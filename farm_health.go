@@ -46,6 +46,18 @@ type farmSummary struct {
 	HubsTotal int
 	Failures  int
 	CheckedAt string
+
+	// Hubs carries each entry's label plus the instance ids it reports.
+	// The handler resolves one of them to HubLabel by matching the local
+	// instance ids (see hubLabelFor); unexported, so it never reaches JSON.
+	Hubs []farmHubRef
+}
+
+// farmHubRef is one fan-out hub entry condensed to what the chip needs: its
+// configured label and the ids of the instances it currently reports.
+type farmHubRef struct {
+	Label       string
+	InstanceIDs map[string]struct{}
 }
 
 type farmHealth struct {
@@ -163,12 +175,13 @@ func parseFarmHealth(raw []byte, now time.Time) (farmSummary, bool) {
 		return farmSummary{}, false
 	}
 	failures := 0
+	var hubs []farmHubRef
 	if hubsRaw, present := probe["hubs"]; present && string(hubsRaw) != "null" {
-		var hubs []map[string]json.RawMessage
-		if err := json.Unmarshal(hubsRaw, &hubs); err != nil {
+		var entries []map[string]json.RawMessage
+		if err := json.Unmarshal(hubsRaw, &entries); err != nil {
 			return farmSummary{}, false
 		}
-		for _, h := range hubs {
+		for _, h := range entries {
 			fr, has := h["failures"]
 			if !has || string(fr) == "null" {
 				continue
@@ -178,6 +191,7 @@ func parseFarmHealth(raw []byte, now time.Time) (farmSummary, bool) {
 				return farmSummary{}, false
 			}
 			failures += n
+			hubs = append(hubs, farmHubRefFrom(h))
 		}
 	}
 	if okRaw, present := probe["ok"]; present {
@@ -199,7 +213,65 @@ func parseFarmHealth(raw []byte, now time.Time) (farmSummary, bool) {
 		HubsTotal: total,
 		Failures:  failures,
 		CheckedAt: checked,
+		Hubs:      hubs,
 	}, true
+}
+
+// farmHubRefFrom reads one hub entry's label and the ids under its
+// "instances" passthrough (the fan-out mirrors each up hub's GET /api/instances).
+// A missing / malformed label or instances array is "no match", not an error:
+// the summary is still usable for the counts, it just carries no hub label.
+func farmHubRefFrom(h map[string]json.RawMessage) farmHubRef {
+	ref := farmHubRef{InstanceIDs: map[string]struct{}{}}
+	if lbl, present := h["label"]; present && string(lbl) != "null" {
+		var s string
+		if err := json.Unmarshal(lbl, &s); err == nil {
+			ref.Label = strings.TrimSpace(s)
+		}
+	}
+	instRaw, present := h["instances"]
+	if !present || string(instRaw) == "null" {
+		return ref
+	}
+	var insts []map[string]json.RawMessage
+	if err := json.Unmarshal(instRaw, &insts); err != nil {
+		return ref
+	}
+	for _, inst := range insts {
+		idRaw, ok := inst["id"]
+		if !ok || string(idRaw) == "null" {
+			continue
+		}
+		var id string
+		if err := json.Unmarshal(idRaw, &id); err != nil {
+			continue
+		}
+		if id = strings.TrimSpace(id); id != "" {
+			ref.InstanceIDs[id] = struct{}{}
+		}
+	}
+	return ref
+}
+
+// hubLabelFor returns the label of the fan-out hub entry that reports one of
+// the local instance ids, in fan-out config order. Empty when no entry
+// matches (single-machine hub, a fan-out that does not list instances, or a
+// fan-out whose snapshot predates the local instances).
+func (f farmSummary) hubLabelFor(localIDs map[string]struct{}) string {
+	if len(localIDs) == 0 {
+		return ""
+	}
+	for _, hub := range f.Hubs {
+		if hub.Label == "" {
+			continue
+		}
+		for id := range hub.InstanceIDs {
+			if _, ok := localIDs[id]; ok {
+				return hub.Label
+			}
+		}
+	}
+	return ""
 }
 
 func jsonInt(raw json.RawMessage) (int, bool) {
@@ -215,6 +287,11 @@ func jsonInt(raw json.RawMessage) (int, bool) {
 
 // handleFarmHealth is GET /api/farm/health. Always 200. The URL is process
 // config (see farmFanoutURL); query parameters are ignored.
+//
+// hubLabel is the fan-out label of the hub entry that reports one of this
+// hub's own instances, so the WebUI chip can name the machine it is looking at
+// ("GTX 1080 hub"). It is omitted when nothing matches; the client falls back
+// to deriving a label from the local GPU name.
 func (h *Hub) handleFarmHealth(w http.ResponseWriter, _ *http.Request) {
 	var sum farmSummary
 	if h != nil && h.farm != nil {
@@ -224,11 +301,30 @@ func (h *Hub) handleFarmHealth(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"available": false})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	body := map[string]any{
 		"available": true,
 		"hubsUp":    sum.HubsUp,
 		"hubsTotal": sum.HubsTotal,
 		"failures":  sum.Failures,
 		"checkedAt": sum.CheckedAt,
-	})
+	}
+	if label := sum.hubLabelFor(localInstanceIDs(h)); label != "" {
+		body["hubLabel"] = label
+	}
+	writeJSON(w, http.StatusOK, body)
+}
+
+// localInstanceIDs is the id set of this hub's instances (all statuses).
+func localInstanceIDs(h *Hub) map[string]struct{} {
+	ids := map[string]struct{}{}
+	if h == nil || h.instances == nil {
+		return ids
+	}
+	for _, inst := range h.instances.List() {
+		if inst == nil || inst.ID == "" {
+			continue
+		}
+		ids[inst.ID] = struct{}{}
+	}
+	return ids
 }

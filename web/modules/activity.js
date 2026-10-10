@@ -8,7 +8,7 @@
  * 这一小时没有真实任务时，改成最近 10 条均匀铺开；一条都没有就不画横条。 */
 
 import { $, Api, esc, t } from "./dom.js";
-import { instances, syncBusyTimer } from "./instances.js";
+import { formatIdleFor, instances, syncBusyTimer } from "./instances.js";
 import { isJunkActivityRow } from "./junk.js";
 import { models, noteIdleFallback } from "./state.js";
 import { isTaskStreamLive } from "./task-events.js";
@@ -22,7 +22,14 @@ const VISIBLE_CAP = 20;
 const HOUR_MS = 60 * 60 * 1000;
 export const STRIP_PLOT_X = 36;
 export const STRIP_PLOT_W = 120;
-export const STRIP_MIN_W = 2;
+export const STRIP_MIN_W = 3;
+/* 横条的几何：顶部时间轴 + 每条泳道一行。条身 10px、圆角 2px，比原来的 5px 细条
+   在 2 倍缩放下更经得起看；泳道 18px 让条身上下都留出呼吸空间。 */
+const STRIP_AXIS_H = 10;
+const STRIP_LANE_H = 18;
+const STRIP_BAR_H = 10;
+/* 每 10 分钟一刻度：6 段 → 7 条刻度线 / 7 个标签（-60m … now） */
+const STRIP_TICKS = 6;
 
 const EVENT_STATUS = {
   "task.queued": "queued",
@@ -271,6 +278,8 @@ export function stripBar(left, width) {
  * Last-hour strip. left/width are fractions of the hour.
  * Running rows extend to now. Tasks that end before the window are omitted.
  * A row with no start time is omitted (queued-only).
+ * Each rect carries its instance name, status and wall duration so the
+ * <title> tooltip is self-describing (no colour legend needed).
  */
 export function stripRects(rows, nowMs) {
   const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
@@ -287,7 +296,7 @@ export function stripRects(rows, nowMs) {
     const a = Math.max(began, start);
     const b = Math.min(Math.max(end, a), now);
     if (b < a) continue;
-    // 同一毫秒结束的任务也要留一个点，画的时候再保证至少 2px。
+    // 同一毫秒结束的任务也要留一个点，画的时候再保证至少 3px。
     const span = Math.max(b - a, 1);
     const id = String(row.instanceId || row.instanceName || "?");
     if (!byInst.has(id)) byInst.set(id, { instanceName: "", rects: [] });
@@ -299,6 +308,7 @@ export function stripRects(rows, nowMs) {
       status: row.status || "queued",
       left: (a - start) / HOUR_MS,
       width: Math.min(1, span / HOUR_MS),
+      durMs: Math.max(0, end - began),
       tip: row.taskId || ""
     });
   }
@@ -313,39 +323,48 @@ export function stripRects(rows, nowMs) {
   return { lanes, windowMs: HOUR_MS };
 }
 
-/** Last 10 real tasks, oldest on the left, equal slots. Used when the hour is empty. */
-export function stripFallback(rows) {
-  const timed = sortActivity(rows).filter(r => activitySortAt(r) > 0).slice(0, 10).reverse();
-  const n = timed.length;
-  const byInst = new Map();
-  timed.forEach((row, i) => {
-    const slot = 1 / n;
-    const left = i * slot + slot * 0.12;
-    const width = Math.min(slot * 0.76, 0.2);
-    const id = String(row.instanceId || row.instanceName || "?");
-    if (!byInst.has(id)) byInst.set(id, { instanceName: "", rects: [] });
-    const bucket = byInst.get(id);
-    const label = row.instanceName && !isHex32(row.instanceName) ? String(row.instanceName).trim() : "";
-    if (label) bucket.instanceName = label;
-    const at = activitySortAt(row);
-    bucket.rects.push({
-      taskId: row.taskId || "",
-      status: row.status || "queued",
-      left,
-      width,
-      at,
-      tip: row.taskId || ""
-    });
+/**
+ * Lanes for an hour with no real task: one per real instance, no rects.
+ * The live instances list wins; rows add instances the list has not seen yet
+ * (the poll may not have run in this session). Same id sort as stripRects, so
+ * the lanes do not reshuffle when the first task of the hour finally lands.
+ */
+export function stripEmptyLanes(rows, list) {
+  const seen = new Map();
+  const add = (id, name) => {
+    const key = String(id || "").trim();
+    if (!key) return;
+    const prev = seen.get(key);
+    // 实例列表给定身份与顺序；它没带名字时，历史行上的名字补进来
+    if (prev) {
+      if (!prev.instanceName && name) prev.instanceName = name;
+      return;
+    }
+    seen.set(key, { instanceId: key, instanceName: name || "", rects: [] });
+  };
+  for (const inst of Array.isArray(list) ? list : []) {
+    if (!inst || !inst.id) continue;
+    const name = String(inst.instanceName || inst.name || inst.modelId || "").trim();
+    add(inst.id, name);
+  }
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (!row) continue;
+    const id = row.instanceId || row.instanceName;
+    if (!id) continue;
+    add(id, activityInstanceName(row, list));
+  }
+  // 名字一个都没有时才退回 id 前缀（与 laneName 的兜底一致）
+  return [...seen.keys()].sort().map(instanceId => {
+    const lane = seen.get(instanceId);
+    return { ...lane, instanceName: lane.instanceName || lane.instanceId.slice(0, 6) };
   });
-  const lanes = [...byInst.keys()].sort().map(instanceId => {
-    const bucket = byInst.get(instanceId);
-    return {
-      instanceId,
-      instanceName: bucket.instanceName || String(instanceId).slice(0, 6),
-      rects: bucket.rects
-    };
-  });
-  return { lanes };
+}
+
+/** Newest real task moment (0 = no task at all). Drives the "Last task" line. */
+export function lastTaskAt(rows) {
+  let at = 0;
+  for (const row of Array.isArray(rows) ? rows : []) at = Math.max(at, activitySortAt(row));
+  return at;
 }
 
 let rows = [];
@@ -423,10 +442,17 @@ function laneName(lane) {
     : String(lane.instanceId || "").slice(0, 6);
 }
 
+/* 一条任务条。<title> 自带实例名 / 状态 / 耗时，不依赖颜色图例也能读懂。
+   正在跑的条加 is-live：水平中线轻微呼吸（reduced-motion 下降级为静态着色）。 */
 function rectSvg(r, y) {
   const bar = stripBar(r.left, r.width);
-  const tip = r.tip || r.taskId || "";
-  return `<rect class="act-rect ${toneClass(r.status)}" x="${bar.x}" y="${y}" width="${bar.w}" height="5" rx="1"><title>${esc(tip)}</title></rect>`;
+  const tip = t("activity.barTip", {
+    name: r.instanceName || "",
+    status: t("activity.status." + (r.status || "queued")),
+    dur: formatDuration(r.durMs)
+  });
+  const live = r.status === "running" ? " is-live" : "";
+  return `<rect class="act-rect ${toneClass(r.status)}${live}" x="${bar.x}" y="${y}" width="${bar.w}" height="${STRIP_BAR_H}" rx="2"><title>${esc(tip)}</title></rect>`;
 }
 
 function namedRows(list) {
@@ -436,53 +462,70 @@ function namedRows(list) {
   });
 }
 
+/* 时间轴：每 10 分钟一条刻度线 + 一个标签（-60m / -50m … now）。
+   两端保留 axisStart / axisNow 两个既有键，中间用 axisMinus 拼。 */
+function axisTickLabel(i) {
+  if (i === STRIP_TICKS) return t("activity.axisNow");
+  if (i === 0) return t("activity.axisStart");
+  return t("activity.axisMinus", { n: (STRIP_TICKS - i) * 10 });
+}
+
+function tickX(i) {
+  return Math.round((STRIP_PLOT_X + (i / STRIP_TICKS) * STRIP_PLOT_W) * 10) / 10;
+}
+
+function stripSvg(lanes, mode) {
+  const n = lanes.reduce((sum, lane) => sum + lane.rects.length, 0);
+  const label = mode === "empty"
+    ? t("activity.stripEmptyAria", { lanes: lanes.length })
+    : t("activity.stripAria", { n, lanes: lanes.length });
+  const H = STRIP_AXIS_H + 4 + lanes.length * STRIP_LANE_H;
+  const W = STRIP_PLOT_X + STRIP_PLOT_W;
+  let body = "";
+  for (let i = 0; i <= STRIP_TICKS; i++) {
+    const x = tickX(i);
+    const cls = i === STRIP_TICKS ? "act-axis act-axis-end" : i === 0 ? "act-axis" : "act-axis act-axis-mid";
+    body += `<line class="act-tick" x1="${x}" y1="9" x2="${x}" y2="${H - 1}"></line>`;
+    body += `<text class="${cls}" x="${x}" y="7">${esc(axisTickLabel(i))}</text>`;
+  }
+  lanes.forEach((lane, i) => {
+    const y = STRIP_AXIS_H + 2 + i * STRIP_LANE_H;
+    const barY = Math.round((y + (STRIP_LANE_H - STRIP_BAR_H) / 2) * 10) / 10;
+    const name = laneName(lane);
+    body += `<g class="act-lane" aria-label="${esc(name)}">`;
+    body += `<text class="act-lane-label" x="1" y="${barY + STRIP_BAR_H - 2}">${esc(name)}</text>`;
+    body += `<rect class="act-lane-bg" x="${STRIP_PLOT_X}" y="${barY}" width="${STRIP_PLOT_W}" height="${STRIP_BAR_H}" rx="2"></rect>`;
+    for (const r of lane.rects) body += rectSvg({ ...r, instanceName: name }, barY);
+    body += `</g>`;
+  });
+  return `<svg class="act-strip${mode === "empty" ? " act-strip-empty" : " act-strip-hour"}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}" focusable="false">${body}</svg>`;
+}
+
 function stripHtml(real, now) {
   const named = namedRows(real);
   const hour = stripRects(named, now);
-  const hourHas = hour.lanes.some(l => l.rects.length);
-  if (!hourHas) {
-    const fb = stripFallback(named);
-    if (!fb.lanes.length) return "";
-    return paintStrip(fb.lanes, now, "fallback");
+  if (hour.lanes.some(l => l.rects.length)) {
+    return paintStrip(hour.lanes);
   }
-  return paintStrip(hour.lanes, now, "hour");
+  // 这一小时没有真实任务：不画空灰条，只留泳道基线 + 居中说明。
+  const lanes = stripEmptyLanes(named, currentInstances());
+  if (!lanes.length) return "";
+  return paintEmptyStrip(lanes, named, now);
 }
 
-function paintStrip(lanes, now, mode) {
-  const captionKey = mode === "hour" ? "activity.stripCaption" : "activity.stripFallback";
-  const caption = `<p class="act-strip-caption">${esc(t(captionKey))}</p>`;
-  const n = lanes.reduce((sum, lane) => sum + lane.rects.length, 0);
-  const label = t("activity.stripAria", { n, lanes: lanes.length });
-  const axisH = 10;
-  const laneH = 10;
-  const H = axisH + 4 + lanes.length * laneH;
-  const W = STRIP_PLOT_X + STRIP_PLOT_W;
-  let body = "";
-  if (mode === "hour") {
-    body += `<text class="act-axis" x="${STRIP_PLOT_X}" y="7">${esc(t("activity.axisStart"))}</text>`;
-    body += `<text class="act-axis act-axis-end" x="${W}" y="7">${esc(t("activity.axisNow"))}</text>`;
-    for (let i = 0; i <= 6; i++) {
-      const x = Math.round((STRIP_PLOT_X + (i / 6) * STRIP_PLOT_W) * 10) / 10;
-      body += `<line class="act-tick" x1="${x}" y1="9" x2="${x}" y2="${H - 1}"></line>`;
-    }
+function paintStrip(lanes) {
+  const caption = `<p class="act-strip-caption">${esc(t("activity.stripCaption"))}</p>`;
+  return caption + stripSvg(lanes, "hour");
+}
+
+function paintEmptyStrip(lanes, real, now) {
+  const caption = `<p class="act-strip-caption">${esc(t("activity.stripCaption"))}</p>`;
+  const note = [`<p class="act-strip-caption act-strip-empty-caption">${esc(t("activity.stripEmpty"))}</p>`];
+  const last = lastTaskAt(real);
+  if (last > 0) {
+    note.push(`<p class="act-strip-caption act-strip-sub">${esc(t("activity.stripLastTask", { t: formatIdleFor(last, now) }))}</p>`);
   }
-  lanes.forEach((lane, i) => {
-    const y = axisH + 2 + i * laneH;
-    const name = laneName(lane);
-    body += `<g class="act-lane" aria-label="${esc(name)}">`;
-    body += `<text class="act-lane-label" x="1" y="${y + 4}">${esc(name)}</text>`;
-    body += `<rect class="act-lane-bg" x="${STRIP_PLOT_X}" y="${y}" width="${STRIP_PLOT_W}" height="5" rx="1"></rect>`;
-    for (const r of lane.rects) {
-      body += rectSvg(r, y);
-      if (mode === "fallback" && r.at) {
-        const bar = stripBar(r.left, r.width);
-        body += `<text class="act-fallback-time" x="${bar.x}" y="${y + 9}">${esc(formatActivityWhen(r.at, now))}</text>`;
-      }
-    }
-    body += `</g>`;
-  });
-  const modeClass = mode === "fallback" ? " act-strip-fallback" : " act-strip-hour";
-  return caption + `<svg class="act-strip${modeClass}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}" focusable="false">${body}</svg>`;
+  return caption + note.join("") + stripSvg(lanes, "empty");
 }
 
 function realRows(part) {

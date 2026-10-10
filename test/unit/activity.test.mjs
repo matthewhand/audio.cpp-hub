@@ -2,9 +2,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createDomWorld } from "./helpers/dom-stub.mjs";
-import { loadEsModule, readWeb } from "./helpers/vm.mjs";
+import { extractFunction, loadEsModule, readWeb } from "./helpers/vm.mjs";
 
 const MIN = 60 * 1000;
+
+/* instances.formatIdleFor 是真源码（activity.js 从那里借「4h」这种相对时长）。
+   纯函数、只依赖入参，抽出来在 vm 里求值，避免测试里另写一份格式。 */
+const formatIdleFor = new Function(
+  `"use strict"; ${extractFunction(readWeb("modules/instances.js"), "formatIdleFor")}; return formatIdleFor;`
+)();
 
 function t(key, params) {
   const dict = {
@@ -14,9 +20,13 @@ function t(key, params) {
     "activity.hideJunk": "Hide test jobs",
     "activity.yesterday": "Yesterday {t}",
     "activity.stripAria": "{n} tasks across {lanes} instances in the last hour",
+    "activity.stripEmptyAria": "No task in the last hour across {lanes} instances",
     "activity.stripCaption": "Last hour",
-    "activity.stripFallback": "Recent",
+    "activity.stripEmpty": "No activity in the last hour",
+    "activity.stripLastTask": "Last task: {t} ago",
+    "activity.barTip": "{name} · {status} · {dur}",
     "activity.axisStart": "-60m",
+    "activity.axisMinus": "-{n}m",
     "activity.axisNow": "now",
     "activity.status.queued": "Queued",
     "activity.status.running": "Running",
@@ -56,6 +66,7 @@ function pure() {
     t,
     esc,
     isJunkActivityRow: junk.isJunkActivityRow,
+    formatIdleFor,
     Api: { get: () => Promise.resolve([]) },
     syncBusyTimer() {},
     noteIdleFallback() {},
@@ -206,6 +217,7 @@ function worldModule(world, extra) {
     t,
     esc,
     isJunkActivityRow: junk.isJunkActivityRow,
+    formatIdleFor,
     Date,
     Promise,
     setInterval(fn, ms) {
@@ -311,6 +323,9 @@ test("renderActivity writes status text, duration, and the strip without style a
   assert.match(svg, /class="act-tick"/);
   assert.equal(svg.split('class="act-tick"').length - 1, 7);
   assert.match(svg, />-60m</);
+  assert.match(svg, />-50m</);
+  assert.match(svg, />-30m</);
+  assert.match(svg, />-10m</);
   assert.match(svg, />now</);
   assert.match(svg, /aria-label="voice"/);
   assert.match(svg, /aria-label="song"/);
@@ -319,13 +334,20 @@ test("renderActivity writes status text, duration, and the strip without style a
   assert.equal(ui.list.querySelectorAll(".act-row").length, 3);
   assert.equal(ui.list.querySelectorAll(".act-dur").length, 3);
   assert.match(svg, /class="act-rect done ok"/);
-  assert.match(svg, /class="act-rect running"/);
+  assert.match(svg, /class="act-rect running is-live"/);
   assert.match(svg, /class="act-rect failed err"/);
   assert.match(svg, new RegExp('x="' + doneBar.x + '"'));
   assert.match(svg, new RegExp('width="' + doneBar.w + '"'));
   assert.match(svg, new RegExp('x="' + runBar.x + '"'));
   assert.match(svg, new RegExp('width="' + runBar.w + '"'));
-  assert.ok(doneBar.w >= 2);
+  assert.ok(doneBar.w >= 3, "a bar is at least 3 user units wide");
+  // 条身 10px、圆角 2px：2 倍缩放下才看得清
+  assert.doesNotMatch(svg, /height="5"/);
+  assert.equal(svg.split('height="10" rx="2"').length - 1, 5, "3 bars + 2 lane baselines");
+  // 每条任务条自带「实例 · 状态 · 耗时」的 <title>，不依赖颜色图例
+  assert.match(svg, /<title>voice · Failed · 5\.1s<\/title>/);
+  assert.match(svg, /<title>song · Running · 2m 00s<\/title>/);
+  assert.doesNotMatch(svg, /<title>[0-9a-f]{8}<\/title>/);
   assert.doesNotMatch(svg, /style=/);
   assert.equal(ui.strip.querySelectorAll("rect.act-rect").length, 3);
   assert.deepEqual(mod.__idle, [
@@ -558,10 +580,12 @@ test("renderActivity orders seeded rows, resolves names, and merges an SSE row b
   });
 });
 
-test("an hour with no real tasks falls back to the last jobs, and none at all omits the strip", () => {
+test("an hour with no real task keeps faint baselines and a centred caption", () => {
   const world = createDomWorld();
   const ui = mount(world);
-  const mod = worldModule(world);
+  const mod = worldModule(world, {
+    instances: [{ id: "i1", instanceName: "voice" }, { id: "i2", instanceName: "song" }]
+  });
   const now = 1_700_000_000_000;
   mod.seedActivity([
     {
@@ -577,17 +601,83 @@ test("an hour with no real tasks falls back to the last jobs, and none at all om
     }
   ]);
   mod.renderActivity(now);
-  assert.match(ui.strip.innerHTML, /act-strip-caption">Recent</);
-  assert.match(ui.strip.innerHTML, /act-strip-fallback/);
-  assert.match(ui.strip.innerHTML, /act-rect/);
-  assert.match(ui.strip.innerHTML, /act-fallback-time/);
+  const svg = ui.strip.innerHTML;
+  // 一条任务条都不画：没有假装在时间轴上的假条
+  assert.equal(ui.strip.querySelectorAll("rect.act-rect").length, 0);
+  // 两条淡基线 + 泳道名 + 时间轴照旧
+  assert.equal(ui.strip.querySelectorAll("rect.act-lane-bg").length, 2);
+  assert.match(svg, /act-strip-empty/);
+  assert.match(svg, /aria-label="voice"/);
+  assert.match(svg, /aria-label="song"/);
+  assert.match(svg, /class="act-tick"/);
+  assert.match(svg, />-60m</);
+  assert.match(svg, />now</);
+  // 居中说明 + 「最近任务：2h 前」（实例名来自实例列表，不只来自历史行）
+  assert.match(svg, /aria-label="No task in the last hour across 2 instances"/);
+  assert.match(
+    ui.strip.innerHTML,
+    /act-strip-empty-caption">No activity in the last hour/
+  );
+  assert.match(ui.strip.innerHTML, /act-strip-sub">Last task: 1h ago</);
   assert.match(ui.list.innerHTML, />voice</);
   assert.doesNotMatch(ui.strip.innerHTML, /style=/);
+
+  // 泳道不凭空出现：一小时内没有真实任务、且一台实例都不认识时，整条横条收起。
+  mod.__sandbox.instances = [];
+  mod.renderActivity(now);
+  assert.match(ui.strip.innerHTML, /No activity in the last hour/);
+  assert.match(ui.strip.innerHTML, /aria-label="voice"/);
+  assert.equal(ui.strip.querySelectorAll("rect.act-rect").length, 0);
+
+  // 一条任务都没有（也没有实例）：什么都不画，空态交给列表自己说
   mod.resetActivity();
   mod.renderActivity(now);
   assert.equal(ui.strip.innerHTML, "");
   assert.equal(ui.empty.textContent, "No recent tasks");
   assert.equal(ui.empty.classList.contains("hidden"), false);
+});
+
+test("stripEmptyLanes / lastTaskAt: one lane per real instance, sorted by id", () => {
+  const mod = pure();
+  const now = 1_700_000_000_000;
+  const rows = [
+    { taskId: "b", instanceId: "i2", instanceName: "song", startedAt: now - 120 * MIN },
+    { taskId: "a", instanceId: "i1", instanceName: "voice", startedAt: now - 130 * MIN }
+  ];
+  const fromRows = mod.stripEmptyLanes(rows, []);
+  assert.deepEqual(
+    Array.from(fromRows, l => l.instanceId),
+    ["i1", "i2"]
+  );
+  assert.deepEqual(
+    Array.from(fromRows, l => l.instanceName),
+    ["voice", "song"]
+  );
+  assert.deepEqual(
+    Array.from(fromRows, l => l.rects.length),
+    [0, 0]
+  );
+  // 实例列表优先，并按实例 id 排序（与 stripRects 同一套，落第一条任务时不换位）
+  const fromList = mod.stripEmptyLanes(rows, [
+    { id: "i9", instanceName: "zulu" },
+    { id: "i1" },
+    { id: "i3", modelId: "breeze" }
+  ]);
+  assert.deepEqual(
+    Array.from(fromList, l => l.instanceId),
+    ["i1", "i2", "i3", "i9"]
+  );
+  assert.equal(fromList[0].instanceName, "voice", "实例列表缺名字时用行上的");
+  assert.equal(fromList[1].instanceName, "song");
+  assert.equal(fromList[2].instanceName, "breeze", "列表条目只有 modelId 时用它");
+  assert.equal(fromList[3].instanceName, "zulu");
+  assert.equal(mod.stripEmptyLanes(rows.concat(rows), [{ id: "i1" }]).length, 2);
+  assert.equal(mod.stripEmptyLanes([], []).length, 0);
+  assert.equal(mod.stripEmptyLanes(null, null).length, 0);
+
+  assert.equal(mod.lastTaskAt(rows), now - 120 * MIN);
+  assert.equal(mod.lastTaskAt([]), 0);
+  assert.equal(mod.lastTaskAt(null), 0);
 });
 
 test("activity row grid keeps time, name, status, and duration in fixed columns", () => {

@@ -12,9 +12,9 @@ function load(lang) {
   const I18N = loadI18n(browser);
   I18N.setLang(lang);
   const src = readWeb("modules/hub-chip.js");
-  const bundle = ["hubChipModel", "farmChipModel", "selectChip"].map(n => extractFunction(src, n)).join("\n");
+  const bundle = ["hubChipModel", "farmChipModel", "selectChip", "gpuHubLabel"].map(n => extractFunction(src, n)).join("\n");
   const context = vm.createContext({ t: (k, p) => I18N.t(k, p), I18N });
-  return vm.runInContext(`${bundle}\n({ hubChipModel, farmChipModel, selectChip })`, context);
+  return vm.runInContext(`${bundle}\n({ hubChipModel, farmChipModel, selectChip, gpuHubLabel })`, context);
 }
 
 const en = load("en");
@@ -52,6 +52,67 @@ test("hubChipModel：zh 文案", () => {
   assert.equal(none.dot, "err");
   assert.equal(none.failed, "失败 2 次");
   assert.match(none.aria, /失败 2 次/);
+});
+
+test("farm chip 第三段：这台 hub 的 GPU 名", () => {
+  const withLabel = en.farmChipModel({ hubsUp: 4, hubsTotal: 4, failures: 0, hubLabel: "GTX 1080 hub" });
+  assert.equal(withLabel.hub, "GTX 1080 hub");
+  assert.equal(withLabel.text, "Farm 4/4");
+  assert.equal(withLabel.failed, "0 failures");
+  assert.match(withLabel.tip, /hubs up \/ hubs total/);
+  assert.match(withLabel.tip, /this hub: GTX 1080 hub/);
+
+  const partial = en.farmChipModel({ hubsUp: 3, hubsTotal: 4, failures: 2, hubLabel: "GTX 1080 hub" });
+  assert.equal(partial.hub, "GTX 1080 hub");
+  assert.match(partial.tip, /2 failures/);
+  assert.match(partial.tip, /this hub: GTX 1080 hub/);
+
+  // 没有标签 → 第三段为空，tooltip 不添那句话
+  const none = en.farmChipModel({ hubsUp: 4, hubsTotal: 4, failures: 0 });
+  assert.equal(none.hub, "");
+  assert.doesNotMatch(none.tip, /this hub/);
+
+  // aria 只描述就绪台数与失败次数，不重复第三段（tooltip 已说明）
+  assert.doesNotMatch(withLabel.aria, /GTX/);
+});
+
+test("gpuHubLabel：从本机实例的 gpuName 推短标签", () => {
+  const label = en.gpuHubLabel([
+    { memory: { gpuName: "NVIDIA GeForce GTX 1080" } }
+  ]);
+  assert.equal(label, "GTX 1080 hub");
+  assert.equal(en.gpuHubLabel([{ memory: { gpuName: "RTX 4090" } }]), "RTX 4090 hub");
+  assert.equal(en.gpuHubLabel([{ memory: { gpuName: "  nvidia geforce GTX 1660  " } }]), "GTX 1660 hub");
+  assert.equal(en.gpuHubLabel([{ memory: { gpuName: "NVIDIA" } }, { memory: { gpuName: "GeForce" } }]), "");
+  assert.equal(en.gpuHubLabel([{ memory: {} }, { memory: { gpuName: "GTX 1080" } }, { memory: { gpuName: "RTX 4090" } }]), "GTX 1080 hub");
+  // 没有 memory / 空列表 / 非数组：一律省略
+  assert.equal(en.gpuHubLabel([{ id: "i1" }, { memory: { gpuName: 42 } }]), "");
+  assert.equal(en.gpuHubLabel([]), "");
+  assert.equal(en.gpuHubLabel(null), "");
+  assert.equal(zh.gpuHubLabel([{ memory: { gpuName: "NVIDIA GeForce GTX 1080" } }]), "GTX 1080 主机");
+});
+
+test("selectChip：服务端 hubLabel 优先，其次本机 GPU 名", () => {
+  const local = { total: 2, ready: 2, failed: 0, instances: [{ id: "i1", memory: { gpuName: "NVIDIA GeForce RTX 4090" } }] };
+  const fromServer = en.selectChip({ available: true, hubsUp: 4, hubsTotal: 4, failures: 0, hubLabel: "GTX 1080 hub" }, local);
+  assert.equal(fromServer.source, "farm");
+  assert.equal(fromServer.model.hub, "GTX 1080 hub");
+
+  const derived = en.selectChip({ available: true, hubsUp: 4, hubsTotal: 4, failures: 0 }, local);
+  assert.equal(derived.model.hub, "RTX 4090 hub");
+
+  // 服务端给了空串（旧 hub 没有这个字段）也要能退回 GPU 名
+  const blank = en.selectChip({ available: true, hubsUp: 1, hubsTotal: 1, failures: 0, hubLabel: "  " }, local);
+  assert.equal(blank.model.hub, "RTX 4090 hub");
+
+  // 一台都没有 gpuName：第三段省略，chip 回到两段
+  const noGpu = en.selectChip({ available: true, hubsUp: 1, hubsTotal: 1, failures: 0 }, { total: 1, ready: 1, failed: 0, instances: [{ id: "i1" }] });
+  assert.equal(noGpu.model.hub, "");
+
+  // 本机 chip 不画第三段
+  const hub = en.selectChip({ available: false }, local);
+  assert.equal(hub.source, "hub");
+  assert.equal(hub.model.hub, "");
 });
 
 test("farmChipModel / selectChip：农场可用走农场，否则退回本机", () => {

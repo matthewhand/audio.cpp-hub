@@ -90,7 +90,8 @@ function noteBusyAnchor(inst, busy) {
 
 /* 计时片段：起点来自 elapsed.js 的表，不来自这一帧的 Date.now()。
    类名刻意不叫 busy-elapsed——那个名字已被忙碌遮罩 #busy-elapsed 占用。
-   data-elapsed-id 是计时器的查找键；data-start 只是存下来的原始锚（展示时再钳）。 */
+   data-elapsed-id 是计时器的查找键；data-start 只是存下来的原始锚（展示时再钳）。
+   卡片标题行右端、工具栏胶囊、状态行共用它，所以只有这一处写 data-elapsed-id。 */
 function busyElapsedHtml(instId) {
   const now = Date.now();
   const shown = taskStartMs(instId, now);
@@ -99,6 +100,33 @@ function busyElapsedHtml(instId) {
   const text = formatBusyElapsed((now - shown) / 1000);
   const startAttr = raw != null ? raw : shown;
   return ` <span class="badge-elapsed num" data-elapsed-id="${esc(instId)}" data-start="${startAttr}">${esc(text)}</span>`;
+}
+
+/* 「生成中…」胶囊的形状：.pulse 的一点两环（见 style.css）+ 文案。
+   胶囊里刻意不放耗时——卡片上它在标题行右端（cardElapsedHtml），
+   工具栏上没有那个位置，才留在胶囊里，两种布局都不会同时出现两个计时。 */
+function generatingBadgeHtml(instId, withElapsed) {
+  const pulse = `<span class="pulse" aria-hidden="true"><i></i><i class="r1"></i><i class="r2"></i></span>`;
+  const tail = withElapsed ? busyElapsedHtml(instId) : "";
+  return `<span class="badge generating">${pulse}${esc(t("instance.generating"))}${tail}</span>`;
+}
+
+/* 卡片标题行右端的「活动图标 + 耗时」：生成中时顶替 idle 标签。
+   与徽标 / 状态行同一个查找键（data-elapsed-id），由唯一的计时器重画；
+   起点这一帧就按 elapsed.js 的表钳好，不等下一拍。
+   stroke 走 currentColor，颜色由 .card-elapsed 的 --accent-live 给。 */
+function cardElapsedHtml(instId) {
+  const now = Date.now();
+  const shown = taskStartMs(instId, now);
+  if (shown == null) return "";
+  const raw = rawStartMs(instId);
+  const text = formatBusyElapsed((now - shown) / 1000);
+  const startAttr = raw != null ? raw : shown;
+  const tip = t("instance.generatingTip");
+  return `<span class="card-elapsed" title="${esc(tip)}">`
+    + `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-activity"/></svg>`
+    + `<span class="badge-elapsed num" data-elapsed-id="${esc(instId)}" data-start="${startAttr}">${esc(text)}</span>`
+    + `</span>`;
 }
 
 /* 卡片、工具栏、状态行共用这一个定时器。重画只换节点，不换表里的起点，
@@ -608,19 +636,20 @@ export function renderInstanceList() {
     // 来源（resolveBusy），原先轮询的「工作中」徽标已合并进来。
     const busy = busyState(inst);
     noteBusyAnchor(inst, busy);
+    if (busy.busy) card.classList.add("generating");
     // Generating replaces the status pill (Ready / Starting / …). Idle shows
-    // the status pill only. The idle-for label is hidden while generating.
+    // the status pill only. The idle-for label is hidden while generating, and
+    // the elapsed clock moves to the card header's right side instead.
     const statusBadge = busy.busy
       ? ""
       : `<span class="badge ${statusClass}">${esc(statusText(inst.status))}</span>`;
-    const busyBadge = busy.busy
-      ? `<span class="badge generating">${esc(t("instance.generating"))}${busyElapsedHtml(inst.id)}</span>`
-      : "";
+    const busyBadge = busy.busy ? generatingBadgeHtml(inst.id, false) : "";
+    const elapsedHtml = busy.busy ? cardElapsedHtml(inst.id) : "";
     const idleHtml = idleLabelHtml(inst, busy.busy);
     const memHtml = memBlockHtml(withSparkSeries(inst));
     const extra = [`#${inst.id}`];
     if (inst.executableName) extra.push(inst.executableName);
-    let html = `<div class="card-title"><span class="card-name">${esc(inst.instanceName || inst.modelId)}</span>${statusBadge}${busyBadge}${idleHtml}</div>
+    let html = `<div class="card-title"><span class="card-name">${esc(inst.instanceName || inst.modelId)}</span>${statusBadge}${busyBadge}${elapsedHtml}${idleHtml}</div>
       <div class="card-family">${esc(instanceSubtitle(inst, modelName))}</div>
       <div class="card-desc">${esc(extra.join(" · "))}</div>${memHtml}`;
     if (inst.status === "ERROR" && inst.errorMessage) {
@@ -704,7 +733,8 @@ export function updateInstanceBar() {
     if (showGen && active) noteBusyAnchor(active, barBusy);
     // innerHTML 一次换掉旧片段。textContent 会先清掉子节点，重绘间隙里
     // 共享计时器会看见「没有 .badge-elapsed」而把 interval 停掉。
-    gen.innerHTML = esc(t("instance.generating")) + (showGen && active ? busyElapsedHtml(active.id) : "");
+    // 工具栏上没有卡片那样的标题行，耗时仍放在胶囊里（同一份 .pulse 形状）。
+    gen.innerHTML = showGen && active ? generatingBadgeHtml(active.id, true) : "";
     gen.classList.toggle("hidden", !showGen);
   }
 

@@ -102,6 +102,13 @@
   --ok: #34d399;
   --warn: #fbbf24;
   --err: #f87171;
+  /* 「生成中 / 直播」语义的强调色（--accent 保持无彩墨色，不参与这一套）。
+     live = 标记本体，soft = 胶囊底色，ring = 卡片外圈，text = 胶囊文字。
+     两套主题分别取值，浅色主题下 --accent-text 与 --accent-soft 的对比度 ≥ 4.5:1。 */
+  --accent-live: #818cf8;
+  --accent-soft: #1e1b4b;
+  --accent-ring: rgba(129, 140, 248, 0.22);
+  --accent-text: #a5b4fc;
   --wave-bg: rgba(255, 255, 255, 0.035);
   --wave-dim: #4a4a52;
   --scrollbar: rgba(255, 255, 255, 0.14);
@@ -135,6 +142,11 @@
   --ok: #047857;
   --warn: #92400e;
   --err: #dc2626;
+  /* 「生成中 / 直播」语义的强调色：与 --accent 的墨色分开，浅色主题用靛蓝 */
+  --accent-live: #4f46e5;
+  --accent-soft: #eef2ff;
+  --accent-ring: rgba(79, 70, 229, 0.18);
+  --accent-text: #4338ca;
   --wave-bg: #f1f1f3;
   --wave-dim: #b8b8bf;
   --scrollbar: rgba(0, 0, 0, 0.16);
@@ -379,6 +391,11 @@ footer { flex: none; }
 .card-list .card { cursor: pointer; }
 .card-list .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
 .card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+/* 生成中的卡片：强调色描边 + 外圈。与 .card.selected 刻意不同——选中的是墨色细环，
+   生成中的是靛蓝粗环，两者叠加时可辨（先写 selected 再写 generating，后声明的覆盖
+   selected 的同优先级属性，而不把「选中」这件事抹掉）。 */
+.card.generating { border-color: var(--accent-live); box-shadow: 0 0 0 3px var(--accent-ring), var(--shadow); }
+.card.generating.selected { box-shadow: 0 0 0 3px var(--accent-ring), 0 0 0 1px var(--accent), var(--shadow); }
 .card-title { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
 .card-family { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 .card-desc { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
@@ -685,26 +702,40 @@ footer { flex: none; }
 }
 /* 「生成中…」徽标：实例卡片与实例状态条共用的唯一忙碌指示。
    原先这里与 .badge.working 分工（一个靠 2s 轮询的 taskCount、一个靠 SSE 推送），
-   现在合并成一个来源（web/modules/instances.js 的 resolveBusy）：脉冲圆点表示
-   「在跑」，右侧 .busy-elapsed 是这一跳的开始至今（共享一个 300ms 计时器）。
+   现在合并成一个来源（web/modules/instances.js 的 resolveBusy）。
+   形状取自概念稿的 .pulse：一个实心点 + 两圈向外扩散淡出的圆环（装饰，动画在
+   文件末尾按 prefers-reduced-motion 关掉，降级为三圈静止涟漪）。耗时数字不在胶囊里，
+   改到卡片标题行右端（.card-elapsed），一眼能看出「哪张卡在跑、跑了多久」。
    旧 .badge.working 仍保留——styleguide.html 的组件示例与 docs/motion.md 引用它。 */
 .badge.generating {
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  border: 1px solid color-mix(in srgb, var(--accent-live) 38%, transparent);
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
-.badge.generating::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  flex: none;
-  border-radius: 50%;
-  background: currentColor;
-  animation: badge-dot 1.2s var(--ease-in-out) infinite;
-}
 .badge.generating .badge-elapsed { font-weight: 600; font-variant-numeric: tabular-nums; opacity: .85; }
+/* 概念稿 .pulse：8px 的实心点 + r1/r2 两圈圆环，ring 用低透明度描边 */
+.pulse { position: relative; display: inline-block; width: 8px; height: 8px; flex: none; }
+.pulse i { position: absolute; inset: 0; border-radius: 50%; background: var(--accent-live); }
+.pulse i.r1 {
+  inset: -3px;
+  background: transparent;
+  border: 2px solid color-mix(in srgb, var(--accent-live) 45%, transparent);
+  animation: pulse-ring 1.8s var(--ease-in-out) infinite;
+}
+.pulse i.r2 {
+  inset: -6px;
+  background: transparent;
+  border: 1.5px solid color-mix(in srgb, var(--accent-live) 18%, transparent);
+  animation: pulse-ring 1.8s var(--ease-in-out) 0.45s infinite;
+}
+@keyframes pulse-ring {
+  0% { transform: scale(0.72); opacity: 0.35; }
+  55% { opacity: 1; }
+  100% { transform: scale(1); opacity: 0.4; }
+}
 @keyframes badge-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: .45; transform: scale(.72); }
@@ -1314,6 +1345,9 @@ footer { padding: 4px 24px 18px; }
 #hub-chip .chip-sep { width: 1px; height: 12px; flex: none; background: var(--border); }
 #hub-chip .chip-failures { font-weight: 600; }
 #hub-chip.has-fail .chip-failures { color: var(--err); }
+/* 第三段：这台 hub 的 GPU 名（"GTX 1080 hub"）。不进 aria-label（tooltip 已有），
+   视觉上比前两段更淡，避免抢「就绪台数」这个主信息。 */
+#hub-chip .chip-hub { color: var(--text-dim); font-weight: 500; }
 
 /* 对话框：.modal/.modal-overlay 为历史类名，.dialog/.dialog-overlay 为规范别名 */
 .modal-overlay, .dialog-overlay {
@@ -2297,6 +2331,10 @@ footer { padding: 4px 24px 18px; }
   /* 「生成中…」的脉冲圆点是装饰，降级为常亮点（文字与计时本身已是状态反馈） */
   .badge.generating::before { animation: none !important; }
   .badge.generating { animation: none !important; }
+  /* 概念稿的两圈涟漪：减少动态效果时停掉扩散，保留三圈静止的同心圆 */
+  .pulse i.r1, .pulse i.r2 { animation: none !important; transform: none; opacity: 1; }
+  /* 泳道里正在跑的条：同样只做静态着色 */
+  .act-rect.running { animation: none !important; }
   .act-status.running .act-dot { animation: none !important; }
   /* 骨架屏流光同样为装饰，降级为静态块 */
   .skeleton { animation: none !important; }
@@ -2444,7 +2482,7 @@ html.theme-switching header {
   .act-status.running .act-dot { animation: none !important; }
 }
 
-/* ---------- 实例卡片：GPU 副标题、空闲时长、页头显存合计 ---------- */
+/* ---------- 实例卡片：GPU 副标题、空闲时长、生成中耗时、页头显存合计 ---------- */
 .card-name { min-width: 0; }
 .idle-for {
   margin-left: auto;
@@ -2454,6 +2492,21 @@ html.theme-switching header {
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
+/* 卡片标题行右端的「活动图标 + 耗时」：生成中时顶替 idle 标签的位置。
+   颜色走 --accent-live（与生成中卡片描边同一支），图标 stroke=currentColor 自动跟随。
+   数字与左栏徽标 / 状态行共用 elapsed.js 的表与同一个计时器（data-elapsed-id）。 */
+.card-elapsed {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-live);
+  font-variant-numeric: tabular-nums;
+}
+.card-elapsed .icon { width: 13px; height: 13px; flex: none; }
 .sec-vram { font-variant-numeric: tabular-nums; font-weight: 600; }
 .sec-vram:empty { display: none; }
 
@@ -2482,18 +2535,29 @@ html.theme-switching header {
   line-height: 1.2;
   color: var(--text-dim);
 }
+/* 最近一小时没有真实任务：居中说明 + 「最近任务：x 前」，下面只留淡基线 */
+.act-strip-empty-caption, .act-strip-sub { text-align: center; font-size: 11px; }
+.act-strip-sub { margin-top: 1px; opacity: 0.9; }
 .act-strip { display: block; width: 100%; height: auto; }
 .act-lane-bg { fill: var(--border); }
+.act-strip-empty .act-lane-bg { fill-opacity: 0.55; }
 .act-lane-label {
   font-size: 3.5px;
   fill: var(--text-dim);
   pointer-events: none;
 }
+.act-rect { stroke: none; }
 .act-rect.queued { fill: var(--text-dim); }
 .act-rect.running { fill: var(--mem-ram); }
 .act-rect.done { fill: var(--ok); }
 .act-rect.failed { fill: var(--err); }
 .act-rect.cancelled { fill: var(--warn); }
+/* 正在跑的条：水平中线轻微呼吸；动效偏好为「减少」时由文件末尾降级为静态 */
+.act-rect.is-live { animation: act-rect-pulse 1.6s var(--ease-in-out) infinite; }
+@keyframes act-rect-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
 .activity-list {
   display: grid;
   grid-template-columns: minmax(5.5ch, max-content) minmax(0, 1fr) max-content minmax(5.5ch, max-content);
@@ -2531,6 +2595,7 @@ html.theme-switching header {
 .activity-list .junk { opacity: 0.45; }
 .act-tick { stroke: var(--text-dim); stroke-width: 0.4; }
 .act-axis, .act-fallback-time { font-size: 3.2px; fill: var(--text-dim); }
+.act-axis-mid { text-anchor: middle; }
 .act-axis-end { text-anchor: end; }
 .activity-foot { margin-top: 6px; }
 .act-junk-toggle {

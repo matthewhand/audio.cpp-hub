@@ -22,6 +22,8 @@ const dotEl = $("hub-chip-dot");
 const textEl = $("hub-chip-text");
 const sepEl = $("hub-chip-sep");
 const failEl = $("hub-chip-failures");
+const hubEl = $("hub-chip-hub");
+const hubSepEl = $("hub-chip-hub-sep");
 
 /* 实例列表是否已经到过手（农场不可用时，没到过就整体隐藏，不显示 0/0） */
 let loaded = false;
@@ -34,9 +36,10 @@ let lastSignature = "";
 /**
  * chip 的显示模型。纯函数，单测按 en / zh 两份词典跑。
  * 数据不可用（实例列表还没到过手）时调用方整行隐藏，不会走到这里——
- * 所以这里不需要「空数据」分支。
+ * 所以这里不需要「空数据」分支。hub 恒为空串：本机 chip 不画第三段
+ * （那是农场 chip 的「这台 hub 的 GPU 名」）。
  * @param {{total:number, ready:number, failed:number|null}} input
- * @returns {{dot:"ok"|"warn"|"err", text:string, failed:string, failN:number|null, aria:string, tip:string}}
+ * @returns {{dot:"ok"|"warn"|"err", text:string, failed:string, failN:number|null, hub:string, aria:string, tip:string}}
  */
 export function hubChipModel(input) {
   const total = Number(input && input.total) || 0;
@@ -55,6 +58,7 @@ export function hubChipModel(input) {
     failed: failedText,
     /* null = 统计还没到；0 也要显示「0 failures」，但不变红 */
     failN: failed,
+    hub: "",
     aria: failedText
       ? t("chip.ariaWithFailed", { text, failed: failedText })
       : t("chip.aria", { text }),
@@ -65,35 +69,65 @@ export function hubChipModel(input) {
 /**
  * 农场 chip。ok = 全部 hub 在线且失败为 0；一台都没在线或总数为 0 是 err；
  * 部分在线或有失败是 warn。failures 用既有的 chip.failures 复数。
- * @param {{hubsUp:number, hubsTotal:number, failures:number}} input
- * @returns {{dot:"ok"|"warn"|"err", text:string, failed:string, failN:number|null, aria:string, tip:string}}
+ * hubLabel 是这台 hub 的名字（服务端 /api/farm/health 的 hubLabel，缺失时由
+ * gpuHubLabel 从本机 GPU 名推），空字符串表示不画第三段。
+ * @param {{hubsUp:number, hubsTotal:number, failures:number, hubLabel?:string}} input
+ * @returns {{dot:"ok"|"warn"|"err", text:string, failed:string, failN:number|null, hub:string, aria:string, tip:string}}
  */
 export function farmChipModel(input) {
   const up = Math.max(0, Math.trunc(Number(input && input.hubsUp) || 0));
   const total = Math.max(0, Math.trunc(Number(input && input.hubsTotal) || 0));
   const failN = Math.max(0, Math.trunc(Number(input && input.failures) || 0));
+  const hub = input && typeof input.hubLabel === "string" ? input.hubLabel.trim() : "";
   const text = t("chip.farm", { up, total });
   const failedText = I18N.plural("chip.failures", failN);
   const dot = total === 0 || up === 0 ? "err" : up === total && failN === 0 ? "ok" : "warn";
+  const baseTip = failN ? t("chip.farmTipWithFailed", { failed: failedText }) : t("chip.farmTip");
   return {
     dot,
     text,
     failed: failedText,
     failN,
+    hub,
     aria: failN
       ? t("chip.farmAriaWithFailed", { text, failed: failedText })
       : t("chip.farmAria", { text }),
-    tip: failN ? t("chip.farmTipWithFailed", { failed: failedText }) : t("chip.farmTip")
+    tip: hub ? baseTip + t("chip.tipThisHub", { label: hub }) : baseTip
   };
 }
 
 /**
+ * 本机 GPU 名 → chip 第三段的短标签。「NVIDIA GeForce GTX 1080」→「GTX 1080 hub」。
+ * 去掉厂商与系列词后什么都不剩（例如只有 "NVIDIA"）时看下一台实例；
+ * 一台都没有 gpuName 就返回空串（那一节整段省略）。纯函数。
+ * @param {any[]} list 2s 轮询拿到的实例列表
+ * @returns {string}
+ */
+export function gpuHubLabel(list) {
+  for (const inst of Array.isArray(list) ? list : []) {
+    const mem = inst && inst.memory;
+    const raw = mem && typeof mem.gpuName === "string" ? mem.gpuName.trim() : "";
+    if (!raw) continue;
+    const short = raw.replace(/\b(?:nvidia|geforce)\b/gi, " ").replace(/\s+/g, " ").trim();
+    if (!short) continue;
+    return t("chip.gpuHub", { name: short });
+  }
+  return "";
+}
+
+/**
  * available === true 用农场摘要；否则用本机 hub chip。
- * @returns {{source:"farm"|"hub", model:{dot:"ok"|"warn"|"err", text:string, failed:string, failN:number|null, aria:string, tip:string}}}
+ * 农场摘要的 hubLabel（服务端匹配出来的，见 farm_health.go）优先；
+ * 它缺失时（旧 hub、单机部署）用本机 GPU 名推一个。两个都没有 → 不画第三段。
+ * @returns {{source:"farm"|"hub", model:{dot:"ok"|"warn"|"err", text:string, failed:string,
+ *           failN:number|null, hub:string, aria:string, tip:string}}}
  */
 export function selectChip(farmSummary, local) {
   if (farmSummary && farmSummary.available === true) {
-    return { source: "farm", model: farmChipModel(farmSummary) };
+    const raw = farmSummary.hubLabel;
+    const fromServer = typeof raw === "string" ? raw.trim() : "";
+    const hub = fromServer || gpuHubLabel(local && local.instances);
+    return { source: "farm", model: farmChipModel({ ...farmSummary, hubLabel: hub }) };
   }
   return { source: "hub", model: hubChipModel(local || {}) };
 }
@@ -101,21 +135,21 @@ export function selectChip(farmSummary, local) {
 /* 实例列表 → 就绪台数 / 总台数 */
 function counts() {
   const list = Array.isArray(instances) ? instances : [];
-  return { total: list.length, ready: list.filter(i => i && i.status === "READY").length };
+  return { total: list.length, ready: list.filter(i => i && i.status === "READY").length, instances: list };
 }
 
 /** 按当前数据重画 chip；数据不可用时整体隐藏。 */
 export function renderHubChip() {
   if (!el) return;
   const { total, ready } = counts();
-  const choice = selectChip(farm, { total, ready, failed: failures });
+  const choice = selectChip(farm, { total, ready, failed: failures, instances: counts().instances });
   // 农场还没答上来时，沿用「实例列表没到就藏起来」；农场可用则不必等本机列表。
   if (choice.source === "hub" && !loaded) {
     el.classList.add("hidden");
     return;
   }
   const model = choice.model;
-  const signature = [choice.source, model.text, model.failed, model.dot].join("|");
+  const signature = [choice.source, model.text, model.failed, model.dot, model.hub || ""].join("|");
   if (signature === lastSignature) return; // 数据没变就不动 DOM
   lastSignature = signature;
   el.classList.remove("hidden");
@@ -126,6 +160,10 @@ export function renderHubChip() {
   if (textEl) textEl.textContent = model.text;
   if (sepEl) sepEl.classList.toggle("hidden", !model.failed);
   if (failEl) failEl.textContent = model.failed;
+  /* 第三段：这台 hub 的 GPU 名。没有标签时整段（含分隔线）收起来，chip 回到两段。 */
+  const hub = model.hub || "";
+  if (hubSepEl) hubSepEl.classList.toggle("hidden", !hub);
+  if (hubEl) hubEl.textContent = hub;
   el.setAttribute("aria-label", model.aria);
   el.title = model.tip || "";
 }
