@@ -3,6 +3,11 @@
    - 新增文案请同时改 i18n.en.js，并用 scripts/check-i18n-parity.js 校验中英键一致
    - 值中的 {name} 为占位符，由 I18N.t(key, params) 插值 */
 window.I18N_ZH = {
+  /* ---------- TTS studio workspace ---------- */
+  "studio.kicker": "语音工作台",
+  "studio.intro": "撰写文稿、调整音色并生成音频。",
+  "studio.script": "文稿",
+  "studio.controls": "音色与演绎",
   /* ---------- 页头 / 导航 ---------- */
   "header.subtitle": "audiocpp_server 进程管理 & 音频工作台",
   "header.settingsTitle": "设置",
