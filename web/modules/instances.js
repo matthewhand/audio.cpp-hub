@@ -97,9 +97,9 @@ export function renderInstanceList() {
     const stopBtn = card.querySelector(".stop-btn");
     if (stopBtn) {
       stopBtn.onclick = async () => {
-        stopBtn.disabled = true;
+        stopBtn.setAttribute("disabled", "");
         await stopInstance(inst.id);
-        stopBtn.disabled = false;
+        stopBtn.removeAttribute("disabled");
       };
     }
     list.appendChild(card);
