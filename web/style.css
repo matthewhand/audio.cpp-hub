@@ -1991,7 +1991,7 @@ footer { padding: 4px 24px 18px; }
 
 /* ---------- 小屏适配（≤720px）：触摸目标 ≥44px、单列、内边距收敛 ---------- */
 @media (max-width: 720px) {
-  header { padding: 10px 14px; gap: var(--space-2); }
+  header { padding: 10px 14px;gap: var(--space-2);flex-wrap:wrap; }
   .brand { gap: var(--space-2); }
   .subtitle { display: none; }
   .header-actions { gap: var(--space-1); }
