@@ -61,6 +61,9 @@ window.I18N_ZH = {
   /* ---------- 实例条 ---------- */
   "instance.barLabel": "实例",
   "instance.noReady": "没有就绪实例",
+  "instance.hintNoReady": "{model} 没有就绪实例。启动此模型后才能提交任务。",
+  "instance.hintOtherReadyOne": "{model} 没有就绪实例。其他模型有一个就绪实例，但不能处理 {model} 的任务。",
+  "instance.hintOtherReadyMany": "{model} 没有就绪实例。其他模型有 {count} 个就绪实例，但都不能处理 {model} 的任务。",
   "instance.noReadySuffix": "（无就绪实例）",
   "instance.ready": "就绪",
   "instance.stopCurrent": "停止当前实例",
