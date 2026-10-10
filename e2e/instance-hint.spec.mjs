@@ -25,17 +25,19 @@ test("no ready instances: clearly explain how to start selected model", async ({
   await expect(card).toHaveAttribute("aria-live", "polite");
   await expect(card).toContainText("Supertonic needs its own instance");
   await expect(card).toContainText("No instances are ready");
-  await expect(page.locator("#instance-context-switch")).toBeHidden();
+  await expect(page.locator(".instance-context-switch")).toBeHidden();
   await expect(page.locator("#instance-pill")).toHaveClass(/warn/);
 });
 
-test("one other model ready: explain mismatch, offer switch, capture UI", async ({ page }, testInfo) => {
+test("one other model ready: explain mismatch, offer switch, capture UI", async ({
+  page
+}, testInfo) => {
   const backend = new MockBackend({ instances: [makeInstance("index_tts2")] });
   await openApp(page, backend, { modelId: selectedModelId, lang: "en" });
   const card = page.locator("#instance-context");
   await expect(card).toBeVisible();
   await expect(card).toContainText("Index TTS 2 is ready on this hub");
-  const action = page.locator("#instance-context-switch");
+  const action = page.locator(".instance-context-switch");
   await expect(action).toBeVisible();
   await expect(action).toHaveText("Switch to Index TTS 2 →");
   await expect(page.locator("#instance-list .badge.ready")).toHaveCount(1);
@@ -57,7 +59,7 @@ test("different other models ready: no misleading switch action", async ({ page 
   await expect(page.locator("#instance-context")).toContainText(
     "2 instances are ready for other models"
   );
-  await expect(page.locator("#instance-context-switch")).toBeHidden();
+  await expect(page.locator(".instance-context-switch")).toBeHidden();
 });
 
 test("matching ready instance: card disappears and task submission enables", async ({ page }) => {
