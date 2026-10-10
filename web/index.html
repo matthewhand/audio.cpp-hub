@@ -81,10 +81,26 @@
           <button id="launch-open-btn" class="btn" data-i18n="instance.create">启动模型</button>
         </div>
 
-        <!-- TTS 面板 -->
+        <!-- TTS studio: script / controls / output keep original IDs for model renderers. -->
         <div class="card panel-card" id="panel-tts">
-          <h2 id="tts-title" data-i18n="tts.title">语音合成</h2>
-          <label id="tts-text-block"><span data-i18n="tts.textLabel">合成文本</span><textarea id="tts-text" rows="4" data-i18n-placeholder="tts.textPlaceholder" placeholder="要合成的文本"></textarea></label>
+          <div class="studio-heading">
+            <span class="studio-overline" data-i18n="studio.kicker">VOICE STUDIO</span>
+            <h2 id="tts-title" data-i18n="tts.title">语音合成</h2>
+            <p class="studio-intro" data-i18n="studio.intro">Write your script, shape the voice, and generate audio.</p>
+          </div>
+          <div class="studio-grid">
+            <section class="studio-script" aria-labelledby="studio-script-heading">
+              <div class="studio-section-heading">
+                <span class="studio-index" aria-hidden="true">01</span>
+                <h3 id="studio-script-heading" data-i18n="studio.script">Script</h3>
+              </div>
+              <label id="tts-text-block"><span data-i18n="tts.textLabel">合成文本</span><textarea id="tts-text" rows="4" data-i18n-placeholder="tts.textPlaceholder" placeholder="要合成的文本"></textarea></label>
+            </section>
+            <section class="studio-controls" aria-labelledby="studio-controls-heading">
+              <div class="studio-section-heading">
+                <span class="studio-index" aria-hidden="true">02</span>
+                <h3 id="studio-controls-heading" data-i18n="studio.controls">Voice &amp; delivery</h3>
+              </div>
           <div id="tts-primary-instruction-row"></div>
           <div id="tts-language-row"></div>
           <div id="tts-mode-row"></div>
@@ -128,12 +144,19 @@
           </div>
 
           <details id="tts-advanced"><summary data-i18n="common.advanced">高级参数</summary><div class="grid" id="tts-advanced-grid"></div></details>
-          <button id="tts-submit" class="btn" data-i18n="tts.submit">合成</button>
+              <div class="studio-render">
+                <span class="studio-index" aria-hidden="true">03</span>
+                <button id="tts-submit" class="btn" data-i18n="tts.submit">合成</button>
+              </div>
+            </section>
+          </div>
+          <div class="studio-feedback">
           <div id="tts-msg" class="msg" role="status" aria-live="polite"></div>
           <div id="tts-stats" class="task-stats" aria-live="polite"></div>
           <div id="tts-result" class="hidden" aria-live="polite">
             <audio id="tts-player" controls preload="auto"></audio>
             <a id="tts-download" class="btn-ghost" download="tts.wav" data-i18n="tts.download">下载 wav</a>
+          </div>
           </div>
         </div>
 
