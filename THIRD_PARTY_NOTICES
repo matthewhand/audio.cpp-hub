@@ -39,7 +39,8 @@ Upstream license texts are available in each module's repository, e.g.
 Icons used (path data copied verbatim into the hidden `<svg>` sprite at the
 top of `web/index.html`, consumed via `<use href="#i-…">`): `menu`,
 `mic-vocal`, `history`, `download`, `chart-column`, `languages`, `settings`,
-`sun`, `moon`, `monitor`, `x`. Upstream: https://lucide.dev / ISC with
+`sun`, `moon`, `monitor`, `x`, `activity`, `clock`, `chevron-down`, `play`,
+`pause`, `rotate-ccw`. Upstream: https://lucide.dev / ISC with
 attribution, https://github.com/lucide-icons/lucide.
 
 ---

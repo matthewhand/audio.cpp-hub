@@ -451,8 +451,9 @@ export function memAriaText(row) {
     : t(base, params);
 }
 
-/* 填充宽度与峰值/均值刻度只写 data-w / data-l。CSP style-src 'self'（headers.go）会丢掉
-   markup 里的 style=""；插入 DOM 后由 applyMemBars 用 CSSOM 写成 width / left。 */
+/* 填充宽度与三个记号（峰值 / 均值 / 空闲）的位置只写 data-w / data-l。CSP
+   style-src 'self'（headers.go）会丢掉 markup 里的 style=""；插入 DOM 后由
+   applyMemBars 用 CSSOM 写成 width / left。 */
 function memRowHtml(row) {
   const key = row.kind === "vram" ? t("instance.memKeyVram") : t("instance.memKeyRam");
   /* 有 GPU 总量时标签行写「/ total」，不再叠一个 now；没有总量（RAM，或旧 hub

@@ -36,6 +36,7 @@
   <link rel="modulepreload" href="/modules/task-events.js">
   <link rel="modulepreload" href="/modules/hub-chip.js">
   <link rel="modulepreload" href="/modules/live-ticker.js">
+  <link rel="modulepreload" href="/modules/last-take.js">
   <link rel="modulepreload" href="/modules/junk.js">
   <link rel="modulepreload" href="/modules/activity.js">
   <link rel="modulepreload" href="/modules/char-count.js">
@@ -66,6 +67,9 @@
     <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
     <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/></symbol>
+    <symbol id="i-rotate-ccw" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
   </svg>
   <a id="skip-to-content" class="skip-link" href="#main-content" data-i18n="a11y.skipToContent">跳到主要内容</a>
   <header>
@@ -177,6 +181,18 @@
           </div>
 
           <details id="tts-advanced"><summary data-i18n="common.advanced">高级参数</summary><div class="grid" id="tts-advanced-grid"></div></details>
+          <!-- 上一条录音条（web/modules/last-take.js）：合成按钮上方，第一次合成完成前收起 -->
+          <div id="last-take" class="last-take hidden" role="group" aria-labelledby="last-take-title">
+            <button type="button" id="last-take-play" class="take-play" data-i18n-aria-label="take.play" data-i18n-title="take.play" aria-label="播放上一条录音" title="播放上一条录音"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false"><use href="#i-play"/></svg></button>
+            <div class="take-head">
+              <span class="take-ttl" id="last-take-title" data-i18n="take.title">上一条录音</span>
+              <span class="take-meta"><b id="last-take-name" class="take-name"></b><span class="take-dot" aria-hidden="true">·</span><span id="last-take-ago" class="take-ago"></span></span>
+            </div>
+            <div id="last-take-wave" class="take-wave" role="slider" tabindex="0" data-i18n-aria-label="take.seek" aria-label="波形：点击或用方向键定位" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="0:00 / 0:00"></div>
+            <span class="take-time num"><b id="last-take-cur">0:00</b> / <span id="last-take-dur">0:00</span></span>
+            <a id="last-take-download" class="btn-ghost take-ibtn" download="tts.wav" data-i18n-aria-label="take.download" data-i18n-title="take.download" aria-label="下载这条录音" title="下载这条录音"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-download"/></svg></a>
+            <button type="button" id="last-take-rerun" class="take-rerun" data-i18n-title="take.rerunTitle" title="用相同文本再生成一次"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-rotate-ccw"/></svg><span data-i18n="take.rerun">再生成</span></button>
+          </div>
           <button id="tts-submit" class="btn" data-i18n="tts.submit">合成</button>
           <div id="tts-live" class="live-ticker hidden" role="status" aria-live="polite"></div>
           <p id="tts-ready-hint" class="hint ready-hint hidden" role="status" data-i18n="tts.needReady">请先在上方启动或选择一个就绪实例，才能合成。</p>

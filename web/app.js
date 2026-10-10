@@ -27,6 +27,7 @@ import { closeLaunchModal, loadProfiles, renderLaunchProfiles } from "./modules/
 import { renderActivity, startActivity } from "./modules/activity.js";
 import { renderCharCount, startCharCount } from "./modules/char-count.js";
 import { renderHubChip, startHubChip } from "./modules/hub-chip.js";
+import { renderLastTake } from "./modules/last-take.js";
 import { renderLiveTicker, startLiveTicker } from "./modules/live-ticker.js";
 import { loadModels, renderModelList, startModelsPanel, updateQuickLaunchTitle } from "./modules/models.js";
 import { buildEmotionSliders, renderWorkspace } from "./modules/panels.js";
@@ -63,6 +64,7 @@ function rerenderAll() {
   /* 页头 chip、合成按钮下方的状态行、左栏实时事件灯：文案走词典，语言切换后重画一次 */
   renderHubChip();
   renderLiveTicker();
+  renderLastTake();
   renderLiveEvents();
   renderActivity();
   renderCharCount();

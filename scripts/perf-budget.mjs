@@ -205,6 +205,30 @@ const KIB = 1024;
  * CSS raw 87.8, CSS gzip 23.6, JS+CSS gzip 183.2, 37 subresource requests.
  * Budgets sit a little above those numbers.
  *
+ * 2026-10 "last take" strip (measured): the concept's player strip above the
+ * Synthesize button joined the initial graph as `modules/last-take.js` (play /
+ * pause, an 80-bar inline <svg> waveform decoded once through WebAudio, relative
+ * time, download, re-run) plus its ~3 KiB of CSS and the strip's static markup in
+ * index.html. It is on the initial view — the strip paints the moment the first
+ * task finishes — so it cannot move to a lazy chunk.
+ * `npm run perf:budget` on this tree:
+ *
+ *   | 指标            | 之前（before） | 之后（after） | 变化          |
+ *   | ---------------- | -------------- | ------------- | ------------- |
+ *   | 初始 JS raw      | 434.1 KiB      | 452.2 KiB     | **+18.1 KiB** |
+ *   | 初始 JS gzip     | 159.7 KiB      | 167.0 KiB     | +7.3 KiB      |
+ *   | 初始 CSS raw     | 87.8 KiB       | 90.9 KiB      | +3.1 KiB      |
+ *   | 初始 CSS gzip    | 23.6 KiB       | 24.4 KiB      | +0.8 KiB      |
+ *   | JS+CSS gzip 合计 | 183.2 KiB      | 191.4 KiB     | +8.2 KiB      |
+ *   | 初始子资源请求数 | 37             | 38            | +1（一整个模块）|
+ *
+ * The caps below are re-pinned on those measured values (the same basis as every
+ * earlier step): jsRawKiB 437 -> 453, jsGzipKiB 162 -> 168, cssRawKiB 89 -> 91,
+ * cssGzipKiB 24 -> 25, totalGzipKiB 185 -> 192. subresourceRequests stays at 38,
+ * which is exactly what this tree now measures. Most of the JS growth is comment
+ * prose in a new file, not new work on the graph; the honest lever for the next
+ * round remains moving click-to-open panels behind `import()` facades.
+ *
  * What is left, and why none of it was done here (measured, not guessed):
  *
  *   | 候选                            | gzip   | 不做的原因                                              |
@@ -219,12 +243,12 @@ const KIB = 1024;
  *   | `pwa.js`                        | 1.7 K  | 渐进增强而非点击才用；挪走只省 1 次请求换一个形状变更。    |
  */
 export const BUDGETS = {
-  jsRawKiB: 437, // 初始 JS 未压缩合计（实测 434.1）
-  jsGzipKiB: 162, // 初始 JS gzip 传输合计（实测 159.7）
-  cssRawKiB: 89, // 初始 CSS 未压缩（实测 87.8）
-  cssGzipKiB: 24, // 初始 CSS gzip 传输（实测 23.6）
-  totalGzipKiB: 185, // JS + CSS gzip 合计（实测 183.2，不含 HTML，HTML 很小)
-  subresourceRequests: 38, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 37）
+  jsRawKiB: 453, // 初始 JS 未压缩合计（实测 452.2）
+  jsGzipKiB: 168, // 初始 JS gzip 传输合计（实测 167.0）
+  cssRawKiB: 91, // 初始 CSS 未压缩（实测 90.9）
+  cssGzipKiB: 25, // 初始 CSS gzip 传输（实测 24.4）
+  totalGzipKiB: 192, // JS + CSS gzip 合计（实测 191.4，不含 HTML，HTML 很小)
+  subresourceRequests: 38, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 38）
   ttiTargetMs: 1500 // 目标 TTI（本地/局域网，中端笔电）——浏览器指标，本脚本不测量
 };
 const CSS = ["style.css"];

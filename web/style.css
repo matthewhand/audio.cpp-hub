@@ -1019,6 +1019,106 @@ details summary:hover { text-decoration: underline; }
 #tts-result { margin-top: 14px; display: flex; align-items: center; gap: 12px; }
 #tts-result audio { flex: 1; height: 38px; }
 
+/* ---------- 上一条录音条（#last-take，位于合成按钮上方） ----------
+   形状取自概念稿 .take：圆形播放键 + 「标题 / 实例 · 多久之前」+ 波形 + 时间
+   + 下载 + 再生成。波形是一棵内联 <svg viewBox="0 0 80 28">，80 根 <rect>
+   的 x/y/width/height/rx 全是 SVG 属性（CSP style-src 'self' 不允许 style
+   属性），已播 / 未播只靠 .played / .rest 两个类换色——没有 keyframes，
+   「减少动态效果」偏好下同样只剩一次颜色切换（颜色过渡由 L6 的全局规则关掉）。 */
+.last-take {
+  margin-top: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+.take-play {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  /* 墨色字/白底：浅色主题 --accent-contrast 是白字配深靛蓝，深色主题是近黑字配
+     浅靛蓝，两套主题的图形对比度都 ≥ 4.5:1（图标按图形对象要求 ≥ 3:1） */
+  background: var(--accent-live);
+  color: var(--accent-contrast);
+  cursor: pointer;
+  transition: transform var(--dur-1) var(--ease-out);
+}
+.take-play:hover { transform: scale(1.06); }
+.take-play .icon { width: 14px; height: 14px; margin-left: 1px; }
+.take-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 74px;
+  line-height: 1.25;
+  flex: 0 1 auto;
+}
+.take-ttl { font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
+.take-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.take-name { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.take-wave {
+  flex: 1 1 auto;
+  min-width: 60px;
+  height: 28px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.take-wave-svg { display: block; width: 100%; height: 28px; }
+.take-wave rect { fill: var(--wave-dim); transition: fill var(--dur-1) var(--ease-out); }
+.take-wave rect.played { fill: var(--accent-live); }
+.take-time {
+  flex: none;
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.take-time b { color: var(--text); font-weight: 600; }
+.take-ibtn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+.take-ibtn .icon { width: 14px; height: 14px; }
+.take-rerun {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.take-rerun:hover { background: var(--ring); }
+.take-rerun .icon { width: 12px; height: 12px; color: var(--text-dim); }
+
 /* ---------- AudioPicker ---------- */
 .picker {
   border: 1px solid var(--card-border);

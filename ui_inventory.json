@@ -24,6 +24,7 @@
       "web/modules/hub-chip.js",
       "web/modules/instances.js",
       "web/modules/junk.js",
+      "web/modules/last-take.js",
       "web/modules/launch.js",
       "web/modules/live-ticker.js",
       "web/modules/models.js",
@@ -202,6 +203,12 @@
         "emotion.tabsLabel",
         "emotion.textLabel",
         "emotion.textPlaceholder",
+        "take.download",
+        "take.play",
+        "take.rerun",
+        "take.rerunTitle",
+        "take.seek",
+        "take.title",
         "tts.download",
         "tts.needReady",
         "tts.speakerAdd",
@@ -578,6 +585,27 @@
       "handlers": [{ "event": "click", "sources": ["web/modules/shell.js"] }]
     },
     {
+      "id": "last-take-download",
+      "tag": "a",
+      "type": null,
+      "i18n": ["take.download", "take.download"],
+      "handlers": []
+    },
+    {
+      "id": "last-take-play",
+      "tag": "button",
+      "type": null,
+      "i18n": ["take.play", "take.play"],
+      "handlers": [{ "event": "click", "sources": ["web/modules/last-take.js"] }]
+    },
+    {
+      "id": "last-take-rerun",
+      "tag": "button",
+      "type": null,
+      "i18n": ["take.rerunTitle"],
+      "handlers": [{ "event": "click", "sources": ["web/modules/last-take.js"] }]
+    },
+    {
       "id": "launch-adv-options",
       "tag": "textarea",
       "type": null,
@@ -923,10 +951,10 @@
     }
   ],
   "dataHooks": [
-    { "name": "data-i18n", "count": 136 },
-    { "name": "data-i18n-aria-label", "count": 27 },
+    { "name": "data-i18n", "count": 138 },
+    { "name": "data-i18n-aria-label", "count": 30 },
     { "name": "data-i18n-placeholder", "count": 24 },
-    { "name": "data-i18n-title", "count": 11 },
+    { "name": "data-i18n-title", "count": 14 },
     { "name": "data-mode", "count": 5 },
     { "name": "data-section", "count": 3 },
     { "name": "data-theme", "count": 1 }
@@ -938,7 +966,9 @@
     { "key": "ArrowDown", "negated": false, "source": "web/modules/command-palette.js" },
     { "key": "ArrowDown", "negated": false, "source": "web/modules/file-browser.js" },
     { "key": "ArrowLeft", "negated": false, "source": "web/audio-picker.js" },
+    { "key": "ArrowLeft", "negated": false, "source": "web/modules/last-take.js" },
     { "key": "ArrowRight", "negated": false, "source": "web/audio-picker.js" },
+    { "key": "ArrowRight", "negated": false, "source": "web/modules/last-take.js" },
     { "key": "ArrowUp", "negated": false, "source": "web/modules/async-ui.js" },
     { "key": "ArrowUp", "negated": false, "source": "web/modules/command-palette.js" },
     { "key": "ArrowUp", "negated": false, "source": "web/modules/file-browser.js" },
@@ -946,6 +976,7 @@
     { "key": "End", "negated": false, "source": "web/audio-picker.js" },
     { "key": "End", "negated": false, "source": "web/modules/async-ui.js" },
     { "key": "End", "negated": false, "source": "web/modules/file-browser.js" },
+    { "key": "End", "negated": false, "source": "web/modules/last-take.js" },
     { "key": "Enter", "negated": false, "source": "web/audio-picker.js" },
     { "key": "Enter", "negated": false, "source": "web/modules/command-palette.js" },
     { "key": "Enter", "negated": false, "source": "web/modules/file-browser.js" },
@@ -958,6 +989,7 @@
     { "key": "Home", "negated": false, "source": "web/audio-picker.js" },
     { "key": "Home", "negated": false, "source": "web/modules/async-ui.js" },
     { "key": "Home", "negated": false, "source": "web/modules/file-browser.js" },
+    { "key": "Home", "negated": false, "source": "web/modules/last-take.js" },
     { "key": "k", "negated": false, "source": "web/modules/command-palette-lazy.js" },
     { "key": "K", "negated": false, "source": "web/modules/command-palette-lazy.js" },
     { "key": "Tab", "negated": true, "source": "web/app.js" }

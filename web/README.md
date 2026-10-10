@@ -39,7 +39,7 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 ### 1. 硬约束
 
 - **无构建、无框架**：一个 `index.html`（538 行）+ 11 个经典 `<script>`（共享全局作用域）
-  + 1 个 `<script type="module">` 入口及其 18 个首屏 `web/modules/*.js`（外加 6 块按需加载的 chunk）。**模块不做任何转译**——
+  + 1 个 `<script type="module">` 入口及其 19 个首屏 `web/modules/*.js`（外加 6 块按需加载的 chunk）。**模块不做任何转译**——
   浏览器原生支持 ES 模块，所以「拆模块」不需要打包器。
   模块数量是**首屏请求数**（浏览器一个文件一个请求，见首屏的 `modulepreload` 约定）：
   别把它拆成一堆十几行的「微模块」——`npm run perf:budget` 的请求数预算就是拿它挡着的。
@@ -56,7 +56,7 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 - **服务侧**：`api.go:165` 的 `staticHandler` 用 `http.Dir("web")` 提供服务，目录请求只回 `index.html`（禁用目录列表），`index.html` 不缓存、其余资源缓存 1 小时（`api.go:203`、`api.go:205`）。
   工作目录由 `main.go:68` 的 `ensureWorkDir` 自动定位（当前目录没有 `web/` 时尝试上级与 exe 目录）。
 - **前端侧**：没有路由库、没有状态管理库。`web/app.js` 是 117 行的**引导层**（导入模块、跨模块重画、
-  最上层弹窗的 Esc / Tab 焦点锁定、启动顺序），业务逻辑按职责拆进 `web/modules/*.js`（18 个首屏模块 + 6 块懒加载 chunk）；
+  最上层弹窗的 Esc / Tab 焦点锁定、启动顺序），业务逻辑按职责拆进 `web/modules/*.js`（19 个首屏模块 + 6 块懒加载 chunk）；
   其余经典脚本是自包含组件（IIFE 或挂到 `window` 的 class），只暴露构造器 / 方法。
 - **数据流是手写的单向流**：DOM 事件 → `Api.*`（`web/api-client.js`）→ 更新模块级 `let` 状态 → 重新渲染相关 DOM。没有响应式绑定，改了 state 必须手动调用对应 render 函数。
 - **HTTP 只有唯一出口**：`web/modules/dom.js:27` 绑定 `window.AudioCppHub.api`，各模块一律
@@ -96,7 +96,7 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 #### 3.2 ES 模块（`web/app.js` + `web/modules/*.js`）
 
 `app.js` 是**引导层**：导入各模块、承担跨模块的重画（`rerenderAll`）与最上层弹窗的 Esc / Tab
-焦点锁定，然后按原顺序建立轮询、首屏加载并应用初始 hash。业务逻辑按职责拆成 18 个模块
+焦点锁定，然后按原顺序建立轮询、首屏加载并应用初始 hash。业务逻辑按职责拆成 19 个模块
 （下表即**首屏静态模块图**，浏览器一定会取的那批；六个 `*-lazy.js` 是懒加载外观层，
 见 3.2 的 chunk 表）：
 
@@ -109,12 +109,13 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 | `modules/routing.js`（122） | #88 hash 路由：`parseRoute` / `go` / `goPanel` / `applyRoute` + 路由意图 `pendingModelId` / `pendingInstanceId` / `pendingSettingsSection` + `window.hub*` 钩子 | `ROUTE_VIEWS` `web/modules/routing.js:25`，`parseRoute` `:41`，`go` `:58`，`applyRoute` `:80` |
 | `modules/command-palette-lazy.js`（64） | **全局 Ctrl/Cmd-K 和弦的唯一所有者**（首屏必需：命令面板没有入口按钮）+ 命令面板的懒加载外观。`ensure` `web/modules/command-palette-lazy.js:25`，`openCommandPalette` `:40`，`closeCommandPalette` `:52`，和弦注册 `:58` |
 | `modules/shell.js`（45） | 主题三态循环（`window.HubTheme`）、语言切换、移动端抽屉 | — |
-| `modules/models.js`（164） | 模型列表（按 category 分组）、已配置黯淡态、空态、HF 仓库/镜像菜单（含 `role=menu` 键盘导航）、`selectModelById` | `loadModels` `web/modules/models.js:24`，`hfMirrorOf` `:55`，`renderModelList` `:109`，`selectModelById` `:147` |
+| `modules/models.js`（215） | 模型列表（按 category 分组）、已配置黯淡态、空态、HF 仓库/镜像菜单（含 `role=menu` 键盘导航）、左栏模型区的折叠与开合记忆、`selectModelById` | `loadModels` `web/modules/models.js:73`，模型区折叠 `:21`–`70`，`hfMirrorOf` `:109`，`renderModelList` `:163`，`selectModelById` `:204` |
 | `modules/settings-lazy.js`（201） | **可执行文件登记**（首屏必需：启动弹窗下拉 + 模型卡片已配置态 + 设备探测缓存 + 增删改表单字段）+ 设置弹窗的懒加载外观 | `deviceCache` `web/modules/settings-lazy.js:29`，`loadExecutables` `:39`，`updateLaunchExec` `:57`，`parseEnvText` `:80`，`parseSessionOptionsText` `:100`，`openSettingsModal` `:156`，`relocalizeSettings` `:182`，`wireSettingsButtons` `:189` |
 | `modules/launch.js`（438） | 启动模型弹窗：可执行文件选择、设备探测、权重路径、启动配置（Profile）、高级参数、启动请求 | `openLaunchModal` `web/modules/launch.js:17`，`probeDevices` `:90`，`loadProfiles` `:214`，`restoreWeightsPath` `:200`，`saveProfile` `:317` |
 | `modules/instances.js`（232） | 实例列表、实例状态条、实例详情（`I18N.date`）、2s 轮询句柄 + 首屏骨架 | `startInstancePolling` `web/modules/instances.js:55`，`renderInstanceList` `:61`，`openInstanceDetail` `:165` |
 | `modules/downloads-lazy.js`（160） | **下载数据 + 页头 ⬇️ 角标与其 2s 轮询**（首屏可见，不能懒加载）+ 两个下载弹窗的懒加载外观 | `getDownloads` `web/modules/downloads-lazy.js:33`，`refreshDownloads` `:58`，`startDownloadsPolling` `:64`，`updateDlBadge` `:70`，`openDownloadsModal` `:100`，`relocalizeDownloads` `:142`，`wireDownloadsButton` `:148` |
 | `modules/tasks.js`（331） | 任务队列**与结果落版**：提交、跟踪、取消、完成、`reattachTasks` 重挂、侧栏任务行；`renderTaskResult` 按类别分派 + ASR / 分离 / 音乐 / 其它结果 + `clearResult` / `makeTrackRow` | `activePolls` `web/modules/tasks.js:21`，`submitTask` `:26`，`trackTask` `:48`，`reattachTasks` `:101`，`renderTaskResult` `:194`，`clearResult` `:242` |
+| `modules/last-take.js`（471） | 合成按钮上方的「上一条录音」条：圆形播放键、实例 + 相对时间、80 根 `<rect>` 的内联 SVG 波形（一次 `fetch()` + WebAudio 解码，只画波形）、等宽时间、下载、「再生成」（交给合成按钮自己的 handler）。条上只放真正落盘的 tts 录音，刷新时从任务清单回填 | `peaksFromChannelData` `web/modules/last-take.js:45`，`relativeAgo` `:80`，`progressToBarIndex` `:98`，`renderLastTake` `:207`，`noteTtsTake` `:438`（由 `tasks.js` 的 `renderTaskResult` 调用），`seedLastTake` `:449`（由 `reattachTasks` 调用） |
 | `modules/sidebar.js`（671） | 操作历史侧栏：历史加载与渲染（含骨架屏 / 三态）、分组、分组菜单（键盘导航）、四要素详情、隐私模式、任务行与历史行的列表组装、「清空」批量删除（走全局等待遮罩） | `openHistoryPanel` `web/modules/sidebar.js:19`，`loadHistory` `:79`，`renderSidebarList` `:125`，`deleteFinishedTasks` `:578`，清空处理 `:593` |
 | `modules/panels.js`（866） | 工作区分发 + TTS / ASR / SEP / Music / Other 五类面板：`paramSchema` 渲染与收集、情感滑块、各面板提交；面板表单的 `VoiceSelect` / `AudioPicker` 实例在模块求值时一次性创建 | `voicePicker` `web/modules/panels.js:24`，`renderWorkspace` `:51`，`renderTtsPanel` `:294`，`buildEmotionSliders` `:536`，`renderAsrPanel` `:646` |
 
@@ -260,7 +261,7 @@ ES 模块的函数声明提升 + 活绑定让这种形状安全，`no-use-before
   单一写方的状态留在自己的模块里（`downloads-lazy.js` 的 `downloads`、`instances.js` 的 `instances`、
   `settings-lazy.js` 的 `editingExecId`、`routing.js` 的 `pending*`）。任务相关另有三张 Map：
   `activePolls` / `taskViews` / `taskDetails`（`web/modules/tasks.js:21`–`23`）。
-- **localStorage 键**：`hub-theme`、`hub-lang`（`web/boot.js:14`、`web/boot.js:56`）、`hub-model`、`hub-privacy`、`hub-threads`，以及按模型持久化的权重路径 / 启动配置键。语言初值优先级（`localStorage` → `navigator.language`）见 `web/i18n.js:23`。
+- **localStorage 键**：`hub-theme`、`hub-lang`（`web/boot.js:14`、`web/boot.js:56`）、`hub-model`、`hub-privacy`、`hub-threads`、`hub-models-open`（左栏模型区的折叠态，`web/modules/models.js:21`）、`hub-activity-open`、`hub-activity-show-junk`，以及按模型持久化的权重路径 / 启动配置键。语言初值优先级（`localStorage` → `navigator.language`）见 `web/i18n.js:23`。
 - **轮询模型**：**不要再写 `setInterval`**。全部交给 `Api.poll`，它保证「上一轮结束才排下一轮（不叠加请求）、标签页隐藏时不发请求、重新可见立即补一次」，句柄 `stop()` 即可无残留收尾。
   - 全局 2s 轮询：实例 + 事件 + 下载（`web/app.js:110`–`112`，各自的 `start*Polling` 在 `instances.js` / `async-ui.js` / `downloads-lazy.js`——下载的轮询句柄与角标留在首屏，弹窗才是懒加载的）。
   - 任务单独 2s 轮询：每个进行中的任务一个 `Api.poll` 句柄（`web/modules/tasks.js` 的 `trackTask`），到终态即 `stop()`。
@@ -274,7 +275,7 @@ ES 模块的函数声明提升 + 活绑定让这种形状安全，`no-use-before
   `pendingSettingsSection` 记录「目标数据还没到」的意图，等对应模块拿到数据再兑现。
   `applyRoute()` 在首屏末尾由 `web/app.js:119` 调一次。
 - **跨组件事件**：主题切换广播 `themechange`（`web/boot.js` 与 `web/modules/shell.js` 各自 dispatch），`motion.js` / `pwa.js` / 音频组件各自监听（重绘波形、切换过渡、刷新 `theme-color`）。
-- **关键 DOM 锚点**（`index.html`）：页头按钮 `#voices-btn` / `#history-btn` / `#downloads-btn` / `#lang-toggle` / `#settings-btn` / `#theme-toggle`；左栏 `#left` 内 `#instance-list`、`#model-list`；右栏 `#right > #workspace`；五类面板 `#panel-tts`、`#panel-asr`、`#panel-sep`、`#panel-music`、`#panel-other`；历史 `#history-panel > #history-list`；音色库 `#voices-panel > #voices-list`；命令面板 `#command-palette`；若干弹窗 `#launch-modal`、`#settings-modal`、`#model-dl-modal`、`#downloads-modal`、`#instance-detail-modal`、`#busy-overlay`；以及 `#toast-root`、`#drawer-overlay`。
+- **关键 DOM 锚点**（`index.html`）：页头按钮 `#voices-btn` / `#history-btn` / `#downloads-btn` / `#lang-toggle` / `#settings-btn` / `#theme-toggle`；左栏 `#left` 内 `#instance-list`（上方 `#mem-markers` 是内存条记号图例）、`#activity-panel`、`#model-panel > #model-list`（summary 上带 `#model-count` 计数徽标）；右栏 `#right > #workspace`；五类面板 `#panel-tts`、`#panel-asr`、`#panel-sep`、`#panel-music`、`#panel-other`；历史 `#history-panel > #history-list`；音色库 `#voices-panel > #voices-list`；命令面板 `#command-palette`；若干弹窗 `#launch-modal`、`#settings-modal`、`#model-dl-modal`、`#downloads-modal`、`#instance-detail-modal`、`#busy-overlay`；以及 `#toast-root`、`#drawer-overlay`。
 
 ### 6. 编码约定
 
