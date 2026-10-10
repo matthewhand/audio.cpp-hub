@@ -1,83 +1,21 @@
-/* Issue #124: reproducible source-based before/after UI screenshots.
-   The baseline restores only this issue's CSS changes; both renders use
-   the real frontend and deterministic API mocks, never the live GPU service. */
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+/* Issue #124 Audio Studio v3: real-browser visual and layout assertions.
+   GPU inference is mocked; production deployment is never touched. */
 import { expect, test } from "@playwright/test";
 import { openApp } from "./helpers.mjs";
 import { MockBackend } from "./mock-backend.mjs";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const changedCss = fs.readFileSync(path.resolve(here, "../web/style.css"), "utf8");
-
-function baselineCss(css) {
-  let result = css;
-  const undo = (updated, original) => {
-    if (!result.includes(updated)) throw new Error("Issue #124 CSS anchor changed");
-    result = result.replace(updated, original);
-  };
-  undo(
-    "#workspace { max-width: 960px; margin: 0 auto; }",
-    "#workspace { max-width: 860px; margin: 0 auto; }"
-  );
-  undo(
-    "#instance-bar {\n  display: flex;\n  flex-wrap: wrap;",
-    "#instance-bar {\n  display: flex;"
-  );
-  undo(
-    "  border: 1px solid var(--card-border);\n  border-left: 3px solid var(--accent);\n  border-radius: 12px;\n  box-shadow: var(--shadow);\n  backdrop-filter: blur(10px);\n  -webkit-backdrop-filter: blur(10px);\n}\n.bar-label",
-    "  border: 1px solid var(--card-border);\n  border-radius: 12px;\n  box-shadow: var(--shadow);\n  backdrop-filter: blur(10px);\n  -webkit-backdrop-filter: blur(10px);\n}\n.bar-label"
-  );
-  undo(
-    "#instance-select { min-width: 0; flex: 1 1 210px; margin-top: 0; }",
-    "#instance-select { flex: 1; margin-top: 0; }"
-  );
-  undo(
-    `#panel-tts{padding:var(--space-6)}
-#panel-tts>h2{margin-top:0;font-size:var(--text-xl)}
-#tts-text{min-height:176px;padding:var(--space-4);font-size:15px;line-height:1.7}
-@media(max-width:720px){
-  #panel-tts{padding:var(--space-4)}
-  #tts-text{min-height:160px}
-  #tts-submit{width:100%}
-}
-`,
-    ""
-  );
-  undo(
-    "header { padding: 10px 14px;gap: var(--space-2);flex-wrap:wrap; }",
-    "header { padding: 10px 14px; gap: var(--space-2); }"
-  );
-  const studioMarker = "/* #124 Audio Studio v2:";
-  const studioIndex = result.indexOf(studioMarker);
-  if (studioIndex < 0) throw new Error("Missing Audio Studio v2 stylesheet");
-  return result.slice(0, studioIndex);
-}
-
-test("issue #124: baseline vs improved TTS workspace (desktop and mobile)", async ({
-  browser
-}, testInfo) => {
+test("issue #124: Studio v3 desktop/mobile and light/dark", async ({ browser }, testInfo) => {
   for (const layout of [
     { name: "desktop", width: 1440, height: 900 },
     { name: "mobile", width: 390, height: 844 }
   ]) {
-    for (const variant of ["before", "after", "after-dark"]) {
+    for (const theme of ["light", "dark"]) {
       const context = await browser.newContext({
         viewport: { width: layout.width, height: layout.height },
         deviceScaleFactor: 1,
         serviceWorkers: "block"
       });
       const page = await context.newPage();
-      if (variant === "before") {
-        await page.route("**/style.css", (route) =>
-          route.fulfill({
-            status: 200,
-            contentType: "text/css; charset=utf-8",
-            body: baselineCss(changedCss)
-          })
-        );
-      }
       const backend = new MockBackend({
         instances: [
           {
@@ -102,40 +40,42 @@ test("issue #124: baseline vs improved TTS workspace (desktop and mobile)", asyn
           }
         ]
       });
-      await openApp(page, backend, {
-        modelId: "breeze-tts",
-        lang: "en",
-        theme: variant === "after-dark" ? "dark" : "light"
-      });
-      await expect(page.locator("#panel-tts")).toBeVisible();
+      await openApp(page, backend, { modelId: "breeze-tts", lang: "en", theme });
+      await expect(page.locator("#studio-script-heading")).toBeVisible();
+      await expect(page.locator("#studio-controls-heading")).toBeVisible();
       await expect(page.locator("#instance-pill")).toHaveClass(/ok/);
-      await page
-        .locator("#tts-text")
-        .fill(
-          "The morning light enters quietly through the window. Each word finds its own rhythm, and the voice follows."
-        );
+      await expect(page.locator("#tts-submit")).toBeEnabled();
+      await page.locator("#tts-text").fill(
+        "The morning light enters quietly through the window. Each word finds its own rhythm, and the voice follows."
+      );
       await expect(page.locator("#tts-text")).toBeFocused();
-      await expect(page.locator("#tts-submit")).toBeVisible();
-      if (variant !== "before") {
-        const editorBox = await page.locator("#tts-text").boundingBox();
-        const generateBox = await page.locator("#tts-submit").boundingBox();
-        const toolbarBox = await page.locator("#instance-bar").boundingBox();
-        expect(editorBox).not.toBeNull();
-        expect(generateBox).not.toBeNull();
-        expect(toolbarBox).not.toBeNull();
-        expect(editorBox.height).toBeGreaterThan(layout.name === "mobile" ? 180 : 225);
-        expect(toolbarBox.x + toolbarBox.width).toBeLessThanOrEqual(layout.width + 1);
-        if (layout.name === "mobile") {
-          expect(generateBox.width).toBeGreaterThan(260);
-        } else {
-          // The principal TTS action must be visible without scrolling.
-          expect(generateBox.y + generateBox.height).toBeLessThanOrEqual(layout.height - 70);
-        }
+      const scriptBox = await page.locator(".studio-script").boundingBox();
+      const controlsBox = await page.locator(".studio-controls").boundingBox();
+      const editorBox = await page.locator("#tts-text").boundingBox();
+      const buttonBox = await page.locator("#tts-submit").boundingBox();
+      const toolbarBox = await page.locator("#instance-bar").boundingBox();
+      expect(scriptBox).not.toBeNull();
+      expect(controlsBox).not.toBeNull();
+      expect(editorBox.height).toBeGreaterThan(layout.name === "desktop" ? 340 : 210);
+      expect(toolbarBox.x + toolbarBox.width).toBeLessThanOrEqual(layout.width + 1);
+      if (layout.name === "desktop") {
+        expect(controlsBox.x).toBeGreaterThanOrEqual(scriptBox.x + scriptBox.width - 2);
+        expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(layout.height - 20);
+      } else {
+        expect(controlsBox.y).toBeGreaterThanOrEqual(scriptBox.y + scriptBox.height - 2);
+        expect(buttonBox.width).toBeGreaterThan(145);
       }
-      await testInfo.attach(`issue124-${variant}-${layout.name}.png`, {
+      await testInfo.attach(`studio-v3-${theme}-${layout.name}.png`, {
         body: await page.screenshot({ animations: "disabled", fullPage: true }),
         contentType: "image/png"
       });
+      if (layout.name === "mobile") {
+        await page.locator(".studio-render").scrollIntoViewIfNeeded();
+        await testInfo.attach(`studio-v3-${theme}-mobile-actions.png`, {
+          body: await page.screenshot({ animations: "disabled" }),
+          contentType: "image/png"
+        });
+      }
       await context.close();
     }
   }
