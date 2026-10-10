@@ -15,6 +15,7 @@
 - `memory` 对象再增加可选的 `ramSeries` / `vramSeries`：最近最多 60 个采样（字节，旧→新）给 WebUI 迷你折线。不足 2 个点省略；VRAM 从未读到时不写 `vramSeries`。采样器里是定长环形缓冲，不随实例寿命增长。旧 hub 没有这两个字段时，WebUI 用 2 秒实例轮询自己攒
 - WebUI：实例卡片标签行右端的 RAM / VRAM 折线；合成按钮下方的实时状态行（生成中写「Streaming from <实例> · <耗时>」，等宽数字跳动；完成后写墙上耗时，音频时长已知时再加 RTF = (durationMs/1000) / result.durationSec，SSE 的 `task.finished` 不带 `durationSec`，完成时补拉一次 `GET /api/tasks/{id}`，仍未知就省略 RTF；失败用错误样式；约 20 秒后清空）；页头 chip 优先显示农场「Farm 在线/总数 · 失败次数」（浏览器只打同域 `GET /api/farm/health`；URL 来自 `AUDIOCPP_HUB_FANOUT_URL`，默认 `http://127.0.0.1:18082/farm/health`，空字符串关闭；超时 1.5s、缓存约 5s、单飞；不可达时 `200 {"available":false}` 并退回本机「Hub 就绪数/总数」，失败次数仍是 `GET /api/stats` 的全量累计）；实例标题行保留「实时事件 / 轮询中」指示灯，并在旁边加合计显存（各实例 `vramBytes` 相加；总量按 GPU 名去重，同一张卡只计一次；没有任何总量时省略「/ 总量」，完全没有显存读数时整段省略）
 - 实例正在生成时只保留「生成中…」胶囊（脉冲圆点 + 耗时），藏起绿色 Ready；空闲时反过来。实例卡片和合成区上方的实例条用同一条规则。卡片副标题在原有型号 / 后端 / 端口上补 GPU 名（有 `gpuName` 时），右侧「idle 4m」来自 `idleSinceMs`，没有则退回最近一条任务的 `finishedAt`，生成中隐藏
+- 合成按钮下方的实时状态行在生成中带 RTF 预估：「Streaming from <实例> · RTF ~1.1× · 3.2s」。中位数取**同实例**最近 ≤10 条 DONE 任务的 (finishedAt − startedAt) ÷ `result.durationSec`（缺一段时间、非 DONE、别台实例的样本一律跳过，不做离群剔除），一次 `GET /api/tasks` 算完，按实例 id 缓存、约 30s 才重算一次（单飞；拉取失败也记时间，接口一直失败时不会跟着 2s 轮询每拍重试）；这台实例还没有可用历史时整段省略，完成后仍写精确 RTF
 - 合成文本框右下角字数（hub 没有最大文本长度常量，只显示「N 字 / N chars」）
 - 左栏实例与模型之间的「最近活动」：`<details>` 默认展开，开合记在 `localStorage`（`hub-activity-open`）。按完整时间戳跨天倒序，过滤测试任务之后最多 20 条；今天只显示钟点，昨天和更早带日期。直播走任务 SSE。首屏用 `GET /api/tasks` 播种；SSE 没连上且面板打开时约 5 秒再拉一次。顶部一条最近 1 小时的横条（每 10 分钟一刻度，每个真实实例一条泳道）；这一小时没有真实任务时均匀铺最近 10 条
 

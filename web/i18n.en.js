@@ -29,6 +29,8 @@ window.I18N_EN = {
   "live.ariaOff": "Polling: the push stream is not connected, refreshing every 2 seconds",
   "ticker.running": "Streaming from {name} · {t}",
   "ticker.runningNoTime": "Streaming from {name}",
+  "ticker.runningRtf": "Streaming from {name} · RTF ~{rtf} · {t}",
+  "ticker.runningRtfNoTime": "Streaming from {name} · RTF ~{rtf}",
   "ticker.done": "Done on {name} · {t}",
   "ticker.doneRtf": "Done on {name} · {t} · RTF {rtf}",
   "ticker.doneRtfOnly": "Done on {name} · RTF {rtf}",

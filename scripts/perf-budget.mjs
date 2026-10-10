@@ -186,6 +186,16 @@ const KIB = 1024;
  * 172.4, 37 subresource requests. jsRawKiB 395 -> 415; jsGzipKiB 145 -> 154;
  * totalGzipKiB 166 -> 175; subresourceRequests 36 -> 38. CSS caps still hold.
  *
+ * 2026-10 polish round (measured): the concept's generating-card work — pulse
+ * ring + accent tokens, the activity icon and elapsed clock at the card header's
+ * right, one lane per real instance with a 10-minute tick axis and the empty-hour
+ * baselines, the farm chip's third segment, and the running status line's
+ * estimated RTF (medianRtf + its cache). All of it is on the initial view.
+ * `npm run perf:budget` on this tree: JS raw 428.3 KiB, JS gzip 157.4,
+ * CSS raw 84.6, CSS gzip 22.6, JS+CSS gzip 180.0, 37 subresource requests.
+ * Budgets sit a little above those numbers; CSS grew with the tokens and the
+ * strip geometry, JS with medianRtf / the RTF cache and the new strip builder.
+ *
  * What is left, and why none of it was done here (measured, not guessed):
  *
  *   | 候选                            | gzip   | 不做的原因                                              |
@@ -200,11 +210,11 @@ const KIB = 1024;
  *   | `pwa.js`                        | 1.7 K  | 渐进增强而非点击才用；挪走只省 1 次请求换一个形状变更。    |
  */
 export const BUDGETS = {
-  jsRawKiB: 415, // 初始 JS 未压缩合计（实测 412.2）
-  jsGzipKiB: 154, // 初始 JS gzip 传输合计（实测 151.2）
-  cssRawKiB: 82, // 初始 CSS 未压缩（实测 80.8）
-  cssGzipKiB: 22, // 初始 CSS gzip 传输（实测 21.2）
-  totalGzipKiB: 175, // JS + CSS gzip 合计（实测 172.4，不含 HTML，HTML 很小)
+  jsRawKiB: 430, // 初始 JS 未压缩合计（实测 428.3）
+  jsGzipKiB: 159, // 初始 JS gzip 传输合计（实测 157.4）
+  cssRawKiB: 86, // 初始 CSS 未压缩（实测 84.6）
+  cssGzipKiB: 23, // 初始 CSS gzip 传输（实测 22.6）
+  totalGzipKiB: 182, // JS + CSS gzip 合计（实测 180.0，不含 HTML，HTML 很小)
   subresourceRequests: 38, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 37）
   ttiTargetMs: 1500 // 目标 TTI（本地/局域网，中端笔电）——浏览器指标，本脚本不测量
 };

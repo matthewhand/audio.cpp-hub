@@ -29,6 +29,8 @@ window.I18N_ZH = {
   "live.ariaOff": "轮询中：推送未连接，每 2 秒刷新一次",
   "ticker.running": "正在从 {name} 流式生成 · {t}",
   "ticker.runningNoTime": "正在从 {name} 流式生成",
+  "ticker.runningRtf": "正在从 {name} 流式生成 · RTF ~{rtf} · {t}",
+  "ticker.runningRtfNoTime": "正在从 {name} 流式生成 · RTF ~{rtf}",
   "ticker.done": "已在 {name} 上完成 · {t}",
   "ticker.doneRtf": "已在 {name} 上完成 · {t} · RTF {rtf}",
   "ticker.doneRtfOnly": "已在 {name} 上完成 · RTF {rtf}",
