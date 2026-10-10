@@ -1,6 +1,8 @@
 /* 极小 DOM 桩：只为在 node 里跑 web/modules/{async-ui,command-palette}.js 的焦点语义而存在，
    不追求通用（不实现布局、不实现 CSS 优先级），只实现这些模块真正用到的那几个动作：
    classList / 属性 / 子树查询 / 事件冒泡 / focus / blur / inert / 动画帧。
+   motion.js 另用这里的 MutationObserver（被观察节点的属性变更后异步回调、不含子树）、
+   可控 matchMedia 与手动时钟（微任务与定时器都由测试推进，不走真实事件循环）。
 
    关键点是 focus() 的前置条件必须和浏览器一致，否则测不出真问题：
      1. 元素在 visibility:hidden 的子树里 → focus() 是空操作（activeElement 不变）；
@@ -141,14 +143,13 @@ export class StubElement {
       contains: (c) => self.classes().has(c),
       add: (c) => {
         const s = self.classes();
-        if (!s.has(c)) {
-          s.add(c);
-          self.attrs.set("class", [...s].join(" "));
-        }
+        if (s.has(c)) return;
+        s.add(c);
+        self.setAttribute("class", [...s].join(" "));
       },
       remove: (c) => {
         const s = self.classes();
-        if (s.delete(c)) self.attrs.set("class", [...s].join(" "));
+        if (s.delete(c)) self.setAttribute("class", [...s].join(" "));
         self.world.onHiddenClassChange(self, s.has("hidden"));
       },
       toggle: (c, on) => (on ? this.classList.add(c) : this.classList.remove(c))
@@ -160,7 +161,7 @@ export class StubElement {
   }
 
   set className(v) {
-    this.attrs.set("class", String(v));
+    this.setAttribute("class", String(v));
   }
 
   get className() {
@@ -187,9 +188,17 @@ export class StubElement {
     return this.isConnected ? this.world.documentElement : null;
   }
 
+  get offsetWidth() {
+    this.world.reflows++;
+    return 0;
+  }
+
   setAttribute(name, value) {
-    this.attrs.set(name, String(value));
-    if (name === "id") this.id = String(value);
+    const str = String(value);
+    const prev = this.attrs.has(name) ? this.attrs.get(name) : undefined;
+    this.attrs.set(name, str);
+    if (name === "id") this.id = str;
+    if (prev !== str && this.world.onAttribute) this.world.onAttribute(this, name);
   }
 
   getAttribute(name) {
@@ -201,7 +210,9 @@ export class StubElement {
   }
 
   removeAttribute(name) {
+    if (!this.attrs.has(name)) return;
     this.attrs.delete(name);
+    if (this.world.onAttribute) this.world.onAttribute(this, name);
   }
 
   appendChild(child) {
@@ -310,7 +321,128 @@ export function createDomWorld() {
     frame: 0,
     revealedAt: new Map(),
     rafQueue: [],
-    listeners: new Map()
+    listeners: new Map(),
+    classWrites: [],
+    classMutations: 0,
+    reflows: 0,
+    _micro: []
+  };
+
+  world.queueMicrotask = (fn) => {
+    world._micro.push(fn);
+  };
+  world.microtaskCount = () => world._micro.length;
+  world.flushMicrotasks = (max = 100) => {
+    let n = 0;
+    while (world._micro.length && n < max) {
+      world._micro.shift()();
+      n++;
+    }
+    return n;
+  };
+
+  world.onAttribute = (node, name) => {
+    if (name === "class") {
+      world.classMutations++;
+      world.classWrites.push({ node, value: node.className });
+    }
+    const obs = node._observers;
+    if (!obs || obs.size === 0) return;
+    for (const ob of obs) ob._push(node, name);
+  };
+
+  /* 只通知 observe 过的那个节点。回调走世界里的微任务队，由 flushMicrotasks 推进。 */
+  world.MutationObserver = class MutationObserver {
+    constructor(callback) {
+      this._cb = callback;
+      this._opts = new Map();
+      this._recs = [];
+      this._queued = false;
+    }
+
+    observe(target, options) {
+      this._opts.set(target, options || {});
+      if (!target._observers) target._observers = new Set();
+      target._observers.add(this);
+    }
+
+    disconnect() {
+      for (const t of this._opts.keys()) {
+        if (t._observers) t._observers.delete(this);
+      }
+      this._opts.clear();
+      this._recs = [];
+      this._queued = false;
+    }
+
+    takeRecords() {
+      const recs = this._recs;
+      this._recs = [];
+      return recs;
+    }
+
+    _push(target, name) {
+      const opt = this._opts.get(target);
+      if (!opt || (!opt.attributes && !opt.attributeFilter)) return;
+      if (opt.attributeFilter && !opt.attributeFilter.includes(name)) return;
+      this._recs.push({ type: "attributes", target, attributeName: name });
+      if (this._queued) return;
+      this._queued = true;
+      world.queueMicrotask(() => {
+        this._queued = false;
+        const recs = this._recs.splice(0);
+        if (recs.length) this._cb(recs, this);
+      });
+    }
+  };
+
+  const mediaLists = new Map();
+  world.matchMedia = (query) => {
+    const key = String(query);
+    let list = mediaLists.get(key);
+    if (!list) {
+      list = {
+        media: key,
+        matches: false,
+        addListener() {},
+        removeListener() {},
+        addEventListener() {},
+        removeEventListener() {}
+      };
+      mediaLists.set(key, list);
+    }
+    return list;
+  };
+  world.matchMedia.setMatches = (query, on) => {
+    world.matchMedia(query).matches = !!on;
+  };
+
+  let timerSeq = 1;
+  const timers = new Map();
+  let timersCleared = 0;
+  world.clock = {
+    setTimeout(fn, ms) {
+      const id = timerSeq++;
+      timers.set(id, { fn, ms: ms == null ? 0 : ms });
+      return id;
+    },
+    clearTimeout(id) {
+      if (timers.delete(id)) timersCleared++;
+    },
+    get size() {
+      return timers.size;
+    },
+    get cleared() {
+      return timersCleared;
+    },
+    delays() {
+      return [...timers.values()].map((t) => t.ms);
+    },
+    fireAll() {
+      const due = [...timers.entries()];
+      for (const [id] of due) timers.delete(id);
+      for (const [, t] of due) t.fn();
+    }
   };
 
   const documentElement = new StubElement(world, "html");

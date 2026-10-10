@@ -55,6 +55,9 @@ audio.cpp-hub 前端为无构建的原生 HTML/CSS/JS，动效全部由 CSS 令�
 - **主题切换**：监听 `themechange` 给 `<html>` 加 `.theme-switching`。
 - **实例状态**：`MutationObserver` 观察 `#instance-pill` 的 `class` 变化。
   （实例列表每 2s 重建，不适合逐行观察，故只强调状态条。）
+  比较时剥掉 `.state-flip` 等动画类，只认「稳定 class 串」的真正变化；
+  flash 自己加 / 删动画类不会再触发下一次，同一节点同一类同时只保留一个
+  定时器（曾出现 flash 与观察者互相触发、把主线程堵住数秒的自激环路）。
 
 ## 已知取舍：列表行的状态过渡
 

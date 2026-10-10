@@ -84,7 +84,7 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 | `wav.js`（95） | 音频工具：解码、PCM16 单声道 WAV 编码、时长/体积格式化、输出设备预热 | `window.WavUtil` | `web/wav.js:2` |
 | `audio-picker.js`（659） | 音频选择组件：上传 / 录制 / 裁剪，含波形、播放，含本地路径页签 | `window.AudioPicker` | class `web/audio-picker.js:11`，`Api` `:9` |
 | `voice-select.js`（181） | 音色下拉：从音色库直选，选中即生效，返回服务器路径 | `window.VoiceSelect` / `window.refreshVoiceSelects` | class `web/voice-select.js:12`，`Api` `:10`，`refreshVoiceSelects` `:176` |
-| `motion.js`（64） | 纯 UI 动效触发器：复制确认、主题切换、实例状态翻转 | `window.hubMotion` | `web/motion.js:30` |
+| `motion.js`（111） | 纯 UI 动效触发器：复制确认、主题切换、实例状态翻转 | `window.hubMotion` | `web/motion.js:74` |
 | `pwa.js`（104） | 注册 `/sw.js`、新版本提示条、`theme-color` 跟随主题 | 顶层立即执行 | `web/pwa.js:85` |
 | `sw.js`（220） | Service Worker：`/api/*` 与 `/v1/*` 绝不缓存；导航 network-first；静态资源 cache-first + 后台再验证 | Service Worker 全局 | 预缓存清单 `web/sw.js:35`，API 豁免 `web/sw.js:150` |
 | `style.css`（2187） | 设计系统 L1–L6：令牌 / 基础 / 布局 / 组件 / 工具 / 可访问性 + 动效与 PWA 补充 | — | 令牌 `web/style.css:16` |
