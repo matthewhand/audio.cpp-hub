@@ -1,17 +1,4 @@
-/* ============================================================
-   audio.cpp-hub 设计系统：黑白单色风（浅色 / 深色 / 跟随系统）
-
-   单文件分层结构，层与层之间用等宽横幅注释分隔：
-     L1 tokens      设计令牌：颜色 / 间距 / 圆角 / 阴影 / 字号 / 层级 / 动效
-     L2 base        重置与全局元素样式
-     L3 layout      页头 / 主布局 / 响应式断点
-     L4 components  可复用组件（button / field / card / dialog / tabs / toast / …）
-     L5 utilities   工具类、焦点环、小屏适配与覆盖
-     L6 a11y        无障碍与「减少动态效果」
-
-   历史遗留类名（.btn / .btn-ghost / .stop-btn / .modal / #hf-menu / .dl-progress …）
-   全部保留并映射到规范组件类，视觉不变；新增代码优先使用规范类名。
-   ============================================================ */
+/* audio.cpp-hub monochrome design system; tokens, layout, components, accessibility. */
 
 /* ============================ L1: TOKENS ============================ */
 
@@ -514,8 +501,7 @@ footer { flex: none; }
 .badge.error { background: var(--err); }
 .badge.stopped { background: #5b616e; color: #fff; }
 .badge.unconfigured { background: #5b616e; color: #fff; }
-/* 实例有活跃任务（QUEUED/RUNNING）：转圈“工作中”徽标（复用 @keyframes spin）。
-   背景用 --accent、文字与弧线用 --accent-contrast，两套主题下均保持高对比 */
+/* Display active task spinner in high contrast. */
 .badge.working { background: var(--accent); color: var(--accent-contrast); display: inline-flex; align-items: center; gap: 5px; }
 .badge.working::before {
   content: "";
@@ -1441,8 +1427,7 @@ footer { padding: 4px 24px 18px; }
 /* 失败记录：左侧红条 + 文本弱化，与成功记录区分 */
 .history-row.failed { box-shadow: inset 3px 0 0 var(--err); }
 .history-row.failed .history-text { color: var(--text-dim); }
-/* 侧栏只有 320px：时间/meta/按钮都是 flex:none，单行放不下时会把唯一可缩的 .history-text
-   压成 0 宽（看不见提示词）。允许换行并让文本独占一行（order 2），保证文本始终可见 */
+/* Allow long history prompts to wrap instead of disappearing. */
 .history-info { display: flex; align-items: center; column-gap: 10px; row-gap: 4px; flex-wrap: wrap; }
 .history-time {
   flex: none;
@@ -1768,9 +1753,7 @@ footer { padding: 4px 24px 18px; }
 .load-error button { flex: none; }
 
 /* ---------- 统一异步状态：骨架 / 空态 / 错误态 ---------- */
-/* 骨架屏（#87 令牌版与 #88 列表三态版此前各定义了一份 .skeleton，已合并为下面这一份，
-   视觉结果不变）：既作 async-ui.js showSkeleton 的列容器（内含 .skeleton-card），
-   也作单条占位条（styleguide.html 的 .skeleton / .skeleton-line）。 */
+/* Unified skeleton list placeholders. */
 .skeleton {
   display: flex;
   flex-direction: column;
@@ -2055,22 +2038,13 @@ footer { padding: 4px 24px 18px; }
   .skeleton { animation: none !important; }
 }
 
-/* ============================================================
-   动效系统补充（workstream E / issue #76）
-   令牌定义见文件顶部 --dur-1/2/3 与 --ease-out/--ease-in-out。
-   原则：只动 transform / opacity（避免重排），时长不超过 --dur-3；
-   所有非必要动效在文件末尾的 prefers-reduced-motion 块中关闭。
-   各模式说明见 docs/motion.md。
-   ============================================================ */
+/* Motion additions; accessibility follows existing reduced-motion rules. */
 
 /* ---------- 模式：对话框淡入 + 缩放（.modal-overlay/.modal 已有基础，见上文） ---------- */
 /* ---------- 模式：抽屉滑入（#left + .drawer-overlay，见窄屏媒体查询） ---------- */
 /* ---------- 模式：toast 滑入滑出（.toast / .toast.leaving，见上文） ---------- */
 
-/* ---------- 模式：高度展开（原生 <details>，靠 interpolate-size 动画 block-size） ----------
-/* details 展开/收起的高度过渡：仅动 block-size，不触发重排。
-   现代浏览器支持时「高级参数 / 说话人」等 details 展开会平滑改变高度；
-   不支持时退化为瞬时展开，不影响功能。 */
+/* Animated native details expansion. */
 @supports (interpolate-size: allow-keywords) {
   details { interpolate-size: allow-keywords; }
   details::details-content {
@@ -2119,8 +2093,7 @@ html.theme-switching header {
     border-color var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
 }
 
-/* ---------- 模式：骨架屏微光（.skeleton 通用工具类） ----------/* 骨架屏：复用 L4 已有的 .skeleton / @keyframes skeleton-shimmer
-   （占位 shimmer 与 base 行为一致，此处不再重复定义，避免两份实现漂移）。 */
+/* Skeleton animation defined once above. */
 
 /* ---------- PWA 更新提示条（pwa.js 动态插入 #pwa-update） ---------- */
 .pwa-update {
@@ -2194,4 +2167,24 @@ html.theme-switching header {
     transition: none !important;
   }
   details::details-content { transition: none !important; }
+}
+/* #124 Audio Studio v2: hierarchy without altering inference. */
+#left{flex-basis:318px}
+#workspace{max-width:1020px}
+#instance-bar{border-left:1px solid var(--card-border);background:var(--bg-elevated);box-shadow:none;padding:12px 16px}
+#instance-stop{margin-left:auto}
+#panel-tts{padding:28px 32px}
+#panel-tts>h2{margin:0 0 20px;font-size:clamp(20px,1.7vw,25px);letter-spacing:-.03em}
+#tts-text-block{display:block;margin-bottom:20px;padding:18px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--bg-elevated);color:var(--text);font-weight:600}
+#tts-text{min-height:240px;padding:18px;font-size:15px;line-height:1.7;border-radius:8px;background:var(--card);box-shadow:none}
+#tts-text:focus{box-shadow:0 0 0 3px var(--ring)}
+#tts-primary-instruction-row{margin:16px 0;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--bg-elevated)}
+#tts-submit{display:block;margin:20px 0 0 auto;min-width:180px;min-height:46px}
+@media(max-width:720px){
+ #instance-stop{margin-left:0}
+ #panel-tts{padding:18px}
+ #tts-text-block{padding:12px}
+ #tts-text{min-height:190px;padding:14px}
+ #tts-primary-instruction-row{padding:12px}
+ #tts-submit{width:100%}
 }
