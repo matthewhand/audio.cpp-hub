@@ -20,7 +20,7 @@
 | `panel-music` | panel | `music.title` | 14 |
 | `panel-other` | panel | `other.title` | 4 |
 | `panel-sep` | panel | `sep.title` | 3 |
-| `panel-tts` | panel | `tts.title` | 19 |
+| `panel-tts` | panel | `studio.kicker` | 23 |
 | `settings-modal` | modal | `settings.title` | 43 |
 | `settings-pane-executables` | settings-pane | `exec.listTitle` | 13 |
 | `settings-pane-general` | settings-pane | `settings.general.language` | 7 |
@@ -216,7 +216,7 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 
 | 属性 | 静态出现次数 |
 | --- | --- |
-| `data-i18n` | 128 |
+| `data-i18n` | 132 |
 | `data-i18n-aria-label` | 27 |
 | `data-i18n-placeholder` | 24 |
 | `data-i18n-title` | 11 |
