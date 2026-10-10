@@ -22,12 +22,12 @@ export let instances = [];
 
 /* ---------- 实例列表 + 状态条（每 2s 轮询） ---------- */
 export let instancePoller = null;
-let instancesLoaded = false;   
+let instancesLoaded = false;
 
 export function applyInstances(data) {
   instancesLoaded = true;
   instances = data;
-  
+
   const want = getPendingInstanceId();
   if (want) {
     const inst = instances.find(i => i.id === want);
@@ -73,7 +73,7 @@ export function renderInstanceList() {
     const card = document.createElement("div");
     const statusClass = STATUS_CLASS[inst.status] || "stopped";
     card.className = "card" + (inst.id === activeInstanceId ? " selected" : "");
-    
+
     const workingBadge = (inst.taskCount || 0) > 0
       ? ` <span class="badge working">${esc(inst.taskCount > 1 ? t("instance.workingCount", { n: inst.taskCount }) : t("instance.working"))}</span>`
       : "";
@@ -92,7 +92,7 @@ export function renderInstanceList() {
     const stopBtn = card.querySelector(".stop-btn");
     if (stopBtn) {
       stopBtn.onclick = async () => {
-        
+
         await Api.del("/api/instances/{id}", { params: { id: inst.id } }).catch(() => {});
         refreshInstances();
       };
@@ -124,7 +124,7 @@ export function updateInstanceBar() {
   select.disabled = !has;
   $("instance-stop").disabled = !has;
   $("instance-detail").disabled = !has;
-  
+
   if (detailInstanceId) {
     const cur = instances.find(i => i.id === detailInstanceId);
     if (cur) renderInstanceDetail(cur); else closeInstanceDetail();
