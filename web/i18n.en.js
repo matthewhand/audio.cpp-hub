@@ -61,6 +61,9 @@ window.I18N_EN = {
   /* ---------- instance bar ---------- */
   "instance.barLabel": "Instance",
   "instance.noReady": "No ready instance",
+  "instance.hintNoReady": "No ready instance for {model}. Launch this model to enable task submission.",
+  "instance.hintOtherReadyOne": "No ready instance for {model}. Another model has a ready instance, but it cannot process {model} tasks.",
+  "instance.hintOtherReadyMany": "No ready instance for {model}. {count} other instances are ready, but none can process {model} tasks.",
   "instance.noReadySuffix": " (no ready instance)",
   "instance.ready": "Ready",
   "instance.stopCurrent": "Stop current instance",
