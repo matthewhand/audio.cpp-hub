@@ -127,6 +127,9 @@ test("issue #124: baseline vs improved TTS workspace (desktop and mobile)", asyn
         expect(toolbarBox.x + toolbarBox.width).toBeLessThanOrEqual(layout.width + 1);
         if (layout.name === "mobile") {
           expect(generateBox.width).toBeGreaterThan(260);
+        } else {
+          // The principal TTS action must be visible without scrolling.
+          expect(generateBox.y + generateBox.height).toBeLessThanOrEqual(layout.height - 70);
         }
       }
       await testInfo.attach(`issue124-${variant}-${layout.name}.png`, {
