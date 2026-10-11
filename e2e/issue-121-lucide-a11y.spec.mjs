@@ -22,10 +22,10 @@ for (const viewport of [
       "theme-toggle"
     ]) {
       const button = page.locator("#" + id);
-      await expect(button).toHaveAttribute("aria-label", /\\S/);
+      await expect(button).toHaveAttribute("aria-label", /\S/);
       await expect(button.locator("svg")).toHaveAttribute("aria-hidden", "true");
       const href = await button.locator("svg use").getAttribute("href");
-      expect(href).toMatch(/^#i-[\\w-]+$/);
+      expect(href).toMatch(/^#i-[\w-]+$/);
       await expect(page.locator(`svg.icon-sprite symbol[id="${href.slice(1)}"]`)).toHaveCount(1);
     }
 
