@@ -155,11 +155,17 @@ func (b *EventBus) OnTaskEvent(ev taskEvent) {
 		"instanceId": ev.InstanceID,
 		"modelId":    ev.ModelID,
 		"category":   ev.Category,
+		"status":     ev.Status,
 		"ts":         time.Now().UnixMilli(),
 	}
 	switch ev.Name {
 	case eventTaskFinished:
 		payload["ok"] = true
+	case eventTaskFailed:
+		payload["ok"] = false
+	}
+	// Terminal metrics are facts about *observed* work, not estimated values.
+	if ev.Name == eventTaskFinished || ev.Name == eventTaskFailed || ev.Name == eventTaskCancelled {
 		payload["durationMs"] = ev.DurationMs
 		if ev.PeakRam != nil {
 			payload["peakRamBytes"] = *ev.PeakRam
@@ -167,13 +173,8 @@ func (b *EventBus) OnTaskEvent(ev taskEvent) {
 		if ev.PeakVram != nil {
 			payload["peakVramBytes"] = *ev.PeakVram
 		}
-	case eventTaskFailed:
-		payload["ok"] = false
-		payload["durationMs"] = ev.DurationMs
-		if ev.Error != "" {
-			payload["error"] = ev.Error
-		}
 	}
+	// Error messages may echo private prompts; clients fetch authoritative task state.
 	b.Publish(ev.Name, payload)
 }
 
