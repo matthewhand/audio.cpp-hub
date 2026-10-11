@@ -9,22 +9,37 @@ for (const [lang, warning] of [
 ]) {
   test(`failed instance poll warns and recovery restores controls (${lang})`, async ({ page }) => {
     const backend = new MockBackend({
-      instances: [{
-        id: "ready-breeze", modelId: "breeze-tts", instanceName: "Breeze",
-        status: "READY", backend: "vulkan", device: 0, port: 19090
-      }, {
-        id: "ready-index", modelId: "index_tts2", instanceName: "Index TTS",
-        status: "READY", backend: "cpu", device: 0, port: 19091
-      }]
+      instances: [
+        {
+          id: "ready-breeze",
+          modelId: "breeze-tts",
+          instanceName: "Breeze",
+          status: "READY",
+          backend: "vulkan",
+          device: 0,
+          port: 19090
+        },
+        {
+          id: "ready-index",
+          modelId: "index_tts2",
+          instanceName: "Index TTS",
+          status: "READY",
+          backend: "cpu",
+          device: 0,
+          port: 19091
+        }
+      ]
     });
     await openApp(page, backend, { modelId: "breeze-tts", lang });
     await expect(page.locator("#instance-pill")).toHaveClass(/ok/);
     await expect(page.locator("#tts-submit")).toBeEnabled();
 
-    const fail = (route) => route.fulfill({
-      status: 503, contentType: "application/json",
-      body: JSON.stringify({ error: "temporary network failure" })
-    });
+    const fail = (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "temporary network failure" })
+      });
     await page.route("**/api/instances", fail);
     await expect(page.locator("#instance-pill")).toContainText(warning, { timeout: 12000 });
     await expect(page.locator("#instance-pill")).toHaveClass(/warn/);
@@ -34,7 +49,9 @@ for (const [lang, warning] of [
     await expect(page.locator("#instance-context")).toBeHidden();
 
     // A user navigation while offline must not resurrect cached READY state.
-    await page.evaluate(() => { globalThis.location.hash = "#/model/index_tts2"; });
+    await page.evaluate(() => {
+      globalThis.location.hash = "#/model/index_tts2";
+    });
     await expect(page.locator("#instance-pill")).toContainText(warning);
     await expect(page.locator("#tts-submit")).toBeDisabled();
 
