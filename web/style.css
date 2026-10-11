@@ -63,12 +63,12 @@
   --z-menu: 1000;
 }
 
-/* ---------- 焦点环（--shadow / --shadow-hover 随主题定义于下方） ---------- */
+/* ---------- 焦点环（--shadow / -- */
 :root {
   --focus-ring: 0 0 0 3px var(--ring);
 }
 
-/* ---------- 主题变量（颜色令牌）：dark / light 两套，system 由 boot.js 解析 ---------- */
+/* ---------- 主题变量（颜色令牌）：dark / */
 :root[data-theme="dark"] {
   --bg: #0c0c0e;
   --bg-elevated: #141416;
@@ -110,7 +110,7 @@
   --ring: rgba(0, 0, 0, 0.10);
   --shadow: 0 4px 18px rgba(0, 0, 0, 0.07);
   --shadow-hover: 0 10px 28px rgba(0, 0, 0, 0.12);
-  /* 对比度：浅色主题下 ok/warn 需比深色主题更深，白字/深字均 ≥ 4.5:1（WCAG AA） */
+  /* 对比度：浅色主题下 ok/warn 需比深色主题更深，白 */
   --ok: #047857;
   --warn: #92400e;
   --err: #dc2626;
@@ -261,7 +261,7 @@ main {
   flex: 0 0 360px;
   min-height: 0;
   overflow-y: auto;
-  /* 左/上各留 2px，避免选中卡片的外扩 box-shadow 和 hover 上移被 overflow 裁剪 */
+  /* 左/上各留 2px，避免选中卡片的外扩 box-shad */
   padding: 2px 4px 2px 2px;
 }
 #right { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; }
@@ -853,7 +853,7 @@ details summary:hover { text-decoration: underline; }
 /* ---------- 页脚 ---------- */
 footer { padding: 4px 24px 18px; }
 
-/* ---------- 可执行文件区块（设置对话框内，上下排列：列表 / 添加表单） ---------- */
+/* ---------- 可执行文件区块（设置对话框内，上下 */
 .exec-body {
   display: flex;
   flex-direction: column;
@@ -1086,7 +1086,7 @@ footer { padding: 4px 24px 18px; }
 /* ---------- 设置 modal ---------- */
 .header-actions { display: flex; gap: 10px; }
 
-/* 对话框：.modal/.modal-overlay 为历史类名，.dialog/.dialog-overlay 为规范别名 */
+/* 对话框：.modal/.modal-overlay 为历 */
 .modal-overlay, .dialog-overlay {
   position: fixed;
   inset: 0;
@@ -1425,7 +1425,7 @@ footer { padding: 4px 24px 18px; }
 /* 失败记录：左侧红条 + 文本弱化，与成功记录区分 */
 .history-row.failed { box-shadow: inset 3px 0 0 var(--err); }
 .history-row.failed .history-text { color: var(--text-dim); }
-/* Allow long history prompts to wrap instead of disappearing. */
+/* Allow long history prompts t */
 .history-info { display: flex; align-items: center; column-gap: 10px; row-gap: 4px; flex-wrap: wrap; }
 .history-time {
   flex: none;
@@ -1893,9 +1893,9 @@ footer { padding: 4px 24px 18px; }
 /* 弹窗容器仅作程序化焦点落点，不显示轮廓（首个可聚焦控件会接管焦点） */
 .modal[tabindex="-1"]:focus, .history-panel-card[tabindex="-1"]:focus { outline: none; }
 
-/* ---------- 新增规范组件（按钮尺寸/加载态、表单字段、tooltip、skeleton） ---------- */
+/* ---------- 新增规范组件（按钮尺寸/加载态、表 */
 
-/* 按钮尺寸变体（配合 .btn / .btn-primary / .btn-ghost / .btn-danger 使用） */
+/* 按钮尺寸变体（配合 .btn / .btn-primar */
 .btn-sm { padding: 5px 12px; font-size: var(--text-sm); }
 .btn-lg { padding: 11px 26px; font-size: var(--text-base); }
 
@@ -1969,7 +1969,7 @@ footer { padding: 4px 24px 18px; }
 /* 长文本折行，避免窄屏横向滚动 */
 .hint, .msg, .json-pre, .exec-path, .settings-row-desc, .field-error { overflow-wrap: anywhere; }
 
-/* ---------- 小屏适配（≤720px）：触摸目标 ≥44px、单列、内边距收敛 ---------- */
+/* ---------- 小屏适配（≤720px）：触摸目标 */
 @media (max-width: 720px) {
   header { padding: 10px 14px;gap: var(--space-2);flex-wrap:wrap; }
   .brand { gap: var(--space-2); }
@@ -1992,7 +1992,7 @@ footer { padding: 4px 24px 18px; }
 }
 
 /* ---------- 列表行进入动画 ---------- */
-/* 仅由 JS 给「首次出现」的行加 .row-enter；轮询复用/重建的行不会带该类，因此不会反复重播 */
+/* 仅由 JS 给「首次出现」的行加 .row-enter； */
 .row-enter { animation: row-in var(--dur-2) var(--ease-out); }
 @keyframes row-in {
   from { opacity: 0; transform: translateY(5px); }
@@ -2037,9 +2037,9 @@ footer { padding: 4px 24px 18px; }
 
 /* Motion additions; accessibility foll */
 
-/* ---------- 模式：对话框淡入 + 缩放（.modal-overlay/.modal 已有基础，见上文） ---------- */
-/* ---------- 模式：抽屉滑入（#left + .drawer-overlay，见窄屏媒体查询） ---------- */
-/* ---------- 模式：toast 滑入滑出（.toast / .toast.leaving，见上文） ---------- */
+/* ---------- 模式：对话框淡入 + 缩放（.mo */
+/* ---------- 模式：抽屉滑入（#left + . */
+/* ---------- 模式：toast 滑入滑出（.to */
 
 /* Animated native details expansion. */
 @supports (interpolate-size: allow-keywords) {
@@ -2060,7 +2060,7 @@ footer { padding: 4px 24px 18px; }
   to { opacity: 1; transform: none; }
 }
 
-/* ---------- 模式：复制确认（motion.js 点击时加 .copied） ---------- */
+/* ---------- 模式：复制确认（motion.js */
 button.copied,
 [data-copy-flash].copied {
   animation: copy-pop var(--dur-2) var(--ease-out);
@@ -2092,7 +2092,7 @@ html.theme-switching header {
 
 /* Skeleton animation defined once above. */
 
-/* ---------- PWA 更新提示条（pwa.js 动态插入 #pwa-update） ---------- */
+/* ---------- PWA 更新提示条（pwa.js  */
 .pwa-update {
   position: fixed;
   left: 50%;
@@ -2192,3 +2192,13 @@ html.theme-switching header {
 .studio-feedback #tts-player{flex:1;min-width:0}
 @media(max-width:850px){.studio-grid{grid-template-columns:1fr}.studio-script{min-height:300px}#panel-tts #tts-text{min-height:240px}}
 @media(max-width:720px){#panel-tts{padding:14px}.studio-script,.studio-controls{padding:15px}.studio-section-heading{margin-bottom:14px}#panel-tts #tts-text{min-height:220px}.studio-render{flex-wrap:wrap}#panel-tts #tts-submit{flex:1;min-width:0}}
+/* #122: readiness and available model actions. */
+#instance-context:not(.hidden){display:flex;gap:14px;align-items:flex-start;border-left:4px solid var(--warn);margin:0 0 16px}
+.instance-context-mark{color:var(--warn);font-size:24px;font-weight:800}
+.instance-context-content{flex:1;min-width:0}
+.instance-context-eyebrow{font-size:11px;color:var(--text-dim)}
+.instance-context-title{display:block;font-size:16px;margin:5px 0}
+.instance-context-copy{margin:0;color:var(--text-dim);font-size:12px}
+.instance-context-choices-heading{margin-top:12px;font-size:11px}
+.instance-context-options{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.instance-context-option{padding:9px 12px}
