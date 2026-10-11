@@ -122,7 +122,7 @@ export function updateInstanceBar() {
     opt.textContent = `${inst.instanceName || inst.modelId} ｜ ${inst.backend}${inst.device != null ? ":" + inst.device : ""} ｜ ${t("instance.port")} ${inst.port} ｜ #${inst.id}`;
     select.appendChild(opt);
   }
-  const has = ready.length > 0;
+  const has = ready.length > 0 && !instanceFeedStale;
   if (has) {
     if (!ready.some(i => i.id === activeInstanceId)) {
       setActiveInstanceId(ready[0].id);
@@ -143,12 +143,12 @@ export function updateInstanceBar() {
   }
 
   const pill = $("instance-pill");
-  pill.textContent = has ? t("instance.ready") : t("instance.noReady");
+  pill.textContent = instanceFeedStale ? t("instance.pollStale") : has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
 
   
   const context = $("instance-context");
-  if (has) {
+  if (has || instanceFeedStale) {
     context.classList.add("hidden");
   } else {
     const target = selectedModelId;
