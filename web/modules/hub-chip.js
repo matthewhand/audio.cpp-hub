@@ -168,6 +168,12 @@ export function renderHubChip() {
   el.title = model.tip || "";
 }
 
+/** 最近一份农场摘要；null = 还没拉到 / 不可用。给 nowqueue.js 读 inFlightCap 用，
+    这样工作区顶部的状态条不必再开一条同源农场轮询。 */
+export function farmSummary() {
+  return farm;
+}
+
 /** 由 web/app.js 在启动时调用一次。 */
 export function startHubChip() {
   if (!el) return;
@@ -181,8 +187,17 @@ export function startHubChip() {
     renderHubChip();
   }, { interval: STATS_POLL_MS, onError: () => {} });
   // 同源摘要。服务端缓存约 5s，这里按同一节奏拉；失败就退回本机 chip。
+  // 每次拿到 / 掉线都广播 hub-farm-summary：工作区顶部的 Now/Queue 状态条从这里
+  // 读 inFlightCap（并发上限），跟着这份摘要更新而不自己开第二条轮询。
+  const publishFarm = (data) => {
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new CustomEvent("hub-farm-summary", { detail: farm }));
+    }
+    return data;
+  };
   Api.poll("/api/farm/health", (data) => {
     farm = data && typeof data === "object" ? data : { available: false };
     renderHubChip();
-  }, { interval: FARM_POLL_MS, onError: () => { farm = { available: false }; renderHubChip(); } });
+    publishFarm(data);
+  }, { interval: FARM_POLL_MS, onError: () => { farm = { available: false }; renderHubChip(); publishFarm(null); } });
 }

@@ -270,6 +270,15 @@ export class StubElement {
     return false;
   }
 
+  /* 事件委托（nowqueue.js 的取消键命中判定；models.js / sidebar.js / motion.js 同形）：
+     沿 parentElement 向上找第一个匹配选择器的节点，含自身。 */
+  closest(selector) {
+    for (let n = this; n; n = n.parentElement) {
+      if (matchesAny(n, selector)) return n;
+    }
+    return null;
+  }
+
   addEventListener(type, cb) {
     if (!this.listeners.has(type)) this.listeners.set(type, []);
     this.listeners.get(type).push(cb);

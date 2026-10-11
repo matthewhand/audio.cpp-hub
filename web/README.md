@@ -39,7 +39,7 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 ### 1. 硬约束
 
 - **无构建、无框架**：一个 `index.html`（538 行）+ 11 个经典 `<script>`（共享全局作用域）
-  + 1 个 `<script type="module">` 入口及其 19 个首屏 `web/modules/*.js`（外加 6 块按需加载的 chunk）。**模块不做任何转译**——
+  + 1 个 `<script type="module">` 入口及其 20 个首屏 `web/modules/*.js`（外加 6 块按需加载的 chunk）。**模块不做任何转译**——
   浏览器原生支持 ES 模块，所以「拆模块」不需要打包器。
   模块数量是**首屏请求数**（浏览器一个文件一个请求，见首屏的 `modulepreload` 约定）：
   别把它拆成一堆十几行的「微模块」——`npm run perf:budget` 的请求数预算就是拿它挡着的。
@@ -56,7 +56,7 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 - **服务侧**：`api.go:165` 的 `staticHandler` 用 `http.Dir("web")` 提供服务，目录请求只回 `index.html`（禁用目录列表），`index.html` 不缓存、其余资源缓存 1 小时（`api.go:203`、`api.go:205`）。
   工作目录由 `main.go:68` 的 `ensureWorkDir` 自动定位（当前目录没有 `web/` 时尝试上级与 exe 目录）。
 - **前端侧**：没有路由库、没有状态管理库。`web/app.js` 是 117 行的**引导层**（导入模块、跨模块重画、
-  最上层弹窗的 Esc / Tab 焦点锁定、启动顺序），业务逻辑按职责拆进 `web/modules/*.js`（19 个首屏模块 + 6 块懒加载 chunk）；
+  最上层弹窗的 Esc / Tab 焦点锁定、启动顺序），业务逻辑按职责拆进 `web/modules/*.js`（20 个首屏模块 + 6 块懒加载 chunk）；
   其余经典脚本是自包含组件（IIFE 或挂到 `window` 的 class），只暴露构造器 / 方法。
 - **数据流是手写的单向流**：DOM 事件 → `Api.*`（`web/api-client.js`）→ 更新模块级 `let` 状态 → 重新渲染相关 DOM。没有响应式绑定，改了 state 必须手动调用对应 render 函数。
 - **HTTP 只有唯一出口**：`web/modules/dom.js:27` 绑定 `window.AudioCppHub.api`，各模块一律
@@ -118,6 +118,7 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 | `modules/last-take.js`（471） | 合成按钮上方的「上一条录音」条：圆形播放键、实例 + 相对时间、80 根 `<rect>` 的内联 SVG 波形（一次 `fetch()` + WebAudio 解码，只画波形）、等宽时间、下载、「再生成」（交给合成按钮自己的 handler）。条上只放真正落盘的 tts 录音，刷新时从任务清单回填 | `peaksFromChannelData` `web/modules/last-take.js:45`，`relativeAgo` `:80`，`progressToBarIndex` `:98`，`renderLastTake` `:207`，`noteTtsTake` `:438`（由 `tasks.js` 的 `renderTaskResult` 调用），`seedLastTake` `:449`（由 `reattachTasks` 调用） |
 | `modules/sidebar.js`（671） | 操作历史侧栏：历史加载与渲染（含骨架屏 / 三态）、分组、分组菜单（键盘导航）、四要素详情、隐私模式、任务行与历史行的列表组装、「清空」批量删除（走全局等待遮罩） | `openHistoryPanel` `web/modules/sidebar.js:19`，`loadHistory` `:79`，`renderSidebarList` `:125`，`deleteFinishedTasks` `:578`，清空处理 `:593` |
 | `modules/panels.js`（866） | 工作区分发 + TTS / ASR / SEP / Music / Other 五类面板：`paramSchema` 渲染与收集、情感滑块、各面板提交；面板表单的 `VoiceSelect` / `AudioPicker` 实例在模块求值时一次性创建 | `voicePicker` `web/modules/panels.js:24`，`renderWorkspace` `:51`，`renderTtsPanel` `:294`，`buildEmotionSliders` `:536`，`renderAsrPanel` `:646` |
+| `modules/nowqueue.js`（406） | 工作区顶部的「Now / Queue」状态条（`#now-queue`，在实例工具栏与合成面板之间）：容量 chip「In flight n / cap」+ 每条运行中任务的强调色 chip（脉冲点 · 实例名 · 摘要 · 耗时 · 取消）+ 虚线 free chip + 队列 chip（位次 · 实例名 · 已等待 · 取消）。**与 `activity.js` 同源**：读它归约好的活跃行，**不开第二个轮询器**，只订阅 `hub-task-event`；SSE 断开时才有 15s 保险拉取。耗时节点用共享计时器的 `data-elapsed-id` 约定（本模块不写耗时 interval），排队的「已等待」用 `data-wait-at` + 只在有排队 chip 时存在的每秒 tick。`cap` 读 `hub-chip.js` 已轮询到的 `farmSummary().inFlightCap`，缺字段回落 `DEFAULT_CAP = 2`，free chip 数 `= max(0, cap - 运行中)` | `describeNowQueue` `web/modules/nowqueue.js:105`，`capacityFrom` `:50`，`shouldHideStrip` `:158`，`renderNowQueue` `:240`，`startNowQueue` `:390` |
 
 ##### 懒加载 chunk（点击才打开的视图）
 

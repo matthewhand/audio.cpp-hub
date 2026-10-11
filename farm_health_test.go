@@ -240,6 +240,77 @@ func TestFarmHealthHubLabelNoMatch(t *testing.T) {
 	}
 }
 
+func TestFarmHealthInFlightCap(t *testing.T) {
+	// inFlightCap is an optional passthrough of the fan-out's
+	// MaxInFlightPerTarget. Reported -> echoed; absent -> the key is omitted so
+	// the client falls back to its own default rather than reading 0 as "no
+	// capacity"; malformed -> the body is rejected, like hubs[].failures.
+	cases := []struct {
+		name  string
+		extra any // nil = do not put the key in the body at all
+		want  any // nil = the key must be absent from the response
+		up    bool
+	}{
+		{name: "reported", extra: 2, want: float64(2), up: true},
+		{name: "reported-zero", extra: 0, want: float64(0), up: true},
+		{name: "absent", extra: nil, want: nil, up: true},
+		{name: "null", extra: nil, want: nil, up: true},
+		{name: "negative", extra: -1, want: nil, up: false},
+		{name: "fractional", extra: 1.5, want: nil, up: false},
+		{name: "string", extra: "2", want: nil, up: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body := map[string]any{"hubsUp": 1, "hubsTotal": 1}
+				// "null" writes an explicit JSON null; absent writes nothing.
+				if tc.extra != nil || tc.name == "null" {
+					body["inFlightCap"] = tc.extra
+				}
+				writeJSON(w, http.StatusOK, body)
+			}))
+			defer up.Close()
+
+			got := farmBody(t, (&Hub{farm: newFarmHealth(up.URL)}).newHandler())
+			if got["available"] != tc.up {
+				t.Fatalf("available = %#v, want %v (%#v)", got["available"], tc.up, got)
+			}
+			if tc.want == nil {
+				if _, ok := got["inFlightCap"]; ok {
+					t.Fatalf("inFlightCap must be omitted: %#v", got)
+				}
+				return
+			}
+			if got["inFlightCap"] != tc.want {
+				t.Fatalf("inFlightCap = %#v, want %#v", got["inFlightCap"], tc.want)
+			}
+		})
+	}
+}
+
+func TestFarmHealthInFlightCapSingleFlighted(t *testing.T) {
+	// The cap travels in the cached summary, not in a second request: two reads
+	// hit the fan-out once and both see the cap.
+	var hits atomic.Int32
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"hubsUp": 2, "hubsTotal": 2, "inFlightCap": 3,
+			"hubs": []map[string]any{{"failures": 0}, {"failures": 0}},
+		})
+	}))
+	defer up.Close()
+	handler := (&Hub{farm: newFarmHealth(up.URL)}).newHandler()
+	for i := 0; i < 2; i++ {
+		if body := farmBody(t, handler); body["inFlightCap"] != float64(3) {
+			t.Fatalf("inFlightCap = %#v", body["inFlightCap"])
+		}
+	}
+	if hits.Load() != 1 {
+		t.Fatalf("upstream hits = %d, want 1", hits.Load())
+	}
+}
+
 func TestFarmHealthHubLabelNoInstances(t *testing.T) {
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"hubsUp": 1, "hubsTotal": 1})

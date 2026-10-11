@@ -59,9 +59,26 @@ function junkFns() {
   return loadEsModule("modules/junk.js", {});
 }
 
+/* 极小事件总线：activity.js 靠 window 上的 hub-task-event（task-events.js 广播）
+   与自己广播的 hub-tasks-refreshed 协调，纯函数测试要能真的把事件送进去。 */
+function makeWindowBus() {
+  const listeners = new Map();
+  return {
+    addEventListener(type, cb) {
+      if (!listeners.has(type)) listeners.set(type, []);
+      listeners.get(type).push(cb);
+    },
+    dispatchEvent(ev) {
+      for (const cb of listeners.get(ev.type) || []) cb(ev);
+      return true;
+    }
+  };
+}
+
 function pure() {
   const junk = junkFns();
-  return loadEsModule("modules/activity.js", {
+  const bus = makeWindowBus();
+  const mod = loadEsModule("modules/activity.js", {
     $: () => null,
     t,
     esc,
@@ -74,9 +91,26 @@ function pure() {
     setInterval: () => 0,
     clearInterval() {},
     localStorage: { getItem: () => null, setItem() {} },
-    window: { addEventListener() {} },
+    window: bus,
+    CustomEvent: class CustomEvent {
+      constructor(type, init = {}) {
+        this.type = type;
+        this.detail = init.detail;
+      }
+    },
     document: { getElementById: () => null, querySelectorAll: () => [] }
   });
+  mod.__bus = bus;
+  // startActivity 注册 hub-task-event 监听；纯函数测试也要能送事件进去
+  mod.startActivity();
+  return mod;
+}
+
+/* 把一条 task.* 事件按 task-events.js 的形状送进 activity.js。
+   task-events.js 是靠 startActivity 注册的那个 window 监听收事件的，
+   所以这里直接走同一个 window 总线的 hub-task-event。 */
+function fireTaskEvent(mod, name, data) {
+  mod.__bus.dispatchEvent({ type: "hub-task-event", detail: { name, data } });
 }
 
 test("formatDuration matches the generating clock", () => {
@@ -801,4 +835,72 @@ test("junk rows stay hidden, dim when shown, and do not fill the strip", () => {
   assert.equal(ui.list.innerHTML, "");
   assert.equal(ui.strip.innerHTML, "");
   assert.equal(ui.empty.textContent, "No recent jobs (1 test jobs hidden)");
+});
+
+test("activeActivityRows: a queued/running row stays only while a source still vouches for it", () => {
+  const mod = pure();
+  const now = Date.now();
+  const running = {
+    id: "r1",
+    instanceId: "i1",
+    instanceName: "breeze",
+    modelId: "breeze",
+    status: "RUNNING",
+    createdAt: now - 3000,
+    startedAt: now - 3000
+  };
+  const queued = {
+    id: "q1",
+    instanceId: "i1",
+    instanceName: "breeze",
+    modelId: "breeze",
+    status: "QUEUED",
+    createdAt: now - 1000,
+    startedAt: null,
+    position: 1
+  };
+
+  // 一次清单都还没拉到：全信事件，什么都不裁
+  fireTaskEvent(mod, "task.started", { taskId: "r1", instanceId: "i1", ts: now });
+  fireTaskEvent(mod, "task.queued", { taskId: "q1", instanceId: "i1", ts: now - 1000 });
+  assert.deepEqual(
+    mod.activeActivityRows().map((r) => r.taskId).sort().join(","),
+    "q1,r1"
+  );
+
+  // 清单里两条都在 -> 都活跃
+  mod.seedActivity([running, queued]);
+  assert.deepEqual(
+    mod.activeActivityRows().map((r) => r.taskId).sort().join(","),
+    "q1,r1"
+  );
+
+  // 任务结束并从清单里消失：SSE 断着时也必须退出活跃集合，
+  // 否则 Now/Queue 会把一条早就结束的任务永远挂在「In flight」上
+  mod.seedActivity([]);
+  assert.equal(mod.activeActivityRows().length, 0);
+  assert.equal(mod.sortActivity(mod.activeActivityRows()).length, 0);
+
+  // 但清单之后又收到它的事件 -> 重新算活跃（事件比清单新）
+  fireTaskEvent(mod, "task.started", { taskId: "r1", instanceId: "i1", ts: Date.now() });
+  assert.deepEqual(
+    mod.activeActivityRows().map((r) => r.taskId).join(","),
+    "r1"
+  );
+
+  // 文本摘要与队列位次：GET /api/tasks 已经有的两个字段，行上要带过来
+  mod.resetActivity();
+  mod.seedActivity([Object.assign({}, running, { text: "hello" }), Object.assign({}, queued, { position: 2 })]);
+  const rows = mod.activeActivityRows();
+  assert.equal(rows.find((r) => r.taskId === "r1").text, "hello");
+  assert.equal(rows.find((r) => r.taskId === "q1").position, 2);
+});
+
+test("seedActivity broadcasts hub-tasks-refreshed for the Now/Queue strip", () => {
+  const mod = pure();
+  const seen = [];
+  mod.__bus.addEventListener("hub-tasks-refreshed", (ev) => seen.push(ev));
+  mod.seedActivity([]);
+  mod.seedActivity([]);
+  assert.equal(seen.length, 2, "every list refresh is announced");
 });

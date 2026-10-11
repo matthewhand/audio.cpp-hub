@@ -205,6 +205,10 @@ function mergeActivity(prev, ev) {
   if (ev.modelId) next.modelId = ev.modelId;
   if (ev.category) next.category = ev.category;
   if (ev.status) next.status = ev.status;
+  /* text / position：Now/Queue 状态条要画任务摘要与队列位次。
+     事件里没有就保留旧值（task.queued 不带 position，之后的 GET /api/tasks 会补上）。 */
+  if (typeof ev.text === "string") next.text = ev.text;
+  if (ev.position != null && Number.isFinite(Number(ev.position))) next.position = Number(ev.position);
   const started = posTime(ev.startedAt);
   if (started) next.startedAt = started;
   const created = posTime(ev.createdAt) || posTime(ev.queuedAt);
@@ -257,6 +261,8 @@ export function rowsFromTasks(tasks) {
       modelId: task.modelId,
       category: task.category,
       status,
+      text: task.text,
+      position: task.position,
       startedAt: task.startedAt,
       finishedAt: task.finishedAt,
       createdAt: task.createdAt,
@@ -576,16 +582,54 @@ function rememberIdle(instanceId, ts) {
   if (typeof noteIdleFallback === "function") noteIdleFallback(instanceId, ts);
 }
 
+/* 「这一行现在还活着吗」需要看两次来源的时间关系：
+ *   - 最近一次 GET /api/tasks（listIds）里出现过这条任务 → 清单说它还在跑；
+ *   - 或者那次清单刷新之后又收到过它的 task.* 事件 → 事件比清单新，清单可能是旧的。
+ * 两者都不满足时（例如 SSE 断着、任务结束后从清单里消失），这一行是陈旧的，
+ * 不该再算作活跃任务——否则 Now/Queue 状态条会把一条早就结束的任务永远挂在
+ * 「In flight」上。listAt 为 0（一次清单都还没拉到）时不裁剪，全信事件。
+ *
+ * 「谁新谁旧」用单调序号而不是 Date.now()：一次 seedActivity() 之后紧跟一条 SSE
+ * 事件时，两者可能落在同一毫秒里，墙钟毫秒分辨不够，会把这条本该算新的事件判成旧的。
+ * 序号只在清单刷新与 task.* 事件这两条产生新信息的路径上递增，比较 = 递增顺序。 */
+/** 单调序号游标：seedActivity() 与每条 task.* 事件各取一号 */
+let seq = 0;
+/** 最近一次清单拉回的墙钟时刻，只作 hub-tasks-refreshed 的负载；判「新旧」用 listSeq。 */
+let listAt = 0;
+/** 最近一次清单里的 taskId 集合 */
+let listIds = new Set();
+/** 最近一次清单刷新对应的单调序号 */
+let listSeq = 0;
+/** taskId → 最近一次 task.* 事件到达时的单调序号 */
+const eventSeq = new Map();
+
+function alive(row) {
+  if (!row) return false;
+  if (!listAt) return true;
+  if (listIds.has(row.taskId)) return true;
+  return (eventSeq.get(String(row.taskId)) || 0) > listSeq;
+}
+
+function publishRefreshed() {
+  if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return;
+  window.dispatchEvent(new CustomEvent("hub-tasks-refreshed", { detail: { at: listAt } }));
+}
+
 export function seedActivity(tasks) {
+  const list = Array.isArray(tasks) ? tasks : [];
   let next = rows.slice();
-  for (const row of rowsFromTasks(tasks)) next = upsertEvent(next, row);
+  for (const row of rowsFromTasks(list)) next = upsertEvent(next, row);
   rows = sortActivity(next);
-  for (const task of Array.isArray(tasks) ? tasks : []) {
+  listIds = new Set(list.map((t) => (t && t.id ? String(t.id) : "")).filter(Boolean));
+  listAt = Date.now();
+  listSeq = ++seq;
+  for (const task of list) {
     if (!task || !task.instanceId || !task.finishedAt) continue;
     if (task.status === "QUEUED" || task.status === "RUNNING") continue;
     rememberIdle(task.instanceId, task.finishedAt);
   }
   if (panelOpen()) renderActivity();
+  publishRefreshed();
 }
 
 function onTaskEvent(ev) {
@@ -604,10 +648,13 @@ function onTaskEvent(ev) {
     durationMs: data.durationMs,
     finishedAt: data.finishedAt
   });
+  eventSeq.set(String(data.taskId), ++seq);
   if (status === "done" || status === "failed" || status === "cancelled") {
     rememberIdle(data.instanceId, data.ts);
   }
   if (panelOpen()) renderActivity();
+  // SSE 改了状态但清单没动（可能还没到下一次拉取），Now/Queue 状态条要立刻跟上
+  publishRefreshed();
 }
 
 function pullTasks() {
@@ -615,6 +662,31 @@ function pullTasks() {
   Api.get("/api/tasks").then((data) => {
     seedActivity(Array.isArray(data) ? data.slice(0, 40) : []);
   }).catch(() => {});
+}
+
+/* ---------- 给 Now/Queue 状态条用的出口（web/modules/nowqueue.js） ----------
+ *
+ * 状态条与本模块同源：不再自己 GET /api/tasks、也不自己挂 SSE，而是读这里已经
+ * 归约好的行。返回的是过滤后的活跃行（QUEUED / RUNNING），按创建时间旧的在前
+ * ——服务端清单本来就是「活跃在前、按 createdAt 倒序」，这里翻正成队列的读法。 */
+
+/**
+ * 当前缓存里的活跃行（QUEUED / RUNNING），旧的在前。只读，不改模块状态。
+ *
+ * 活跃 = 状态是 queued/running **且**这一行还「活着」：最近一次 GET /api/tasks
+ * 里仍有它，或它在那之后又收到过 task.* 事件。SSE 断开时清单是唯一来源，
+ * 任务结束并从清单里消失后，这一行就自动退出活跃集合（见 alive）。
+ */
+export function activeActivityRows() {
+  const active = new Set(["queued", "running"]);
+  return sortActivity(rows)
+    .filter((r) => r && active.has(r.status) && alive(r))
+    .reverse();
+}
+
+/** 让本模块重拉一次 GET /api/tasks（状态条的 SSE 保险拉取复用这一条请求）。 */
+export function pullActivityTasks() {
+  return pullTasks();
 }
 
 function ensurePoll() {
@@ -672,6 +744,10 @@ export function startActivity() {
 /** Test-only reset. */
 export function resetActivity() {
   rows = [];
+  listAt = 0;
+  listSeq = 0;
+  listIds = new Set();
+  eventSeq.clear();
   stopPoll();
   stopStrip();
 }

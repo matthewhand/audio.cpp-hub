@@ -73,6 +73,7 @@ const PRECACHE_URLS = [
   "/modules/sidebar.js",
   "/modules/stats-lazy.js",
   "/modules/voices-panel-lazy.js",
+  "/modules/nowqueue.js",
   // 下面是懒加载 chunk（不在首屏，也不进 index.html 的 modulepreload）：各自只被对应
   // 外观层的 import("./x.js") 拉取，但离线冷启动点开时仍要能用，因此只进预缓存。
   "/modules/stats.js",          // 看板（#/stats）

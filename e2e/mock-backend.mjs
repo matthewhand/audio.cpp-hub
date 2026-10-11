@@ -45,6 +45,9 @@ export class MockBackend {
     this.tasks = [];
     this.seq = 1;
     this.requests = [];
+    /* 农场摘要。默认「不可用」，让 chip 退回本机实例计数；Now/Queue 状态条的
+       并发上限也就走 DEFAULT_CAP。用例可以给 inFlightCap 覆盖。 */
+    this.farm = opts.farm || { available: false };
   }
 
   nextId() {
@@ -95,6 +98,9 @@ export class MockBackend {
     if (method === "GET" && p === "/api/models") return this.json(route, this.models);
     let m = p.match(/^\/api\/models\/([^/]+)\/packages$/);
     if (method === "GET" && m) return this.json(route, { packages: [] });
+
+    // ---------- 农场摘要（同源，页头 chip 与 Now/Queue 状态条共用） ----------
+    if (method === "GET" && p === "/api/farm/health") return this.json(route, this.farm);
 
     // ---------- 可执行文件 ----------
     if (p === "/api/executables") {

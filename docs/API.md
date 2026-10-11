@@ -204,12 +204,13 @@ URL 来自进程环境变量 `AUDIOCPP_HUB_FANOUT_URL`。未设置时用 `http:/
 始终 `200`。fan-out 给出可用摘要时：
 
 ```json
-{"available":true,"hubsUp":3,"hubsTotal":4,"failures":1,"checkedAt":"2026-10-10T00:00:00Z"}
+{"available":true,"hubsUp":3,"hubsTotal":4,"failures":1,"checkedAt":"2026-10-10T00:00:00Z","inFlightCap":2}
 ```
 
 - `hubsUp` / `hubsTotal` 来自 fan-out 正文里的同名字段（必须都在，且 `0 <= hubsUp <= hubsTotal`）
 - `failures` 是 `hubs[].failures` 之和（`hubs` 可以没有；有但不是数组则整段无效）。`0` 也写出来
 - `checkedAt` 优先用 fan-out 的 `updatedAt`（非空字符串），否则是 hub 这次检查的 UTC 时间
+- `inFlightCap` **可选**：fan-out 的 `MaxInFlightPerTarget` 逐字透传。没有这个键表示 fan-out 没报（旧版本或单机部署），客户端回落到自己的默认值，**不会**把「缺字段」读成「额度为 0」；上报 `0` 则照实写 `0`。存在但不是 `0 <= n <= 1e9` 的整数时整份摘要无效（同 `hubs[].failures` 的规则）。WebUI 用它作为「Now / Queue」状态条的并发上限
 - fan-out 的 `ok` 若出现必须是布尔，但不决定 `available`。`available: true` 只表示「拿到了一份能用的摘要」
 
 连不上、非 200、正文不是这份形状时，同样 `200`，正文只有：
@@ -567,7 +568,7 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 | `GET /api/instances` | `web/modules/instances.js:49` 首屏加载 + `web/modules/instances.js:57` 2s 轮询 |
 | `GET /api/events` | `web/modules/async-ui.js:189`（`startEventsPolling`）2s 轮询（失败静默） |
 | `GET /api/events/stream` | `web/modules/task-events.js`（`EventSource`，不是 `fetch`；失败静默，实例列表仍靠 2s 轮询） |
-| `GET /api/farm/health` | `web/modules/hub-chip.js`（约 5s 轮询；不可用时 chip 退回本机实例计数） |
+| `GET /api/farm/health` | `web/modules/hub-chip.js`（约 5s 轮询；不可用时 chip 退回本机实例计数；同一份摘要里的 `inFlightCap` 由 `web/modules/nowqueue.js` 读作并发上限，不另发请求） |
 | `GET /api/tasks` | `web/modules/activity.js`（最近活动面板播种；SSE 未连接且面板打开时约 5s 再拉） |
 | `GET /api/stats` | `web/modules/stats.js:46`（`loadStats`）打开 `#/stats` 时按需拉取，非轮询 |
 | `GET /api/downloads` | `web/modules/downloads-lazy.js:60` 首屏加载 + `web/modules/downloads-lazy.js:65` 2s 轮询 |

@@ -31,6 +31,7 @@ import { renderLastTake } from "./modules/last-take.js";
 import { renderLiveTicker, startLiveTicker } from "./modules/live-ticker.js";
 import { loadModels, renderModelList, startModelsPanel, updateQuickLaunchTitle } from "./modules/models.js";
 import { buildEmotionSliders, renderWorkspace } from "./modules/panels.js";
+import { renderNowQueue, startNowQueue } from "./modules/nowqueue.js";
 import { applyRoute } from "./modules/routing.js";
 import { closeSettingsModal, loadExecutables, relocalizeSettings, updateLaunchExec } from "./modules/settings-lazy.js";
 import { applyLangBtn, applyThemeIcon, closeDrawer } from "./modules/shell.js";
@@ -64,6 +65,7 @@ function rerenderAll() {
   /* 页头 chip、合成按钮下方的状态行、左栏实时事件灯：文案走词典，语言切换后重画一次 */
   renderHubChip();
   renderLiveTicker();
+  renderNowQueue();
   renderLastTake();
   renderLiveEvents();
   renderActivity();
@@ -128,6 +130,7 @@ startDownloadsPolling();
 startHubChip();
 startLiveTicker();
 startActivity();
+startNowQueue();
 startModelsPanel();
 startCharCount();
 

@@ -6,6 +6,10 @@
 
 ### Added
 
+- WebUI 工作区顶部（实例工具栏与合成面板之间）新增「Now / Queue」状态条（`web/modules/nowqueue.js`）：左边标题图标 + 「Now / Queue」，一枚「In flight n / cap」容量 chip，每个运行中的任务一枚强调色 chip（脉冲点 · 实例名 · 文本前 14 字摘要 · 耗时 · 取消键），剩余容量用虚线「free」chip 占位，竖线之后是「Queued n」与每条排队任务的 chip（队列位次 · 实例名 · 已等待 · 取消键）。没有就绪实例也没有在途任务时整条收起；空闲时收成一行「In flight 0 / N」+ free chips。窄屏折行。数据与左栏「最近活动」同源（同一份 `GET /api/tasks` 缓存 + 同一路任务 SSE），**不新增轮询器**：SSE 通着时只靠 `task.*` 事件重画，SSE 断开时另有一个 15s 保险拉取复用同一条请求路径。运行中 chip 的耗时刻度走全站唯一的 `elapsed.js` 表与 `instances.js` 那个定时器（`.badge-elapsed[data-elapsed-id]`），本模块不开第二个耗时 interval；排队 chip 的「已等待」不是任务耗时，自带一个每秒一跳、且**只在真的有排队 chip 时**存在的轻量 interval。取消单击即生效（不弹确认框），同一任务在途期间按钮 disabled 并挡住重复点击，请求失败沿用既有的 toast。chip 的 tooltip 给出实例名、8 位短任务 id 与完整文本
+- `GET /api/farm/health` 的摘要新增可选透传字段 `inFlightCap`（数字，取自 fan-out 的 `MaxInFlightPerTarget`）：**fan-out 没报就不写这个键**（旧 hub 与单机部署都没有），客户端因此回落到自己的默认值 `2`，而不是把「没有这个字段」读成「并发额度为 0」。上报值存在但格式非法（负数、非整数、超范围）时整份摘要判为不可用，与 `hubs[].failures` 同一规则。该字段只用于上面的并发上限显示，浏览器不打跨源请求，值仍由 hub 去拉配置好的 fan-out URL（`farm_health.go` + `farm_health_test.go` 表驱动）
+  - 已知限制：hub 的 `GET /api/tasks` **没有分片（chunk）进度字段**，因此「Now / Queue」状态条里画不出「第 n / m 片」的分片进度条。概念稿在这条状态条上还有一处分片进度；要在不编造数据的前提下补上，后端需先在任务快照里加一个分片进度字段（例如 `result.chunkDone` / `result.chunkTotal`，或任务对象上的同名字段），前端再照读。**本次没有加这个字段，也没有用任何近似值去填**
+
 - Web UI 页头按钮改用内嵌 Lucide 图标雪碧图（`menu`、`mic-vocal`、`history`、`download`、`chart-column`、`languages`、`settings`，主题为 `sun` / `moon` / `monitor`，面板关闭为 `x`）。路径数据来自 lucide-static，许可证全文在 `third_party/lucide/LICENSE`（ISC，部分图标源自 Feather / MIT）
 - 每个运行中的实例采样 RSS，并尽力读取 VRAM（Linux DRM fdinfo，否则 `nvidia-smi`，失败则退避）。`GET /api/instances` 在第一次采样后带上可选的 `memory`（当前 / 峰值 / 时间加权平均）；任务结束时把 RUNNING 期间的峰值写成 `peakRamBytes` / `peakVramBytes`。非 Linux 省略 `memory`
 - `GET /api/events/stream`：任务生命周期的 Server-Sent Events（连接时 `hello`，约 15 秒一条 `: ping`，以及 `task.queued` / `task.started` / `task.finished` / `task.failed` / `task.cancelled`）。Web UI 在对应实例上显示「生成中…」，推送不可用时仍靠原来的 2 秒轮询。fan-out 不代理这条流
@@ -43,6 +47,8 @@
 
 ### Changed
 
+- 首屏性能预算按实测上调（Now / Queue 状态条落在首屏，不是点开才用的视图）：JS raw 452.2 → 471.9 KiB、gzip 167.0 → 175.1、CSS raw 90.9 → 94.3、gzip 24.4 → 25.4、合计 gzip 191.4 → 200.4、子资源 38 → 39。预算相应改为 JS raw 472、gzip 176、CSS raw 95、gzip 26、合计 gzip 201、子资源 39（`scripts/perf-budget.mjs` 的注释里记了完整的 before → after 表）
+- `web/modules/activity.js` 的任务行新增 `text` 与 `position` 两个字段（GET /api/tasks 已有的数据，此前本模块没带过来），供 Now/Queue 状态条画摘要与队列位次；活动区本身不读这两个字段，行为不变
 - 首屏性能预算再按实测上调：`elapsed.js` 与 `junk.js` 进入首屏模块图（子资源 37，预算 38），共用计时与最近 1 小时横条使 JS raw 412.2 KiB、gzip 151.2、合计 gzip 172.4。预算改为 JS raw 415、gzip 154、合计 gzip 175。CSS 预算不变
 - 首屏性能预算按实测上调（JS raw 387.4 KiB、gzip 142.9、CSS raw 79.9、gzip 21.0、合计 gzip 163.9、子资源 35）。最近活动、字数、内存条、状态行和农场 chip 都在首屏，不能拆成懒加载
 - 首屏体积优化：「点开才用得上」的六个视图（服务器端文件浏览器、音色库、下载管理、设置、用量看板、Ctrl/Cmd-K 命令面板）改为动态 `import()` 的懒加载 chunk，首屏外观层（角标、按钮、启动弹窗下拉、命令面板和弦）留在首屏模块图内；实测首屏 JS raw 313.5 → 310.2 KiB、gzip 114.4 → 113.6 KiB，预算按同一口径同步收紧

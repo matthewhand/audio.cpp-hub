@@ -241,14 +241,32 @@ const KIB = 1024;
  *   | `modules/panels.js`             | 10.8 K | 工作区表单本身，首屏就要画，不是「点开才用得上」。          |
  *   | `style.css`                     | 17.6 K | 无打包器，按用途拆 CSS 要改整套首屏结构与视觉契约。        |
  *   | `pwa.js`                        | 1.7 K  | 渐进增强而非点击才用；挪走只省 1 次请求换一个形状变更。    |
+ *
+ * 2026-10（Now / Queue 状态条）：工作区顶部新增 `modules/nowqueue.js`（一条常驻
+ * 状态条，不是点开才用的面板，因此留在首屏模块图里），外加 `style.css` 的 `.nq*`
+ * 规则。实测 before → after（`npm run perf:budget`）：
+ *
+ *   | 指标             | 加之前         | 加之后         | 变化           |
+ *   | ---------------- | -------------- | -------------- | -------------- |
+ *   | 初始 JS raw      | 452.2 KiB      | 471.9 KiB      | +19.7 KiB      |
+ *   | 初始 JS gzip     | 167.0 KiB      | 175.1 KiB      | +8.1 KiB       |
+ *   | 初始 CSS raw     | 90.9 KiB       | 94.3 KiB       | +3.4 KiB       |
+ *   | 初始 CSS gzip    | 24.4 KiB       | 25.4 KiB       | +1.0 KiB       |
+ *   | JS+CSS gzip 合计 | 191.4 KiB      | 200.4 KiB      | +9.0 KiB       |
+ *   | 初始子资源请求数 | 38             | 39             | +1（整个模块） |
+ *
+ * 上限按同一口径重新钉到实测值。JS raw 的大头是模块头部的说明注释（同一份
+ * 「计时只有一处写 / 容量口径是什么」的约定在本仓库是硬要求），不是新的依赖边：
+ * 本模块只 import 已经存在于首屏的 dom / activity / elapsed / hub-chip /
+ * instances / tasks / task-events 七个模块，没有引入任何新的传递依赖。
  */
 export const BUDGETS = {
-  jsRawKiB: 453, // 初始 JS 未压缩合计（实测 452.2）
-  jsGzipKiB: 168, // 初始 JS gzip 传输合计（实测 167.0）
-  cssRawKiB: 91, // 初始 CSS 未压缩（实测 90.9）
-  cssGzipKiB: 25, // 初始 CSS gzip 传输（实测 24.4）
-  totalGzipKiB: 192, // JS + CSS gzip 合计（实测 191.4，不含 HTML，HTML 很小)
-  subresourceRequests: 38, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 38）
+  jsRawKiB: 472, // 初始 JS 未压缩合计（实测 471.9）
+  jsGzipKiB: 176, // 初始 JS gzip 传输合计（实测 175.1）
+  cssRawKiB: 95, // 初始 CSS 未压缩（实测 94.3）
+  cssGzipKiB: 26, // 初始 CSS gzip 传输（实测 25.4）
+  totalGzipKiB: 201, // JS + CSS gzip 合计（实测 200.4，不含 HTML，HTML 很小）
+  subresourceRequests: 39, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 39）
   ttiTargetMs: 1500 // 目标 TTI（本地/局域网，中端笔电）——浏览器指标，本脚本不测量
 };
 const CSS = ["style.css"];

@@ -47,6 +47,12 @@ type farmSummary struct {
 	Failures  int
 	CheckedAt string
 
+	// InFlightCap is the fan-out's per-target concurrency cap, passed through
+	// verbatim from its body (MaxInFlightPerTarget). nil when the fan-out does
+	// not report one, so the WebUI can fall back to its own default instead of
+	// reading a hard zero as "no capacity at all".
+	InFlightCap *int
+
 	// Hubs carries each entry's label plus the instance ids it reports.
 	// The handler resolves one of them to HubLabel by matching the local
 	// instance ids (see hubLabelFor); unexported, so it never reaches JSON.
@@ -207,14 +213,37 @@ func parseFarmHealth(raw []byte, now time.Time) (farmSummary, bool) {
 			checked = s
 		}
 	}
+	cap, okCap := inFlightCap(probe)
+	if !okCap {
+		return farmSummary{}, false
+	}
 	return farmSummary{
-		Available: true,
-		HubsUp:    up,
-		HubsTotal: total,
-		Failures:  failures,
-		CheckedAt: checked,
-		Hubs:      hubs,
+		Available:   true,
+		HubsUp:      up,
+		HubsTotal:   total,
+		Failures:    failures,
+		CheckedAt:   checked,
+		InFlightCap: cap,
+		Hubs:        hubs,
 	}, true
+}
+
+// inFlightCap reads the fan-out's optional per-target concurrency cap
+// (MaxInFlightPerTarget). Absent or null is "not reported" (nil, true), which
+// the client turns into its own default. A present-but-malformed value (not a
+// whole number, negative, or out of range) invalidates the whole body, the same
+// way hubs[].failures does: a fan-out that garbles its capacity is a bug worth
+// showing as unavailable, not worth quietly reporting as a smaller number.
+func inFlightCap(probe map[string]json.RawMessage) (*int, bool) {
+	raw, present := probe["inFlightCap"]
+	if !present || string(raw) == "null" {
+		return nil, true
+	}
+	n, ok := jsonInt(raw)
+	if !ok || n < 0 {
+		return nil, false
+	}
+	return &n, true
 }
 
 // farmHubRefFrom reads one hub entry's label and the ids under its
@@ -310,6 +339,11 @@ func (h *Hub) handleFarmHealth(w http.ResponseWriter, _ *http.Request) {
 	}
 	if label := sum.hubLabelFor(localInstanceIDs(h)); label != "" {
 		body["hubLabel"] = label
+	}
+	// 并发上限是可选透传：fan-out 没报就不写这个键，客户端用自己的默认值。
+	// 写成 0 也会照实透传（fan-out 说没有并发额度就是没有）。
+	if sum.InFlightCap != nil {
+		body["inFlightCap"] = *sum.InFlightCap
 	}
 	writeJSON(w, http.StatusOK, body)
 }
