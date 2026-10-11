@@ -46,7 +46,7 @@ func TestQA121SSEPayloadStatusAndPrivacy(t *testing.T) {
 				if _, ok := data["error"]; ok {
 					t.Fatalf("backend error text leaked in SSE: %#v", data)
 				}
-				if tt.terminal && (data["durationMs"] != float64(32) || data["peakRamBytes"] != float64(123) && tt.name != eventTaskFailed) {
+				if tt.terminal && (data["durationMs"] != float64(32) || data["peakRamBytes"] != float64(123)) {
 					t.Fatalf("terminal metrics incomplete: %#v", data)
 				}
 			case <-time.After(time.Second):

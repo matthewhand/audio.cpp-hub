@@ -161,17 +161,11 @@ func (b *EventBus) OnTaskEvent(ev taskEvent) {
 	switch ev.Name {
 	case eventTaskFinished:
 		payload["ok"] = true
-		payload["durationMs"] = ev.DurationMs
-		if ev.PeakRam != nil {
-			payload["peakRamBytes"] = *ev.PeakRam
-		}
-		if ev.PeakVram != nil {
-			payload["peakVramBytes"] = *ev.PeakVram
-		}
 	case eventTaskFailed:
 		payload["ok"] = false
-		payload["durationMs"] = ev.DurationMs
-	case eventTaskCancelled:
+	}
+	// Terminal metrics are facts about *observed* work, not estimated values.
+	if ev.Name == eventTaskFinished || ev.Name == eventTaskFailed || ev.Name == eventTaskCancelled {
 		payload["durationMs"] = ev.DurationMs
 		if ev.PeakRam != nil {
 			payload["peakRamBytes"] = *ev.PeakRam
