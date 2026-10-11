@@ -146,7 +146,66 @@ try {
   );
   console.log("PASS HTTP SSE 404 fallback -> authoritative polling");
   await fallbackContext.close();
-  console.log("RESULT 7/7 real browser integration checks passed");
+  // This final scenario uses the *actual* Go TaskManager for both SSE and
+  // authoritative GET /api/tasks. Only unrelated app bootstrap APIs are mocked.
+  const actualContext = await browser.newContext({
+    baseURL: base,
+    serviceWorkers: "block",
+    viewport: { width: 768, height: 850 }
+  });
+  const actual = await actualContext.newPage();
+  const actualBackend = new MockBackend({
+    instances: backend.instances,
+    autoCompleteTasks: false
+  });
+  let actualTaskGets = 0;
+  await actual.route(
+    (url) => url.pathname.startsWith("/api/") || url.pathname.startsWith("/v1/"),
+    (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === "/api/tasks") {
+        actualTaskGets++;
+        return route.continue();
+      }
+      return path === "/api/events/stream" ? route.continue() : actualBackend.handle(route);
+    }
+  );
+  await actual.addInitScript(() => {
+    localStorage.clear();
+    localStorage.setItem("hub-model", "supertonic");
+    localStorage.setItem("hub-lang", "en");
+  });
+  await actual.goto(base);
+  await actual.locator("#model-list .card-title").first().waitFor({ timeout: 10000 });
+  await actual.locator("#activity-queue-open").click();
+  await actual.waitForFunction(
+    () => document.querySelector("#activity-queue-status")?.textContent.includes("Live"),
+    { timeout: 7000 }
+  );
+  const creation = await fetch(base + "/qa/live-create", { method: "POST" });
+  check(creation.status === 202, "Real TaskManager submission was rejected");
+  const created = await creation.json();
+  check(typeof created.id === "string", "Real task ID missing");
+  await actual.waitForFunction(
+    () => document.querySelector(".aq-row .aq-status")?.textContent.includes("Running"),
+    { timeout: 7000 }
+  );
+  const beforeFinish = actualTaskGets;
+  check(
+    (await fetch(base + "/qa/live-finish", { method: "POST" })).status === 204,
+    "Real synthetic engine release failed"
+  );
+  await actual.waitForFunction(
+    () => document.querySelector(".aq-row .aq-status")?.textContent.includes("Done"),
+    { timeout: 7000 }
+  );
+  check(actualTaskGets > beforeFinish, "Terminal SSE did not trigger a real GET /api/tasks");
+  check(actualTaskGets >= 3, "Insufficient authoritative Go task revalidation");
+  console.log(
+    "PASS Go TaskManager lifecycle -> native SSE -> real GET /api/tasks -> browser RUNNING/DONE"
+  );
+  await actualContext.close();
+  console.log("RESULT 8/8 real browser integration checks passed");
 } finally {
   await browser.close();
   await fetch(base + "/qa/stop", { method: "POST" }).catch(() => {});

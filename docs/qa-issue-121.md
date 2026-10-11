@@ -17,8 +17,12 @@ While it is listening on `127.0.0.1:4194`, run a second local command:
 node e2e/qa121-real-sse-browser.mjs
 ```
 
-The browser exercise uses a disposable test EventBus and synthetic/mock tasks;
-it covers stream connection, event-triggered task refresh, disconnect/reconnect,
-404 fallback, privacy and responsive screenshots. The harness has an 80-second
+The browser exercise uses a disposable Go EventBus and two isolated scenarios:
+a synthetic event stream with mock task GETs for fallback/disconnect coverage,
+and a **real Go TaskManager** with a synthetic loopback-only engine, real
+`GET /api/tasks`, and native SSE observed by Chromium. Neither scenario
+uses model weights or production inference. The browser covers connection,
+authoritative task refresh, RUNNING-to-DONE lifecycle, reconnect, 404 fallback,
+privacy and responsive screenshots. The harness has an 80-second
 lifetime and returns without touching production services or model weights.
 The normal Go suite skips the opt-in harness automatically.
