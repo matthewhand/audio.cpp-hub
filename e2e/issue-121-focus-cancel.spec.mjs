@@ -136,3 +136,27 @@ test("cancel awaits old poll then performs a new post-DELETE GET", async ({ page
   await expect.poll(() => afterDeleteGets, { timeout: 3500 }).toBeGreaterThan(0);
   await expect(page.locator(".aq-row")).toContainText("Cancelled");
 });
+
+test("SSE refresh preserves the same focused Cancel element without blur", async ({ page }) => {
+  const backend = new MockBackend({ instances: [ready], autoCompleteTasks: false });
+  backend.tasks.push(task("stableNode"));
+  await setup(page, backend);
+  const button = page.locator("#activity-queue-list button").first();
+  await button.focus();
+  const original = await button.elementHandle();
+  await page.evaluate(() => {
+    globalThis.__focusBlurCount = 0;
+    globalThis.document.activeElement.addEventListener("blur", () => {
+      globalThis.__focusBlurCount++;
+    });
+  });
+  const response = page.waitForResponse(res =>
+    res.url().endsWith("/api/tasks") && res.request().method() === "GET"
+  );
+  await page.evaluate(() => globalThis.__focusStream[0].emit("task.started"));
+  await response;
+  await page.waitForTimeout(150);
+  expect(await original.evaluate(el => el.isConnected)).toBe(true);
+  await expect(button).toBeFocused();
+  expect(await page.evaluate(() => globalThis.__focusBlurCount)).toBe(0);
+});
