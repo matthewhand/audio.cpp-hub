@@ -466,7 +466,9 @@ export class MockBackend {
 
   defaultResult(category, req) {
     if (category === "asr") {
-      return this.asrResult || { text: "mock transcript: hello from audio.cpp-hub", language: "en" };
+      return (
+        this.asrResult || { text: "mock transcript: hello from audio.cpp-hub", language: "en" }
+      );
     }
     return { text: req.text || "mock result" };
   }

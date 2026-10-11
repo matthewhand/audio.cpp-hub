@@ -30,8 +30,9 @@ test("ASR 任务：路径选音频 → 提交 → 识别文本展示", async ({ 
   expect(backend.tasks[0].category).toBe("asr");
 });
 
-
-test("VibeVoice ASR displays real speaker IDs and sample-rate-derived timestamps", async ({ page }) => {
+test("VibeVoice ASR displays real speaker IDs and sample-rate-derived timestamps", async ({
+  page
+}) => {
   const backend = new MockBackend({
     instances: [{ ...READY, modelId: "vibevoice_asr", instanceName: "vibevoice_asr" }],
     asrResult: {

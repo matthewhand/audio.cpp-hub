@@ -1317,15 +1317,6 @@ footer { padding: 4px 24px 18px; }
 }
 .asr-text-card .btn-ghost { flex-shrink: 0; }
 
-#asr-speaker-timeline { margin-top: 18px; }
-#asr-speaker-timeline h3 { font-size: 15px; margin: 0 0 10px; }
-.asr-speaker-turns { padding: 0; margin: 0; list-style: none; display: grid; gap: 8px; }
-.asr-speaker-turns li { min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--input-bg); }
-.asr-speaker-turn-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
-.asr-speaker-id { font-weight: 650; color: var(--text); }
-.asr-speaker-time { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-dim); }
-.asr-speaker-words { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-
 .json-pre {
   margin-top: 10px;
   padding: 12px 14px;
