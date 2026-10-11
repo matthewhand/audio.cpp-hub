@@ -73,6 +73,7 @@ const PRECACHE_URLS = [
   "/modules/downloads.js",      // 下载管理弹窗 + 按模型下载弹窗
   "/modules/settings.js",       // 设置弹窗（通用 / HTTPS / 可执行文件列表）
   "/modules/command-palette.js", // 命令面板（Ctrl/Cmd-K）
+  "/modules/readiness.js", // 选中模型无就绪实例时加载的替代选项
   "/modules/panels.js",
   "/style.css",
   "/icons/icon-192.png",
