@@ -1972,7 +1972,7 @@ footer { padding: 4px 24px 18px; }
 /* 长文本折行，避免窄屏横向滚动 */
 .hint, .msg, .json-pre, .exec-path, .settings-row-desc, .field-error { overflow-wrap: anywhere; }
 
-/* ---------- 小屏适配（≤720px）：触摸目标 */
+/* Mobile controls <=720px */
 @media (max-width: 720px) {
   header { padding: 10px 14px;gap: var(--space-2);flex-wrap:wrap; }
   .brand { gap: var(--space-2); }
@@ -1987,11 +1987,12 @@ footer { padding: 4px 24px 18px; }
   .grid,
   #launch-modal .grid,
   #settings-pane-https .grid { grid-template-columns: 1fr; }
-  /* 触摸目标：按钮 / 输入控件最小高度 44px */
+  /* 44px touch targets */
   .btn, .btn-primary, .btn-ghost, .btn-danger, .stop-btn,
   select, input[type="text"], input[type="number"], textarea {
     min-height: 44px;
   }
+  .modal-close { min-width: 44px; min-height: 44px; }
 }
 
 /* ---------- 列表行进入动画 ---------- */
