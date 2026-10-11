@@ -1,5 +1,6 @@
 /* #121 Activity/Queue: on-demand UI; /api/tasks is the source of truth. */
 import { $, Api, t as globalT } from "./dom.js";
+import { showToast } from "./async-ui.js";
 
 const AQ_LOCALES = {
   "en": {
@@ -13,6 +14,8 @@ const AQ_LOCALES = {
     "aq.unverified": "Unverified",
     "aq.cancel": "Cancel task",
     "aq.cancelling": "Cancelling",
+    "aq.cancelFailed": "Could not cancel task",
+    "aq.confirmFailed": "Task update could not be verified",
     "aq.status.QUEUED": "Queued",
     "aq.status.RUNNING": "Running",
     "aq.status.DONE": "Done",
@@ -30,6 +33,8 @@ const AQ_LOCALES = {
     "aq.unverified": "未验证",
     "aq.cancel": "取消任务",
     "aq.cancelling": "正在取消",
+    "aq.cancelFailed": "取消任务失败",
+    "aq.confirmFailed": "无法验证任务更新",
     "aq.status.QUEUED": "排队中",
     "aq.status.RUNNING": "执行中",
     "aq.status.DONE": "已完成",
@@ -71,12 +76,18 @@ function node(tag, value, cls) {
 function render() {
   if (!opened) return;
   const status = $("activity-queue-status");
-  status.textContent = stale ? t("aq.stale") : streamLive ? t("aq.live") : t("aq.polling");
-  status.dataset.state = stale ? "stale" : streamLive ? "live" : "polling";
+  const message = stale ? t("aq.stale") : streamLive ? t("aq.live") : t("aq.polling");
+  if (status.textContent !== message) status.textContent = message;
+  const state = stale ? "stale" : streamLive ? "live" : "polling";
+  if (status.dataset.state !== state) status.dataset.state = state;
   const list = $("activity-queue-list");
+  list.tabIndex = -1;
+  const focusWithin = list.contains(document.activeElement);
+  const focusedTaskId = focusWithin ? document.activeElement.dataset?.aqCancelTaskId : null;
   list.replaceChildren();
   if (!rows.length) {
     list.append(node("li", stale ? t("aq.unavailable") : t("aq.empty")));
+    if (focusWithin) list.focus({ preventScroll: true });
     return;
   }
   const privacy = privacyOn();
@@ -93,12 +104,20 @@ function render() {
     } else if (ACTIVE.has(task.status)) {
       const button = node("button", pending.has(task.id) ? t("aq.cancelling") : t("aq.cancel"), "btn-ghost");
       button.type = "button";
-      button.disabled = pending.has(task.id);
-      button.setAttribute("aria-label", t("aq.cancel"));
+      // Keep the pending control focusable; cancel() guards against duplicate clicks.
+      button.setAttribute("aria-disabled", String(pending.has(task.id)));
+      button.dataset.aqCancelTaskId = task.id;
+      button.setAttribute("aria-label", t(pending.has(task.id) ? "aq.cancelling" : "aq.cancel"));
       button.addEventListener("click", () => void cancel(task.id));
       line.append(button);
     }
     list.append(line);
+  }
+  if (focusWithin) {
+    const button = [...list.querySelectorAll("button")].find(
+      el => el.dataset.aqCancelTaskId === focusedTaskId
+    );
+    (button || list).focus({ preventScroll: true });
   }
 }
 async function reconcile() {
@@ -125,9 +144,14 @@ async function cancel(id) {
   render();
   try {
     await Api.del("/api/tasks/{id}", { params: { id } });
-    await reconcile(); // API confirmation, not an optimistic CANCELLED label
-  } catch {
-    stale = true;
+    // A GET that began before DELETE is not valid cancellation confirmation.
+    const previous = inFlight;
+    if (previous) await previous;
+    if (!opened) return;
+    await reconcile(); // must issue a new authoritative GET after DELETE
+    if (stale) showToast("error", t("aq.confirmFailed"));
+  } catch (error) {
+    if (opened) showToast("error", t("aq.cancelFailed") + ": " + (error?.message || ""));
   } finally {
     pending.delete(id);
     render();
