@@ -1,19 +1,14 @@
-/* web/modules/shell.js — 界面外壳
- *
- * 主题切换（页头 ☀️/🌙，三态 system/light/dark，解析逻辑在 <head> 的 web/boot.js）、
- * 语言切换（页头 EN/中文）、移动端抽屉菜单。
- * 三者都只改 window.HubTheme / localStorage 并刷新自己的按钮，
- * 真正的「重画全站」由 web/app.js 的 rerenderAll 统一触发。 */
+
 
 import { $, t } from "./dom.js";
 
 export const themeBtn = $("theme-toggle");
-/* 页头按钮在「跟随系统 / 浅色 / 深色」之间循环；图标与 title 都取自当前模式（#87） */
+
 const THEME_MODES = ["system", "light", "dark"];
-const THEME_ICONS = { system: "🖥️", light: "☀️", dark: "🌙" };
+const THEME_ICONS = { system: "i-monitor", light: "i-sun", dark: "i-moon" };
 export function applyThemeIcon() {
   const mode = window.HubTheme.mode();
-  themeBtn.textContent = THEME_ICONS[mode] || THEME_ICONS.system;
+  themeBtn.querySelector("use").setAttribute("href", "#" + (THEME_ICONS[mode] || THEME_ICONS.system));
   themeBtn.title = t("settings.general.theme") + "：" + t("settings.theme." + mode);
 }
 themeBtn.onclick = () => {
@@ -27,7 +22,7 @@ applyThemeIcon();
 
 export const langBtn = $("lang-toggle");
 export function applyLangBtn() {
-  langBtn.textContent = I18N.lang() === "zh" ? "EN" : "中文";
+  $("lang-label").textContent = I18N.lang() === "zh" ? "EN" : "中文";
 }
 langBtn.onclick = () => I18N.setLang(I18N.lang() === "zh" ? "en" : "zh");
 

@@ -14,6 +14,7 @@
       "web/modules/async-ui.js",
       "web/modules/command-palette-lazy.js",
       "web/modules/command-palette.js",
+      "web/modules/diarization-lazy.js",
       "web/modules/dom.js",
       "web/modules/downloads-lazy.js",
       "web/modules/downloads.js",
@@ -29,6 +30,7 @@
       "web/modules/settings.js",
       "web/modules/shell.js",
       "web/modules/sidebar.js",
+      "web/modules/speaker-segments.js",
       "web/modules/state.js",
       "web/modules/stats-lazy.js",
       "web/modules/stats.js",
@@ -132,7 +134,14 @@
       "id": "panel-asr",
       "kind": "panel",
       "label": "asr.title",
-      "i18n": ["asr.copy", "asr.details", "asr.submit", "asr.title", "common.advanced"]
+      "i18n": [
+        "asr.copy",
+        "asr.details",
+        "asr.speakerTimeline",
+        "asr.submit",
+        "asr.title",
+        "common.advanced"
+      ]
     },
     {
       "id": "panel-music",
@@ -914,7 +923,7 @@
     }
   ],
   "dataHooks": [
-    { "name": "data-i18n", "count": 133 },
+    { "name": "data-i18n", "count": 134 },
     { "name": "data-i18n-aria-label", "count": 27 },
     { "name": "data-i18n-placeholder", "count": 24 },
     { "name": "data-i18n-title", "count": 11 },

@@ -236,10 +236,12 @@ header {
   justify-content: center;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
+.theme-btn .icon{display:block;flex:none}
 .theme-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
 
 /* 语言切换按钮：胶囊形，容纳 EN / 中文 文字 */
 #lang-toggle {
+  gap: 5px;
   width: auto;
   min-width: 38px;
   padding: 0 13px;
@@ -1972,12 +1974,12 @@ footer { padding: 4px 24px 18px; }
 /* 长文本折行，避免窄屏横向滚动 */
 .hint, .msg, .json-pre, .exec-path, .settings-row-desc, .field-error { overflow-wrap: anywhere; }
 
-/* ---------- 小屏适配（≤720px）：触摸目标 */
+/* Mobile controls <=720px */
 @media (max-width: 720px) {
   header { padding: 10px 14px;gap: var(--space-2);flex-wrap:wrap; }
   .brand { gap: var(--space-2); }
   .subtitle { display: none; }
-  .header-actions { gap: var(--space-1); }
+  .header-actions { gap: var(--space-1); flex-wrap: wrap; }
   main { padding: var(--space-3); gap: var(--space-4); overflow-x: hidden; }
   .theme-btn { width: 44px; height: 44px; }
   #lang-toggle { min-height: 44px; border-radius: var(--radius-full); }
@@ -1987,11 +1989,12 @@ footer { padding: 4px 24px 18px; }
   .grid,
   #launch-modal .grid,
   #settings-pane-https .grid { grid-template-columns: 1fr; }
-  /* 触摸目标：按钮 / 输入控件最小高度 44px */
+  /* 44px touch targets */
   .btn, .btn-primary, .btn-ghost, .btn-danger, .stop-btn,
   select, input[type="text"], input[type="number"], textarea {
     min-height: 44px;
   }
+  .modal-close { min-width: 44px; min-height: 44px; }
 }
 
 /* ---------- 列表行进入动画 ---------- */
