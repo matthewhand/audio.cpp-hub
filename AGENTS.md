@@ -122,7 +122,8 @@ test/unit/                # node:test 单元测试（wav / i18n / app-utils / ap
                           # file-browser / stats-lazy / lazy-panels / routing / command-palette-focus）
 e2e/                      # Playwright e2e（12 个 spec / 20 条用例，headless Chromium + mock 后端，无 Go/GPU/模型）
 scripts/                  # 闸门与生成脚本（check-i18n-parity.js、check-sw-precache.mjs、check-diagrams.py、ui-inventory*、
-│                         # perf-budget.mjs、gen-icons.cjs、axe-audit.js、record-demos.cjs）
+│                         # perf-budget.mjs、gen-icons.cjs、axe-audit.js、record-demos.cjs、
+│                         # ui-shots.mjs：UI 视口矩阵验收截图+JSON 报告，见「UI verification standard」）
 package.json / package-lock.json  # DEV-ONLY 工具链与测试脚本（tsc/ESLint/Prettier/Playwright）
 tsconfig.json / eslint.config.js  # DEV-ONLY 静态闸门配置（checkJs+noEmit / ESLint flat config）
 docs/                     # 文档：API.md（路由权威参考）、farm.md + agent-api.md + fanout-design.md
@@ -174,6 +175,62 @@ npm run test:e2e       # Playwright：headless Chromium + mock 后端，首次�
 - **其它闸门**：`node scripts/check-i18n-parity.js`（中英 605/605 键对等 + `web/*.html` 的 `data-i18n*` 引用键均存在）、`node scripts/check-sw-precache.mjs`（`web/sw.js` 的 `PRECACHE_URLS` 覆盖 `index.html` 本地引用与模块图传递闭包——`perf:budget` 的三方一致只管 ES module 图，管不到经典脚本）、`python3 scripts/check-diagrams.py docs/diagrams`（19/19 图示可访问性契约）、`npm run ui:inventory:check`（UI 清单防漂移）、`npm run perf:budget`（首屏体积预算）。详见 `TESTING.md` 与 `web/README.md`
 
 改动仍需手动过一遍受影响页面（中英切换 / 深浅主题 / 窄屏），自动化测试覆盖的是契约与纯函数，不替代人工看界面。
+
+## UI verification standard
+
+每个 UI 改动都要按本节验收。机械能覆盖的部分交给工具：`scripts/ui-shots.mjs` 走完整视口矩阵、每个视口出一张 PNG、并向 stdout 打印一份 JSON 结论（任一视口不通过即退出码 1）；图片本身仍要人看。
+
+### Viewport matrix
+
+| Viewport | Size | 为什么是它 |
+| --- | --- | --- |
+| mobile | 360x800 | 支持的最窄手机宽度 |
+| mobile (large) | 390x844 | 现代手机宽度 |
+| tablet | 768x1024 | 单列布局的分界点 |
+| laptop | 1280x720 | **最挤的一档**——首屏折叠检查预期在这里最难 |
+| desktop | 1920x1080 | 宽裕参照 |
+
+Every UI change must be captured at all five sizes. 1280x720 is the tightest layout of the matrix, and the fold checks are expected to be hardest there — never fudge them.
+
+### Themes
+
+All screenshots are taken in dark theme, plus exactly one light-theme shot per change (desktop or laptop viewport). One light shot per change, not one per viewport.
+
+### Checks per viewport
+
+Each viewport is checked for:
+
+- **No console errors** — `console.error` plus `pageerror`.
+- **No horizontal overflow** — `document.documentElement.scrollWidth <= clientWidth`.
+- **Key controls reachable** — Synthesize button (`#tts-submit`), instance cards (`#instance-list .card`), the activity panel (`#activity-panel`) and the header buttons (`#voices-btn`, `#history-btn`, `#downloads-btn`, `#lang-toggle`, `#settings-btn`, `#theme-toggle`). Reachable means present, visible, and either inside the viewport or reachable by scrolling its own scroll container.
+- **Fold, recorded separately** — whether each of those controls is above the fold without scrolling. Fold is its own result and never gates the pass/fail verdict: a fold failure at 1280x720 may be reported as a known gap, but it must be reported, never dropped.
+
+### Image labelling
+
+Every image in a PR is labelled as one of:
+
+- `production` — a real hub, with real models and instances;
+- `mock-backend` — the e2e mock (`e2e/mock-backend.mjs`), no Go binary / GPU / model involved;
+- `concept` — a design mockup, not the shipped UI.
+
+Mock and live stay distinct. Never present a mock-backend or concept image as a production result.
+
+### Engine
+
+The PR description names the engine that produced the change and the evidence, e.g. `opencode step-5-preview-free#high`, `grok`, `agy`, `kilocode`, `hand`.
+
+### Privacy
+
+Screenshots go in the PR body, but never include personal home interiors, secrets, tokens, or LAN inventories (hostnames / IPs of the lab). Crop them out of the frame, or run the shots against the mock backend instead.
+
+### Running the tool
+
+```bash
+BASE_URL=http://127.0.0.1:18080 OUT_DIR=./ui-shots-out node scripts/ui-shots.mjs
+# subset of the matrix: ONLY=mobile-360x800,laptop-1280x720
+```
+
+`BASE_URL` defaults to `http://127.0.0.1:4173`, `OUT_DIR` to `./ui-shots-out`; `ONLY` takes a comma-separated list of viewport names, `ACTION=generating` is accepted as an informational note and is never required. Point `BASE_URL` at a real hub (production shots), or at the e2e static server plus the mock backend (mock-backend shots) — the run is strictly read-only: nothing is clicked, no form is submitted, and any non-GET/HEAD request is aborted by the runner itself. Per viewport the tool writes `<name>-dark.png`, plus `<name>-light.png` on `laptop-1280x720`, and prints the JSON report (`{baseUrl, generatedAt, viewports:[{name,width,height,consoleErrors,overflow,controls,fold,pass,shots}], overall}`); the same JSON lands in `OUT_DIR/ui-shots.json`.
 
 ## 发布与部署
 

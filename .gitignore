@@ -19,6 +19,7 @@ node_modules/
 /test-results/
 /playwright-report/
 /blob-report/
+/ui-shots-out/
 
 # 本机部署残留：绝不能进版本库（含 90MB+ 的 audiocpp 二进制与 Java 版构建产物）
 /target/
