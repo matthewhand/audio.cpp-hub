@@ -1,18 +1,6 @@
-/* web/modules/panels.js — 工作区与任务面板
- *
- * 右侧常驻工作区：按选中模型切换 TTS / ASR / 分离 / 音乐 / 其它五类面板，
- * 从 models.json 的 paramSchema 渲染高级参数与枚举、收集请求体，
- * 以及各面板的提交逻辑（VibeVoice 多说话人、情感向量 / 参考音频 / 文本、
- * YuE2 busy 超时等）。面板自身的表单状态（ttsVariant / emotionMode / speakerPickers…）
- * 都在本模块，因为只有本模块写。
- *
- * 五类面板里所有参考音频 / 说话人入口的 VoiceSelect 与 AudioPicker 实例也在本模块
- * 求值时一次性创建：它们是面板表单的部件，历史「载入」要回填的也正是这批实例，
- * 放在这里才能保证「重渲染后统一刷新标签」只有一个挂载点。
- * 组件本身仍是经典脚本（web/voice-select.js、web/audio-picker.js），本模块不重新实现。
- *
- * 同 sidebar.js：工作区重画要刷新侧栏历史，侧栏的「载入」要回填本模块的 TTS 表单，
- * 两模块之间是一处刻意的循环依赖（只在运行期回调里互相调用）。 */
+/* Studio workspace: TTS/ASR/separation/music/other panels, request forms,
+ * voice and audio pickers, and task submission. Picker instances live here so
+ * history restore can reuse them; sidebar callbacks form a runtime-only cycle. */
 
 import { $, el, esc, t } from "./dom.js";
 import { historyRefPath, loadHistory } from "./sidebar.js";
