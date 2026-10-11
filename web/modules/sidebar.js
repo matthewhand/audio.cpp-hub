@@ -39,14 +39,20 @@ $("history-panel").addEventListener("mousedown", (e) => {
 export function privacyOn() {
   return localStorage.getItem("hub-privacy") === "1";
 }
-/* 按当前隐私模式刷新历史列表中所有文本预览与切换按钮状态；真实文本保存在 dataset.realText 中 */
+/* Preserve preview text in JavaScript only, never in DOM attributes or hidden nodes. */
+const privateRowText = new WeakMap();
+export function rememberHistoryRowText(node, text) {
+  privateRowText.set(node, text || "");
+}
+/* Refresh visible previews; rebuild the full row when privacy mode changes to
+ * update expanded details, playback ARIA labels and cached row signatures. */
 export function applyHistoryPrivacy() {
   const btn = $("history-privacy");
   btn.textContent = t("history.privacyBtn");
   btn.classList.toggle("active", privacyOn());
   btn.title = privacyOn() ? t("history.privacyOn") : t("history.privacyOff");
   for (const textEl of document.querySelectorAll("#history-list .history-text")) {
-    const real = textEl.dataset.realText || "";
+    const real = privateRowText.get(textEl) || "";
     textEl.textContent = privacyOn() && real ? t("history.masked") : real || t("history.noText");
     if (!privacyOn() && real) textEl.title = real;
     else textEl.removeAttribute("title");
@@ -55,9 +61,19 @@ export function applyHistoryPrivacy() {
 $("history-privacy").onclick = () => {
   localStorage.setItem("hub-privacy", privacyOn() ? "0" : "1");
   applyHistoryPrivacy();
+  renderSidebarList();
 };
-// 语言切换后占位文字与按钮 title 需随语言刷新
-I18N.onChange(applyHistoryPrivacy);
+window.addEventListener("storage", (event) => {
+  if (event.key === "hub-privacy") {
+    applyHistoryPrivacy();
+    renderSidebarList();
+  }
+});
+// 语言切换后重新生成隐藏的详情/播放标签，避免陈旧的 DOM 数据
+I18N.onChange(() => {
+  applyHistoryPrivacy();
+  renderSidebarList();
+});
 applyHistoryPrivacy();
 
 export function historyModelId() {
@@ -429,7 +445,7 @@ export function buildHistoryDetail(item, rec) {
   if (params.length) {
     const sec = addSection(t("history.detailParams"));
     const div = el(`<div class="detail-params"></div>`);
-    div.textContent = params.join("\n");
+    div.textContent = masked ? t("history.masked") : params.join("\n");
     sec.appendChild(div);
   }
   return panel;
@@ -484,8 +500,8 @@ export function makeHistoryRow(item) {
   const timeEl = row.querySelector(".history-time");
   timeEl.textContent = I18N.date(item.time);
   const textEl = row.querySelector(".history-text");
-  // 真实文本存 dataset，隐私模式切换时由 applyHistoryPrivacy 恢复/遮蔽
-  textEl.dataset.realText = item.text || "";
+  // Keep raw text outside serialized DOM attributes, even when privacy is off.
+  rememberHistoryRowText(textEl, item.text);
   textEl.textContent = privacyOn() && item.text ? t("history.masked") : item.text || t("history.noText");
   if (item.text && !privacyOn()) textEl.title = item.text;
   const meta = [];
@@ -517,7 +533,7 @@ export function makeHistoryRow(item) {
     </div>`);
     const audio = player.querySelector("audio");
     const playBtn = player.querySelector(".history-play");
-    const rowLabel = (item.text || t("history.noText")).slice(0, 60);
+    const rowLabel = privacyOn() ? t("history.masked") : (item.text || t("history.noText")).slice(0, 60);
     audio.setAttribute("aria-label", rowLabel);
     playBtn.setAttribute("aria-label", t("history.playNamed", { name: rowLabel }));
     playBtn.textContent = t("history.play");
