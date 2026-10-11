@@ -251,7 +251,7 @@ func (h *Hub) handleEventStream(w http.ResponseWriter, r *http.Request) {
 			if !ok { // EventBus.Close on process shutdown
 				return
 			}
-			if err := writeSSEFrame(w, rc, []byte("event: " + ev.name + "\ndata: " + string(ev.data) + "\n\n")); err != nil {
+			if err := writeSSEFrame(w, rc, []byte("event: "+ev.name+"\ndata: "+string(ev.data)+"\n\n")); err != nil {
 				return
 			}
 		case <-ping.C:
