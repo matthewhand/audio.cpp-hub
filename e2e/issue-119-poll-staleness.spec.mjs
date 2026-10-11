@@ -34,7 +34,7 @@ for (const [lang, warning] of [
     await expect(page.locator("#instance-context")).toBeHidden();
 
     // A user navigation while offline must not resurrect cached READY state.
-    await page.evaluate(() => { location.hash = "#/model/index_tts2"; });
+    await page.evaluate(() => { window.location.hash = "#/model/index_tts2"; });
     await expect(page.locator("#instance-pill")).toContainText(warning);
     await expect(page.locator("#tts-submit")).toBeDisabled();
 
