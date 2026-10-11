@@ -55,7 +55,7 @@ type statsResponse struct {
 
 // dayCount 单日生成次数（按记录本地时区的天聚合）。
 type dayCount struct {
-	Day   string `json:"day"`   // YYYY-MM-DD
+	Day   string `json:"day"` // YYYY-MM-DD
 	Count int    `json:"count"`
 }
 

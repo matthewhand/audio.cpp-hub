@@ -6,14 +6,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readWeb, extractFunction, makeFunction, makeI18nStub } from "./helpers/vm.mjs";
 
-/* 函数 → 现在拥有它的文件（相对 web/） */
+/* 函数 → 现在拥有它的文件（相对 web/）。
+   设置弹窗拆成外观层 + 懒加载 chunk 后，可执行文件登记的解析函数（启动弹窗也在用）
+   归首屏常驻的外观层 modules/settings-lazy.js。 */
 const SRC = {
   esc: "modules/dom.js",
   safeHttpUrl: "modules/dom.js",
   hfMirrorOf: "modules/models.js",
   fmtBytes: "modules/downloads.js",
-  parseEnvText: "modules/settings.js",
-  parseSessionOptionsText: "modules/settings.js"
+  parseEnvText: "modules/settings-lazy.js",
+  parseSessionOptionsText: "modules/settings-lazy.js"
 };
 
 function load(name, deps = {}) {

@@ -149,11 +149,23 @@ func (m *HistoryManager) RecordTTS(inst *Instance, request map[string]any, taskI
 			return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		}
 	}
-	f, err := open(filepath.Join(dir, historyIndexFile))
+	indexPath := filepath.Join(dir, historyIndexFile)
+	f, err := open(indexPath)
 	if err != nil {
 		return fmt.Errorf("open history index: %w", err)
 	}
+	// A prior short append can leave a damaged, unterminated JSONL fragment.
+	// Preserve the original bytes and separate the next valid record, instead
+	// of silently joining both records into a single unreadable replay line.
+	separator, err := historyIndexNeedsSeparator(indexPath)
+	if err != nil {
+		_ = f.Close()
+		return fmt.Errorf("inspect history index boundary: %w", err)
+	}
 	line := append(data, '\n')
+	if separator {
+		line = append([]byte{'\n'}, line...)
+	}
 	n, writeErr := f.Write(line)
 	closeErr := f.Close()
 	if writeErr != nil {
@@ -168,6 +180,31 @@ func (m *HistoryManager) RecordTTS(inst *Instance, request map[string]any, taskI
 	// Append is not transactional; do not expose failed writes in the in-memory index.
 	m.index[modelID] = append(m.index[modelID], rec)
 	return nil
+}
+
+// historyIndexNeedsSeparator checks only the final byte (not the full index),
+// keeping append overhead bounded even when the history grows large.
+func historyIndexNeedsSeparator(path string) (bool, error) {
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	stat, err := f.Stat()
+	if err != nil {
+		return false, err
+	}
+	if stat.Size() == 0 {
+		return false, nil
+	}
+	var last [1]byte
+	if _, err := f.ReadAt(last[:], stat.Size()-1); err != nil {
+		return false, err
+	}
+	return last[0] != '\n', nil
 }
 
 // normalizeVoice 归一化声音来源：voice_ref / speaker(+instruct) / instruct / default，另附情感参考 audio。

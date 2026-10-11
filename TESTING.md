@@ -24,13 +24,27 @@
 - `wav.test.mjs`：`WavUtil.audioBufferToWav`（头字段、裁剪、双声道降混、幅度钳制、空区间）、`formatDuration`、`formatSize`、`warmAudioOutput` 容错。
 - `i18n.test.mjs`：语言探测、`t()` 插值/数组值/缺失 key、`setLang` 持久化与 `onChange`、`applyI18n`、`errText`（后端 code/params → 文案）、`pick`、`bytes`（1024 进位与单位后缀）、**中英字典 key 完全对齐（parity）**。parity 直接比对 `window.I18N_ZH` / `window.I18N_EN` 两个真实对象，不再从源码刮 key。
 - `app-utils.test.mjs`：`esc`、`safeHttpUrl`、`hfMirrorOf`、`fmtBytes`、`parseEnvText`、`parseSessionOptionsText`。
-- `file-browser.test.mjs`：`formatSize`（委托 `I18N.bytes`；空值不打扰 I18N）。
+- `file-browser.test.mjs`：`formatSize`（委托 `I18N.bytes`；空值不打扰 I18N）+ 懒加载外观层的
+  转发守卫（`rerenderAll` 调 `relocalizeFileBrowser`、外观层未加载时 `relocalize` / `cancel` 空转、
+  打开路径确实经 `import("./file-browser.js")` 并发去重）。
+- `stats-lazy.test.mjs`：看板外观层（先同步显示外壳再加载 chunk、关闭/重画在未加载时空转、
+  并发打开共享一次 import、import 失败收回面板、`wireStatsButton` 接线）。
+- `lazy-panels.test.mjs`：音色库 / 下载 / 设置 / 命令面板四个外观层的同一组契约——同步关闭与语言切换
+  在 chunk 未加载时是 no-op（或只收已显示的外壳并放弃随后那次打开）、并发打开共享一次
+  import、失败不缓存、页头与入口按钮接线路由、**首屏必须可见/被依赖的东西没有被懒加载**
+  （下载角标与 2s 轮询、可执行文件登记落到启动弹窗下拉）、**形状闸门**（chunk 走 `import()`、
+  进 `PRECACHE_URLS` 而不进 `modulepreload`、旧的经典脚本标签与预缓存项已撤掉）、
+  **命令面板的和弦只注册一次**（外观层独家持有全局 Ctrl/Cmd-K，chunk 不得再挂
+  `document` keydown——两份监听会各处理一次同一次按键，真浏览器里表现为「打开又立刻关掉」；
+  `e2e/command-palette.spec.mjs` 从行为侧钉同一条）。
 
-> **数字/单位排版已收口到 `I18N.bytes`（Intl）**：`app.js` 的 `fmtBytes` 与 `file-browser.js` 的 `formatSize` 现在只做「非法值兜底 + 委托」。单测因此断言**契约与兜底**，不硬编码 ICU 版本的空格 / 千分位 / `kB` vs `KB` 差异。
+> **数字/单位排版已收口到 `I18N.bytes`（Intl）**：`modules/downloads.js`（懒加载 chunk）的
+> `fmtBytes` 与 `modules/file-browser.js` 的 `formatSize` 现在只做「非法值兜底 + 委托」。单测因此断言**契约与兜底**，不硬编码 ICU 版本的空格 / 千分位 / `kB` vs `KB` 差异。
 
 ### 有意不做的单元测试（DOM 重）
 
-以下属于 DOM/浏览器重逻辑，改由 e2e 覆盖，不做单元测试：面板渲染（`renderWorkspace`/`renderTtsPanel`/…）、任务轮询与结果渲染、历史/分组/侧栏 DOM 复用、AudioPicker 波形绘制与录音、FileBrowser 弹窗、下载行渲染、`I18N.applyI18n` 之外的交互。`app.js` 里内联在渲染函数中的**速度格式化**（`fmtBytes(d.speedBps) + "/s"`）也属此类，未单测。
+以下属于 DOM/浏览器重逻辑，改由 e2e 覆盖，不做单元测试：面板渲染（`renderWorkspace`/`renderTtsPanel`/…）、任务轮询与结果渲染、历史/分组/侧栏 DOM 复用、AudioPicker 波形绘制与录音、文件浏览器弹窗（改懒加载后由 `e2e/file-browser.spec.mjs` 兜住
+「首屏不取 chunk / 点开才取 / 再开不重复取 / 经典脚本的动态 import 也能开」）、下载行渲染、音色库面板与设置弹窗的 DOM 渲染（分别由 `e2e/voices.spec.mjs` / `e2e/executable.spec.mjs` 的懒加载契约用例兜住）、`I18N.applyI18n` 之外的交互。`app.js` 里内联在渲染函数中的**速度格式化**（`fmtBytes(d.speedBps) + "/s"`）也属此类，未单测。
 
 ---
 
@@ -59,13 +73,16 @@
 
 | 流程 | spec |
 | --- | --- |
-| 登记可执行文件 | `executable.spec.mjs` |
+| 登记可执行文件 + 设置懒加载契约 | `executable.spec.mjs` |
 | 启动 / 停止实例 | `instance.spec.mjs` |
 | 提交 TTS 任务并看到结果音频 | `tts.spec.mjs` |
 | 提交 ASR 任务并看到识别文本 | `asr.spec.mjs` |
 | 历史加载 / 删除 / 分组 | `history.spec.mjs` |
-| 音色库添加 | `voices.spec.mjs` |
-| 下载暂停 / 续传 | `downloads.spec.mjs` |
+| 音色库添加 + 深链接 + 懒加载契约 | `voices.spec.mjs` |
+| 下载暂停 / 续传 + 懒加载契约 | `downloads.spec.mjs` |
+| 文件浏览器懒加载（含经典脚本的动态 import） | `file-browser.spec.mjs` |
+| 看板懒加载 | `stats.spec.mjs` |
+| 命令面板懒加载（和弦首按即开、再按即关、Esc） | `command-palette.spec.mjs` |
 | 模型切换 / 主题 / 语言 | `ui-switch.spec.mjs` |
 
 ### 延迟/未覆盖（诚实说明）
@@ -98,15 +115,92 @@
 
 | 指标 | 预算 | 当前实测 |
 | --- | --- | --- |
-| 初始 JS raw | 330 KiB | 323.4 KiB |
-| 初始 JS gzip | 118 KiB | 113.4 KiB |
-| 初始 CSS raw | 68 KiB | 65.0 KiB |
-| 初始 CSS gzip | 18 KiB | 16.7 KiB |
-| JS+CSS gzip 合计 | 135 KiB | 130.1 KiB |
-| 初始子资源请求数 | 30 | 29 |
+| 初始 JS raw | 312 KiB | 310.2 KiB |
+| 初始 JS gzip | 115 KiB | 113.6 KiB |
+| 初始 CSS raw | 68 KiB | 67.6 KiB |
+| 初始 CSS gzip | 18 KiB | 17.2 KiB |
+| JS+CSS gzip 合计 | 132 KiB | 130.7 KiB |
+| 初始子资源请求数 | 31 | 30 |
 | TTI 目标 | ≤ 1500 ms（本地/局域网，中端笔电） | 由真实浏览器测量，不在本脚本校验 |
 
 预算定义在 `scripts/perf-budget.mjs` 的 `BUDGETS`（单一来源）。超标退出 1。
+**棘轮方向只朝下**：每次把一个「点开才用得上」的视图挪进懒加载 chunk，就按新的实测值重新收一次，
+并在 `scripts/perf-budget.mjs` 顶注留下 before → after 全量对照——**不许**为了让新功能过线而调高。
+
+### 懒加载命令面板（2026-09，本轮）
+
+`web/modules/command-palette.js`（6.1 KiB raw / 2.5 KiB gzip）改成懒加载 chunk，经首屏外观层
+`web/modules/command-palette-lazy.js` 按需 import。它是最后一个「从不上首屏」的视图——**没有入口
+按钮**，唯一入口是全局 Ctrl/Cmd-K 和弦，所以和弦必须留在外观层（否则首按必然失灵）。
+同口径实测：
+
+| 指标 | 懒加载前 | 懒加载后 | 变化 |
+| --- | --- | --- | --- |
+| 初始子资源请求数 | 30 | 30 | 0（1 chunk 换 1 外观层） |
+| 初始 JS raw | 313.5 KiB | **310.2 KiB** | −3.3 KiB |
+| 初始 JS gzip | 114.4 KiB | **113.6 KiB** | −0.8 KiB |
+| JS+CSS gzip 合计 | 131.6 KiB | **130.7 KiB** | −0.9 KiB |
+| 首屏模块数 | 17 | 18 | +1（64 行 / 1.5 KiB 的外观层） |
+
+净收益不大，因为外观层要背着和弦。与下载 / 设置 / 音色库三块不同，这里**不先亮外壳**：
+命令面板的核心就是那个搜索框，而外壳的 input 监听由 chunk 绑定，外壳先亮会吞掉 chunk 在路上
+时抢跑的那几下按键。
+
+`test/unit/lazy-panels.test.mjs`（5 条）从源码侧钉住「和弦只注册一次」，`e2e/command-palette.spec.mjs`
+（2 条）从行为侧钉住同一件事：两次 Ctrl-K 必须能开再能关，一旦有两份监听，第二次按键会被处理
+两遍、面板停在打开态。
+
+**剩下的候选与不做的原因**（实测，非猜测；同一张表也记在 `scripts/perf-budget.mjs` 顶注）：
+中英词典合计 21.7 KiB gzip（首屏 gzip 的 16%，一次只用一种语言，但改按需加载要动 i18n 的加载
+顺序硬约束并让 `setLang` 异步化——是独立一轮，不是 easy win）；`sidebar.js` 里的 `#/history`
+面板与常驻侧栏共享行状态，切不开；`panels.js` / `style.css` 是首屏内容本身；`pwa.js` 只值
+1.7 KiB 且属渐进增强而非点击才用。
+
+### 懒加载文件浏览器（2026-09）
+
+`web/file-browser.js`（17.2 KiB raw / 5.7 KiB gzip 的经典脚本，挂在 `window.FileBrowser`）
+改成懒加载 chunk `web/modules/file-browser.js`，经首屏外观层 `web/modules/file-browser-lazy.js`
+按需 import（形状与 `stats-lazy.js` 完全一致，理由见下节）。同口径实测：
+
+| 指标 | 懒加载前（CI 失败值） | 懒加载后 | 变化 |
+| --- | --- | --- | --- |
+| 初始子资源请求数 | 30 | 30 | 0（−1 经典脚本 +1 模块） |
+| 初始 JS raw | 340.3 KiB | **325.6 KiB** | −14.7 KiB |
+| 初始 JS gzip | 121.1 KiB | **116.9 KiB** | −4.2 KiB |
+| JS+CSS gzip 合计 | 138.2 KiB | **134.0 KiB** | −4.2 KiB |
+| 首屏模块数 | 15 | 16 | +1（48 行 / 1.6 KiB 的外观层） |
+
+前 4 项全部由这一处改动换来；`e2e/file-browser.spec.mjs`（2 条）钉住契约，
+`test/unit/file-browser.test.mjs` 钉住外观层的同步空转守卫。
+
+### 懒加载音色库 / 下载 / 设置三个面板（2026-09，本轮）
+
+把「点开才用得上」的三块面板按 `stats-lazy` / `file-browser-lazy` 的形状拆开：
+
+| 外观层（首屏） | 懒加载 chunk | 切了什么 |
+| --- | --- | --- |
+| `modules/voices-panel-lazy.js` | `modules/voices-panel.js`（原经典脚本 `web/voices-panel.js`） | 整块搬走：面板只在点 🎙 / `#/voices` 时用得上。页头按钮由外观层 `wireVoicesButton` 接线，经典脚本 `voice-select.js` 依赖的 `window.openVoicesPanel` 也由外观层挂上 |
+| `modules/downloads-lazy.js` | `modules/downloads.js` | **只搬弹窗**：页头 ⬇️ 角标与它的 2s 轮询在首屏就可见，必须留在外观层（数据也只有一份，chunk 经 `getDownloads()` 读） |
+| `modules/settings-lazy.js` | `modules/settings.js` | **只搬弹窗**：可执行文件登记被启动弹窗下拉与模型卡片的已配置态共用，必须留在外观层；搬走的是通用 / HTTPS 证书 / 可执行文件列表三个分节 |
+
+同口径实测（`npm run perf:budget` 两次）：
+
+| 指标 | 懒加载前 | 懒加载后 | 变化 |
+| --- | --- | --- | --- |
+| 初始子资源请求数 | 30 | 30 | 0（3 个 chunk 换成 3 个外观层） |
+| 初始 JS raw | 325.6 KiB | **313.5 KiB** | −12.1 KiB |
+| 初始 JS gzip | 116.9 KiB | **114.4 KiB** | −2.5 KiB |
+| JS+CSS gzip 合计 | 134.0 KiB | **131.6 KiB** | −2.4 KiB |
+| 首屏模块数 | 16 | 17 | +1（三个外观层共 17.9 KiB） |
+
+请求数不变是**故意的**：这一轮拿字节换点击，不拿请求换字节。移出首屏的 chunk 共
+26.7 KiB raw / 10.4 KiB gzip，换回首屏的外观层 17.9 KiB / 8.2 KiB（外观层不是白写的：
+它扛着首屏必须的数据，外加「Esc 落在 chunk 还在路上那一帧」的竞态守卫）。
+
+守卫网：`test/unit/lazy-panels.test.mjs`（21 条，含「chunk 只进预缓存不进 modulepreload」
+与「首屏数据不懒加载」「Esc 落在 chunk 还在路上那一帧不再打开」）、`e2e/voices.spec.mjs` /
+`e2e/downloads.spec.mjs` / `e2e/executable.spec.mjs` 各 1 条懒加载契约
+（首屏不取 chunk → 点开才取 → 再开不重复取），`e2e/voices.spec.mjs` 另有 1 条 `#/voices` 冷启动。
 
 ### 首屏请求数：ES 模块化之后（2026-09，#100 拆分 → 本次修复）
 
@@ -161,7 +255,7 @@
 安装失败（`install` 用 `allSettled`），但离线冷启动会在该脚本处断掉。两者都必须靠检查挡住。
 
 `perf:budget` 的三方一致只覆盖 **ES module 图**；`index.html` 里那些**经典脚本**
-（`i18n.zh.js` / `i18n.en.js` / `api-client.js` / `file-browser.js` / `audio-picker.js` …）
+（`i18n.zh.js` / `i18n.en.js` / `api-client.js` / `audio-picker.js` …）
 漏出预缓存时它看不见，而这批脚本缺任意一个都会让离线首屏直接崩（`i18n.js` 读不到
 `window.I18N_ZH`、模块图拿不到 `Api`）。`npm run check:sw` 补上这一段：静态遍历
 `index.html` 的 `<script src>` / `<link rel=stylesheet>` 引用 + 从这些入口出发的 ES module
@@ -180,15 +274,42 @@
 > **#100 模块拆分那一轮**把预算按 35 个请求的现状标成了 40，属于**为迁就退化而放宽**。本次
 > 修掉退化后，预算按修复后的实测值重新收紧（请求数 40 → 30），并在上文留下 before/after 全量对照。
 
-### 懒加载评估
+### 懒加载 chunk（2026-09 起，按「外观层 + 动态 import」形状逐步落地）
 
-结论：**当前不实现，留有依据的推荐**。原因：
+首屏体积里最划算的省法不是压字节，而是**不把「点开才用得上」的代码放进首屏模块图**。
+已落地的五块（形状完全一致，见 `web/README.md` 3.2「懒加载 chunk」）：
 
-1. 业务逻辑已是 ES 模块，但 `app.js` 之外仍是 classic script + `window.*`（`web/i18n.zh.js` / `i18n.en.js` / `api-client.js` 等），且 `panels.js` 在模块求值时就 `new VoiceSelect(...)` / `new AudioPicker(...)`，因此 `audio-picker.js`、`voice-select.js` 属首屏必需，无法后置。
-2. 动态 `import()` 只对 ES module 生效；要懒加载 `voices-panel.js` / `file-browser.js` 需先把它们改为 ESM 并调整 `window.*` 暴露方式、`CSP script-src 'self'` 下的模块加载，以及 `#voices-btn` 的绑定时机——这是一次结构性改造。
-3. `motion.js` / `pwa.js` 都很小（2.3 / 3.5 KiB raw），且 `pwa.js` 需要在 `app.js` 之前注册 Service Worker 才能覆盖首屏资源，收益不足以换取顺序上的脆弱性。
+| 外观层（首屏） | 懒加载 chunk | 省下的首屏字节 |
+| --- | --- | --- |
+| `modules/stats-lazy.js` | `modules/stats.js` | −5.4 KiB raw / −2.7 KiB gzip |
+| `modules/file-browser-lazy.js` | `modules/file-browser.js`（原经典脚本 `web/file-browser.js`） | −14.7 KiB raw / −4.2 KiB gzip |
+| `modules/voices-panel-lazy.js` | `modules/voices-panel.js`（原经典脚本 `web/voices-panel.js`） | 见上节（三块合并实测 −13.4 KiB raw / −3.1 KiB gzip） |
+| `modules/downloads-lazy.js` | `modules/downloads.js` | 同上 |
+| `modules/settings-lazy.js` | `modules/settings.js` | 同上 |
 
-推荐（待懒加载落地时）：把非关键面板 `voices-panel.js`、`file-browser.js`（以及仅动画需要的 `wav.js` 播放预热）改为 ESM，在首次打开对应面板时 `await import()`，`app.js` 绑定按钮时先尝试动态导入、失败回退同步加载；届时同步下调本预算的「初始 JS gzip」并把懒加载模块计入新的按需预算，同时**把动态 `import()` 的目标从 `modulepreload` 清单里移除**（否则预载会把懒加载的收益全部抵消）。
+约定（`scripts/perf-budget.mjs` 会强制）：
+
+- 动态 `import()` 的**目标不进 `modulepreload`**——预载会把收益全部抵消；
+- 动态 `import()` 的**目标必须进 `sw.js` 的 `PRECACHE_URLS`**——否则离线冷启动点开该视图会 404；
+- 懒加载 chunk **不计入**首屏体积与请求数，`ui:inventory` 则**要**扫它（否则 `docs/ui.md`
+  里的端点表会凭空少掉 `/api/stats` / `/api/fs/*`）；
+- 外观层**必须在首屏**：入口按钮的 `onclick` 与 Esc / 语言切换这些同步路径都走它，
+  chunk 未加载时保持 no-op。`test/unit/lazy-panels.test.mjs` 会钉住「chunk 用 `import()`
+  拉、且只在 `PRECACHE_URLS` 不在 `modulepreload`」。
+
+**切分线是「首屏可不可见 / 被首屏其它模块依赖」，不是「整个文件 vs 首屏」**。音色库是
+纯点击视图，整块搬走；下载与设置各有一半必须在首屏（角标轮询、可执行文件登记），
+只搬弹窗 DOM 渲染——把这两块整块搬走会直接让页头角标不跳、启动弹窗没有可执行文件可选。
+
+仍然**不做**懒加载的部分，及原因：
+
+1. `audio-picker.js` / `voice-select.js` 属首屏必需——`panels.js` 在模块求值时就
+   `new VoiceSelect(...)` / `new AudioPicker(...)`，后置会让工作区首绘缺表单。
+2. `motion.js` / `pwa.js` 都很小（2.3 / 3.8 KiB raw），且 `pwa.js` 需要在 `app.js` 之前
+   注册 Service Worker 才能覆盖首屏资源，收益不足以换取顺序上的脆弱性。
+3. `sidebar.js` / `panels.js` / `tasks.js` 互相咬合（任务行就渲染在侧栏里），
+   且首屏 `reattachTasks` 立刻要用，不具备「点击才打开」的性质。
+4. 下两个候选：历史侧栏（`#/history`）与命令面板（`Ctrl/Cmd-K`，6.1 KiB）。
 
 ---
 

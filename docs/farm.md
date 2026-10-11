@@ -4,12 +4,62 @@ Three hosts serve TTS/ASR over the LAN. All endpoints are OpenAI-flavored
 (`POST /v1/audio/speech`, `GET /v1/models`) and LAN-only, no auth — do not
 expose any of them to the public internet.
 
+**Start here:** point clients at the fan-out `http://10.0.0.36:18082` for TTS and
+discovery; the `:18080` table below is the per-host detail behind it.
+
 | Host | Hardware | Endpoint | Instances | Notes |
 |---|---|---|---|---|
-| `10.0.0.36` (ubuntu-gtx) | GTX 1080 8 GB, Vulkan | `:18080` | `breeze` (always warm), `sanotts` (always warm), `citrinet` ASR (5-min idle unload) | Host-native systemd service (`audio-cpp-hub.service`), see HOST-DEPLOYMENT.md |
+| `10.0.0.36` (ubuntu-gtx) | GTX 1080 8 GB, Vulkan | `:18080` | `breeze` (always warm), `sanotts` (always warm), `citrinet` ASR (5-min idle unload) | Host-native systemd service (`audio-cpp-hub.service`), see [deployment-10.0.0.36.md](deployment-10.0.0.36.md) |
 | `10.0.0.30` (ubuntu-max) | Strix Halo iGPU (Radeon 8060S, 128 GB GTT), RX 6600 XT idle | `:18080` | `breeze` (warm via `ExecStartPost`) | Docker `audio-cpp-hub-amd`, image `audio-cpp-hub:amd` (Mesa RADV) |
 | `10.0.0.30` (second hub) | same iGPU | `:18081` | `qwen3-vd` (voice-design, `instruct` top-level) | Docker `audio-cpp-hub-amd-qwen3`, image `audio-cpp-hub:amd-a3bfac4`, state dirs `data-qwen3/ logs-qwen3/ run-qwen3/` |
 | `10.0.0.32` (WINDOWS2) | Ryzen 9 5950X, CPU only (in Docker) | `:18080` | `sanotts` (fast tiny TTS) | Docker Desktop (WSL2), container `audio-cpp-hub-cpu`, image `audio-cpp-hub:cpu-espeak` |
+
+## Unified fan-out entrypoint — `http://10.0.0.36:18082`
+
+`cmd/fanout-proxy` (tiny Go router, stdlib only) sits in front of the four hubs
+above and gives agents one OpenAI-shaped base URL with automatic failover, so
+they no longer hard-code `host:port:model` triples:
+
+| Alias | Serves from (in order) |
+|---|---|
+| `breeze`, `expressive` | `.36:18080 breeze` → `.30:18080 breeze` |
+| `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` |
+| `sanotts`, `instant` | `.36:18080 sanotts` → `.32:18080 sanotts` |
+| `citrinet`, `stt` | `.36:18080 citrinet` |
+
+- `POST /v1/audio/speech` routes on `model`, rewrites it to the upstream service
+  name, streams the audio back and fails over on hub-down / 5xx / "instance not
+  READY". `GET /v1/models` lists only aliases that currently resolve.
+- `POST /api/tasks` (STT) routes on `model` the same way — `{"model":"stt",
+  "request":{…}}` — and rewrites the alias into the origin hub's local
+  `instanceId`. Reading a task back is a read-through pinned with
+  `?hub=<baseUrl>` (task ids are hub-local), e.g.
+  `GET /api/tasks/<id>?hub=http://10.0.0.36:18080`. Failover covers
+  *submission*; the task then runs on the engine that accepted it.
+- `GET /farm/health` — per-hub up/down + latency + which backend each alias
+  resolved to, plus `inFlightCap` / per-target `inFlight`;
+  `GET /api/instances` — the whole farm's instances in one list.
+- **Per-origin in-flight cap** (`maxInFlightPerTarget`, default `2`, `<= 0`
+  disables): at most N forwards may be in flight per hub+service. A hub
+  runs one engine per instance with a serial queue, so an uncapped router lets
+  one loud agent fill `.36 breeze`'s queue while everything else stalls
+  invisibly. A target at its cap is skipped, so the request spills to the
+  standby; only a route whose every target is busy answers `429` +
+  `Retry-After: 5` (not `503`). `qwen3-vd` and `citrinet` are single-target, so
+  parallel callers there get 429s past the cap — OpenAI SDKs retry those
+  automatically. For `POST /api/tasks` the cap covers the submission only; the
+  hub's serial queue bounds what actually runs. Knob details:
+  `cmd/fanout-proxy/README.md` → "Knobs".
+- History is **not** unified: responses carry `X-Fanout-Hub` /
+  `X-Fanout-Instance` so a take can be fetched from the origin hub's
+  `/api/history/...`. Same for voice libraries: `/api/voices` and
+  `/api/history/*` go to `.36:18080` directly, since each hub owns that state.
+  A speech call against `citrinet` still 503s (the engine wants an audio
+  contract, not text) — ASR uses `POST /api/tasks` instead.
+- The 6600 XT (`.30` DEVICE=0) is deliberately absent from the route table, and
+  no hub is reconfigured by the proxy. LAN-only, no auth — same warning as
+  above. Design and rationale: `docs/fanout-design.md`; ops:
+  `cmd/fanout-proxy/README.md`; agent contract: `docs/agent-api.md`.
 
 ## 10.0.0.30 — two containers on one host
 
@@ -81,9 +131,55 @@ CPU performance is a non-issue for sanotts: ~30–300 ms per sentence.
 
 ## Client routing quick reference
 
-- Expressive / sarcastic voice design: `.36:18080` model `breeze`
-  (`options.instruction`) or `.30:18081` model `qwen3-vd` (top-level
-  `instruct`, ~2.5x faster than breeze).
-- Instant TTS: `.36:18080` or `.32:18080`, model `sanotts`.
-- Standby breeze (if .36 is down): `.30:18080` model `breeze`.
-- STT: `.36:18080` model `citrinet` via async `POST /api/tasks`.
+- One base URL for everything generative **and** STT: `http://10.0.0.36:18082`
+  (fan-out, failover included) — preferred for agents and the default in
+  `clients/audiocpp_client.py` (`DEFAULT_HUB`). ASR is `POST /api/tasks` with
+  `"model": "stt"` plus `?hub=` on the follow-up reads.
+- One hub URL for the per-host state: `http://10.0.0.36:18080` for upload, voice
+  library and history — that client's `DEFAULT_DIRECT_HUB` (`--direct-hub` /
+  `AUDIOCPP_DIRECT_HUB_URL`), because those live per host and the fan-out does
+  not proxy them. The client also still sends STT here.
+- Per-host direct access, when you want to pin a take to one box:
+  - Expressive / sarcastic voice design: `.36:18080` model `breeze`
+    (`options.instruction`) or `.30:18081` model `qwen3-vd` (top-level
+    `instruct`, ~2.5x faster than breeze).
+  - Instant TTS: `.36:18080` or `.32:18080`, model `sanotts`.
+  - Standby breeze (if .36 is down): `.30:18080` model `breeze`.
+  - STT: `.36:18080` model `citrinet` via async `POST /api/tasks` (hub-direct
+    shape, `instanceId` instead of an alias).
+
+Quick checks against the farm:
+
+```
+curl -s http://10.0.0.36:18082/farm/health | python3 -m json.tool   # who is up, where aliases resolve
+curl -s http://10.0.0.36:18082/v1/models                           # aliases with a READY backend
+./clients/audiocpp_client.py health                                 # same, readable, no deps
+```
+
+## Open WebUI — TTS wiring
+
+Open WebUI (`:3000` on `.36`) has no fan-out awareness, so it must be pointed at
+`:18082` by hand. **Admin → Settings → Audio:**
+
+| Setting | Value | Why |
+|---|---|---|
+| TTS Engine | **OpenAI** | the fan-out speaks `POST /v1/audio/speech` only |
+| OpenAI API Base URL | `http://10.0.0.36:18082/v1` | **`:18082`, not `:18080`** — failover across the farm; `:18080` is one hub, so a restart of `.36` takes voice off the air |
+| TTS Model | `breeze` · `expressive` · `sanotts` · `instant` · `qwen3-vd` | fan-out aliases (the table above), not hub service names |
+| Voice | leave a placeholder | audiocpp ignores the OpenAI `voice` field entirely; a value there is noise, not an error |
+
+If the TTS model list looks empty, the base URL is wrong (`:18080` returns hub
+service names, not aliases) or the backend is down — check
+`curl -s http://10.0.0.36:18082/v1/models`.
+
+**STT does not work through this path.** The fan-out does not speak OpenAI
+`POST /v1/audio/transcriptions`, and OWUI's built-in OpenAI STT would need an
+adapter to reach `citrinet`; there is none, so don't point OWUI's STT config at
+`:18082` or `:18080` expecting it to work. Transcription stays on the task API —
+the Python client's `transcribe()` against `.36:18080`, or the fan-out's
+`POST /api/tasks` with `"model": "stt"` and a `?hub=`-pinned read.
+Contract: [agent-api.md §2](agent-api.md#2-speech--text-stt).
+
+Because OWUI can't set per-request `options.instruction`, keep expressive voice
+design (`qwen3-vd`, `breeze` + instruction) for API/agent use; from OWUI pick
+the alias whose default delivery you want.

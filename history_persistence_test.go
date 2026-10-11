@@ -124,3 +124,62 @@ func TestFinalizeTTSPropagatesHistoryWriteFailure(t *testing.T) {
 		t.Fatalf("audio asset must be preserved: %v", err)
 	}
 }
+
+// Persist only the first half of an index record, simulating a short disk append.
+type partialDiskHistoryWriter struct{ file *os.File }
+
+func (w *partialDiskHistoryWriter) Write(p []byte) (int, error) { return w.file.Write(p[:len(p)/2]) }
+func (w *partialDiskHistoryWriter) Close() error                { return w.file.Close() }
+
+func TestRecordTTSShortAppendDoesNotCorruptLaterReplay(t *testing.T) {
+	t.Chdir(t.TempDir())
+	m := NewHistoryManager()
+	inst := &Instance{ID: "instance", Name: "tts", ModelID: "index_tts2"}
+	add := func(id string) error { return m.RecordTTS(inst, map[string]any{"text": id}, id, nil, "") }
+	if err := add("task-1"); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(historyDir(inst.ModelID), historyIndexFile)
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.openIndexFile = func(path string) (io.WriteCloser, error) {
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, err
+		}
+		return &partialDiskHistoryWriter{f}, nil
+	}
+	if err := add("task-2"); !errors.Is(err, io.ErrShortWrite) {
+		t.Fatalf("short append must return ErrShortWrite: %v", err)
+	}
+	m.openIndexFile = nil
+	if err := add("task-3"); err != nil {
+		t.Fatalf("healthy append following short write: %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(after), string(original)) {
+		t.Fatal("preexisting valid history bytes were modified")
+	}
+	// The damaged fragment remains untouched, while the next line is valid JSON.
+	lines := strings.Split(strings.TrimSuffix(string(after), "\n"), "\n")
+	if len(lines) != 3 || !strings.HasPrefix(lines[2], "{") {
+		t.Fatalf("expected original, damaged fragment, then clean record: %q", after)
+	}
+	var third map[string]any
+	if err := json.Unmarshal([]byte(lines[2]), &third); err != nil || third["taskId"] != "task-3" {
+		t.Fatalf("healthy record following damaged fragment is unreadable: %v, %#v", err, third)
+	}
+	replayed := NewHistoryManager()
+	rows := replayed.index[inst.ModelID]
+	if len(rows) != 2 || rows[0]["taskId"] != "task-1" || rows[1]["taskId"] != "task-3" {
+		t.Fatalf("replay must keep first and later good records, got: %#v", rows)
+	}
+	if got := len(m.index[inst.ModelID]); got != 2 {
+		t.Fatalf("short write exposed a phantom record: %d", got)
+	}
+}

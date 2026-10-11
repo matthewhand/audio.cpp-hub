@@ -1,7 +1,8 @@
 /* e2e 公共辅助：注入 localStorage 偏好、打开首页、等待初始渲染完成。 */
 import { expect } from "@playwright/test";
 
-/** 打开首页并等待模型列表渲染；backend 需已 install。 */
+/** 打开首页并等待模型列表渲染；backend 需已 install。
+ *  prefs.hash 可选：带 hash 冷启动（深链接刷新），用来验证懒加载面板的路由还原。 */
 export async function openApp(page, backend, prefs = {}) {
   backend.install(page);
   await page.addInitScript((p) => {
@@ -14,7 +15,7 @@ export async function openApp(page, backend, prefs = {}) {
       /* about:blank 等场景忽略 */
     }
   }, prefs);
-  await page.goto("/");
+  await page.goto("/" + (prefs.hash || ""));
   await expect(page.locator("#model-list .card-title").first()).toBeVisible();
 }
 

@@ -1,35 +1,31 @@
-/* web/modules/settings.js — 设置对话框
+/* web/modules/settings.js — 设置对话框渲染（**懒加载 chunk**）
  *
- * 左侧分区导航 + 右侧内容面板：通用（界面语言 / 主题）、HTTPS 证书、可执行文件登记。
- * 可执行文件同时供启动弹窗使用（renderExecList / startEditExec / parseEnvText /
- * parseSessionOptionsText / updateLaunchExec 都在这里，由 launch 模块导入）。 */
+ * 左侧分区导航 + 右侧内容面板：通用（界面语言 / 主题）、HTTPS 证书、可执行文件列表。
+ * 三者都只在打开设置弹窗时用得上，因此本模块**不在首屏模块图**里：调用方
+ * （routing.js / app.js）走首屏外观层 modules/settings-lazy.js，由它
+ * import("./settings.js") 按需拉取。
+ *
+ * 可执行文件登记的**数据**（轮询、启动弹窗下拉、增删改表单字段、设备探测缓存）
+ * 留在外观层——它被首屏的启动弹窗与模型卡片共用。实测表见 scripts/perf-budget.mjs 顶注。 */
 
-import { focusDialog, renderListError, restoreDialogFocus, setButtonBusy, showToast } from "./async-ui.js";
+import { restoreDialogFocus, setButtonBusy, showToast } from "./async-ui.js";
 import { $, Api, esc, t } from "./dom.js";
-import { renderModelList } from "./models.js";
-import { go, goPanel, setPendingSettingsSection } from "./routing.js";
+import { envToText, editingExecId, loadExecutables, resetExecForm, setEditingExecId, showExecForm } from "./settings-lazy.js";
 import { applyThemeIcon } from "./shell.js";
-import { executables, models, setExecutables } from "./state.js";
+import { executables } from "./state.js";
 
-/* 每个可执行文件的探测结果缓存（id → devices 数组）；可执行文件增删改时整体清空。
-   缓存随可执行文件登记一起失效，因此归本模块；写入方（--list-devices 探测）在 launch.js。 */
-export const deviceCache = {};
-
-/* ---------- 设置对话框（左侧功能菜单 + 右侧内容面板） ---------- */
-export const settingsModal = $("settings-modal");
-export let settingsSection = "general";
-export let lastCertStatus = null;
+let settingsSection = "general";
+let lastCertStatus = null;
 
 export function openSettingsModal(section) {
   settingsSection = section || settingsSection || "general";
   activateSettingsSection(settingsSection);
   syncGeneralPane();
-  settingsModal.classList.remove("hidden");
-  focusDialog(settingsModal);
+  // 外壳的显示与 focusDialog 由外观层 settings-lazy.js 负责（chunk 到位前就要有反馈）
   loadExecutables();
 }
 export function closeSettingsModal() {
-  settingsModal.classList.add("hidden");
+  $("settings-modal").classList.add("hidden");
   restoreDialogFocus();
   window.hubPanelClosed("settings");
 }
@@ -45,10 +41,8 @@ export function activateSettingsSection(section) {
 document.querySelectorAll(".settings-nav-item").forEach(btn => {
   btn.onclick = () => activateSettingsSection(btn.dataset.section);
 });
-$("settings-btn").onclick = () => { setPendingSettingsSection("general"); goPanel("settings"); };
-$("exec-goto-btn").onclick = () => { setPendingSettingsSection("executables"); go("#/settings"); };
 $("settings-modal-close").onclick = closeSettingsModal;
-settingsModal.onclick = (e) => { if (e.target === settingsModal) closeSettingsModal(); };
+$("settings-modal").onclick = (e) => { if (e.target === $("settings-modal")) closeSettingsModal(); };
 
 /* 通用面板：界面语言 / 主题（与页头开关同一状态源） */
 export function syncGeneralPane() {
@@ -63,14 +57,14 @@ $("ui-theme").onchange = (e) => {
 };
 
 /* ---------- HTTPS 证书面板 ---------- */
-export async function loadCertStatus() {
+async function loadCertStatus() {
   try {
     const json = await Api.get("/api/cert/status");
     if (json && json.data) renderCertStatus(json.data);
   } catch (e) { /* 状态拉取失败不影响面板其他操作 */ }
 }
 
-export function renderCertStatus(data) {
+function renderCertStatus(data) {
   lastCertStatus = data;
   $("https-enabled").checked = !!data.enabled;
   const badge = $("https-status-badge");
@@ -99,7 +93,7 @@ $("https-enabled").onchange = async (e) => {
   }
 };
 
-export async function downloadCert(url, fallbackName) {
+async function downloadCert(url, fallbackName) {
   try {
     // 需要原始 Response：读 blob 与 Content-Disposition 文件名
     const res = await Api.get(url, { raw: true });
@@ -147,23 +141,7 @@ $("https-generate-btn").onclick = async () => {
   }
 };
 
-export async function loadExecutables() {
-  // 可执行文件可能已增删改：设备探测缓存整体失效
-  for (const k of Object.keys(deviceCache)) delete deviceCache[k];
-  try {
-    setExecutables(await Api.list("/api/executables"));
-  } catch (e) {
-    setExecutables([]);
-    renderListError($("exec-list"), t("common.loadFailed") + t("common.colon") + e.message, loadExecutables);
-    updateLaunchExec();
-    return;
-  }
-  renderExecList();
-  updateLaunchExec();
-  // 可执行文件有效性也影响模型卡片的已配置/黯淡状态
-  if (models.length) renderModelList();
-}
-
+/* ---------- 可执行文件列表（数据与表单在外观层 settings-lazy.js） ---------- */
 export function renderExecList() {
   const list = $("exec-list");
   list.innerHTML = "";
@@ -196,20 +174,9 @@ export function renderExecList() {
   }
 }
 
-/* 正在编辑的可执行文件 id，null 表示新增模式；表单默认收起，点“新增”/“编辑”才展开 */
-export let editingExecId = null;
-
-export function showExecForm() {
-  $("exec-form-section").classList.remove("hidden");
-}
-
-export function hideExecForm() {
-  $("exec-form-section").classList.add("hidden");
-  $("exec-msg").textContent = "";
-}
-
-export function startEditExec(ex) {
-  editingExecId = ex.id;
+/* 行内编辑：把某个可执行文件回填进表单（状态机在外观层） */
+function startEditExec(ex) {
+  setEditingExecId(ex.id);
   $("exec-name").value = ex.name || "";
   $("exec-path").value = ex.path || "";
   $("exec-note").value = ex.note || "";
@@ -224,79 +191,18 @@ export function startEditExec(ex) {
   showExecForm();
 }
 
-export function resetExecForm() {
-  editingExecId = null;
-  $("exec-name").value = "";
-  $("exec-path").value = "";
-  $("exec-note").value = "";
-  $("exec-env").value = "";
-  const title = $("exec-form-title");
-  title.dataset.i18n = "exec.addTitle";
-  title.textContent = t("exec.addTitle");
-  const btn = $("exec-add-btn");
-  btn.dataset.i18n = "exec.add";
-  btn.textContent = t("exec.add");
-  hideExecForm();
-}
-
 $("exec-new-btn").onclick = () => {
   resetExecForm();
   showExecForm();
 };
 $("exec-cancel-edit-btn").onclick = resetExecForm;
 
-/* 解析环境变量输入：每行 KEY=VALUE，空行忽略；格式错误抛带行号的异常 */
-export function parseEnvText() {
-  const env = {};
-  const lines = $("exec-env").value.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const eq = line.indexOf("=");
-    if (eq <= 0 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(line.substring(0, eq).trim())) {
-      throw new Error(t("exec.envInvalid", { line: i + 1 }));
-    }
-    env[line.substring(0, eq).trim()] = line.substring(eq + 1).trim();
+/* 语言切换重画（由外观层 settings-lazy.js 转发，只在弹窗已开时调）：
+   静态文案由 I18N.applyI18n 批量替换，这里重画 t() 生成的动态区域。 */
+export function relocalize() {
+  if (!$("settings-modal").classList.contains("hidden")) {
+    syncGeneralPane();
+    if (lastCertStatus) renderCertStatus(lastCertStatus);
+    renderExecList();
   }
-  return env;
-}
-
-export function envToText(env) {
-  if (!env) return "";
-  return Object.entries(env).map(([k, v]) => k + "=" + v).join("\n");
-}
-
-export function parseSessionOptionsText() {
-  const options = {};
-  const lines = $("launch-adv-options").value.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const eq = line.indexOf("=");
-    if (eq <= 0) throw new Error(t("launch.advInvalid", { line: i + 1 }));
-    options[line.substring(0, eq).trim()] = line.substring(eq + 1).trim();
-  }
-  return options;
-}
-
-export function updateLaunchExec() {
-  const sel = $("launch-exec");
-  sel.innerHTML = "";
-  const empty = executables.length === 0;
-  if (empty) {
-    // 无可用程序时显示占位项，点击下拉即跳转到设置页添加（见下方 mousedown 处理）
-    const opt = document.createElement("option");
-    opt.value = "";
-    opt.textContent = t("launch.execNone");
-    sel.appendChild(opt);
-  }
-  for (const ex of executables) {
-    const opt = document.createElement("option");
-    opt.value = ex.id;
-    opt.textContent = ex.name + (ex.exists ? "" : t("exec.missingSuffix"));
-    sel.appendChild(opt);
-  }
-  sel.classList.toggle("exec-empty", empty);
-  $("launch-btn").disabled = empty;
-  $("exec-empty-hint").classList.toggle("hidden", !empty);
 }

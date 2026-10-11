@@ -3,6 +3,11 @@
    - 新增文案请同时改 i18n.en.js，并用 scripts/check-i18n-parity.js 校验中英键一致
    - 值中的 {name} 为占位符，由 I18N.t(key, params) 插值 */
 window.I18N_ZH = {
+  /* ---------- TTS studio workspace ---------- */
+  "studio.kicker": "语音工作台",
+  "studio.intro": "撰写文稿、调整音色并生成音频。",
+  "studio.script": "文稿",
+  "studio.controls": "音色与演绎",
   /* ---------- 页头 / 导航 ---------- */
   "header.subtitle": "audiocpp_server 进程管理 & 音频工作台",
   "header.settingsTitle": "设置",
@@ -61,6 +66,15 @@ window.I18N_ZH = {
   /* ---------- 实例条 ---------- */
   "instance.barLabel": "实例",
   "instance.noReady": "没有就绪实例",
+  "instance.pollStale": "实例状态暂不可用，正在重试",
+  "instance.readiness.kicker": "工作区就绪状态",
+  "instance.readiness.title": "{model} 需要独立的实例",
+  "instance.readiness.none": "无就绪实例。请启动 {model}。",
+  "instance.readiness.others": "其他模型有 {count} 个就绪实例。可在下方切换或启动 {model}。",
+  "instance.readiness.unlisted": "其他模型已就绪，但未登记。请启动 {model}。",
+  "instance.readiness.available": "当前可用",
+  "instance.readiness.choice": "{model} · {backend} :{port}",
+  "instance.readiness.switch": "切换到 {model}",
   "instance.noReadySuffix": "（无就绪实例）",
   "instance.ready": "就绪",
   "instance.stopCurrent": "停止当前实例",
@@ -70,6 +84,7 @@ window.I18N_ZH = {
   "instance.working": "工作中",
   "instance.workingCount": "工作中（{n}）",
   "instance.stop": "停止",
+  "instance.stopFailed": "停止实例失败",
   "instance.status.STARTING": "启动中",
   "instance.status.READY": "就绪",
   "instance.status.ERROR": "错误",
@@ -153,6 +168,7 @@ window.I18N_ZH = {
   "history.refresh": "刷新",
   "history.clear": "清空",
   "history.empty": "暂无历史记录",
+  "history.emptyFor": "{model} 暂无生成记录（按模型显示）。",
   "history.load": "载入",
   "history.play": "播放",
   "history.pause": "暂停",
@@ -266,6 +282,14 @@ window.I18N_ZH = {
   "asr.copy": "复制",
   "asr.copied": "已复制",
   "asr.details": "详细输出",
+  "asr.analyzeSpeakers": "分析说话人",
+  "asr.speakerOnly": "仅输出说话人时间分段；此模型不转写语音。",
+  "asr.diarUnavailable": "后端未返回说话人分段；无法使用说话人识别。",
+  "asr.diarMissingRate": "后端未返回有效采样率，无法显示说话人时间。",
+  "asr.diarInvalid": "返回的说话人 ID 或时间偏移均无效。",
+  "asr.diarNoSpeakers": "未检测到说话人分段。",
+  "asr.speakerTimeline": "说话人时间线",
+  "asr.speaker": "说话人 {id}",
   /* ---------- SEP 面板 ---------- */
   "sep.title": "音频分离",
   "sep.hint": "输入 44.1kHz 音乐效果最佳。",

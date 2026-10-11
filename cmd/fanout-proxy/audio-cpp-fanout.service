@@ -1,0 +1,36 @@
+# audio.cpp-hub fan-out proxy — systemd **user** unit template for 10.0.0.36.
+#
+# Install (no root, nothing is enabled for you):
+#   mkdir -p ~/.config/systemd/user
+#   cp ~/audio.cpp-hub/cmd/fanout-proxy/audio-cpp-fanout.service ~/.config/systemd/user/
+#   # build the binary first (see cmd/fanout-proxy/README.md), then:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now audio-cpp-fanout
+#   loginctl enable-linger "$USER"   # optional: keep it running without a login session
+#
+# Status / logs / restart:
+#   systemctl --user status audio-cpp-fanout
+#   journalctl --user -u audio-cpp-fanout -f
+#   systemctl --user restart audio-cpp-fanout
+#
+# A user unit (not a system unit) is deliberate: the proxy is LAN-only tooling
+# and needs no privileges, and a user unit cannot be started at boot for other
+# accounts.
+[Unit]
+Description=audio.cpp-hub fan-out proxy (LAN router for the voice farm, :18082)
+Documentation=file:///home/matthewh/audio.cpp-hub/docs/fanout-design.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/audio.cpp-hub/cmd/fanout-proxy
+ExecStart=%h/audio.cpp-hub/bin/fanout-proxy -config %h/audio.cpp-hub/cmd/fanout-proxy/farm.routes.json
+# -config is explicit: a manual run from any other directory must not silently
+# pick up a different farm.routes.json.
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

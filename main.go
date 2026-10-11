@@ -58,6 +58,8 @@ type Hub struct {
 	execs     *ExecutableRegistry
 	profiles  *ProfileRegistry
 	tasks     *TaskManager
+	bus       *EventBus
+	mem       *MemorySampler
 	history   *HistoryManager
 	voices    *VoiceLibrary
 	downloads *DownloadManager
@@ -100,6 +102,11 @@ func main() {
 		downloads: NewDownloadManager(cfg),
 	}
 	hub.tasks = NewTaskManager(hub.history)
+	hub.bus = NewEventBus()
+	hub.mem = NewMemorySampler(hub.instances, hub.tasks, hub.bus)
+	hub.tasks.AddObserver(hub.bus)
+	hub.tasks.AddObserver(hub.mem)
+	hub.mem.Start()
 
 	if _, err := os.Stat("web"); err != nil {
 		log.Printf("警告: 工作目录下没有 web/ 目录，静态页面不可用（请从项目根目录启动）")
@@ -120,12 +127,19 @@ func main() {
 		signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 		<-ch
 		log.Printf("收到退出信号，开始优雅关闭…")
+		// Close the bus first so SSE handlers return without waiting out Shutdown.
+		if hub.bus != nil {
+			hub.bus.Close()
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		if err := srv.Shutdown(ctx); err != nil {
 			log.Printf("HTTP 未能及时排空，强制关闭: %v", err)
 			srv.Close()
 		}
 		cancel()
+		if hub.mem != nil {
+			hub.mem.Stop()
+		}
 		log.Printf("停止全部实例…")
 		hub.instances.stopAll()
 		hub.downloads.Shutdown()

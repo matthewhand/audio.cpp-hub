@@ -1,16 +1,6 @@
-/* web/modules/tasks.js — 推理任务队列与结果落版
- *
- * 提交（POST /api/tasks）、2s 轮询跟踪、取消、完成后落地结果，
- * 以及侧栏里的任务行渲染（makeTaskRow / toggleTaskDetail）。
- * 任务视图缓存（activePolls / taskViews / taskDetails）在这里，因为只有本模块写。
- *
- * 结果落版（renderTaskResult / clearResult / makeTrackRow 与四类结果渲染）与队列放在一起：
- * 任务生命周期的终点就是「把结果画到面板上」，中间没有任何别的模块参与。
- * 本模块不认识面板表单，只按 category 分派到对应结果容器。
- *
- * 注意：任务完成要刷新操作历史侧栏（renderSidebarList / loadHistory），
- * 而侧栏的任务行又要用到本模块的取消与耗时，因此本模块与 sidebar.js 之间
- * 存在一处刻意的循环依赖——两边只在运行期回调里互相调用，模块求值期互不读取。 */
+/* Asynchronous task queue, polling, reattachment, and result rendering.
+ * Speaker timelines load only when an ASR result opens; sidebar imports
+ * form a runtime-only cycle. */
 
 import { showToast } from "./async-ui.js";
 import { $, Api, el, markRowEnter, t } from "./dom.js";
@@ -203,7 +193,7 @@ export async function renderTaskResult(task) {
   }
   try {
     const json = await Api.get("/api/tasks/{id}/result", { params: { id: task.id } });
-    if (task.category === "asr") renderAsrResult(json);
+    if (task.category === "asr") await (await import("./diarization-lazy.js")).renderAsrResult(json, { diarizationOnly: task.modelId === "sortformer_diar", modelId: task.modelId });
     else if (task.category === "sep") renderSepResult(json);
     else if (task.category === "music") renderMusicResult(json);
     else renderOtherResult(json);
@@ -244,23 +234,6 @@ export function clearResult(container) {
     URL.revokeObjectURL(row.dataset.blobUrl);
   }
   container.innerHTML = "";
-}
-
-/* ASR 结果渲染（任务完成后由 renderTaskResult 调用） */
-function renderAsrResult(json) {
-  $("asr-text").textContent = json.text || t("asr.noText");
-  const details = {};
-  for (const k of ["language", "words", "segments", "speaker_turns", "timing"]) {
-    if (json[k] !== undefined) details[k] = json[k];
-  }
-  const det = $("asr-json-details");
-  if (Object.keys(details).length > 0) {
-    $("asr-json").textContent = JSON.stringify(details, null, 2);
-    det.classList.remove("hidden");
-  } else {
-    det.classList.add("hidden");
-  }
-  $("asr-result").classList.remove("hidden");
 }
 
 /* SEP 结果渲染（任务完成后由 renderTaskResult 调用） */

@@ -4,9 +4,9 @@
  * 只收「几乎不会误报 + 真的能挡住 bug」的规则，避免开发者为了消警告而写 eslint-disable。
  *
  * web/ 现在分两类，规则集相同、只差 sourceType 与 globals：
- *   - 经典脚本（i18n.zh/en.js / i18n.js / api-client.js / wav.js / file-browser.js /
- *     legacy-globals.js / motion.js / pwa.js / audio-picker.js / voice-select.js /
- *     voices-panel.js）：sourceType "script"，跨文件靠 window.* 通信，公开接口在
+ *   - 经典脚本（i18n.zh/en.js / i18n.js / api-client.js / wav.js /
+ *     legacy-globals.js / motion.js / pwa.js / audio-picker.js /
+ *     voice-select.js）：sourceType "script"，跨文件靠 window.* 通信，公开接口在
  *     下方 globals 里逐个声明；
  *   - ES 模块（web/app.js + web/modules/*.js）：sourceType "module"，
  *     跨文件靠 import/export，额外启用 import/export 一致性检查。
@@ -88,7 +88,7 @@ const SHARED_RULES = {
   "no-trailing-spaces": "error",
 
   /* --- 两处刻意的手写排版（关闭理由即风格本身） ---
-   * 1) indent：IIFE 函数体不缩进（`() => {` 之后顶格，见 audio-picker.js / voices-panel.js）。
+   * 1) indent：IIFE 函数体不缩进（`() => {` 之后顶格，见 audio-picker.js）。
    *    开启会产生约 837 条违规。
    * 2) no-multi-spaces：行尾注释按列对齐（`this.value = null;          // 当前音频的服务器绝对路径`）。
    *    开启会产生 18 条违规。
@@ -133,13 +133,14 @@ export default [
         // 各 web/*.js 挂到 window.* 的公开接口（与 web/globals.d.ts 一一对应）
         I18N: "readonly",
         WavUtil: "readonly",
-        FileBrowser: "readonly",
         AudioPicker: "readonly",
         VoiceSelect: "readonly",
         refreshVoiceSelects: "readonly",
+        // 音色库面板是懒加载 chunk：这两个全局由首屏外观层
+        // modules/voices-panel-lazy.js 挂上，供经典脚本 voice-select.js 调用
         openVoicesPanel: "readonly",
         closeVoicesPanel: "readonly",
-        // legacy-globals.js 挂到 window 的桥接口：voices-panel.js / audio-picker.js 直接引用
+        // legacy-globals.js 挂到 window 的桥接口：audio-picker.js 直接引用
         $: "readonly",
         el: "readonly",
         showToast: "readonly",
@@ -228,13 +229,12 @@ export default [
     languageOptions: {
       sourceType: "module",
       ecmaVersion: 2022,
-      // 只给仍以 window 形式存在的运行期资产：I18N / WavUtil / FileBrowser /
-      // AudioPicker / VoiceSelect 是经典脚本挂的全局，其余一律来自 import。
+      // 只给仍以 window 形式存在的运行期资产：I18N / WavUtil / AudioPicker /
+      // VoiceSelect 是经典脚本挂的全局，其余一律来自 import。
       globals: {
         ...globals.browser,
         I18N: "readonly",
         WavUtil: "readonly",
-        FileBrowser: "readonly",
         AudioPicker: "readonly",
         VoiceSelect: "readonly",
         openVoicesPanel: "readonly",

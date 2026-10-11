@@ -119,12 +119,12 @@ func TestPerDayCounts(t *testing.T) {
 	now := time.Now()
 	hist := map[string][]map[string]any{
 		"m": {
-			{"time": now.UnixMilli()},                                // 今天
-			{"time": now.Add(-24 * time.Hour).UnixMilli()},           // 昨天
-			{"time": now.Add(-24 * time.Hour).UnixMilli()},           // 昨天
-			{"time": now.Add(-48 * time.Hour).UnixMilli()},           // 前天
-			{"time": now.Add(-48 * 24 * time.Hour).UnixMilli()},      // 48 天前（窗口外）
-			{"time": now.Add(2 * time.Hour).UnixMilli()},             // 未来（容错→今天）
+			{"time": now.UnixMilli()},                           // 今天
+			{"time": now.Add(-24 * time.Hour).UnixMilli()},      // 昨天
+			{"time": now.Add(-24 * time.Hour).UnixMilli()},      // 昨天
+			{"time": now.Add(-48 * time.Hour).UnixMilli()},      // 前天
+			{"time": now.Add(-48 * 24 * time.Hour).UnixMilli()}, // 48 天前（窗口外）
+			{"time": now.Add(2 * time.Hour).UnixMilli()},        // 未来（容错→今天）
 		},
 	}
 	days := perDayCounts(hist, now.UnixMilli())

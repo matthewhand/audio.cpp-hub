@@ -15,13 +15,14 @@
  * 避免「自动关闭」误导航。 */
 
 import { isOpen } from "./async-ui.js";
-import { closeDownloadsModal, openDownloadsModal } from "./downloads.js";
+import { closeDownloadsModal, openDownloadsModal, wireDownloadsButton } from "./downloads-lazy.js";
 import { closeInstanceDetail, instances, openInstanceDetail } from "./instances.js";
 import { selectModelById } from "./models.js";
-import { closeSettingsModal, openSettingsModal } from "./settings.js";
+import { closeSettingsModal, openSettingsModal, wireSettingsButtons } from "./settings-lazy.js";
 import { closeHistoryPanel, openHistoryPanel } from "./sidebar.js";
 import { closeStatsPanel, openStatsPanel, wireStatsButton } from "./stats-lazy.js";
 import { selectedModelId } from "./state.js";
+import { closeVoicesPanel, openVoicesPanel, wireVoicesButton } from "./voices-panel-lazy.js";
 
 export const ROUTE_VIEWS = ["history", "voices", "downloads", "stats", "settings"];
 
@@ -67,8 +68,11 @@ export function goPanel(route) {
   go(location.hash === target ? defaultRoute() : target);
 }
 
-// 看板的页头按钮由懒加载外观接线（模块本身要点击后才拉）
+// 看板、音色库、下载、设置的页头/入口按钮都由懒加载外观接线（面板本身要点击后才拉）
 wireStatsButton(goPanel);
+wireVoicesButton(goPanel);
+wireDownloadsButton(goPanel);
+wireSettingsButtons(go, goPanel, setPendingSettingsSection);
 
 window.hubNavigate = go;
 window.hubTogglePanel = goPanel;
@@ -88,7 +92,7 @@ export function applyRoute() {
     const r = parseRoute(location.hash);
     // 先关闭非目标面板（仅关闭确实打开的，避免误触焦点还原）
     if (r.view !== "history" && isOpen("history-panel")) closeHistoryPanel();
-    if (r.view !== "voices" && isOpen("voices-panel") && window.closeVoicesPanel) window.closeVoicesPanel();
+    if (r.view !== "voices" && isOpen("voices-panel")) closeVoicesPanel();
     if (r.view !== "downloads" && isOpen("downloads-modal")) closeDownloadsModal();
     if (r.view !== "stats" && isOpen("stats-panel")) closeStatsPanel();
     if (r.view !== "settings" && isOpen("settings-modal")) closeSettingsModal();
@@ -98,7 +102,7 @@ export function applyRoute() {
     }
     // 再打开目标面板
     if (r.view === "history") openHistoryPanel();
-    else if (r.view === "voices") { if (window.openVoicesPanel) window.openVoicesPanel(); }
+    else if (r.view === "voices") openVoicesPanel();
     else if (r.view === "downloads") openDownloadsModal();
     else if (r.view === "stats") openStatsPanel();
     else if (r.view === "settings") {

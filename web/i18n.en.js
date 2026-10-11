@@ -3,6 +3,11 @@
    - Keep in sync with i18n.zh.js; run scripts/check-i18n-parity.js to verify parity
    - {name} placeholders are interpolated by I18N.t(key, params) */
 window.I18N_EN = {
+  /* ---------- TTS studio workspace ---------- */
+  "studio.kicker": "VOICE STUDIO",
+  "studio.intro": "Write your script, shape the voice, and generate audio.",
+  "studio.script": "Script",
+  "studio.controls": "Voice & delivery",
   /* ---------- header / nav ---------- */
   "header.subtitle": "audiocpp_server process manager & audio workbench",
   "header.settingsTitle": "Settings",
@@ -61,6 +66,15 @@ window.I18N_EN = {
   /* ---------- instance bar ---------- */
   "instance.barLabel": "Instance",
   "instance.noReady": "No ready instance",
+  "instance.pollStale": "Instance status unavailable — retrying",
+  "instance.readiness.kicker": "WORKSPACE READINESS",
+  "instance.readiness.title": "{model} needs its own instance",
+  "instance.readiness.none": "No instances are ready. Launch {model} above.",
+  "instance.readiness.others": "{count} other instances are ready. Switch below or launch {model}.",
+  "instance.readiness.unlisted": "Other instances are ready but not listed. Launch {model} above.",
+  "instance.readiness.available": "AVAILABLE NOW",
+  "instance.readiness.choice": "{model} · {backend} :{port}",
+  "instance.readiness.switch": "Switch to {model}",
   "instance.noReadySuffix": " (no ready instance)",
   "instance.ready": "Ready",
   "instance.stopCurrent": "Stop current instance",
@@ -70,6 +84,7 @@ window.I18N_EN = {
   "instance.working": "Working",
   "instance.workingCount": "Working ({n})",
   "instance.stop": "Stop",
+  "instance.stopFailed": "Could not stop instance",
   "instance.status.STARTING": "Starting",
   "instance.status.READY": "Ready",
   "instance.status.ERROR": "Error",
@@ -153,6 +168,7 @@ window.I18N_EN = {
   "history.refresh": "Refresh",
   "history.clear": "Clear",
   "history.empty": "No history yet",
+  "history.emptyFor": "No takes for {model} (model-specific history).",
   "history.load": "Load",
   "history.play": "Play",
   "history.pause": "Pause",
@@ -266,6 +282,14 @@ window.I18N_EN = {
   "asr.copy": "Copy",
   "asr.copied": "Copied",
   "asr.details": "Detailed output",
+  "asr.analyzeSpeakers": "Analyze speakers",
+  "asr.speakerOnly": "Speaker timing only — this model does not transcribe speech.",
+  "asr.diarUnavailable": "This backend did not return speaker turns; diarization is unavailable.",
+  "asr.diarMissingRate": "Speaker timing is unavailable because the backend omitted a valid sample rate.",
+  "asr.diarInvalid": "All returned speaker turns had invalid identifiers or time offsets.",
+  "asr.diarNoSpeakers": "No speaker turns were detected.",
+  "asr.speakerTimeline": "Speaker timeline",
+  "asr.speaker": "Speaker {id}",
   /* ---------- SEP panel ---------- */
   "sep.title": "Source Separation",
   "sep.hint": "44.1kHz music input works best.",

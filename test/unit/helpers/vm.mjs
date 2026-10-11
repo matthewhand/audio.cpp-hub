@@ -130,10 +130,13 @@ export function makeFunction(fnSource, deps = {}) {
  * 为什么需要：web/ 无构建，模块是浏览器原生 ES module，node 无法直接 import
  * （它们 import 的是浏览器全局与彼此，循环依赖靠活绑定闭环）。测试只关心纯逻辑，
  * 于是把这些引用做成 sandbox 里的桩。不修改任何前端源码。
+ *
+ * rewrite：可选的源码改写钩子。vm 上下文不支持 import()，因此测试懒加载外观层时
+ * 用它把 `import("./chunk.js")` 换成 sandbox 里的可控桩（见 lazy-panels.test.mjs）。
  */
-export function loadEsModule(name, sandbox = {}) {
-  const source = readWeb(name);
+export function loadEsModule(name, sandbox = {}, rewrite = (s) => s) {
   const exported = new Set();
+  const source = rewrite(readWeb(name));
   for (const m of source.matchAll(
     /^export\s+(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm
   )) {

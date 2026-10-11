@@ -7,6 +7,8 @@
  * TypeScript 的 checkJs 不会把「某个脚本里的 `window.X = ...` 赋值」推断成其它脚本
  * 可见的全局标识符，因此这里只给**经典脚本**补一份 window 环境声明；
  * 模块之间的接口由 import/export 自行校验，不在这里登记。
+ * 唯一的例外是 web/audio-picker.js 里那次 `import("./modules/file-browser-lazy.js")`：
+ * 经典脚本与模块之间的动态 import，tsc 能按相对路径解析到真模块，无需在此声明。
  *
  * 只声明各模块**被其它文件实际用到的公开成员**，内部实现一律留 any：
  * 既能捕获调用侧的拼写错误 / 参数个数错误，又不需要随实现同步维护一份类型副本。
@@ -44,7 +46,7 @@ interface I18NApi {
   setLang(next: string): void;
   /** 批量替换 data-i18n / -placeholder / -title / -aria-label 标注 */
   applyI18n(root?: ParentNode): void;
-  /** 注册语言切换回调（web/app.js 的 rerenderAll / AudioPicker / FileBrowser / VoicesPanel） */
+  /** 注册语言切换回调（web/app.js 的 rerenderAll / AudioPicker / 懒加载的 file-browser-lazy / VoicesPanel） */
   onChange(cb: () => void): void;
   /** 解析后端 {"code","params"} 错误体并翻译，无匹配 code 时原样返回 */
   errText(text: string): string;
@@ -90,28 +92,6 @@ declare interface Window {
   WavUtil: WavUtilApi;
   /** Safari 老版本前缀兜底，lib.dom 未收录 */
   webkitAudioContext?: typeof AudioContext;
-}
-
-/* ---- file-browser.js → window.FileBrowser ---- */
-interface FileBrowserOptions {
-  /** file=选文件，dir=选目录 */
-  mode: "file" | "dir";
-  title: string;
-  /** 仅 file 模式；自动附带「所有文件」选项 */
-  extensions?: string[];
-  startPath?: string;
-  defaultAll?: boolean;
-}
-interface FileBrowserApi {
-  /** 打开服务器端文件系统浏览弹窗；用户取消返回 null */
-  open(options: FileBrowserOptions): Promise<string | null>;
-  isOpen(): boolean;
-  cancel(): void;
-  relocalize(): void;
-}
-declare const FileBrowser: FileBrowserApi;
-declare interface Window {
-  FileBrowser: FileBrowserApi;
 }
 
 /* ---- audio-picker.js → window.AudioPicker ---- */
@@ -250,20 +230,23 @@ declare interface Window {
 
 /* ---- modules/routing.js → window.hub* 路由 / 面板钩子 ----
  * web/modules/routing.js 是 hash 路由的唯一应用方（applyRoute）；下列钩子供晚于它
- * 加载的 voices-panel.js 等在按钮点击 / 关闭时与路由保持同步（#/voices 深链接、
+ * 加载的 modules/*.js 等在按钮点击 / 关闭时与路由保持同步（#/voices 深链接、
  * 面板再次点击收起）。go / goPanel / parseRoute 等只在模块之间用 import 传递。 */
 declare interface Window {
   /** 改 hash 触发 hashchange → applyRoute；同 hash 时直接重放（用于重试） */
   hubNavigate(hash: string): void;
   /** 页头按钮：同一面板再次点击则收起（回到默认模型路由） */
   hubTogglePanel(route: string): void;
-  /** 重放一次 applyRoute（voices-panel.js 加载后补跑，使 #/voices 刷新可还原） */
+  /** 重放一次 applyRoute（app.js 启动末尾就会调一次，深链接靠它还原视图） */
   hubApplyRoute(): void;
   /** 由各 closeX() 调用：仅当当前路由仍指向该面板时才回退（避免误导航） */
   hubPanelClosed(view: string): void;
 }
 
-/* ---- voices-panel.js → window.openVoicesPanel / window.closeVoicesPanel ---- */
+/* ---- modules/voices-panel-lazy.js → window.openVoicesPanel / window.closeVoicesPanel ----
+ * 音色库面板是懒加载 chunk（modules/voices-panel.js），由首屏外观层挂上这两个 window
+ * 全局：经典脚本 voice-select.js 的「管理音色库」按钮 import 不了 ES 模块，只能走
+ * window。两个函数都是 async（要先 import chunk），调用方不必 await。 */
 declare function openVoicesPanel(): void;
 declare function closeVoicesPanel(): void;
 declare interface Window {
@@ -315,9 +298,9 @@ interface HubServiceWorkerScope {
  * 真实实现在 web/modules/async-ui.js（showToast）与 web/modules/ui.js
  * （focusDialog / restoreDialogFocus），由 web/app.js 求值时回填到 window.AudioCppHubApp。
  *
- * 仍然直接用到它们的地方：audio-picker.js（window.showToast）、
- * voices-panel.js（$ / el / showToast / window.focusDialog / window.restoreDialogFocus，
- * 以及 #88 的 parseApiError / renderStateError / renderEmptyState）。 */
+ * 仍然直接用到它们的地方：audio-picker.js（window.showToast 与 $ / el）。
+ * 音色库面板改成懒加载 ES 模块（modules/voices-panel.js）后不再经 window 桥接，
+ * 剩下的转发器为后续经典组件保留。 */
 declare function $(id: string): any;
 declare function el(html: string): any;
 declare function showToast(level: string, message: string): void;

@@ -11,6 +11,8 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 
 > Web UI 侧的错误信封由 [`web/api-client.js`](../web/api-client.js) 归一化为 `ApiError`（`code` / `params` / `message`），见文末「[前端 API 客户端](#前端-api-客户端webapi-clientjs)」。
 
+> 本文只覆盖 hub 本体的路由。多机语音农场的统一入口 `cmd/fanout-proxy`（默认 `:18082`）是独立二进制，只暴露 `GET /farm/health`、`GET /api/instances`、`GET /v1/models`、`POST /v1/audio/speech`，见 [`docs/fanout-design.md`](fanout-design.md)。
+
 > English: this file is Chinese-first. Method and path are language-neutral; see the comments in `api.go` for exact handler semantics.
 
 ## 路由索引
@@ -254,6 +256,13 @@ body 同上，更新后返回条目；不存在 `404 EXEC_NOT_FOUND`。
 
 流式回写非 TTS 结果 JSON；TTS 任务或结果不存在返回 `404 RESULT_NOT_FOUND`（提示走 `/api/history`）。
 
+**说话人分段（Sortformer / VibeVoice）**：任务返回保留上游原始 JSON；
+`speaker_turns[]` 和 `sample_rate` 仅在后端实际返回时用于生成浏览器
+`{status,segments:[{start,end,speakerId,text,confidence?}]}` 展示结果。
+`start/end` 为秒，`speakerId` 仅在当前音频内有意义；单独 Sortformer
+**不生成转写文本**。完整数据契约、限制与独立推理验证计划参见
+[docs/diarization.md](diarization.md)。
+
 ### `DELETE /api/tasks/{id}`
 
 `QUEUED` 直接取消；`RUNNING` 中断 hub 侧等待（引擎会跑完，属已知限制）；已结束则删除记录。返回 `{"ok":true,"data":{"id":"..."}}`。
@@ -474,14 +483,19 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 
 | 端点 | 调用点 |
 | --- | --- |
-| `GET /api/models` | `web/modules/models.js:30`（`Api.list`） |
-| `GET /api/instances` | `web/modules/instances.js:52` 首屏加载 + `web/modules/instances.js:60` 2s 轮询 |
+| `GET /api/models` | `web/modules/models.js:27`（`Api.list`） |
+| `GET /api/instances` | `web/modules/instances.js:49` 首屏加载 + `web/modules/instances.js:57` 2s 轮询 |
 | `GET /api/events` | `web/modules/async-ui.js:189`（`startEventsPolling`）2s 轮询（失败静默） |
-| `GET /api/stats` | `web/modules/stats.js:40`（`loadStats`）打开 `#/stats` 时按需拉取，非轮询 |
-| `GET /api/downloads` | `web/modules/downloads.js:44` 首屏加载 + `web/modules/downloads.js:49` 2s 轮询 |
-| `POST /api/tasks` | `web/modules/tasks.js:26` |
-| `DELETE /api/tasks/{id}` | `web/modules/tasks.js:41` |
-| `GET /api/tasks?modelId=` | `web/modules/tasks.js:105`（`Api.list` + `query`，`reattachTasks` 重挂） |
-| `GET /api/tasks/{id}` | `web/modules/tasks.js:54`（每个进行中任务一个轮询句柄，到终态即 `stop()`） |
+| `GET /api/stats` | `web/modules/stats.js:46`（`loadStats`）打开 `#/stats` 时按需拉取，非轮询 |
+| `GET /api/downloads` | `web/modules/downloads-lazy.js:60` 首屏加载 + `web/modules/downloads-lazy.js:65` 2s 轮询 |
+| `POST /api/tasks` | `web/modules/tasks.js:27` |
+| `DELETE /api/tasks/{id}` | `web/modules/tasks.js:42` |
+| `GET /api/tasks?modelId=` | `web/modules/tasks.js:106`（`Api.list` + `query`，`reattachTasks` 重挂） |
+| `GET /api/tasks/{id}` | `web/modules/tasks.js:55`（每个进行中任务一个轮询句柄，到终态即 `stop()`） |
 
-全局 2s 轮询的启动顺序在 `web/app.js:110`–`112`（实例 → 事件 → 下载）。其余 `fetch` 调用（证书、executables、profiles、history、任务结果、voices、fs 等）尚未迁移；`web/api-client.js` 头部「迁移约定」一节列出了后续顺序（先 GET 列表 / 轮询，再 POST / PUT / DELETE）。
+全局 2s 轮询的启动顺序在 `web/app.js:110`–`112`（实例 → 事件 → 下载）。上表只列 2s 轮询与首屏加载涉及的端点；其余接口（证书、executables、profiles、history、任务结果、voices、fs 等）同样已全部经 `Api.*` 发出——`web/` 内除 Service Worker 自身外没有裸 `fetch`。
+
+
+### ASR speaker-turn display (hub UI)
+
+When a completed ASR task returns `speaker_turns` and numeric positive `sample_rate`, the browser renders the model-supplied speaker IDs and timestamped turn list alongside its ordinary transcript. Times come from `start_sample / sample_rate` and `end_sample / sample_rate`, never guesses. Missing or invalid timing fields suppress corresponding turns; plain ASR stays transcript-only. The raw JSON remains available. The hub does not identify people by name or add an inference endpoint.

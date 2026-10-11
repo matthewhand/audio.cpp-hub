@@ -1,5 +1,9 @@
 /* web/modules/command-palette.js — 命令面板（#88，Ctrl/Cmd-K）
  *
+ * **懒加载 chunk**：不在首屏模块图里，由外观层 modules/command-palette-lazy.js 在
+ * 用户首次按下 Ctrl/Cmd-K 时 import()（实测表见 scripts/perf-budget.mjs 顶注）。
+ * 全局快捷键归外观层所有——本模块只拥有自己 DOM 上那几个局部监听器。
+ *
  * 一个扁平搜索框，跳转面板 / 模型 / 实例。候选项由 paletteSources() 现场拼装：
  * 面板项来自 ROUTE_VIEWS，模型项来自 models，实例项来自 instances，因此不需要
  * 额外索引，2s 轮询刷新后候选自动是最新的。
@@ -8,7 +12,7 @@
  * 背景 inert 与「等焦点目标真的可聚焦」；本模块只管列表渲染与 ↑↓/Enter/Esc 键盘语义。
  * Esc 在输入框里被 stopPropagation，避免和外层的「Esc 关最上层弹窗」抢一次。 */
 
-import { focusDialog, isOpen, restoreDialogFocus } from "./async-ui.js";
+import { focusDialog, restoreDialogFocus } from "./async-ui.js";
 import { $, el, t } from "./dom.js";
 import { instances, statusText } from "./instances.js";
 import { categoryName } from "./models.js";
@@ -129,10 +133,4 @@ $("command-palette-input").addEventListener("keydown", (e) => {
 });
 $("command-palette").addEventListener("mousedown", (e) => {
   if (e.target === e.currentTarget) closeCommandPalette();
-});
-document.addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "k" || e.key === "K")) {
-    e.preventDefault();
-    if (isOpen("command-palette")) closeCommandPalette(); else openCommandPalette();
-  }
 });

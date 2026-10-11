@@ -1,0 +1,36 @@
+{
+  "listen": ":18082",
+  "pollIntervalMs": 7000,
+  "pollTimeoutMs": 3000,
+  "maxBodyBytes": 67108864,
+  "hubs": [
+    { "baseUrl": "http://10.0.0.36:18080", "label": "gtx1080-primary" },
+    { "baseUrl": "http://10.0.0.30:18080", "label": "strix-halo-breeze" },
+    { "baseUrl": "http://10.0.0.30:18081", "label": "strix-halo-qwen3" },
+    { "baseUrl": "http://10.0.0.32:18080", "label": "ryzen-cpu-sanotts" }
+  ],
+  "routes": [
+    {
+      "aliases": ["breeze", "expressive"],
+      "targets": [
+        { "hub": "http://10.0.0.36:18080", "instanceName": "breeze" },
+        { "hub": "http://10.0.0.30:18080", "instanceName": "breeze" }
+      ]
+    },
+    {
+      "aliases": ["qwen3-vd", "voice-design-fast"],
+      "targets": [{ "hub": "http://10.0.0.30:18081", "instanceName": "qwen3-vd" }]
+    },
+    {
+      "aliases": ["sanotts", "instant"],
+      "targets": [
+        { "hub": "http://10.0.0.36:18080", "instanceName": "sanotts" },
+        { "hub": "http://10.0.0.32:18080", "instanceName": "sanotts" }
+      ]
+    },
+    {
+      "aliases": ["citrinet", "stt"],
+      "targets": [{ "hub": "http://10.0.0.36:18080", "instanceName": "citrinet" }]
+    }
+  ]
+}

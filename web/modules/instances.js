@@ -1,9 +1,4 @@
-/* web/modules/instances.js — 实例
- *
- * 左栏实例列表、顶部实例状态条（选择 / 停止 / 详情）、实例详情弹窗，
- * 以及 2s 轮询的建立与复用（Api.poll 句柄在模块内保存，单飞 + 可见性语义不变）。 */
-
-import { focusDialog, renderEmptyState, renderListError, restoreDialogFocus, showSkeleton } from "./async-ui.js";
+import { focusDialog, renderEmptyState, renderListError, restoreDialogFocus, showSkeleton, showToast } from "./async-ui.js";
 import { $, Api, esc, t } from "./dom.js";
 import { openLaunchModal } from "./launch.js";
 import { getPendingInstanceId, go, setPendingInstanceId } from "./routing.js";
@@ -23,14 +18,15 @@ export function submitLabel(id) {
 
 export let instances = [];
 
-/* ---------- 实例列表 + 状态条（每 2s 轮询） ---------- */
 export let instancePoller = null;
-let instancesLoaded = false;   // 首次成功拉取前显示骨架屏 / 失败时给可见错误+重试
-/* 轮询数据回调：只在成功时更新视图；失败由 Api.poll 的 onError 处理 */
+let instancesLoaded = false;
+let instanceFeedStale = false;
+
 export function applyInstances(data) {
   instancesLoaded = true;
+  instanceFeedStale = false;
   instances = data;
-  // 深链接 #/instance/<id>：实例列表就绪后补齐打开详情
+
   const want = getPendingInstanceId();
   if (want) {
     const inst = instances.find(i => i.id === want);
@@ -39,9 +35,16 @@ export function applyInstances(data) {
   renderInstanceList();
   updateInstanceBar();
 }
-/* 轮询中的瞬时失败保留上次列表，仅在从未加载成功时显示错误/重试 */
+
 export function onInstancesError(e) {
-  if (instances.length === 0) renderListError($("instance-list"), t("common.loadFailed") + t("common.colon") + e.message, refreshInstances);
+  instanceFeedStale = true;
+  const pill = $("instance-pill");
+  pill.textContent = t("instance.pollStale");
+  pill.className = "pill warn";
+  for (const id of SUBMIT_BTNS) $(id).disabled = true;
+  document.querySelectorAll("#instance-select,#instance-stop,#instance-detail,#instance-list .stop-btn").forEach(el => el.setAttribute("disabled", ""));
+  $("instance-context").classList.add("hidden");
+  if (!instancesLoaded) renderListError($("instance-list"), t("common.loadFailed") + t("common.colon") + e.message, refreshInstances);
 }
 
 export function refreshInstances() {
@@ -49,9 +52,6 @@ export function refreshInstances() {
   return Api.list("/api/instances").then(applyInstances).catch(onInstancesError);
 }
 
-/* 建立 2s 轮询（由 web/app.js 在启动时调用一次）。句柄只在本模块持有：
-   Api.poll 保证上一轮结束才排下一轮、标签页隐藏时不发请求、重新可见立即补一次。
-   Api.poll 默认 immediate：建轮询时首轮请求已发出，所以这里只需在首轮回来之前占位。 */
 export function startInstancePolling() {
   if (!instancesLoaded) showSkeleton($("instance-list"), 3);
   instancePoller = Api.poll("/api/instances", applyInstances, { list: true, onError: onInstancesError });
@@ -61,7 +61,7 @@ export function startInstancePolling() {
 export function renderInstanceList() {
   const list = $("instance-list");
   list.removeAttribute("aria-busy");
-  // 展示全部实例（不再按选中模型过滤）：就绪 > 启动中 > 其它，可用的始终排在最前
+
   const order = { READY: 0, STARTING: 1 };
   const sorted = [...instances].sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2));
   list.innerHTML = "";
@@ -78,7 +78,7 @@ export function renderInstanceList() {
     const card = document.createElement("div");
     const statusClass = STATUS_CLASS[inst.status] || "stopped";
     card.className = "card" + (inst.id === activeInstanceId ? " selected" : "");
-    // 有活跃任务（QUEUED/RUNNING）时追加转圈“工作中”徽标，随 2s 轮询自动出现/消失
+
     const workingBadge = (inst.taskCount || 0) > 0
       ? ` <span class="badge working">${esc(inst.taskCount > 1 ? t("instance.workingCount", { n: inst.taskCount }) : t("instance.working"))}</span>`
       : "";
@@ -96,10 +96,11 @@ export function renderInstanceList() {
     if (detailBtn) detailBtn.onclick = () => go("#/instance/" + encodeURIComponent(inst.id));
     const stopBtn = card.querySelector(".stop-btn");
     if (stopBtn) {
+      if (instanceFeedStale) stopBtn.setAttribute("disabled", "");
       stopBtn.onclick = async () => {
-        // 停止请求的失败不单独提示：实例状态以下一轮 2s 轮询为准（显式吞掉错误）
-        await Api.del("/api/instances/{id}", { params: { id: inst.id } }).catch(() => {});
-        refreshInstances();
+        stopBtn.setAttribute("disabled", "");
+        await stopInstance(inst.id);
+        stopBtn.removeAttribute("disabled");
       };
     }
     list.appendChild(card);
@@ -116,7 +117,7 @@ export function updateInstanceBar() {
     opt.textContent = `${inst.instanceName || inst.modelId} ｜ ${inst.backend}${inst.device != null ? ":" + inst.device : ""} ｜ ${t("instance.port")} ${inst.port} ｜ #${inst.id}`;
     select.appendChild(opt);
   }
-  const has = ready.length > 0;
+  const has = ready.length > 0 && !instanceFeedStale;
   if (has) {
     if (!ready.some(i => i.id === activeInstanceId)) {
       setActiveInstanceId(ready[0].id);
@@ -125,25 +126,48 @@ export function updateInstanceBar() {
   } else {
     setActiveInstanceId(null);
   }
-  // 注意：历史按 modelId 维度记录，与激活哪个实例无关，实例启停/切换不得刷新历史列表
-  // （重建 DOM 会打断行内播放、折叠已展开的播放器）
+
+
   select.disabled = !has;
   $("instance-stop").disabled = !has;
   $("instance-detail").disabled = !has;
-  // 详情弹窗打开时跟随轮询刷新；实例已消失则自动关闭
+
   if (detailInstanceId) {
     const cur = instances.find(i => i.id === detailInstanceId);
     if (cur) renderInstanceDetail(cur); else closeInstanceDetail();
   }
 
   const pill = $("instance-pill");
-  pill.textContent = has ? t("instance.ready") : t("instance.noReady");
+  pill.textContent = instanceFeedStale ? t("instance.pollStale") : has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
+
+
+  const context = $("instance-context");
+  if (has || instanceFeedStale) {
+    context.classList.add("hidden");
+  } else {
+    const target = selectedModelId;
+    void import("./readiness.js").then(({ renderReadiness }) => {
+      if (!instanceFeedStale && selectedModelId === target && !instances.some(i => i.modelId === target && i.status === "READY")) {
+        renderReadiness(instances, models, target);
+      }
+    }).catch(() => { context.classList.add("hidden"); });
+  }
 
   for (const id of SUBMIT_BTNS) {
     const btn = $(id);
     btn.disabled = !has;
     btn.textContent = has ? submitLabel(id) : submitLabel(id) + t("instance.noReadySuffix");
+  }
+}
+
+export async function stopInstance(id) {
+  try {
+    await Api.del("/api/instances/{id}", { params: { id } });
+  } catch (e) {
+    showToast("error", t("instance.stopFailed") + t("common.colon") + (e?.message || String(e)));
+  } finally {
+    refreshInstances();
   }
 }
 
@@ -155,11 +179,9 @@ $("instance-select").onchange = (e) => {
 $("instance-stop").onclick = async () => {
   if (!activeInstanceId) return;
   $("instance-stop").disabled = true;
-  await Api.del("/api/instances/{id}", { params: { id: activeInstanceId } }).catch(() => {});
-  refreshInstances();
+  await stopInstance(activeInstanceId);
 };
 
-/* ---------- 实例详情弹窗 ---------- */
 export const instanceDetailModal = $("instance-detail-modal");
 export let detailInstanceId = null;
 export function openInstanceDetail(inst) {
