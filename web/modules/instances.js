@@ -1,5 +1,3 @@
-/* web/modules/instances.js — 实例 * * 左栏实例列表 */
-
 import { focusDialog, renderEmptyState, renderListError, restoreDialogFocus, showSkeleton, showToast } from "./async-ui.js";
 import { $, Api, esc, t } from "./dom.js";
 import { openLaunchModal } from "./launch.js";
@@ -19,7 +17,6 @@ export function submitLabel(id) {
 }
 
 export let instances = [];
-
 
 export let instancePoller = null;
 let instancesLoaded = false;
@@ -45,8 +42,7 @@ export function onInstancesError(e) {
   pill.textContent = t("instance.feedStale");
   pill.className = "pill warn";
   for (const id of SUBMIT_BTNS) $(id).disabled = true;
-  for (const id of ["instance-select", "instance-stop", "instance-detail"]) $(id).disabled = true;
-  document.querySelectorAll("#instance-list .stop-btn").forEach(btn => btn.setAttribute("disabled", ""));
+  document.querySelectorAll("#instance-select,#instance-stop,#instance-detail,#instance-list .stop-btn").forEach(el => el.setAttribute("disabled", ""));
   $("instance-context").classList.add("hidden");
   if (!instancesLoaded) renderListError($("instance-list"), t("common.loadFailed") + t("common.colon") + e.message, refreshInstances);
 }
@@ -55,7 +51,6 @@ export function refreshInstances() {
   if (instancePoller) return instancePoller.refresh();
   return Api.list("/api/instances").then(applyInstances).catch(onInstancesError);
 }
-
 
 export function startInstancePolling() {
   if (!instancesLoaded) showSkeleton($("instance-list"), 3);
@@ -166,7 +161,6 @@ export function updateInstanceBar() {
   }
 }
 
-/* A rejected stop must not appear successful. Keep the next poll authoritative. */
 export async function stopInstance(id) {
   try {
     await Api.del("/api/instances/{id}", { params: { id } });
@@ -187,7 +181,6 @@ $("instance-stop").onclick = async () => {
   $("instance-stop").disabled = true;
   await stopInstance(activeInstanceId);
 };
-
 
 export const instanceDetailModal = $("instance-detail-modal");
 export let detailInstanceId = null;
