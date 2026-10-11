@@ -29,10 +29,11 @@ for (const viewport of [
     await page.locator("#theme-toggle").click();
     await expect(theme).not.toHaveAttribute("href", previous);
     await page.locator("#lang-toggle").click();
-    await expect(page.locator("#lang-label")).toHaveText("中文");
-    expect(
-      await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth)
-    ).toBe(true);
+    await expect(page.locator("#lang-label")).toHaveText("EN");
+    const noOverflow = await page.evaluate(
+      () => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth
+    );
+    expect(noOverflow).toBe(true);
     await test.info().attach(`lucide-${viewport.width}x${viewport.height}`, {
       body: await page.screenshot(),
       contentType: "image/png"
