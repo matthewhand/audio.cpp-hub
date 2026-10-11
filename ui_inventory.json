@@ -10,6 +10,7 @@
       "web/i18n.js",
       "web/i18n.zh.js",
       "web/legacy-globals.js",
+      "web/modules/activity-queue.js",
       "web/modules/async-ui.js",
       "web/modules/command-palette-lazy.js",
       "web/modules/command-palette.js",
@@ -328,6 +329,20 @@
     }
   ],
   "controls": [
+    {
+      "id": "activity-queue-close",
+      "tag": "button",
+      "type": null,
+      "i18n": [],
+      "handlers": [{ "event": "click", "sources": ["web/modules/activity-queue.js"] }]
+    },
+    {
+      "id": "activity-queue-open",
+      "tag": "button",
+      "type": null,
+      "i18n": ["aq.open"],
+      "handlers": [{ "event": "click", "sources": ["web/modules/shell.js"] }]
+    },
     {
       "id": "asr-copy",
       "tag": "button",
@@ -899,7 +914,7 @@
     }
   ],
   "dataHooks": [
-    { "name": "data-i18n", "count": 132 },
+    { "name": "data-i18n", "count": 133 },
     { "name": "data-i18n-aria-label", "count": 27 },
     { "name": "data-i18n-placeholder", "count": 24 },
     { "name": "data-i18n-title", "count": 11 },
@@ -934,6 +949,7 @@
     { "key": "Home", "negated": false, "source": "web/audio-picker.js" },
     { "key": "Home", "negated": false, "source": "web/modules/async-ui.js" },
     { "key": "Home", "negated": false, "source": "web/modules/file-browser.js" },
+    { "key": "hub-privacy", "negated": false, "source": "web/modules/activity-queue.js" },
     { "key": "k", "negated": false, "source": "web/modules/command-palette-lazy.js" },
     { "key": "K", "negated": false, "source": "web/modules/command-palette-lazy.js" },
     { "key": "Tab", "negated": true, "source": "web/app.js" }
@@ -1033,12 +1049,13 @@
     { "method": "DELETE", "path": "/api/profiles/{param}", "sources": ["web/modules/launch.js"] },
     { "method": "PUT", "path": "/api/profiles/{param}", "sources": ["web/modules/launch.js"] },
     { "method": "GET", "path": "/api/stats", "sources": ["web/modules/stats.js"] },
+    { "method": "GET", "path": "/api/tasks", "sources": ["web/modules/activity-queue.js"] },
     { "method": "POST", "path": "/api/tasks", "sources": ["web/modules/tasks.js"] },
     { "method": "GET", "path": "/api/tasks?modelId={param}", "sources": ["web/modules/tasks.js"] },
     {
       "method": "DELETE",
       "path": "/api/tasks/{param}",
-      "sources": ["web/modules/sidebar.js", "web/modules/tasks.js"]
+      "sources": ["web/modules/activity-queue.js", "web/modules/sidebar.js", "web/modules/tasks.js"]
     },
     { "method": "GET", "path": "/api/tasks/{param}", "sources": ["web/modules/tasks.js"] },
     { "method": "GET", "path": "/api/tasks/{param}/result", "sources": ["web/modules/tasks.js"] },

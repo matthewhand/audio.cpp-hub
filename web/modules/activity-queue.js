@@ -1,5 +1,43 @@
 /* #121 Activity/Queue: on-demand UI; /api/tasks is the source of truth. */
-import { $, Api, t } from "./dom.js";
+import { $, Api, t as globalT } from "./dom.js";
+
+const AQ_LOCALES = {
+  "en": {
+    "aq.close": "Close",
+    "aq.heading": "Activity and queue",
+    "aq.stale": "Task status unavailable; displaying unverified data",
+    "aq.live": "Live task events",
+    "aq.polling": "Polling task status",
+    "aq.unavailable": "Task data unavailable",
+    "aq.empty": "No recent tasks",
+    "aq.unverified": "Unverified",
+    "aq.cancel": "Cancel task",
+    "aq.cancelling": "Cancelling",
+    "aq.status.QUEUED": "Queued",
+    "aq.status.RUNNING": "Running",
+    "aq.status.DONE": "Done",
+    "aq.status.FAILED": "Failed",
+    "aq.status.CANCELLED": "Cancelled"
+  },
+  "zh": {
+    "aq.close": "关闭",
+    "aq.heading": "任务动态与队列",
+    "aq.stale": "任务状态暂不可用，显示的是未验证的数据",
+    "aq.live": "实时任务事件",
+    "aq.polling": "正在轮询任务状态",
+    "aq.unavailable": "任务数据不可用",
+    "aq.empty": "暂无最近任务",
+    "aq.unverified": "未验证",
+    "aq.cancel": "取消任务",
+    "aq.cancelling": "正在取消",
+    "aq.status.QUEUED": "排队中",
+    "aq.status.RUNNING": "执行中",
+    "aq.status.DONE": "已完成",
+    "aq.status.FAILED": "失败",
+    "aq.status.CANCELLED": "已取消"
+  }
+};
+function t(key) { return AQ_LOCALES[I18N.lang()]?.[key] || globalT(key); }
 
 const MAX_ROWS = 12;
 const POLL_MS = 5000;
@@ -67,7 +105,7 @@ async function reconcile() {
   if (!opened) return;
   if (inFlight) return inFlight;
   const current = generation;
-  inFlight = Api.list("/api/tasks").then(tasks => {
+  const request = Api.list("/api/tasks").then(tasks => {
     if (opened && current === generation) {
       rows = orderActivity(tasks);
       stale = false;
@@ -75,10 +113,11 @@ async function reconcile() {
   }).catch(() => {
     if (opened && current === generation) stale = true;
   }).finally(() => {
-    inFlight = null;
+    if (inFlight === request) inFlight = null;
     if (opened && current === generation) render();
   });
-  return inFlight;
+  inFlight = request;
+  return request;
 }
 async function cancel(id) {
   if (!opened || stale || pending.has(id)) return;
@@ -96,6 +135,8 @@ async function cancel(id) {
 }
 function schedulePoll() {
   if (poll) clearInterval(poll);
+  poll = null;
+  if (!opened || document.hidden) return;
   poll = setInterval(() => {
     if (!document.hidden) void reconcile();
   }, streamLive ? LIVE_POLL_MS : POLL_MS);
@@ -114,9 +155,10 @@ function connectStream() {
   try {
     stream = new EventSource("/api/events/stream");
     for (const name of ["hello", "task.queued", "task.started", "task.finished", "task.failed", "task.cancelled"])
-      stream.addEventListener(name, eventReceived);
-    stream.onopen = () => { streamLive = false; schedulePoll(); render(); };
+      {stream.addEventListener(name, eventReceived);}
+    stream.onopen = () => { if (!opened || document.hidden) return; streamLive = false; schedulePoll(); render(); };
     stream.onerror = () => {
+      if (!opened || document.hidden) return;
       streamLive = false;
       schedulePoll(); // 404/503/disconnect/reconnect use authoritative polling
       void reconcile();
@@ -156,13 +198,26 @@ function close() {
   streamLive = false;
   stale = true;
   rows = [];
+  inFlight = null;
   pending.clear();
+  // Privacy also applies to hidden DOM, so never retain previews after close.
+  $("activity-queue-list").replaceChildren();
+  $("activity-queue-status").textContent = "";
   $("activity-queue-panel").classList.add("hidden");
   $("activity-queue-open").setAttribute("aria-expanded", "false");
   document.removeEventListener("click", privacyClick);
   window.removeEventListener("storage", storageChange);
   document.removeEventListener("visibilitychange", visibilityChange);
 }
+function relocalize() {
+  if (!opened) return;
+  $("activity-queue-heading").textContent = t("aq.heading");
+  $("activity-queue-close").textContent = t("aq.close");
+  $("activity-queue-list").setAttribute("aria-label", t("aq.heading"));
+  render();
+}
+I18N.onChange(relocalize);
+
 export function toggleActivityQueue() {
   if (opened) { close(); return; }
   opened = true;
@@ -182,7 +237,7 @@ export function toggleActivityQueue() {
     stylesheet.href = "/activity-queue.css";
     document.head.append(stylesheet);
   }
-  render();
+  relocalize();
   void reconcile();
   connectStream();
   schedulePoll();
