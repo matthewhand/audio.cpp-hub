@@ -66,6 +66,7 @@ window.I18N_EN = {
   /* ---------- instance bar ---------- */
   "instance.barLabel": "Instance",
   "instance.noReady": "No ready instance",
+  "instance.pollStale": "Instance status unavailable — retrying",
   "instance.readiness.kicker": "WORKSPACE READINESS",
   "instance.readiness.title": "{model} needs its own instance",
   "instance.readiness.none": "No instances are ready. Launch {model} above.",

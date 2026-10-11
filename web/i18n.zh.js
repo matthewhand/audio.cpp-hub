@@ -66,6 +66,7 @@ window.I18N_ZH = {
   /* ---------- 实例条 ---------- */
   "instance.barLabel": "实例",
   "instance.noReady": "没有就绪实例",
+  "instance.pollStale": "实例状态暂不可用，正在重试",
   "instance.readiness.kicker": "工作区就绪状态",
   "instance.readiness.title": "{model} 需要独立的实例",
   "instance.readiness.none": "无就绪实例。请启动 {model}。",
