@@ -42,6 +42,8 @@ const (
 
 	// SSE（events.go）：连接后心跳注释间隔与每订阅者事件缓冲上限
 	// （慢订阅者缓冲满即丢事件，绝不阻塞任务执行路径）。
-	ssePingInterval = 15 * time.Second
-	eventBusBuffer  = 64
+	ssePingInterval    = 15 * time.Second
+	eventBusBuffer     = 64
+	maxSSESubscribers = 64 // HTTP stream limit; bounded channels alone do not bound connection count
+	sseWriteTimeout   = 10 * time.Second // per-frame deadline, renewed on each successful event/ping
 )
