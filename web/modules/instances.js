@@ -22,7 +22,7 @@ export let instances = [];
 
 /* ---------- 实例列表 + 状态条（每 2s 轮询） ---------- */
 export let instancePoller = null;
-let instancesLoaded = false;   // 首次成功拉取前显示骨架屏 / 失败时给可见错误+重试
+let instancesLoaded = false;   // First-load placeholder.
 /* 轮询数据回调：只在成功时更新视图；失败由 Api.poll 的 onError 处理 */
 export function applyInstances(data) {
   instancesLoaded = true;
@@ -56,7 +56,7 @@ export function startInstancePolling() {
 export function renderInstanceList() {
   const list = $("instance-list");
   list.removeAttribute("aria-busy");
-  // 展示全部实例（不再按选中模型过滤）：就绪 > 启动中 > 其它，可用的始终排在最前
+  // Sort READY first.
   const order = { READY: 0, STARTING: 1 };
   const sorted = [...instances].sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2));
   list.innerHTML = "";
@@ -73,7 +73,7 @@ export function renderInstanceList() {
     const card = document.createElement("div");
     const statusClass = STATUS_CLASS[inst.status] || "stopped";
     card.className = "card" + (inst.id === activeInstanceId ? " selected" : "");
-    // 有活跃任务（QUEUED/RUNNING）时追加转圈“工作中”徽标，随 2s 轮询自动出现/消失
+    // Show when queued/running.
     const workingBadge = (inst.taskCount || 0) > 0
       ? ` <span class="badge working">${esc(inst.taskCount > 1 ? t("instance.workingCount", { n: inst.taskCount }) : t("instance.working"))}</span>`
       : "";
@@ -120,8 +120,8 @@ export function updateInstanceBar() {
   } else {
     setActiveInstanceId(null);
   }
-  // 注意：历史按 modelId 维度记录，与激活哪个实例无关，实例启停/切换不得刷新历史列表
-  // （重建 DOM 会打断行内播放、折叠已展开的播放器）
+  // Keep history DOM stable on instance changes.
+  
   select.disabled = !has;
   $("instance-stop").disabled = !has;
   $("instance-detail").disabled = !has;
@@ -135,15 +135,16 @@ export function updateInstanceBar() {
   pill.textContent = has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
 
-  // Render alternative-model guidance only when needed; do not pay for it on first load.
+  // Load the alternatives UI only if needed.
   const context = $("instance-context");
   if (has) {
     context.classList.add("hidden");
   } else {
     const target = selectedModelId;
     void import("./readiness.js").then(({ renderReadiness }) => {
-      if (selectedModelId === target && !instances.some(i => i.modelId === target && i.status === "READY"))
+      if (selectedModelId === target && !instances.some(i => i.modelId === target && i.status === "READY")) {
         renderReadiness(instances, models, target);
+      }
     }).catch(() => { context.classList.add("hidden"); });
   }
 
