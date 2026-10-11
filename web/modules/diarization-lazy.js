@@ -1,5 +1,6 @@
 /* Speaker turns from a real provider, never inferred from transcript text. */
 import { $, t } from "./dom.js";
+import { selectedModel } from "./state.js";
 
 function formatTime(seconds) {
   const tenths = Math.round(seconds * 10);
@@ -35,8 +36,10 @@ export function renderSpeakerTurns(normalized) {
   panel.classList.toggle("hidden", !normalized.segments.length);
 }
 
-export async function renderAsrResult(json, { diarizationOnly = false } = {}) {
+export async function renderAsrResult(json, { diarizationOnly = false, modelId = "" } = {}) {
   const { normalizeSpeakerTurns } = await import("./speaker-segments.js");
+  // A pending result must not repaint a different model after navigation.
+  if (modelId && selectedModel()?.id !== modelId) return;
   $("asr-text").textContent = json.text || t(diarizationOnly ? "asr.speakerOnly" : "asr.noText");
   const normalized = normalizeSpeakerTurns(json);
   renderSpeakerTurns(normalized);

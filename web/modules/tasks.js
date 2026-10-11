@@ -193,7 +193,7 @@ export async function renderTaskResult(task) {
   }
   try {
     const json = await Api.get("/api/tasks/{id}/result", { params: { id: task.id } });
-    if (task.category === "asr") await (await import("./diarization-lazy.js")).renderAsrResult(json, { diarizationOnly: task.modelId === "sortformer_diar" });
+    if (task.category === "asr") await (await import("./diarization-lazy.js")).renderAsrResult(json, { diarizationOnly: task.modelId === "sortformer_diar", modelId: task.modelId });
     else if (task.category === "sep") renderSepResult(json);
     else if (task.category === "music") renderMusicResult(json);
     else renderOtherResult(json);
