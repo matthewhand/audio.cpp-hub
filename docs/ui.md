@@ -153,6 +153,7 @@
 | `Home` | 等值 | `web/modules/async-ui.js` |
 | `Home` | 等值 | `web/modules/file-browser.js` |
 | `hub-privacy` | 等值 | `web/modules/activity-queue.js` |
+| `hub-privacy` | 等值 | `web/modules/sidebar.js` |
 | `k` | 等值 | `web/modules/command-palette-lazy.js` |
 | `K` | 等值 | `web/modules/command-palette-lazy.js` |
 | `Tab` | 非 (guard) | `web/app.js` |

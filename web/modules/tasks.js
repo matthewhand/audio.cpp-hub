@@ -5,7 +5,7 @@
 import { showToast } from "./async-ui.js";
 import { $, Api, el, markRowEnter, t } from "./dom.js";
 import { refreshInstances } from "./instances.js";
-import { loadHistory, privacyOn, renderSidebarList } from "./sidebar.js";
+import { loadHistory, privacyOn, rememberHistoryRowText, renderSidebarList } from "./sidebar.js";
 import { activeInstanceId, selectedModel } from "./state.js";
 
 export const activePolls = new Map(); // taskId → Api.poll 句柄（stop() 即无定时器/无在途请求）
@@ -109,7 +109,7 @@ export function makeTaskRow(task) {
   </div>`);
   row.querySelector(".history-time").textContent = I18N.date(task.createdAt);
   const textEl = row.querySelector(".history-text");
-  textEl.dataset.realText = task.text || "";
+  rememberHistoryRowText(textEl, task.text);
   textEl.textContent = privacyOn() && task.text ? t("history.masked") : task.text || t("history.noText");
   if (task.text && !privacyOn()) textEl.title = task.text;
   const meta = [];
@@ -151,8 +151,8 @@ export function makeTaskRow(task) {
   }
   if (task.status === "FAILED") {
     const err = el(`<div class="error-text history-error"></div>`);
-    err.textContent = task.error || t("task.failed");
-    if (task.error) err.title = task.error;
+    err.textContent = privacyOn() && task.error ? t("history.masked") : task.error || t("task.failed");
+    if (task.error && !privacyOn()) err.title = task.error;
     row.appendChild(err);
   }
   return markRowEnter(row, "t:" + task.id);
