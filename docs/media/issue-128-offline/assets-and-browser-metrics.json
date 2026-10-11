@@ -1,0 +1,294 @@
+[
+  {
+    "name": "max-amd",
+    "assets": [
+      {
+        "path": "/",
+        "http_status": 200,
+        "sha256": "7692d7642294cf50f54caec4359fb5a9d6163ac3d3d8898ffa104f0c7a16eafb",
+        "bytes": 35494
+      },
+      {
+        "path": "/style.css",
+        "http_status": 200,
+        "sha256": "aac936f65078d01771c68fe75f430c60d3c59de78ab58adacc2f4e7f185d5817",
+        "bytes": 66514
+      },
+      {
+        "path": "/app.js",
+        "http_status": 200,
+        "sha256": "8bb17322878421f6169255199929c3b333879c3f6e40cfaaac3aa4e0e52a30a6",
+        "bytes": 6789
+      },
+      {
+        "path": "/sw.js",
+        "http_status": 200,
+        "sha256": "28396ee7e8e44c58890bacb69dc350ae3c7b859465232be40d64fe7771e0a70a",
+        "bytes": 6888
+      },
+      {
+        "path": "/boot.js",
+        "http_status": 200,
+        "sha256": "3e3b778783cdc24623868abc4855bef90afee93a60c4e26d6170ce6233c84374",
+        "bytes": 2309
+      },
+      {
+        "path": "/manifest.webmanifest",
+        "http_status": 200,
+        "sha256": "8bc03abe86d26c796e204fd5916ee368f2a98290bfc5ea03773b5c3dd13ac6f4",
+        "bytes": 955
+      }
+    ],
+    "viewports": [
+      {
+        "label": "mobile",
+        "width": 390,
+        "height": 844,
+        "http_status": 200,
+        "document_scroll_width": 448,
+        "client_width": 390,
+        "browser_page_errors": 0,
+        "screenshot": "max-amd-mobile.png"
+      },
+      {
+        "label": "laptop",
+        "width": 1366,
+        "height": 768,
+        "http_status": 200,
+        "document_scroll_width": 1366,
+        "client_width": 1366,
+        "browser_page_errors": 0,
+        "screenshot": "max-amd-laptop.png"
+      },
+      {
+        "label": "desktop",
+        "width": 1920,
+        "height": 1080,
+        "http_status": 200,
+        "document_scroll_width": 1920,
+        "client_width": 1920,
+        "browser_page_errors": 0,
+        "screenshot": "max-amd-desktop.png"
+      }
+    ]
+  },
+  {
+    "name": "max-qwen3",
+    "assets": [
+      {
+        "path": "/",
+        "http_status": 200,
+        "sha256": "7e7796316e49532a085d4065b3d37d27b232ba7543b4198712da1b1ae1e72695",
+        "bytes": 37975
+      },
+      {
+        "path": "/style.css",
+        "http_status": 200,
+        "sha256": "14b2fdde7d9d8c2e869e91f4c9aebe11d7f6ffc7ecff30c1f298ef3a67be8ac2",
+        "bytes": 69247
+      },
+      {
+        "path": "/app.js",
+        "http_status": 200,
+        "sha256": "34839a5026d66720d707324fbaefec1d6264dbbe8ab8d1e1db2efa324ffce17a",
+        "bytes": 6990
+      },
+      {
+        "path": "/sw.js",
+        "http_status": 200,
+        "sha256": "dda7ae151191bf657daf66b8b3a8b9441a65e547ac529f16638904fe924da350",
+        "bytes": 7106
+      },
+      {
+        "path": "/boot.js",
+        "http_status": 200,
+        "sha256": "3e3b778783cdc24623868abc4855bef90afee93a60c4e26d6170ce6233c84374",
+        "bytes": 2309
+      },
+      {
+        "path": "/manifest.webmanifest",
+        "http_status": 200,
+        "sha256": "8bc03abe86d26c796e204fd5916ee368f2a98290bfc5ea03773b5c3dd13ac6f4",
+        "bytes": 955
+      }
+    ],
+    "viewports": [
+      {
+        "label": "mobile",
+        "width": 390,
+        "height": 844,
+        "http_status": 200,
+        "document_scroll_width": 496,
+        "client_width": 390,
+        "browser_page_errors": 0,
+        "screenshot": "max-qwen3-mobile.png"
+      },
+      {
+        "label": "laptop",
+        "width": 1366,
+        "height": 768,
+        "http_status": 200,
+        "document_scroll_width": 1366,
+        "client_width": 1366,
+        "browser_page_errors": 0,
+        "screenshot": "max-qwen3-laptop.png"
+      },
+      {
+        "label": "desktop",
+        "width": 1920,
+        "height": 1080,
+        "http_status": 200,
+        "document_scroll_width": 1920,
+        "client_width": 1920,
+        "browser_page_errors": 0,
+        "screenshot": "max-qwen3-desktop.png"
+      }
+    ]
+  },
+  {
+    "name": "gtx",
+    "assets": [
+      {
+        "path": "/",
+        "http_status": 200,
+        "sha256": "6c4ded3802b1088ab043e271ce3661a199f84aed4451dd8110a8427823091a1c",
+        "bytes": 52579
+      },
+      {
+        "path": "/style.css",
+        "http_status": 200,
+        "sha256": "a80c01d92b44479b8688b86a428444dca423d137b669ee9088a3455db21125b0",
+        "bytes": 107294
+      },
+      {
+        "path": "/app.js",
+        "http_status": 200,
+        "sha256": "c74fdce2ec0f3e55d693f9a7cc9fcc88d2314770a0fca1c0df8e497036648846",
+        "bytes": 7776
+      },
+      {
+        "path": "/sw.js",
+        "http_status": 200,
+        "sha256": "46561f030831a0188fbf9078b5a7a3706b13b8c84e86153533732586d2e0f472",
+        "bytes": 7853
+      },
+      {
+        "path": "/boot.js",
+        "http_status": 200,
+        "sha256": "3e3b778783cdc24623868abc4855bef90afee93a60c4e26d6170ce6233c84374",
+        "bytes": 2309
+      },
+      {
+        "path": "/manifest.webmanifest",
+        "http_status": 200,
+        "sha256": "8bc03abe86d26c796e204fd5916ee368f2a98290bfc5ea03773b5c3dd13ac6f4",
+        "bytes": 955
+      }
+    ],
+    "viewports": [
+      {
+        "label": "mobile",
+        "width": 390,
+        "height": 844,
+        "http_status": 200,
+        "document_scroll_width": 390,
+        "client_width": 390,
+        "browser_page_errors": 0,
+        "screenshot": "gtx-mobile.png"
+      },
+      {
+        "label": "laptop",
+        "width": 1366,
+        "height": 768,
+        "http_status": 200,
+        "document_scroll_width": 1366,
+        "client_width": 1366,
+        "browser_page_errors": 0,
+        "screenshot": "gtx-laptop.png"
+      },
+      {
+        "label": "desktop",
+        "width": 1920,
+        "height": 1080,
+        "http_status": 200,
+        "document_scroll_width": 1920,
+        "client_width": 1920,
+        "browser_page_errors": 0,
+        "screenshot": "gtx-desktop.png"
+      }
+    ]
+  },
+  {
+    "name": "windows-cpu",
+    "assets": [
+      {
+        "path": "/",
+        "http_status": 200,
+        "sha256": "7e7796316e49532a085d4065b3d37d27b232ba7543b4198712da1b1ae1e72695",
+        "bytes": 37975
+      },
+      {
+        "path": "/style.css",
+        "http_status": 200,
+        "sha256": "14b2fdde7d9d8c2e869e91f4c9aebe11d7f6ffc7ecff30c1f298ef3a67be8ac2",
+        "bytes": 69247
+      },
+      {
+        "path": "/app.js",
+        "http_status": 200,
+        "sha256": "34839a5026d66720d707324fbaefec1d6264dbbe8ab8d1e1db2efa324ffce17a",
+        "bytes": 6990
+      },
+      {
+        "path": "/sw.js",
+        "http_status": 200,
+        "sha256": "dda7ae151191bf657daf66b8b3a8b9441a65e547ac529f16638904fe924da350",
+        "bytes": 7106
+      },
+      {
+        "path": "/boot.js",
+        "http_status": 200,
+        "sha256": "3e3b778783cdc24623868abc4855bef90afee93a60c4e26d6170ce6233c84374",
+        "bytes": 2309
+      },
+      {
+        "path": "/manifest.webmanifest",
+        "http_status": 200,
+        "sha256": "8bc03abe86d26c796e204fd5916ee368f2a98290bfc5ea03773b5c3dd13ac6f4",
+        "bytes": 955
+      }
+    ],
+    "viewports": [
+      {
+        "label": "mobile",
+        "width": 390,
+        "height": 844,
+        "http_status": 200,
+        "document_scroll_width": 496,
+        "client_width": 390,
+        "browser_page_errors": 0,
+        "screenshot": "windows-cpu-mobile.png"
+      },
+      {
+        "label": "laptop",
+        "width": 1366,
+        "height": 768,
+        "http_status": 200,
+        "document_scroll_width": 1366,
+        "client_width": 1366,
+        "browser_page_errors": 0,
+        "screenshot": "windows-cpu-laptop.png"
+      },
+      {
+        "label": "desktop",
+        "width": 1920,
+        "height": 1080,
+        "http_status": 200,
+        "document_scroll_width": 1920,
+        "client_width": 1920,
+        "browser_page_errors": 0,
+        "screenshot": "windows-cpu-desktop.png"
+      }
+    ]
+  }
+]
