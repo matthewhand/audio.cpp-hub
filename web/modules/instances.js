@@ -26,7 +26,7 @@ export function applyInstances(data) {
   instancesLoaded = true;
   instanceFeedStale = false;
   instances = data;
-  
+
   const want = getPendingInstanceId();
   if (want) {
     const inst = instances.find(i => i.id === want);
@@ -61,7 +61,7 @@ export function startInstancePolling() {
 export function renderInstanceList() {
   const list = $("instance-list");
   list.removeAttribute("aria-busy");
-  
+
   const order = { READY: 0, STARTING: 1 };
   const sorted = [...instances].sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2));
   list.innerHTML = "";
@@ -78,7 +78,7 @@ export function renderInstanceList() {
     const card = document.createElement("div");
     const statusClass = STATUS_CLASS[inst.status] || "stopped";
     card.className = "card" + (inst.id === activeInstanceId ? " selected" : "");
-    
+
     const workingBadge = (inst.taskCount || 0) > 0
       ? ` <span class="badge working">${esc(inst.taskCount > 1 ? t("instance.workingCount", { n: inst.taskCount }) : t("instance.working"))}</span>`
       : "";
@@ -126,12 +126,12 @@ export function updateInstanceBar() {
   } else {
     setActiveInstanceId(null);
   }
-  
+
 
   select.disabled = !has;
   $("instance-stop").disabled = !has;
   $("instance-detail").disabled = !has;
-  
+
   if (detailInstanceId) {
     const cur = instances.find(i => i.id === detailInstanceId);
     if (cur) renderInstanceDetail(cur); else closeInstanceDetail();
@@ -141,7 +141,7 @@ export function updateInstanceBar() {
   pill.textContent = instanceFeedStale ? t("instance.pollStale") : has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
 
-  
+
   const context = $("instance-context");
   if (has || instanceFeedStale) {
     context.classList.add("hidden");
