@@ -150,13 +150,13 @@ test("SSE refresh preserves the same focused Cancel element without blur", async
       globalThis.__focusBlurCount++;
     });
   });
-  const response = page.waitForResponse(res =>
-    res.url().endsWith("/api/tasks") && res.request().method() === "GET"
+  const response = page.waitForResponse(
+    (res) => res.url().endsWith("/api/tasks") && res.request().method() === "GET"
   );
   await page.evaluate(() => globalThis.__focusStream[0].emit("task.started"));
   await response;
   await page.waitForTimeout(150);
-  expect(await original.evaluate(el => el.isConnected)).toBe(true);
+  expect(await original.evaluate((el) => el.isConnected)).toBe(true);
   await expect(button).toBeFocused();
   expect(await page.evaluate(() => globalThis.__focusBlurCount)).toBe(0);
 });
