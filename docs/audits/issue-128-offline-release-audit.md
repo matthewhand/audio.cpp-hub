@@ -25,6 +25,13 @@ cached service worker. Full SHA-256 hashes and per-viewport metrics are in
 four assets. AMD and GTX each serve another set. None of the four matches the
 complete inspected clean GitHub main HTML/CSS/app/SW bundle.
 
+GTX is managed by systemd service audio-cpp-hub.service, running as user
+matthewh from /home/matthewh/audio.cpp-hub. Its active executable is
+/home/matthewh/audio.cpp-hub/bin/audio.cpp-hub with read-only SHA-256:
+**64c4b5993788f53a29c1a2b0a508408558fcd38f99279140e2d67c8a548cbcc4**.
+This pins the actual binary bytes observed before any proposed rollout, but
+does not identify a reproducible source commit.
+
 GTX serves its **dirty working-source files directly**, not a clean Git
 commit: the four served hashes exactly match files under
 ~/audio.cpp-hub/web, branch fix/119-webui-qol (committed HEAD 1fb5092;
