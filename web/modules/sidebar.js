@@ -168,7 +168,7 @@ export function renderSidebarList() {
     if (list.children[i] !== desired[i]) list.insertBefore(desired[i], list.children[i] || null);
   }
   while (list.children.length > desired.length) list.removeChild(list.lastChild);
-  if (!desired.length) renderEmptyState(list, t("history.empty"));
+  if (!desired.length) renderEmptyState(list, t("history.emptyFor", { model: I18N.pick(selectedModel(), "displayName") }));
 }
 
 export function historyRowsFlattened(modelId, ctx) {

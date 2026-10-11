@@ -167,6 +167,7 @@ window.I18N_EN = {
   "history.refresh": "Refresh",
   "history.clear": "Clear",
   "history.empty": "No history yet",
+  "history.emptyFor": "No takes for {model} (model-specific history).",
   "history.load": "Load",
   "history.play": "Play",
   "history.pause": "Pause",
