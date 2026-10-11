@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -588,13 +589,20 @@ func (h *Hub) handleRun(w http.ResponseWriter, r *http.Request) {
 	}
 	tmp := filepath.Join(dir, taskID+".resp.tmp")
 	if err := h.tasks.forwardToFile(r.Context(), inst, requestRaw, tmp); err != nil {
-		h.history.RecordTTS(inst, request, taskID, nil, summarize(err.Error()))
+		if historyErr := h.history.RecordTTS(inst, request, taskID, nil, summarize(err.Error())); historyErr != nil {
+			log.Printf("failed to persist synchronous TTS failure history: %v", historyErr)
+		}
 		os.Remove(tmp)
 		errJSON(w, http.StatusBadGateway, "FORWARD_FAILED", nil, summarize(err.Error()))
 		return
 	}
 	// TTS 历史由 finalizeTTS 统一记录（含音频提取失败详情）
-	finalizeTTS(h.history, inst, request, taskID, tmp)
+	_, finalErr := finalizeTTS(h.history, inst, request, taskID, tmp)
+	if strings.HasPrefix(finalErr, "历史记录落盘失败:") {
+		os.Remove(tmp)
+		errJSON(w, http.StatusInternalServerError, "HISTORY_IO", nil, finalErr)
+		return
+	}
 	// 响应 JSON 原样回写前端（写完删临时文件）
 	f, err := os.Open(tmp)
 	if err != nil {

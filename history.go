@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,8 +21,9 @@ import (
 // + groups.json 手动分组），内存索引启动时回放重建。
 // 与 Java 版的差异：无数量/容量淘汰——历史是用户资产，只由用户手动删除。
 type HistoryManager struct {
-	mu    sync.Mutex
-	index map[string][]map[string]any // modelId → 记录（旧→新）
+	mu            sync.Mutex
+	index         map[string][]map[string]any          // modelId → 记录（旧→新）
+	openIndexFile func(string) (io.WriteCloser, error) // test seam; nil uses normal OS append
 }
 
 // historyRefName 参考音频快照名：ref（voice_ref）/ emo（情感参考 audio）/ spk0..spk99（voice_samples 逐项）
@@ -88,13 +91,12 @@ func (m *HistoryManager) replay() {
 }
 
 // RecordTTS 记录一条 TTS 任务：归一化请求结构（text/language/voice/options）+ 参考音频快照
-// + 结果元数据。result 非空表示拿到音频；errMsg 非空表示失败。落盘失败只记日志。
+// + 结果元数据。result 非空表示拿到音频；errMsg 非空表示失败。落盘失败返回错误。
 func (m *HistoryManager) RecordTTS(inst *Instance, request map[string]any, taskID string,
-	result map[string]any, errMsg string) {
+	result map[string]any, errMsg string) error {
 	modelID := inst.ModelID
 	if !idvalidate.SafeKey(modelID) || !idvalidate.SafeKey(taskID) {
-		log.Printf("历史记录的 modelId/taskId 非法，跳过: %s/%s", modelID, taskID)
-		return
+		return fmt.Errorf("invalid history modelId/taskId: %q/%q", modelID, taskID)
 	}
 	rec := map[string]any{
 		"taskId":       taskID,
@@ -132,24 +134,77 @@ func (m *HistoryManager) RecordTTS(inst *Instance, request map[string]any, taskI
 
 	dir := historyDir(modelID)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		log.Printf("历史记录落盘失败: %v", err)
-		return
+		return fmt.Errorf("create history directory: %w", err)
 	}
 	snapshotRefAudios(dir, taskID, request, rec)
 	data, err := json.Marshal(rec)
 	if err != nil {
-		return
+		return fmt.Errorf("marshal history record: %w", err)
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	f, err := os.OpenFile(filepath.Join(dir, historyIndexFile), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Printf("历史记录落盘失败: %v", err)
-		return
+	open := m.openIndexFile
+	if open == nil {
+		open = func(path string) (io.WriteCloser, error) {
+			return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		}
 	}
-	f.Write(append(data, '\n'))
-	f.Close()
+	indexPath := filepath.Join(dir, historyIndexFile)
+	f, err := open(indexPath)
+	if err != nil {
+		return fmt.Errorf("open history index: %w", err)
+	}
+	// A prior short append can leave a damaged, unterminated JSONL fragment.
+	// Preserve the original bytes and separate the next valid record, instead
+	// of silently joining both records into a single unreadable replay line.
+	separator, err := historyIndexNeedsSeparator(indexPath)
+	if err != nil {
+		_ = f.Close()
+		return fmt.Errorf("inspect history index boundary: %w", err)
+	}
+	line := append(data, '\n')
+	if separator {
+		line = append([]byte{'\n'}, line...)
+	}
+	n, writeErr := f.Write(line)
+	closeErr := f.Close()
+	if writeErr != nil {
+		return fmt.Errorf("write history index: %w", writeErr)
+	}
+	if n != len(line) {
+		return fmt.Errorf("write history index: %w", io.ErrShortWrite)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close history index: %w", closeErr)
+	}
+	// Append is not transactional; do not expose failed writes in the in-memory index.
 	m.index[modelID] = append(m.index[modelID], rec)
+	return nil
+}
+
+// historyIndexNeedsSeparator checks only the final byte (not the full index),
+// keeping append overhead bounded even when the history grows large.
+func historyIndexNeedsSeparator(path string) (bool, error) {
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	stat, err := f.Stat()
+	if err != nil {
+		return false, err
+	}
+	if stat.Size() == 0 {
+		return false, nil
+	}
+	var last [1]byte
+	if _, err := f.ReadAt(last[:], stat.Size()-1); err != nil {
+		return false, err
+	}
+	return last[0] != '\n', nil
 }
 
 // normalizeVoice 归一化声音来源：voice_ref / speaker(+instruct) / instruct / default，另附情感参考 audio。

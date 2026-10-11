@@ -345,14 +345,17 @@ func (h *Hub) archiveV1Speech(inst *Instance, teePath, taskID string, request ma
 		log.Printf("/v1/audio/speech 归档改名失败: %v", err)
 		return
 	}
-	h.history.RecordTTS(inst, request, taskID, map[string]any{
+	if err := h.history.RecordTTS(inst, request, taskID, map[string]any{
 		"file":        taskID + ".wav",
 		"size":        size,
 		"durationSec": round3(info.DurationSec),
 		"sampleRate":  info.SampleRate,
 		"channels":    info.Channels,
 		"via":         "v1/audio/speech",
-	}, "")
+	}, ""); err != nil {
+		// Response may have already streamed; keep audio valid and log history failure.
+		log.Printf("failed to archive v1 speech history: %v", err)
+	}
 }
 
 // v1Error OpenAI 风格错误体：{"error":{"message","type"}}。
