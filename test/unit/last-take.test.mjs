@@ -1,6 +1,6 @@
 /* 「上一条录音」条（web/modules/last-take.js）：四个纯函数 + 一条渲染路径。
  *
- * 渲染路径挂 DOM 桩、桩 AudioContext 与桩 fetch，走真实的 noteTtsTake / seedLastTake /
+ * 渲染路径挂 DOM 桩、桩 AudioContext 与桩 fetch，走真实的 noteTtsTake / refreshLastTake /
  * play / timeupdate 入口：条在第一次合成完成前收起，完成后长出 80 根条，
  * 解码失败退化成等高矮条但照样能播。相对时间的文案按 en / zh 两份真词典各跑一遍。 */
 import { test } from "node:test";
@@ -128,6 +128,40 @@ test("progressToBarIndex：0 / 中点 / 末尾 / 时长未知", () => {
   assert.equal(mod.progressToBarIndex(3, null, 80), 0);
   assert.equal(mod.progressToBarIndex(Number.NaN, 7, 80), 0);
   assert.equal(mod.progressToBarIndex(3, 7, 0), 0);
+});
+
+test("pickLatestTake：最新的那条已完成 tts 胜出，其余一律跳过", () => {
+  const mod = pure();
+  const list = [
+    { id: "asr00001", modelId: "m", category: "asr", status: "DONE", finishedAt: T0 - MIN },
+    { id: "fail0001", modelId: "m", category: "tts", status: "FAILED", finishedAt: T0 - MIN },
+    { id: "queued01", modelId: "m", category: "tts", status: "QUEUED", createdAt: T0 },
+    { id: "noaudio1", category: "tts", status: "DONE", finishedAt: T0 }, // 没有 modelId，拼不出 URL
+    { id: "old00001", modelId: "m", category: "tts", status: "DONE", finishedAt: T0 - 10 * MIN },
+    { id: "new00001", modelId: "m", category: "tts", status: "DONE", finishedAt: T0 - 2 * MIN },
+    { id: "newe0001", modelId: "m", category: "tts", status: "DONE", finishedAt: T0 - MIN }
+  ];
+  assert.equal(mod.pickLatestTake(list).id, "newe0001");
+  // 同秒并列：清单顺序在前的那条（同秒不算「更新」）
+  assert.equal(
+    mod.pickLatestTake([
+      { id: "tie00001", modelId: "m", category: "tts", status: "DONE", finishedAt: T0 },
+      { id: "tie00002", modelId: "m", category: "tts", status: "DONE", finishedAt: T0 }
+    ]).id,
+    "tie00001"
+  );
+  // 没有 finishedAt 时用 createdAt 顶上；都缺的按 0（仍然可选，音频在盘上）
+  assert.equal(
+    mod.pickLatestTake([
+      { id: "ct000001", modelId: "m", category: "tts", status: "DONE", createdAt: T0 - 60 * MIN },
+      { id: "bare0001", modelId: "m", category: "tts", status: "DONE" }
+    ]).id,
+    "ct000001"
+  );
+  // 空 / 非数组 / 没有可用条目
+  assert.equal(mod.pickLatestTake([]), null);
+  assert.equal(mod.pickLatestTake(null), null);
+  assert.equal(mod.pickLatestTake([{ id: "x", category: "asr", status: "DONE" }]), null);
 });
 
 test("barBox / flatPeaks / takeAudioUrl：几何、最小条高与历史 URL 拼法", () => {
@@ -463,7 +497,7 @@ test("首屏从任务清单里回填上一条录音；没有就保持收起", ()
   assert.equal(world.$("last-take").classList.contains("hidden"), true);
 
   assert.equal(
-    mod.seedLastTake([
+    mod.refreshLastTake([
       { id: "aaaa1111", modelId: "m", category: "asr", status: "DONE", finishedAt: T0 },
       { id: "bbbb2222", modelId: "m", category: "tts", status: "FAILED", finishedAt: T0 },
       doneTask({ id: "old00001", finishedAt: T0 - 10 * MIN }),
@@ -478,24 +512,70 @@ test("首屏从任务清单里回填上一条录音；没有就保持收起", ()
   );
   assert.equal(world.$("last-take-name").textContent, "calm");
 
-  // 已经有 take：清单回填不覆盖本次会话已经显示的那条
-  assert.equal(mod.seedLastTake([doneTask({ id: "other0001" })]), false);
+  // 已经有 take 且清单里没有更新的：不覆盖本次会话已经显示的那条
+  assert.equal(mod.refreshLastTake([doneTask({ id: "other0001", finishedAt: T0 - 30 * MIN })]), false);
   assert.equal(
     world.$("last-take-download").getAttribute("href"),
     "/api/history/breeze-tts/new00001/audio"
   );
 
-  // 空清单 / 非数组：不画任何东西
+  // 空清单 / 非数组 / 没有可用条目：什么都不画
   mod.resetLastTake();
-  assert.equal(mod.seedLastTake([]), false);
-  assert.equal(mod.seedLastTake(null), false);
+  assert.equal(mod.refreshLastTake([]), false);
+  assert.equal(mod.refreshLastTake(null), false);
   assert.equal(
-    mod.seedLastTake([{ id: "x", modelId: "m", category: "tts", status: "DONE", finishedAt: T0 }]),
+    mod.refreshLastTake([{ id: "x", modelId: "m", category: "tts", status: "DONE", finishedAt: T0 }]),
     true
   );
   mod.resetLastTake();
   assert.equal(world.$("last-take").classList.contains("hidden"), true);
   assert.equal(mod.__timers.length, 0, "收起后不再留着相对时间计时器");
+});
+
+test("会话中途刷新：别处提交的 tts 任务结束，清单里有更新的就换条（含重新解码）", async () => {
+  const world = createDomWorld();
+  const ui = mount(world);
+  const ctx = audioContextStub([new Float32Array(80).fill(0.5)], 3);
+  const mod = worldModule(world, {
+    window: { AudioContext: ctx.Ctx },
+    fetch: () => Promise.resolve(channelData())
+  });
+
+  assert.equal(mod.noteTtsTake(doneTask({ id: "first001", finishedAt: T0 - 30 * MIN })), true);
+  assert.equal(world.$("last-take-name").textContent, "breeze");
+  await settle();
+  assert.equal(world.$("last-take-dur").textContent, "0:03");
+
+  // SSE 的 task.finished → 补拉任务详情 → 进来：换条、换地址、重新解码、更新时间
+  assert.equal(
+    mod.refreshLastTake([
+      doneTask({ id: "first001", finishedAt: T0 - 30 * MIN }),
+      doneTask({ id: "later0001", instanceName: "calm", finishedAt: T0, text: "换一条" })
+    ]),
+    true
+  );
+  assert.equal(world.$("last-take-name").textContent, "calm");
+  assert.equal(world.$("last-take-ago").textContent, "just now");
+  assert.equal(
+    world.$("last-take-download").getAttribute("href"),
+    "/api/history/breeze-tts/later0001/audio"
+  );
+  // 播放器指向新地址（别的客户端提交的任务，renderTaskResult 不会替它设 src）
+  assert.equal(ui.audio.src, "/api/history/breeze-tts/later0001/audio");
+  assert.equal(ui.audio.pauseCalls >= 1, true, "换条时暂停上一段播放");
+  await settle();
+  assert.equal(world.$("last-take-dur").textContent, "0:03", "换了新音频后重新解码");
+
+  // 清单里没有比当前这条更新的（旧的 / 非 tts / 未完成）：不换、不重复解码
+  const before = world.$("last-take-download").getAttribute("href");
+  assert.equal(mod.refreshLastTake([doneTask({ id: "first001", finishedAt: T0 - 30 * MIN })]), false);
+  assert.equal(
+    mod.refreshLastTake([{ id: "asr0001", modelId: "m", category: "asr", status: "DONE", finishedAt: T0 }]),
+    false
+  );
+  assert.equal(world.$("last-take-download").getAttribute("href"), before);
+  // 同一 taskId 再来一次也不重来（SSE 与轮询各来一次）
+  assert.equal(mod.refreshLastTake([doneTask({ id: "later0001", finishedAt: T0 })]), false);
 });
 
 test("再生成：把文本改回这条录音的，然后交给合成按钮自己的 handler", () => {

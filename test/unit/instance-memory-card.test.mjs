@@ -277,8 +277,11 @@ test("instance card shows idle marker, VRAM total, GPU subtitle, and one badge",
   assert.ok(shown);
   assert.match(shown.innerHTML, /Idle 598/);
   assert.match(shown.innerHTML, /\/ 8\.0 GiB/);
-  assert.match(shown.innerHTML, /BreezeTTS 2 · GTX 1080 · vulkan:0 · :18090/);
+  assert.match(shown.innerHTML, /BreezeTTS 2 · GTX 1080 · :18090/);
   assert.match(shown.innerHTML, /idle 4m/);
+  // 压缩掉的第三行身份信息（#id · 后端 · 可执行文件）搬进卡片 title 提示
+  assert.equal(shown.getAttribute("title"), "#i1 · vulkan:0 · audio · :18090");
+  assert.equal(shown.querySelectorAll(".card-desc").length, 0, "identity line dropped from the card body");
   assert.equal(shown.querySelectorAll(".badge.ready").length, 1);
   assert.equal(shown.querySelectorAll(".badge.generating").length, 0);
   assert.doesNotMatch(shown.innerHTML, /style=/);

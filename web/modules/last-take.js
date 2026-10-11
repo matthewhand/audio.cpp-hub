@@ -4,10 +4,13 @@
  *   圆形播放按钮 30px → 「Last take」标题 + 「实例 · 1 分钟前」→ 波形（80 根圆角条）
  *   → 「0:03 / 0:07」→ 下载 → 再生成一次（repeat 图标）。
  *
- * 数据源只有一个：tts 任务结束时 tasks.js 已经用来填 #tts-player.src 的那个历史
- * wav URL（renderTaskResult 里同一行调 noteTtsTake）。本模块**不重建请求体、
- * 也不换播放地址**：播放仍由 #tts-player 自己按那个 URL 走，下载链接也还是同一个
- * 文件。代价是浏览器会把这个文件取两次（<audio> 自己一次 + 为画波形的这一次
+ * 数据源有三个，都不新建请求体、也不换播放地址（播放仍由 #tts-player 按同一个
+ * 历史 wav URL 走，下载链接也还是同一个文件）：
+ *   1) tasks.js 的 renderTaskResult：本页提交的 tts 任务结束时同一行调 noteTtsTake；
+ *   2) task-events.js 的 SSE task.finished：别的客户端 / 别的标签页提交的任务结束时，
+ *      补拉一次 GET /api/tasks/{id}（载荷没有 finishedAt / instanceName）再进来；
+ *   3) 轮询兜底：模型切换 / 首屏重挂时 refreshLastTake 从任务清单挑最新的那条。
+ * 代价是浏览器会把这个文件取两次（<audio> 自己一次 + 为画波形的这一次
  * fetch）；改成 blob URL 可以只取一次，但那样就把面板上那个规范的历史 URL 顶掉了
  * （下载链接与既有的结果区语义都依赖它），不划算。
  * 解码失败 / 浏览器没有 WebAudio 时画一排等高的矮条，播放不受影响（波形只是装饰，
@@ -401,6 +404,30 @@ export function takeAudioUrl(task) {
   return "/api/history/" + task.modelId + "/" + task.id + "/audio";
 }
 
+/**
+ * 清单里最新的那条已完成 tts（挑「上一条录音」用）。纯函数：
+ * category 不是 tts、状态不是 DONE、拼不出音频 URL 的条目一律跳过；
+ * 时间取 finishedAt，缺了回落 createdAt，都缺按 0（有比没有好，仍然可能被选
+ * 中——拼得出 URL 的 DONE 任务音频就在盘上）。
+ * @param {any[]} tasks GET /api/tasks 的列表
+ * @returns {any|null}  newest task, or null
+ */
+export function pickLatestTake(tasks) {
+  if (!Array.isArray(tasks)) return null;
+  let newest = null;
+  for (const task of tasks) {
+    if (!task || task.category !== "tts" || task.status !== "DONE") continue;
+    if (!takeAudioUrl(task)) continue;
+    if (!newest) { newest = task; continue; }
+    if (takeAt(task) > takeAt(newest)) newest = task;
+  }
+  return newest;
+}
+
+function takeAt(task) {
+  return Number(task && task.finishedAt) || Number(task && task.createdAt) || 0;
+}
+
 function setTake(task) {
   const url = takeAudioUrl(task);
   if (!url) return false;
@@ -412,11 +439,15 @@ function setTake(task) {
     instanceName: task.instanceName || "",
     url,
     text: typeof task.text === "string" ? task.text : "",
-    at: Number(task.finishedAt) || Number(task.createdAt) || Date.now()
+    at: takeAt(task) || Date.now()
   };
   if (task.id !== prevId) {
     const a = player();
     if (a) {
+      // 换了一条录音：#tts-player 必须指向它，否则播放键播的还是上一条。
+      // renderTaskResult 已经设过同一个地址时不再赋值（重复设 src 会让
+      // 结果区的播放重新加载）。currentSrc / src 都可能是绝对地址，用后缀比。
+      if (!playerPointsTo(a, url)) a.src = url;
       a.pause();
       a.currentTime = 0;
     }
@@ -430,9 +461,17 @@ function setTake(task) {
   return true;
 }
 
+/** #tts-player 是不是已经指向这条 take 的地址（比后缀：浏览器里 src 是绝对地址）。 */
+function playerPointsTo(a, url) {
+  if (!a) return false;
+  const src = a.currentSrc || a.src;
+  return typeof src === "string" && src.length > 0 && src.endsWith(url);
+}
+
 /**
- * tts 任务结束时由 tasks.js 调用（就在它填 #tts-player.src 的那一行旁边）。
- * 非 tts / 未完成的条目一律忽略——条上只放真正落了盘的录音。
+ * tts 任务结束时由 tasks.js / task-events.js 调用（tasks.js 就在它填
+ * #tts-player.src 的那一行旁边）。非 tts / 未完成的条目一律忽略——条上只放
+ * 真正落了盘的录音。
  * @param {any} task GET /api/tasks/{id} 的任务对象
  */
 export function noteTtsTake(task) {
@@ -442,20 +481,15 @@ export function noteTtsTake(task) {
 
 /**
  * 首屏 / 模型切换后的任务清单（GET /api/tasks?modelId=…）里挑最新的那条已完成 tts：
- * 刷新页面也能看到上一条录音。只在还没有 take 时生效（不覆盖本次会话已经显示的那条），
- * 挑不出就保持隐藏，不画任何占位内容。
+ * 刷新页面也能看到上一条录音，SSE 断开时任务在别处结束也靠这条兜底。比当前这条
+ * 新才换（SSE 已经刷新过就不重复解码），挑不出就保持现状。
  * @param {any[]} tasks 任务列表
  */
-export function seedLastTake(tasks) {
-  if (take || !Array.isArray(tasks)) return false;
-  let newest = null;
-  for (const task of tasks) {
-    if (!task || task.category !== "tts" || task.status !== "DONE") continue;
-    const at = Number(task.finishedAt) || Number(task.createdAt) || 0;
-    if (!takeAudioUrl(task)) continue;
-    if (!newest || at > (Number(newest.finishedAt) || Number(newest.createdAt) || 0)) newest = task;
-  }
+export function refreshLastTake(tasks) {
+  const newest = pickLatestTake(tasks);
   if (!newest) return false;
+  if (take && take.taskId === newest.id) return false;
+  if (take && takeAt(newest) <= (Number(take.at) || 0)) return false;
   return setTake(newest);
 }
 

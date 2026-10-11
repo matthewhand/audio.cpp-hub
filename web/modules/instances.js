@@ -255,18 +255,32 @@ export function idleSinceOf(mem, fallbackMs) {
 
 /**
  * Second line under the instance name:
- * "<model> · <GPU name> · vulkan:0 · :18090". Empty parts are dropped.
+ * "<model> · <GPU name> · :18090". Empty parts are dropped.
+ *
+ * Backend / device are deliberately NOT here (see renderInstanceList): they moved to
+ * the card's title attribute and the Details dialog, so two cards + the activity
+ * panel + the models row fit in the left rail at 1280x800 without scrolling.
  */
 export function instanceSubtitle(inst, modelName) {
   const parts = [];
   if (modelName) parts.push(String(modelName));
   const gpu = inst && inst.memory && typeof inst.memory.gpuName === "string" ? inst.memory.gpuName.trim() : "";
   if (gpu) parts.push(gpu);
-  if (inst && inst.backend) {
+  if (inst && inst.port != null && inst.port !== "") parts.push(":" + inst.port);
+  return parts.join(" · ");
+}
+
+/** Card title tooltip: the identity line compaction removed from the card body.
+ *  "#id · vulkan:0 · exe · :port". Empty parts are dropped. */
+export function instanceCardTip(inst) {
+  if (!inst) return "";
+  const parts = [`#${inst.id}`];
+  if (inst.backend) {
     const dev = inst.device != null && inst.device !== "" ? ":" + inst.device : "";
     parts.push(String(inst.backend) + dev);
   }
-  if (inst && inst.port != null && inst.port !== "") parts.push(":" + inst.port);
+  if (inst.executableName) parts.push(String(inst.executableName));
+  if (inst.port != null && inst.port !== "") parts.push(":" + inst.port);
   return parts.join(" · ");
 }
 
@@ -678,11 +692,12 @@ export function renderInstanceList() {
     const elapsedHtml = busy.busy ? cardElapsedHtml(inst.id) : "";
     const idleHtml = idleLabelHtml(inst, busy.busy);
     const memHtml = memBlockHtml(withSparkSeries(inst));
-    const extra = [`#${inst.id}`];
-    if (inst.executableName) extra.push(inst.executableName);
+    /* 卡片只有两行文本：标题行 + 副标题。#id / 后端 / 设备 / 可执行文件这些身份信息
+       放进卡片 title 提示与「详情」弹窗（左栏窄，1280x800 下要塞进实例列表、
+       最近活动与模型三块，见 instanceCardTip）。 */
+    const cardTip = instanceCardTip(inst);
     let html = `<div class="card-title"><span class="card-name">${esc(inst.instanceName || inst.modelId)}</span>${statusBadge}${busyBadge}${elapsedHtml}${idleHtml}</div>
-      <div class="card-family">${esc(instanceSubtitle(inst, modelName))}</div>
-      <div class="card-desc">${esc(extra.join(" · "))}</div>${memHtml}`;
+      <div class="card-family">${esc(instanceSubtitle(inst, modelName))}</div>${memHtml}`;
     if (inst.status === "ERROR" && inst.errorMessage) {
       html += `<div class="error-text">${esc(inst.errorMessage)}</div>`;
     }
@@ -690,6 +705,7 @@ export function renderInstanceList() {
       html += `<div class="card-actions"><button class="btn-ghost detail-btn">${t("instance.detail")}</button><button class="stop-btn">${t("instance.stop")}</button></div>`;
     }
     card.innerHTML = html;
+    if (cardTip) card.setAttribute("title", cardTip);
     applyMemBars(card);
     const detailBtn = card.querySelector(".detail-btn");
     if (detailBtn) detailBtn.onclick = () => go("#/instance/" + encodeURIComponent(inst.id));

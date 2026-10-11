@@ -10,9 +10,10 @@
  * 收到 hello 是「Live events」，否则「Polling」——用户能直接看出当前是推送
  * 还是在轮询，不需要懂 SSE。 */
 
-import { $, t } from "./dom.js";
+import { $, Api, t } from "./dom.js";
 import { clearTaskStart, rememberStart } from "./elapsed.js";
 import { refreshInstances, renderInstanceList, syncBusyTimer, updateInstanceBar } from "./instances.js";
+import { noteTtsTake } from "./last-take.js";
 import { noteTaskEvent } from "./live-ticker.js";
 import { busyStarts } from "./state.js";
 
@@ -101,6 +102,28 @@ export function applyTaskEvent(name, data) {
   // 最近活动时间线只听这个事件，避免 task-events ↔ activity 成环。
   publishTask(name, d);
   if (TERMINAL.has(name)) refreshInstances();
+  // 「上一条录音」条：任何 tts 任务结束都刷新（别的客户端提交的也算）。
+  if (name === "task.finished") refreshLastTakeFromEvent(d);
+}
+
+/**
+ * task.finished 也要刷新「上一条录音」条：任务可能由别的客户端（另一个标签页、
+ * Python 客户端、fan-out）提交，本页的 trackTask 轮询等不到它。
+ * SSE 载荷带 taskId / modelId / category，但没有 finishedAt / instanceName / text，
+ * 因此补拉一次 GET /api/tasks/{id} 再交给 last-take.js（与 live-ticker 的
+ * pullDuration 同一套路）。非 tts 事件直接跳过；同一 taskId 单飞；失败静默
+ * ——模型切换与首屏的 refreshLastTake 还会兜底。
+ */
+const takePulls = new Set();
+async function refreshLastTakeFromEvent(d) {
+  if (!d || !d.taskId) return;
+  if (d.category && d.category !== "tts") return; // 非 TTS：条上不放
+  if (takePulls.has(d.taskId)) return;
+  takePulls.add(d.taskId);
+  try {
+    noteTtsTake(await Api.get("/api/tasks/{id}", { params: { id: d.taskId } }));
+  } catch (e) { /* 瞬时失败无所谓：下次模型切换 / 首屏播种再试 */ }
+  finally { takePulls.delete(d.taskId); }
 }
 
 /* ---------- 「实时事件 / 轮询」指示灯 ---------- */

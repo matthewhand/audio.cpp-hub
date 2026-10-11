@@ -16,8 +16,7 @@ import { showToast } from "./async-ui.js";
 import { $, Api, el, markRowEnter, t } from "./dom.js";
 import { clearTaskStart, rememberStart } from "./elapsed.js";
 import { refreshInstances, syncBusyTimer } from "./instances.js";
-import { noteTtsTake, seedLastTake } from "./last-take.js";
-import { noteTask } from "./live-ticker.js";
+import { noteTtsTake, refreshLastTake } from "./last-take.js";import { noteTask } from "./live-ticker.js";
 import { loadHistory, privacyOn, renderSidebarList } from "./sidebar.js";
 import { activeInstanceId, noteIdleFallback, runningStarts, selectedModel } from "./state.js";
 
@@ -148,9 +147,10 @@ export async function reattachTasks() {
   try {
     // 已有句柄的任务会被 trackTask 直接跳过，不会重复建轮询
     const tasks = await Api.list("/api/tasks", { query: { modelId: m.id } });
-    // 刷新页面后仍能看到上一条录音：清单里最新的那条已完成 tts 就够了，
-    // 不额外发请求（音频 URL 与 renderTaskResult 用的是同一个拼法）。
-    seedLastTake(tasks);
+    // 刷新页面 / 切换模型后也能看到上一条录音：清单里最新的那条已完成 tts 就够了，
+    // 不额外发请求（音频 URL 与 renderTaskResult 用的是同一个拼法）。比当前这条
+    // 新才换——SSE 已经刷新过时不会重复解码。
+    refreshLastTake(tasks);
     for (const task of tasks) trackTask(task);
   } catch (e) { /* 忽略：下次切换/轮询再试 */ }
 }

@@ -1845,6 +1845,66 @@ footer { padding: 4px 24px 18px; }
 .panel-card { padding: 20px 22px; }
 .panel-card h2 { margin-top: 0; }
 
+/* ---------- TTS 头部行：标题 + 模型胶囊 + 「声音设计 / 克隆 / 音色库」分段 ---------- */
+/* 形状取自概念稿 .panel-h + .tag + .seg：标题在左，模型名是小胶囊，分段控件右对齐；
+   窄屏（见下方媒体查询）整行允许换行，分段折到第二行不挤压标题。 */
+.panel-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+.panel-head h2 { margin-top: 0; }
+.panel-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+.panel-head-right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+
+/* 分段控件（role=tablist）：1px 边框 + 2px 内衬 + 8px 圆角。轨道用页面底色
+   （概念稿的 surface-2），选中段用 elevated 卡面 + 小阴影「浮起」——两套主题下
+   选中 / 未选中都有可见差别（浅色：灰底白段；深色：更深的底，段面稍亮）。
+   颜色只走既有令牌，深浅两套主题自动成立。 */
+.seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.seg-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 550;
+  line-height: 1.4;
+  padding: 3px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg-btn:hover { color: var(--text); }
+.seg-btn.on {
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.seg-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
 .asr-text-card {
   display: flex;
   align-items: flex-start;

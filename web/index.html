@@ -46,6 +46,9 @@
   <link rel="modulepreload" href="/modules/stats-lazy.js">
   <link rel="modulepreload" href="/modules/voices-panel-lazy.js">
   <link rel="modulepreload" href="/modules/panels.js">
+
+  <link rel="modulepreload" href="/modules/tts-modes.js">
+
   <link rel="modulepreload" href="/modules/nowqueue.js">
 </head>
 <body>
@@ -145,8 +148,15 @@
         </div>
 
         <!-- TTS 面板 -->
+        <!-- 头部行：标题 + 模型小胶囊 + 右侧「声音设计 / 克隆 / 音色库」分段控件
+             （web/modules/tts-modes.js 的纯逻辑 + panels.js 的 renderTtsSegments 渲染）。
+             窄屏时 .panel-head 允许换行，分段控件折到第二行）。 -->
         <div class="card panel-card" id="panel-tts">
-          <h2 id="tts-title" data-i18n="tts.title">语音合成</h2>
+          <div class="panel-head">
+            <h2 id="tts-title" data-i18n="tts.title">语音合成</h2>
+            <span id="tts-model-chip" class="panel-chip hidden"></span>
+            <div id="tts-seg-mount" class="panel-head-right hidden"></div>
+          </div>
           <label id="tts-text-block"><span class="field-label-row"><span data-i18n="tts.textLabel">合成文本</span><span id="tts-char-count" class="char-count" aria-live="polite"></span></span><textarea id="tts-text" rows="4" data-i18n-placeholder="tts.textPlaceholder" placeholder="要合成的文本"></textarea></label>
           <div id="tts-primary-instruction-row"></div>
           <div id="tts-language-row"></div>

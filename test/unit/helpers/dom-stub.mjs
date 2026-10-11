@@ -221,6 +221,11 @@ export class StubElement {
     return child;
   }
 
+  /* ParentNode.append：等价于依次 appendChild（panels.js 的 breeze instruction 行用） */
+  append(...nodes) {
+    for (const n of nodes) this.appendChild(n);
+  }
+
   /* instances.js 的工具栏「生成中」把计时片段插到胶囊末尾。只实现 beforeend。 */
   insertAdjacentHTML(position, html) {
     if (position !== "beforeend") throw new Error("dom-stub: unsupported insertAdjacentHTML " + position);
@@ -282,6 +287,25 @@ export class StubElement {
   addEventListener(type, cb) {
     if (!this.listeners.has(type)) this.listeners.set(type, []);
     this.listeners.get(type).push(cb);
+  }
+
+  /* 浏览器语义：dispatchEvent 先在目标上跑（addEventListener 注册的回调 + on* 属性
+     处理器都算事件监听器），再沿 parentElement 冒泡（ev.bubbles !== false），最后到
+     document。世界级 fire() 用同一套语义，只是自己造事件对象。 */
+  dispatchEvent(ev) {
+    const type = ev && ev.type;
+    if (!type) return true;
+    const fire = (n) => {
+      for (const cb of n.listeners.get(type) || []) cb.call(n, ev);
+      const prop = n["on" + type];
+      if (typeof prop === "function") prop.call(n, ev);
+    };
+    fire(this);
+    if (!ev || ev.bubbles !== false) {
+      for (let n = this.parentElement; n; n = n.parentElement) fire(n);
+      for (const cb of this.world.listeners.get(type) || []) cb.call(this.world.document, ev);
+    }
+    return true;
   }
 
   scrollIntoView() {

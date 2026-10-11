@@ -19,6 +19,7 @@ import { $, el, esc, t } from "./dom.js";
 import { historyRefPath, loadHistory } from "./sidebar.js";
 import { activeInstanceId, selectedModel } from "./state.js";
 import { clearResult, reattachTasks, submitTask, trackTask } from "./tasks.js";
+import { activeSegment, segmentsFor, SEGMENT_LABEL_KEYS, targetFor } from "./tts-modes.js";
 
 /* ---------- 表单选择器实例（模块求值时创建一次，仅本模块使用） ---------- */
 /* ---------- 表单选择器实例（模块求值时创建一次，仅本模块使用） ---------- */
@@ -291,9 +292,177 @@ export function qwen3VariantOf(modelId) {
   return "base";
 }
 
+/* ---------- TTS 头部：声音设计 / 克隆 / 音色库 分段控件（概念稿 .seg） ---------- */
+/*
+ * 纯逻辑在 tts-modes.js（segmentsFor / activeSegment / targetFor）；这里只是薄视图：
+ * 读**真实**的下拉与音色选择器状态，画三颗以内的分段，点击时按「与用户手动切换
+ * 完全相同的路径」改下拉值（赋 value + 派发冒泡 change）。
+ * 本模块不新增任何请求字段、不改请求体拼法——分段只是快捷方式。
+ *
+ * 少于两颗分段解析出来时整块隐藏（只一种模式可切，分段不提供信息）。
+ * 重画只在实际变化时发生：分段成员不变时只改 class / aria / tabindex，
+ * 键盘方向键在分段间移动焦点不会被重建打掉。 */
+
+/** #tts-mode-row 里真实的「合成模式」下拉（没有就不分段）。 */
+function ttsModeSelect() {
+  const row = $("tts-mode-row");
+  return row ? row.querySelector("select") : null;
+}
+
+/** 真实选项 [{value,label}]；label 取选项文本（中英文都由词典决定）。
+ *  value 先读 DOM 属性（<option> 的 value 会反射成属性）再读 IDL 属性，
+ *  两种构造方式（innerHTML / createElement）下都取得到。 */
+function ttsModeOptions() {
+  const sel = ttsModeSelect();
+  if (!sel || typeof sel.querySelectorAll !== "function") return [];
+  return sel.querySelectorAll("option").map((o) => ({
+    value: o.getAttribute("value") || o.value || "",
+    label: o.textContent || ""
+  }));
+}
+
+/** 当前模型有没有音色选择器：以 updateTtsBlocks 之后的真实 DOM 为准（隐藏即没有）。 */
+function ttsHasVoicePicker() {
+  const voice = $("tts-voice-block");
+  const speakers = $("tts-speakers-block");
+  const shown = (n) => !!n && !n.classList.contains("hidden");
+  return shown(voice) || shown(speakers);
+}
+
+/** 分段成员 + 当前高亮。caps 全部来自真实 DOM，不猜模型能力。 */
+function ttsSegmentsState() {
+  const sel = ttsModeSelect();
+  const modeOptions = ttsModeOptions();
+  const caps = { modeOptions, hasVoicePicker: ttsHasVoicePicker() };
+  const segments = segmentsFor(modeOptions, caps);
+  return { segments, active: activeSegment(sel ? sel.value : "", { ...caps, segments }) };
+}
+
+/* 上一次画进 #tts-seg-mount 的分段成员（id 顺序，不含高亮）。空串 = 收起状态。
+   成员没变时 renderTtsSegments 只改状态不重建 DOM，键盘焦点因此不丢。 */
+let segMountIds = "";
+
+function segMarkup(segments, active) {
+  const label = t("tts.seg.label");
+  const btns = segments.map((s, i) => {
+    const name = t(SEGMENT_LABEL_KEYS[s.id]);
+    const on = s.id === active;
+    const tab = on || (!active && i === 0) ? 0 : -1;
+    return `<button type="button" class="seg-btn${on ? " on" : ""}" role="tab" data-seg="${esc(s.id)}"`
+      + ` aria-selected="${on ? "true" : "false"}" tabindex="${tab}" title="${esc(name)}">${esc(name)}</button>`;
+  });
+  return `<div class="seg" role="tablist" aria-label="${esc(label)}">${btns.join("")}</div>`;
+}
+
+/** 只改状态不重建：class / aria-selected / roving tabindex。 */
+function paintSegState(segments, active) {
+  const mount = $("tts-seg-mount");
+  if (!mount || typeof mount.querySelectorAll !== "function") return;
+  for (const btn of mount.querySelectorAll("[data-seg]")) {
+    const on = btn.getAttribute("data-seg") === active;
+    btn.classList.toggle("on", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+    btn.tabIndex = on ? 0 : -1;
+  }
+}
+
+function focusSegButton(id) {
+  const mount = $("tts-seg-mount");
+  if (!mount || typeof mount.querySelectorAll !== "function") return;
+  for (const btn of mount.querySelectorAll("[data-seg]")) {
+    if (btn.getAttribute("data-seg") === id && typeof btn.focus === "function") btn.focus();
+  }
+}
+
+/** 音色库快捷键：聚焦（并滚到）真实的音色选择器，不改模式。 */
+function focusVoicePicker() {
+  const block = $("tts-voice-block");
+  if (!block || block.classList.contains("hidden")) return; // 隐藏的选不到，不动模式也不报错
+  const picker = $("voice-picker");
+  const field = picker && typeof picker.querySelector === "function" ? picker.querySelector("select") : null;
+  const target = field || picker || block;
+  if (typeof target.scrollIntoView === "function") target.scrollIntoView({ block: "nearest" });
+  if (typeof target.focus === "function") target.focus();
+}
+
+/** 点一颗分段：有真实模式就赋值 + 派发冒泡 change（与用户手动切换同一条路径），
+ *  否则（library 快捷键）聚焦音色选择器。方向键操作时结束把焦点还给新分段。 */
+function selectTtsSegment(id, opts = {}) {
+  const value = targetFor(id, ttsModeOptions());
+  const sel = ttsModeSelect();
+  if (value && sel) {
+    sel.value = value;
+    if (typeof sel.dispatchEvent === "function" && typeof Event === "function") {
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  } else {
+    focusVoicePicker();
+  }
+  renderTtsSegments(); // 兜底：没有 select / 值没变时也刷新高亮
+  if (opts.focus) focusSegButton(id);
+}
+
+function wireSegButtons() {
+  const mount = $("tts-seg-mount");
+  if (!mount || typeof mount.querySelectorAll !== "function") return;
+  const btns = mount.querySelectorAll("[data-seg]");
+  btns.forEach((btn, i) => {
+    const id = btn.getAttribute("data-seg");
+    btn.onclick = () => selectTtsSegment(id);
+    btn.onkeydown = (e) => {
+      const step = { ArrowRight: 1, ArrowLeft: -1, Home: "first", End: "last" };
+      if (!(e.key in step)) return;
+      e.preventDefault();
+      const next = step[e.key] === "first"
+        ? 0
+        : step[e.key] === "last"
+          ? btns.length - 1
+          : (i + step[e.key] + btns.length) % btns.length;
+      selectTtsSegment(btns[next].getAttribute("data-seg"), { focus: true });
+    };
+  });
+}
+
+/** 渲染分段控件。updateTtsBlocks 之后、模式 / 模型 / 语言变化时调用。 */
+export function renderTtsSegments() {
+  const mount = $("tts-seg-mount");
+  if (!mount) return;
+  const { segments, active } = ttsSegmentsState();
+  if (segments.length < 2) {
+    if (segMountIds !== "") {
+      mount.innerHTML = "";
+      segMountIds = "";
+    }
+    mount.classList.add("hidden");
+    return;
+  }
+  mount.classList.remove("hidden");
+  const ids = segments.map((s) => s.id).join(",");
+  if (ids !== segMountIds) {
+    mount.innerHTML = segMarkup(segments, active);
+    segMountIds = ids;
+    wireSegButtons();
+    return;
+  }
+  paintSegState(segments, active);
+}
+
+/* 用户直接动「合成模式」下拉（含分段派发的 change）也要跟上高亮。监听稳定容器
+   #tts-mode-row：panels.js 重建行时监听不丢，也不必用 MutationObserver
+   （重建本来就走 renderTtsPanel 这个回调）。本函数只写 #tts-seg-mount，
+   不碰下拉，因此不会自触发。 */
+$("tts-mode-row").addEventListener("change", () => { renderTtsSegments(); });
+
 /* ---------- TTS 面板 ---------- */
 export function renderTtsPanel(m) {
-  $("tts-title").textContent = t("tts.title") + " — " + I18N.pick(m, "displayName");
+  /* 标题行：标题（走词典）+ 模型小胶囊 + 右侧分段控件（见文件头「分段控件」一节） */
+  $("tts-title").textContent = t("tts.title");
+  const chip = $("tts-model-chip");
+  const chipText = I18N.pick(m, "displayName");
+  if (chip) {
+    chip.textContent = chipText;
+    chip.classList.toggle("hidden", !chipText);
+  }
   buildBreezeInstructionRow($("tts-primary-instruction-row"), m);
   ttsLanguageSel = buildLanguageRow($("tts-language-row"), m, "tts");
   const modeRow = $("tts-mode-row");
@@ -372,6 +541,8 @@ export function updateTtsBlocks(m) {
   if (m.family === "breeze_tts") {
     $("tts-ref-text-row").classList.toggle("hidden", breezeMode !== "voice_clone");
   }
+  // 模式 / 可见性都定下来了：按最终 DOM 刷新 TTS 头部分段控件（高亮跟随当前模式）
+  renderTtsSegments();
 }
 
 $("tts-submit").onclick = async () => {

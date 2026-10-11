@@ -259,14 +259,32 @@ const KIB = 1024;
  * 「计时只有一处写 / 容量口径是什么」的约定在本仓库是硬要求），不是新的依赖边：
  * 本模块只 import 已经存在于首屏的 dom / activity / elapsed / hub-chip /
  * instances / tasks / task-events 七个模块，没有引入任何新的传递依赖。
+ *
+ * 2026-10 concept v2 「声音设计 / 克隆 / 音色库」分段控件（measured）：新增首屏模块
+ * `modules/tts-modes.js`（纯映射逻辑，由 panels.js 的 renderTtsSegments 消费）+ `style.css`
+ * 的 `.panel-head` / `.panel-chip` / `.seg` 规则。控件在首屏 TTS 面板头部，点开才加载的
+ * 形状不适用。`npm run perf:budget` on this tree:
+ *
+ *   | 指标            | 加之前         | 加之后         | 变化           |
+ *   | ---------------- | -------------- | -------------- | -------------- |
+ *   | 初始 JS raw      | 471.9 KiB      | 492.1 KiB      | +20.2 KiB      |
+ *   | 初始 JS gzip     | 175.1 KiB      | 179.4 KiB      | +4.3 KiB       |
+ *   | 初始 CSS raw     | 94.3 KiB       | 96.2 KiB       | +1.9 KiB       |
+ *   | 初始 CSS gzip    | 25.4 KiB       | 25.5 KiB       | +0.1 KiB       |
+ *   | JS+CSS gzip 合计 | 200.4 KiB      | 204.9 KiB      | +4.5 KiB       |
+ *   | 初始子资源请求数 | 39             | 40             | +1（整个模块） |
+ *
+ * 上限按同一口径重新钉到实测值之上一点：jsRawKiB 472 -> 493、jsGzipKiB 176 -> 180、
+ * cssRawKiB 95 -> 97、totalGzipKiB 201 -> 205、subresourceRequests 39 -> 40；
+ * cssGzipKiB（25.4 -> 25.5）仍在 26 以内，不动。
  */
 export const BUDGETS = {
-  jsRawKiB: 472, // 初始 JS 未压缩合计（实测 471.9）
-  jsGzipKiB: 176, // 初始 JS gzip 传输合计（实测 175.1）
-  cssRawKiB: 95, // 初始 CSS 未压缩（实测 94.3）
-  cssGzipKiB: 26, // 初始 CSS gzip 传输（实测 25.4）
-  totalGzipKiB: 201, // JS + CSS gzip 合计（实测 200.4，不含 HTML，HTML 很小）
-  subresourceRequests: 39, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 39）
+  jsRawKiB: 493, // 初始 JS 未压缩合计（实测 492.1）
+  jsGzipKiB: 180, // 初始 JS gzip 传输合计（实测 179.4）
+  cssRawKiB: 97, // 初始 CSS 未压缩（实测 96.2）
+  cssGzipKiB: 26, // 初始 CSS gzip 传输（实测 25.5）
+  totalGzipKiB: 205, // JS + CSS gzip 合计（实测 204.9，不含 HTML，HTML 很小）
+  subresourceRequests: 40, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 40）
   ttiTargetMs: 1500 // 目标 TTI（本地/局域网，中端笔电）——浏览器指标，本脚本不测量
 };
 const CSS = ["style.css"];

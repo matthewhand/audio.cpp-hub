@@ -53,6 +53,7 @@ const NAMES = [
   "formatIdleFor",
   "idleSinceOf",
   "instanceSubtitle",
+  "instanceCardTip",
   "aggregateVram",
   "formatVramHead",
   "memSeries",
@@ -108,6 +109,7 @@ const {
   formatIdleFor,
   idleSinceOf,
   instanceSubtitle,
+  instanceCardTip,
   aggregateVram,
   formatVramHead,
   pushSparkSample,
@@ -573,18 +575,30 @@ test("formatIdleFor / idleSinceOf", () => {
   assert.equal(idleSinceOf(null, 0), null);
 });
 
-test("instanceSubtitle：有 GPU 名就插在型号和设备之间", () => {
+test("instanceSubtitle：有 GPU 名就插在型号和端口之间（后端已移到卡片 title）", () => {
   assert.equal(
     instanceSubtitle(
       { memory: { gpuName: "GTX 1080" }, backend: "vulkan", device: 0, port: 18090 },
       "BreezeTTS 2"
     ),
-    "BreezeTTS 2 · GTX 1080 · vulkan:0 · :18090"
+    "BreezeTTS 2 · GTX 1080 · :18090"
   );
   assert.equal(
     instanceSubtitle({ backend: "cpu", device: 0, port: 7001 }, "voice"),
-    "voice · cpu:0 · :7001"
+    "voice · :7001"
   );
+  assert.equal(instanceSubtitle({}, ""), "");
+});
+
+test("instanceCardTip：压缩掉的身份信息（#id · 后端:设备 · 可执行 · 端口）", () => {
+  assert.equal(
+    instanceCardTip({ id: "i1", backend: "vulkan", device: 0, executableName: "audio", port: 18090 }),
+    "#i1 · vulkan:0 · audio · :18090"
+  );
+  // 缺字段逐项省略；device 为空串时不写冒号
+  assert.equal(instanceCardTip({ id: "ab12" }), "#ab12");
+  assert.equal(instanceCardTip({ id: "ab12", backend: "cpu", device: "" }), "#ab12 · cpu");
+  assert.equal(instanceCardTip(null), "");
 });
 
 test("aggregateVram：同卡去重，没有总量就省略斜杠，没有显存就省略", () => {
