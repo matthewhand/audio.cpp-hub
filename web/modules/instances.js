@@ -121,7 +121,7 @@ export function updateInstanceBar() {
     setActiveInstanceId(null);
   }
   // Keep history DOM stable on instance changes.
-  
+
   select.disabled = !has;
   $("instance-stop").disabled = !has;
   $("instance-detail").disabled = !has;
