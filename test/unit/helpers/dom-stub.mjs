@@ -16,6 +16,21 @@ const SETTLE_FRAMES = 2; // 去掉 .hidden 之后，visibility 过渡在第 2 �
 
 const FOCUSABLE_TAGS = new Set(["a", "button", "input", "select", "textarea", "area"]);
 
+/* 真浏览器 querySelectorAll 的形状（见 StubElement.querySelectorAll 的注释）：
+   只暴露 length / item() / 下标 / forEach / Symbol.iterator。刻意**不给**
+   map / filter / reduce 等 Array 方法——把这层皮丢掉就等于把 NodeList 用成
+   数组，真机上必炸。 */
+export function nodeListLike(nodes) {
+  const list = {
+    length: nodes.length,
+    item: (i) => (i >= 0 && i < nodes.length ? nodes[i] : null)
+  };
+  for (let i = 0; i < nodes.length; i++) list[i] = nodes[i];
+  list.forEach = (cb, thisArg) => nodes.forEach(cb, thisArg);
+  list[Symbol.iterator] = () => nodes[Symbol.iterator]();
+  return list;
+}
+
 /* ---- 选择器：只支持这些模块真正用到的子集 ----
    形如 `tag`、`#id`、`.class`、`.a.b`、`[attr]`、`[attr="v"]`、
    以及它们与 `:not(...)` 的组合；顶层可写成逗号分隔的列表。 */
@@ -228,7 +243,9 @@ export class StubElement {
 
   /* instances.js 的工具栏「生成中」把计时片段插到胶囊末尾。只实现 beforeend。 */
   insertAdjacentHTML(position, html) {
-    if (position !== "beforeend") throw new Error("dom-stub: unsupported insertAdjacentHTML " + position);
+    if (position !== "beforeend") {
+      throw new Error("dom-stub: unsupported insertAdjacentHTML " + position);
+    }
     const holder = new StubElement(this.world, "div");
     holder.innerHTML = html;
     for (const child of holder.children.slice()) this.appendChild(child);
@@ -262,8 +279,13 @@ export class StubElement {
     return this.descendants().find((n) => matchesAny(n, selector)) || null;
   }
 
+  /* 浏览器语义：querySelectorAll 返回 **NodeList**——只有 length / item() /
+     下标访问 / forEach / 迭代，**没有任何 Array 方法**。桩如果悄悄返回 Array，
+     「sel.querySelectorAll(...).map is not a function」这类真机崩溃在 node 测试里
+     永远绿着（tests green，real Chromium 崩），所以这里刻意复刻 NodeList 形状。
+     新增把 querySelectorAll 结果当数组用的代码会让测试先炸，而不是用户先炸。 */
   querySelectorAll(selector) {
-    return this.descendants().filter((n) => matchesAny(n, selector));
+    return nodeListLike(this.descendants().filter((n) => matchesAny(n, selector)));
   }
 
   contains(node) {

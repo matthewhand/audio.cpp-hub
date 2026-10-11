@@ -172,10 +172,10 @@ test("模型区：默认态、localStorage 记忆、实例到达后改默认", a
   assert.equal(ui.panel.open, true);
 
   // 模型清单照常渲染：分类标题、卡片、下载 / HF 入口一个不少
-  const cards = ui.list.querySelectorAll(".card");
+  const cards = Array.from(ui.list.querySelectorAll(".card"));
   assert.equal(cards.length, 2);
   assert.deepEqual(
-    ui.list.querySelectorAll(".group-title").map((n) => n.textContent),
+    Array.from(ui.list.querySelectorAll(".group-title")).map((n) => n.textContent),
     ["TTS", "ASR"]
   );
   assert.equal(ui.list.querySelectorAll(".dl-link").length, 2);

@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 修复 TTS 头部「声音设计 / 克隆 / 音色库」分段控件在真实浏览器里整块不渲染：`web/modules/panels.js` 把 `querySelectorAll` 返回的 **NodeList** 当数组 `.map`（Chromium 控制台 `sel.querySelectorAll(...).map is not a function`，`renderTtsSegments` 每次调用都抛，控件永远画不出来——NodeList 只有 `length` / `item()` / 下标 / `forEach` / 迭代，没有 Array 方法）。改为 `Array.from(...)` 后再 `map`。同类问题在单测里抓不到，因为 DOM 桩的 `querySelectorAll` 返回的是 Array；现在桩改成 **NodeList 形状**（显式不给 `map` / `filter` / `reduce` 等），`test/unit/tts-segments.test.mjs` 的渲染路径用例先炸（生产调用栈：`panels.js:318` → `ttsModeOptions` → `renderTtsSegments` → `updateTtsBlocks`），修复后转绿；另修掉该形状暴露出的 3 处测试自身误用（`elapsed-timer` / `last-take` / `model-panel`）
+- 修复左栏 1280x800 的收纳：实例卡片第三行身份信息（`#<id> · <后端>`）确认已从卡片 markup 去掉（完整 id / 后端 / 设备 / 可执行文件只在卡片 `title` 提示与「详情」弹窗），并把卡片、内存条、卡片列表、小节标题、活动 / 模型面板的垂直 padding 与 gap 收紧一轮（实例卡 266px → 241px，卡片列表 gap 10 → 8，内存条内外距、进度条边距、图例与操作行距各收 2–4px，小节标题与两个 `<details>` 面板的 margin 各收 2–4px，模型卡 padding 8px → 6px）。实测首屏（1280×800、两号就绪实例带内存条）可见：实例列表两张卡 + 「最近活动」面板头（模型行在面板收起时同样落在首屏内；面板展开时其「最近一小时」时间条是内容，不属间距调整范围）
+
 ### Added
 
 - WebUI 工作区顶部（实例工具栏与合成面板之间）新增「Now / Queue」状态条（`web/modules/nowqueue.js`）：左边标题图标 + 「Now / Queue」，一枚「In flight n / cap」容量 chip，每个运行中的任务一枚强调色 chip（脉冲点 · 实例名 · 文本前 14 字摘要 · 耗时 · 取消键），剩余容量用虚线「free」chip 占位，竖线之后是「Queued n」与每条排队任务的 chip（队列位次 · 实例名 · 已等待 · 取消键）。没有就绪实例也没有在途任务时整条收起；空闲时收成一行「In flight 0 / N」+ free chips。窄屏折行。数据与左栏「最近活动」同源（同一份 `GET /api/tasks` 缓存 + 同一路任务 SSE），**不新增轮询器**：SSE 通着时只靠 `task.*` 事件重画，SSE 断开时另有一个 15s 保险拉取复用同一条请求路径。运行中 chip 的耗时刻度走全站唯一的 `elapsed.js` 表与 `instances.js` 那个定时器（`.badge-elapsed[data-elapsed-id]`），本模块不开第二个耗时 interval；排队 chip 的「已等待」不是任务耗时，自带一个每秒一跳、且**只在真的有排队 chip 时**存在的轻量 interval。取消单击即生效（不弹确认框），同一任务在途期间按钮 disabled 并挡住重复点击，请求失败沿用既有的 toast。chip 的 tooltip 给出实例名、8 位短任务 id 与完整文本

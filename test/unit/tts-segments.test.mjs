@@ -41,17 +41,47 @@ function t(key, params) {
 
 const IDS = [
   // 模块求值就要在位的控件
-  "voice-picker", "emotion-picker", "asr-audio-picker", "sep-audio-picker",
-  "other-audio-picker", "tts-speaker-add", "tts-emotion-alpha", "tts-submit",
-  "asr-submit", "asr-copy", "sep-submit", "music-submit", "other-submit", "tts-mode-row",
+  "voice-picker",
+  "emotion-picker",
+  "asr-audio-picker",
+  "sep-audio-picker",
+  "other-audio-picker",
+  "tts-speaker-add",
+  "tts-emotion-alpha",
+  "tts-submit",
+  "asr-submit",
+  "asr-copy",
+  "sep-submit",
+  "music-submit",
+  "other-submit",
+  "tts-mode-row",
   // renderWorkspace 切换的五张面板
-  "panel-tts", "panel-asr", "panel-sep", "panel-music", "panel-other",
+  "panel-tts",
+  "panel-asr",
+  "panel-sep",
+  "panel-music",
+  "panel-other",
   // renderTtsPanel / updateTtsBlocks 触碰的面板元素
-  "tts-title", "tts-model-chip", "tts-seg-mount", "tts-primary-instruction-row",
-  "tts-language-row", "tts-speaker-row", "tts-instruct-row", "tts-ref-text-row",
-  "tts-enum-row", "tts-emotion-block", "tts-voice-block", "tts-speakers-block",
-  "tts-speakers-list", "tts-text-block", "tts-advanced-grid", "tts-advanced",
-  "tts-text", "tts-result", "tts-msg", "tts-stats"
+  "tts-title",
+  "tts-model-chip",
+  "tts-seg-mount",
+  "tts-primary-instruction-row",
+  "tts-language-row",
+  "tts-speaker-row",
+  "tts-instruct-row",
+  "tts-ref-text-row",
+  "tts-enum-row",
+  "tts-emotion-block",
+  "tts-voice-block",
+  "tts-speakers-block",
+  "tts-speakers-list",
+  "tts-text-block",
+  "tts-advanced-grid",
+  "tts-advanced",
+  "tts-text",
+  "tts-result",
+  "tts-msg",
+  "tts-stats"
 ];
 
 function mount(world) {
@@ -105,8 +135,13 @@ function load(world, model) {
     document: world.document,
     $: world.$,
     el: world.el,
-    esc: (v) => String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"),
+    esc: (v) =>
+      String(v == null ? "" : v)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;"),
     t,
     I18N: { pick: (o, k) => (o && o[k]) || "", num: (n) => String(n), date: (v) => String(v) },
     Event: StubEvent,
@@ -150,7 +185,8 @@ function modeSelect(world) {
 }
 
 function segButtons(world) {
-  return world.$("tts-seg-mount").querySelectorAll("[data-seg]");
+  // NodeList 形状（无 Array 方法）：调用方要 map / 下标访问前先 Array.from
+  return Array.from(world.$("tts-seg-mount").querySelectorAll("[data-seg]"));
 }
 
 test("渲染路径：分段控件出现、点击切换、手动切换高亮跟随", () => {
@@ -177,7 +213,10 @@ test("渲染路径：分段控件出现、点击切换、手动切换高亮跟�
   assert.equal(list.getAttribute("aria-label"), "Voice source");
   const btns = segButtons(world);
   assert.equal(btns.length, 2);
-  assert.deepEqual(btns.map((b) => b.getAttribute("data-seg")), ["design", "clone"]);
+  assert.deepEqual(
+    btns.map((b) => b.getAttribute("data-seg")),
+    ["design", "clone"]
+  );
   // dom-stub 不建文本节点，文案从 markup 读
   assert.match(mountEl.innerHTML, />Voice design<\/button>/);
   assert.match(mountEl.innerHTML, />Clone<\/button>/);
@@ -193,7 +232,9 @@ test("渲染路径：分段控件出现、点击切换、手动切换高亮跟�
 
   // 点「克隆」：真实 select 的值被改掉，且沿冒泡路径派发 change —— 只一次
   let changes = 0;
-  sel.addEventListener("change", () => { changes++; });
+  sel.addEventListener("change", () => {
+    changes++;
+  });
   btns[1].onclick();
   assert.equal(sel.value, "voice_clone", "点分段 = 改真实下拉值");
   assert.equal(changes, 1, "change 只派发一次");
@@ -204,7 +245,10 @@ test("渲染路径：分段控件出现、点击切换、手动切换高亮跟�
   assert.equal(after[0].classList.contains("on"), false);
   assert.equal(after[1].getAttribute("tabindex"), "0");
   // 克隆模式有音色选择器 → 音色库分段随之解析出来（这颗不改模式，只聚焦选择器）
-  assert.deepEqual(after.map((b) => b.getAttribute("data-seg")), ["design", "clone", "library"]);
+  assert.deepEqual(
+    after.map((b) => b.getAttribute("data-seg")),
+    ["design", "clone", "library"]
+  );
   assert.equal(world.$("tts-voice-block").classList.contains("hidden"), false);
 
   // 直接改真实 select（用户手动切换）：高亮跟随。设计模式没有参考音频选择器，
@@ -212,7 +256,10 @@ test("渲染路径：分段控件出现、点击切换、手动切换高亮跟�
   sel.value = "voice_design";
   sel.dispatchEvent(new StubEvent("change", { bubbles: true }));
   const back = segButtons(world);
-  assert.deepEqual(back.map((b) => b.getAttribute("data-seg")), ["design", "clone"]);
+  assert.deepEqual(
+    back.map((b) => b.getAttribute("data-seg")),
+    ["design", "clone"]
+  );
   assert.equal(back[0].classList.contains("on"), true);
   assert.equal(back[0].getAttribute("aria-selected"), "true");
   assert.equal(back[1].getAttribute("aria-selected"), "false");
@@ -251,7 +298,12 @@ test("键盘：方向键 / Home / End 在分段间移动并激活", () => {
 
   // 其它键不拦截（不 preventDefault）
   let prevented = false;
-  segButtons(world)[0].onkeydown({ key: "a", preventDefault() { prevented = true; } });
+  segButtons(world)[0].onkeydown({
+    key: "a",
+    preventDefault() {
+      prevented = true;
+    }
+  });
   assert.equal(prevented, false);
 });
 
@@ -266,4 +318,38 @@ test("单模式模型：整块分段控件隐藏", () => {
   assert.equal(segButtons(world).length, 0, "不留任何分段节点");
   assert.equal(modeSelect(world), null, "这个模型没有模式下拉");
   assert.equal(world.$("tts-model-chip").textContent, "MioTTS");
+});
+
+/* dom 桩的形状契约：querySelectorAll 返回 **NodeList**，不是 Array。
+   曾有缺陷：panels.js 把 NodeList 当数组 .map，node 测试全绿（桩返回 Array），
+   真实 Chromium 一打开就 "…querySelectorAll(...).map is not a function"，
+   分段控件整块画不出来。上面的渲染路径用例就是钉这条契约的回归——这里再显式
+   钉住桩本身，谁把桩改回 Array 谁先炸。 */
+test("dom 桩的 querySelectorAll 是 NodeList 形状（没有 Array 方法）", () => {
+  const world = createDomWorld();
+  // 与 panels.js breeze 行同形的真实 <select>（两个 <option>）
+  const sel = new StubElement(world, "select");
+  for (const mode of ["voice_design", "voice_clone"]) {
+    const opt = new StubElement(world, "option");
+    opt.setAttribute("value", mode);
+    opt.textContent = mode;
+    sel.appendChild(opt);
+  }
+
+  const options = sel.querySelectorAll("option");
+  // NodeList 该有的都在
+  assert.equal(options.length, 2);
+  assert.equal(options.item(1).getAttribute("value"), "voice_clone");
+  assert.equal(options[0].getAttribute("value"), "voice_design");
+  assert.equal(typeof options.forEach, "function");
+  assert.equal(typeof options[Symbol.iterator], "function");
+  // Array 方法一个都没有（真机上这些调用会 TypeError）
+  for (const m of ["map", "filter", "reduce", "sort", "slice", "join", "some", "find", "indexOf"]) {
+    assert.equal(m in options, false, `NodeList 没有 ${m}`);
+  }
+  // 迭代 / 下标真实可用（源码里 for…of 的写法不受影响）
+  assert.deepEqual(
+    [...options].map((o) => o.getAttribute("value")),
+    ["voice_design", "voice_clone"]
+  );
 });

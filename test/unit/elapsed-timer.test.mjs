@@ -87,7 +87,8 @@ function breeze(taskCount) {
 
 /** 卡片、工具栏、状态行三处 .badge-elapsed 的文本。 */
 function elapsedTexts(world) {
-  return world.document.querySelectorAll("[data-elapsed-id]").map((n) => n.textContent);
+  // querySelectorAll 是 NodeList（dom-stub 刻意复刻真机形状）：Array.from 之后再 map
+  return Array.from(world.document.querySelectorAll("[data-elapsed-id]")).map((n) => n.textContent);
 }
 
 test("elapsed helpers: skew, clamp, queued→started, rebind", () => {

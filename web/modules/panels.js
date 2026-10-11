@@ -311,11 +311,12 @@ function ttsModeSelect() {
 
 /** 真实选项 [{value,label}]；label 取选项文本（中英文都由词典决定）。
  *  value 先读 DOM 属性（<option> 的 value 会反射成属性）再读 IDL 属性，
- *  两种构造方式（innerHTML / createElement）下都取得到。 */
+ *  两种构造方式（innerHTML / createElement）下都取得到。
+ *  querySelectorAll 是 NodeList（无 Array 方法）：Array.from 后再 map。 */
 function ttsModeOptions() {
   const sel = ttsModeSelect();
   if (!sel || typeof sel.querySelectorAll !== "function") return [];
-  return sel.querySelectorAll("option").map((o) => ({
+  return Array.from(sel.querySelectorAll("option")).map((o) => ({
     value: o.getAttribute("value") || o.value || "",
     label: o.textContent || ""
   }));

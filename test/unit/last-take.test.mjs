@@ -417,7 +417,7 @@ test("播放 / 暂停、timeupdate 着色、拖动与方向键定位", async () 
   // timeupdate → 波形着色 + 时间标签 + 滑块的 aria 值
   ui.audio.currentTime = 3.5;
   world.fire(ui.audio, "timeupdate");
-  const rects = world.$("last-take").querySelectorAll("rect");
+  const rects = Array.from(world.$("last-take").querySelectorAll("rect"));
   assert.equal(rects.filter((r) => r.classList.contains("played")).length, 40);
   assert.equal(world.$("last-take-cur").textContent, "0:03");
   assert.equal(world.$("last-take-dur").textContent, "0:07");
@@ -513,7 +513,10 @@ test("首屏从任务清单里回填上一条录音；没有就保持收起", ()
   assert.equal(world.$("last-take-name").textContent, "calm");
 
   // 已经有 take 且清单里没有更新的：不覆盖本次会话已经显示的那条
-  assert.equal(mod.refreshLastTake([doneTask({ id: "other0001", finishedAt: T0 - 30 * MIN })]), false);
+  assert.equal(
+    mod.refreshLastTake([doneTask({ id: "other0001", finishedAt: T0 - 30 * MIN })]),
+    false
+  );
   assert.equal(
     world.$("last-take-download").getAttribute("href"),
     "/api/history/breeze-tts/new00001/audio"
@@ -524,7 +527,9 @@ test("首屏从任务清单里回填上一条录音；没有就保持收起", ()
   assert.equal(mod.refreshLastTake([]), false);
   assert.equal(mod.refreshLastTake(null), false);
   assert.equal(
-    mod.refreshLastTake([{ id: "x", modelId: "m", category: "tts", status: "DONE", finishedAt: T0 }]),
+    mod.refreshLastTake([
+      { id: "x", modelId: "m", category: "tts", status: "DONE", finishedAt: T0 }
+    ]),
     true
   );
   mod.resetLastTake();
@@ -568,9 +573,14 @@ test("会话中途刷新：别处提交的 tts 任务结束，清单里有更新
 
   // 清单里没有比当前这条更新的（旧的 / 非 tts / 未完成）：不换、不重复解码
   const before = world.$("last-take-download").getAttribute("href");
-  assert.equal(mod.refreshLastTake([doneTask({ id: "first001", finishedAt: T0 - 30 * MIN })]), false);
   assert.equal(
-    mod.refreshLastTake([{ id: "asr0001", modelId: "m", category: "asr", status: "DONE", finishedAt: T0 }]),
+    mod.refreshLastTake([doneTask({ id: "first001", finishedAt: T0 - 30 * MIN })]),
+    false
+  );
+  assert.equal(
+    mod.refreshLastTake([
+      { id: "asr0001", modelId: "m", category: "asr", status: "DONE", finishedAt: T0 }
+    ]),
     false
   );
   assert.equal(world.$("last-take-download").getAttribute("href"), before);
