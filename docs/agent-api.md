@@ -270,7 +270,7 @@ take the direct hub (`transcribe()` is hub-direct shape (b) above).
 - LAN-only, no auth: put a reverse proxy with TLS + auth in front before any
   non-LAN exposure.
 
-### Task lifecycle push stream (draft Issue #121 backend)
+### Task lifecycle push stream (Issue #121; HTTP resource guards #155)
 
 `GET /api/events/stream` is a **hub-local** Server-Sent Events endpoint
 (`Content-Type: text/event-stream`); it is not proxied through fan-out.
@@ -287,6 +287,15 @@ can miss events, and subscriptions disconnect cleanly when the client closes.
 **Always** fetch the authoritative state using `GET /api/tasks` after
 connecting or reconnecting and on relevant task events. Fall back to bounded
 polling when the stream is unavailable or disconnected.
+
+The hub admits at most 64 concurrent HTTP SSE subscribers; an additional
+connection receives HTTP 503 with code `EVENTS_BUSY` and must use the
+`GET /api/tasks` polling fallback. Each client queue holds at most 64
+notifications (new notifications are dropped for an overloaded subscriber),
+and each hello/event/ping frame has a renewed 10-second HTTP write deadline
+so a stalled recipient cannot occupy a handler indefinitely. Healthy streams
+remain open for as long as needed. These are resource-safety limits, not
+assurances that every transient event will be delivered.
 
 `GET /api/instances` may supply an optional `memory` object on supported
 platforms. Current `vramBytes` is omitted when the latest GPU probe failed;
