@@ -203,7 +203,7 @@ export async function renderTaskResult(task) {
   }
   try {
     const json = await Api.get("/api/tasks/{id}/result", { params: { id: task.id } });
-    if (task.category === "asr") renderAsrResult(json);
+    if (task.category === "asr") await (await import("./diarization-lazy.js")).renderAsrResult(json);
     else if (task.category === "sep") renderSepResult(json);
     else if (task.category === "music") renderMusicResult(json);
     else renderOtherResult(json);
@@ -244,23 +244,6 @@ export function clearResult(container) {
     URL.revokeObjectURL(row.dataset.blobUrl);
   }
   container.innerHTML = "";
-}
-
-/* ASR 结果渲染（任务完成后由 renderTaskResult 调用） */
-function renderAsrResult(json) {
-  $("asr-text").textContent = json.text || t("asr.noText");
-  const details = {};
-  for (const k of ["language", "words", "segments", "speaker_turns", "timing"]) {
-    if (json[k] !== undefined) details[k] = json[k];
-  }
-  const det = $("asr-json-details");
-  if (Object.keys(details).length > 0) {
-    $("asr-json").textContent = JSON.stringify(details, null, 2);
-    det.classList.remove("hidden");
-  } else {
-    det.classList.add("hidden");
-  }
-  $("asr-result").classList.remove("hidden");
 }
 
 /* SEP 结果渲染（任务完成后由 renderTaskResult 调用） */

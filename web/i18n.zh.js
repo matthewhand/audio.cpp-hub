@@ -282,6 +282,8 @@ window.I18N_ZH = {
   "asr.copy": "复制",
   "asr.copied": "已复制",
   "asr.details": "详细输出",
+  "asr.speakerTimeline": "说话人时间线",
+  "asr.speaker": "说话人 {id}",
   /* ---------- SEP 面板 ---------- */
   "sep.title": "音频分离",
   "sep.hint": "输入 44.1kHz 音乐效果最佳。",

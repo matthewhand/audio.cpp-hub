@@ -282,6 +282,8 @@ window.I18N_EN = {
   "asr.copy": "Copy",
   "asr.copied": "Copied",
   "asr.details": "Detailed output",
+  "asr.speakerTimeline": "Speaker timeline",
+  "asr.speaker": "Speaker {id}",
   /* ---------- SEP panel ---------- */
   "sep.title": "Source Separation",
   "sep.hint": "44.1kHz music input works best.",
