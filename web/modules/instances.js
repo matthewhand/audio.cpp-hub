@@ -39,7 +39,7 @@ export function applyInstances(data) {
 export function onInstancesError(e) {
   instanceFeedStale = true;
   const pill = $("instance-pill");
-  pill.textContent = t("instance.feedStale");
+  pill.textContent = t("instance.pollStale");
   pill.className = "pill warn";
   for (const id of SUBMIT_BTNS) $(id).disabled = true;
   document.querySelectorAll("#instance-select,#instance-stop,#instance-detail,#instance-list .stop-btn").forEach(el => el.setAttribute("disabled", ""));
