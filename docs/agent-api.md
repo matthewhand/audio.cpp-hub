@@ -293,3 +293,9 @@ platforms. Current `vramBytes` is omitted when the latest GPU probe failed;
 historically *measured* peak/average fields may remain available. Neither
 absence nor an old peak should be interpreted as zero or as a live reading.
 The sampler does not run on platforms lacking process-RSS instrumentation.
+
+Task creation now holds the worker at a per-task release barrier until the
+`task.queued` notification has finished dispatching to task observers. This
+prevents fast backends from publishing `task.started` before `task.queued`.
+Events are still transient, and unusual cancellation/shutdown interleavings
+require clients to revalidate against `GET /api/tasks`.

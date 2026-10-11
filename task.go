@@ -48,6 +48,8 @@ type Task struct {
 	request    map[string]any // body["request"]，历史记录与文本预览用
 	requestRaw json.RawMessage
 	resultPath string
+	// The queued worker must wait for the queued notification to be emitted.
+	queueReady chan struct{}
 }
 
 func (t *Task) active() bool { return t.Status == "QUEUED" || t.Status == "RUNNING" }
@@ -159,7 +161,9 @@ func (m *TaskManager) Submit(inst *Instance, request map[string]any, requestRaw 
 		inst:         inst,
 		request:      request,
 		requestRaw:   requestRaw,
+		queueReady:   make(chan struct{}),
 	}
+	defer close(t.queueReady)
 	if s, ok := request["text"].(string); ok {
 		preview := truncateRunes(s, taskTextPreviewMax)
 		t.Text = &preview
@@ -474,6 +478,9 @@ func (m *TaskManager) positionLocked(task *Task) int {
 }
 
 func (m *TaskManager) execute(t *Task) {
+	if t.queueReady != nil {
+		<-t.queueReady
+	}
 	m.mu.Lock()
 	if t.Status != "QUEUED" {
 		m.mu.Unlock()
