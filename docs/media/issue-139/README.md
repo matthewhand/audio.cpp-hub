@@ -2,7 +2,8 @@
 
 These are **actual headless Chromium captures**, not generated design mockups.
 The "after" captures come from a **local isolated static-server source preview
-with a mocked backend**; they do not prove a production rollout.
+with a mocked backend**; they do not prove a production rollout. The History
+dialog screenshot was taken after its opening opacity transition settled.
 
 | Screenshot | Provenance | Viewport |
 | --- | --- | --- |
