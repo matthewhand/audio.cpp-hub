@@ -107,3 +107,59 @@ test("missing or invalid sample rates never produce guessed speaker times", asyn
   await expect(page.locator("#asr-speaker-timeline")).toBeHidden();
   await expect(page.locator("#asr-text")).toHaveText("Without timing units.");
 });
+
+test("Sortformer diarization submits audio and displays timed, textless speaker turns", async ({
+  page
+}) => {
+  const backend = new MockBackend({
+    instances: [{ ...READY, modelId: "sortformer_diar", instanceName: "sortformer_diar" }],
+    asrResult: {
+      sample_rate: 16000,
+      speaker_turns: [
+        { speaker_id: "speaker_1", start_sample: 16000, end_sample: 48000 },
+        { speaker_id: "speaker_0", start_sample: 0, end_sample: 24000 }
+      ]
+    }
+  });
+  await openApp(page, backend, { modelId: "sortformer_diar", lang: "en" });
+  await expect(page.locator("#asr-title")).toContainText("Sortformer");
+  await expect(page.locator("#asr-submit")).toHaveText("Analyze speakers");
+  await pickAudioByPath(page, "#asr-audio-picker", "/audio/two-speakers.wav");
+  await page.locator("#asr-submit").click();
+  await expect(page.locator("#asr-result")).toBeVisible({ timeout: 12000 });
+  const timeline = page.locator("#asr-speaker-timeline");
+  await expect(timeline).toBeVisible();
+  await expect(timeline.locator("li")).toHaveCount(2);
+  await expect(timeline.locator("li").first()).toContainText("Speaker speaker_0");
+  await expect(timeline.locator("li").last()).toContainText("0:01.0 – 0:03.0");
+  await expect(page.locator("#asr-text")).toContainText("does not transcribe");
+  await expect(page.locator("#asr-diar-status")).toBeHidden();
+  expect(backend.tasks).toHaveLength(1);
+  expect(backend.tasks[0].category).toBe("asr");
+});
+
+test("Sortformer never fakes successful diarization for an unsupported backend", async ({
+  page
+}) => {
+  const backend = new MockBackend({
+    instances: [{ ...READY, modelId: "sortformer_diar", instanceName: "sortformer_diar" }],
+    asrResult: { text: "Not speaker aware" }
+  });
+  await openApp(page, backend, { modelId: "sortformer_diar", lang: "en" });
+  await pickAudioByPath(page, "#asr-audio-picker", "/audio/unsupported.wav");
+  await page.locator("#asr-submit").click();
+  await expect(page.locator("#asr-result")).toBeVisible({ timeout: 12000 });
+  await expect(page.locator("#asr-speaker-timeline")).toBeHidden();
+  await expect(page.locator("#asr-diar-status")).toContainText("diarization is unavailable");
+});
+
+test("Sortformer distinguishes silence from invalid timestamps", async ({ page }) => {
+  const backend = new MockBackend({
+    instances: [{ ...READY, modelId: "sortformer_diar", instanceName: "sortformer_diar" }],
+    asrResult: { sample_rate: 16000, speaker_turns: [] }
+  });
+  await openApp(page, backend, { modelId: "sortformer_diar", lang: "en" });
+  await pickAudioByPath(page, "#asr-audio-picker", "/audio/silent.wav");
+  await page.locator("#asr-submit").click();
+  await expect(page.locator("#asr-diar-status")).toContainText("No speaker turns");
+});

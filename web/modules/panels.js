@@ -644,7 +644,8 @@ export function applyHistoryOptions(m, options) {
 
 /* ---------- ASR 面板 ---------- */
 export function renderAsrPanel(m) {
-  $("asr-title").textContent = t("asr.title") + " — " + I18N.pick(m, "displayName");
+  $("asr-title").textContent = m.diarizationOnly ? I18N.pick(m, "displayName") : t("asr.title") + " — " + I18N.pick(m, "displayName");
+  $("asr-submit").textContent = t(m.diarizationOnly ? "asr.analyzeSpeakers" : "asr.submit");
   asrLanguageSel = buildLanguageRow($("asr-language-row"), m, "asr");
   const textRow = $("asr-text-row");
   textRow.innerHTML = "";

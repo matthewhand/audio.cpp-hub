@@ -282,6 +282,12 @@ window.I18N_EN = {
   "asr.copy": "Copy",
   "asr.copied": "Copied",
   "asr.details": "Detailed output",
+  "asr.analyzeSpeakers": "Analyze speakers",
+  "asr.speakerOnly": "Speaker timing only — this model does not transcribe speech.",
+  "asr.diarUnavailable": "This backend did not return speaker turns; diarization is unavailable.",
+  "asr.diarMissingRate": "Speaker timing is unavailable because the backend omitted a valid sample rate.",
+  "asr.diarInvalid": "All returned speaker turns had invalid identifiers or time offsets.",
+  "asr.diarNoSpeakers": "No speaker turns were detected.",
   "asr.speakerTimeline": "Speaker timeline",
   "asr.speaker": "Speaker {id}",
   /* ---------- SEP panel ---------- */

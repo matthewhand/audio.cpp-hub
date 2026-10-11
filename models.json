@@ -520,6 +520,27 @@
     }
   },
   {
+    "id": "sortformer_diar",
+    "family": "sortformer_diar",
+    "hfUrl": "https://huggingface.co/nvidia/diar_sortformer_4spk-v1",
+    "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Sortformer-Diar-4spk-v1-GGUF",
+    "displayName": "Sortformer 说话人识别（仅分段）",
+    "displayNameEn": "Sortformer speaker diarization (turns only)",
+    "description": "NVIDIA Sortformer 离线说话人分段（最多四人）；输出说话人与时间，不转写文本。",
+    "descriptionEn": "Offline Sortformer speaker-turn detection (up to four speakers); produces timed speaker turns, not transcript text.",
+    "category": "asr",
+    "serverTask": "diar",
+    "diarizationOnly": true,
+    "modes": ["offline"],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "json",
+    "paramSchema": {}
+  },
+  {
     "id": "qwen3_forced_aligner",
     "family": "qwen3_forced_aligner",
     "hfUrl": "https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B",
