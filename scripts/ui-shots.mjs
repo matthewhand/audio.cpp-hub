@@ -6,6 +6,8 @@
  *   - console errors (console.error + pageerror)
  *   - horizontal overflow (documentElement.scrollWidth vs clientWidth)
  *   - key control state: present / visible / reachable / above the fold
+ *     ("above the fold" also refuses controls that a scrollable ancestor keeps
+ *      out of view: the left column and the workspace scroll independently)
  * One dark screenshot per viewport, plus exactly one light screenshot on
  * LIGHT_SHOT. The run is strictly read-only: nothing is clicked, no form is
  * submitted, and every non-GET/HEAD request is aborted.
@@ -207,6 +209,11 @@ function hamburgerVisible() {
  * scrollable ancestor is snapshotted, scrollIntoView runs, then the snapshot is
  * restored so the screenshot still shows the natural scroll position.
  * aboveFold is measured at that natural position and kept as a separate result.
+ * "Above the fold" refuses controls a scrollable ancestor keeps out of view: the
+ * left column and the workspace are independent scrollers, so a control parked
+ * below the fold inside them is not above the fold (reaching it needs a scroll).
+ * page.evaluate serializes only this function, so the clipping walk is inlined
+ * here on purpose — a module-level helper would not cross into the browser.
  */
 function measureControl(selector) {
   const root = document.documentElement;
@@ -224,7 +231,19 @@ function measureControl(selector) {
     Number(style.opacity) > 0 &&
     box.width > 0 &&
     box.height > 0;
-  const aboveFold = visible && meetsViewport(box);
+  let clipped = false;
+  for (let node = el.parentElement; node && !clipped; node = node.parentElement) {
+    const s = getComputedStyle(node);
+    const scrollsY =
+      /auto|scroll|overlay/.test(s.overflowY) && node.scrollHeight > node.clientHeight;
+    const scrollsX = /auto|scroll|overlay/.test(s.overflowX) && node.scrollWidth > node.clientWidth;
+    if (!scrollsY && !scrollsX) continue;
+    const r = node.getBoundingClientRect();
+    const visH = Math.min(box.bottom, r.bottom) - Math.max(box.top, r.top);
+    const visW = Math.min(box.right, r.right) - Math.max(box.left, r.left);
+    if (visH < Math.min(box.height, 4) || visW < Math.min(box.width, 4)) clipped = true;
+  }
+  const aboveFold = visible && meetsViewport(box) && !clipped;
   let reachable = aboveFold;
   if (!reachable) {
     const snapshots = [];

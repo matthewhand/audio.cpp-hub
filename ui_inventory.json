@@ -28,6 +28,7 @@
       "web/modules/launch.js",
       "web/modules/live-ticker.js",
       "web/modules/models.js",
+      "web/modules/nowqueue.js",
       "web/modules/panels.js",
       "web/modules/routing.js",
       "web/modules/settings-lazy.js",
@@ -39,6 +40,7 @@
       "web/modules/stats.js",
       "web/modules/task-events.js",
       "web/modules/tasks.js",
+      "web/modules/tts-modes.js",
       "web/modules/voices-panel-lazy.js",
       "web/modules/voices-panel.js",
       "web/motion.js",
@@ -396,6 +398,13 @@
       "type": null,
       "i18n": ["history.closeTitle"],
       "handlers": [{ "event": "click", "sources": ["web/modules/downloads.js"] }]
+    },
+    {
+      "id": "drawer-close",
+      "tag": "button",
+      "type": null,
+      "i18n": ["history.closeTitle", "history.closeTitle"],
+      "handlers": [{ "event": "click", "sources": ["web/modules/shell.js"] }]
     },
     {
       "id": "exec-add-btn",
@@ -951,10 +960,10 @@
     }
   ],
   "dataHooks": [
-    { "name": "data-i18n", "count": 138 },
-    { "name": "data-i18n-aria-label", "count": 30 },
+    { "name": "data-i18n", "count": 139 },
+    { "name": "data-i18n-aria-label", "count": 31 },
     { "name": "data-i18n-placeholder", "count": 24 },
-    { "name": "data-i18n-title", "count": 14 },
+    { "name": "data-i18n-title", "count": 15 },
     { "name": "data-mode", "count": 5 },
     { "name": "data-section", "count": 3 },
     { "name": "data-theme", "count": 1 }
@@ -1109,7 +1118,11 @@
     {
       "method": "GET",
       "path": "/api/tasks/{param}",
-      "sources": ["web/modules/live-ticker.js", "web/modules/tasks.js"]
+      "sources": [
+        "web/modules/live-ticker.js",
+        "web/modules/task-events.js",
+        "web/modules/tasks.js"
+      ]
     },
     { "method": "GET", "path": "/api/tasks/{param}/result", "sources": ["web/modules/tasks.js"] },
     {

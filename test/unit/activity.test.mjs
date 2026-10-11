@@ -432,6 +432,113 @@ test("startActivity remembers a closed panel and skips DOM updates until it open
   });
 });
 
+/* ---------- Phase R2：矮视口（≤800px 高）默认收起「最近活动」 ---------- */
+/** 带 matchMedia 的 worldModule：matches 控制当前视口是否落进矮笔记本那一档。 */
+function shortModule(world, matches = true) {
+  const mqListeners = [];
+  const mod = worldModule(world, {
+    window: {
+      addEventListener() {},
+      matchMedia: (q) => ({
+        matches: matches === true,
+        media: q,
+        addEventListener(type, cb) {
+          if (type === "change") mqListeners.push(cb);
+        }
+      })
+    }
+  });
+  mod.__mqListeners = mqListeners;
+  return mod;
+}
+
+test("defaultActivityOpen / shortSidebarViewport：矮视口收起，高视口展开", () => {
+  const world = createDomWorld();
+  mount(world);
+  const mod = shortModule(world, true);
+  assert.equal(mod.shortSidebarViewport({ matchMedia: () => ({ matches: true }) }), true);
+  assert.equal(mod.shortSidebarViewport({ matchMedia: () => ({ matches: false }) }), false);
+  assert.equal(mod.shortSidebarViewport({}), false, "没有 matchMedia 的环境按否处理");
+  assert.equal(mod.defaultActivityOpen(true), false);
+  assert.equal(mod.defaultActivityOpen(false), true);
+});
+
+test("startActivity：矮视口默认收起最近活动，用户记录优先，跨过断点重套默认", () => {
+  const world = createDomWorld();
+  const ui = mount(world);
+  const mod = shortModule(world, true);
+  mod.startActivity();
+  assert.equal(ui.panel.open, false, "1280x720 一档默认收起（标题与计数还在）");
+  // 没有用户记录时跨过断点：视口变高 → 重新展开
+  mod.__sandbox.window.matchMedia = () => ({ matches: false, addEventListener() {} });
+  for (const cb of mod.__mqListeners) cb();
+  assert.equal(ui.panel.open, true);
+  // 用户手动收起：记进 localStorage，之后媒体查询变化不再改它
+  ui.panel.open = false;
+  world.fire(ui.panel, "toggle");
+  assert.equal(mod.__sandbox.localStorage.getItem("hub-activity-open"), "0");
+  mod.__sandbox.window.matchMedia = () => ({ matches: true, addEventListener() {} });
+  for (const cb of mod.__mqListeners) cb();
+  assert.equal(ui.panel.open, false, "有记录就按记录的来");
+  mod.resetActivity();
+});
+
+test("startActivity：高视口与 private mode 都保持原来的展开默认态", () => {
+  const world = createDomWorld();
+  const ui = mount(world);
+  const mod = worldModule(world, {
+    window: { addEventListener() {} }, // 没有 matchMedia（老环境 / 隐私模式）
+    localStorage: {
+      getItem() {
+        throw new Error("denied");
+      },
+      setItem() {
+        throw new Error("denied");
+      },
+      removeItem() {
+        throw new Error("denied");
+      }
+    }
+  });
+  assert.doesNotThrow(() => mod.startActivity());
+  assert.equal(ui.panel.open, true, "读不出视口与记录时维持默认展开");
+  assert.equal(mod.__timers.filter((x) => x.ms === 5000).length, 2, "展开态照常轮询");
+  mod.resetActivity();
+});
+
+test("R2 的 CSS / DOM 契约：矮笔记本媒体查询、sticky 操作条、桌面限幅", () => {
+  const css = readWeb("style.css");
+  // 矮视口（>900px 宽且 ≤800px 高）：底部操作条 sticky 吸底 + 实底 + 细顶线
+  const short = /@media \(min-width: 901px\) and \(max-height: 800px\) \{([\s\S]*?)\n\}/.exec(css);
+  assert.ok(short, "矮笔记本横向布局的媒体查询存在");
+  assert.match(short[1], /#panel-tts \.tts-action-bar \{[\s\S]*?position: sticky/);
+  assert.match(short[1], /#panel-tts \.tts-action-bar \{[\s\S]*?bottom: 0/);
+  assert.match(short[1], /#panel-tts \.tts-action-bar \{[\s\S]*?background: var\(--bg-elevated\)/);
+  assert.match(
+    short[1],
+    /#panel-tts \.tts-action-bar \{[\s\S]*?border-top: 1px solid var\(--card-border\)/
+  );
+  // 指令框收到 ~3 行；高级参数仍是收起的 <details>（index.html 里没有 open 属性）
+  assert.match(
+    short[1],
+    /#tts-primary-instruction-row textarea \{ min-height: calc\(3 \* 1\.55em \+ 16px\)/
+  );
+  // 左栏压缩：卡片内重复图例收起、全局图例仍在，侧栏末尾有滚动提示
+  assert.match(short[1], /\.card \.mem-legend \{ display: none; \}/);
+  assert.match(short[1], /#left::after \{[\s\S]*?position: sticky/);
+  // 桌面宽屏限幅：header / main / footer 同一 1680px 上限并居中
+  const wide = /@media \(min-width: 1600px\) \{([\s\S]*?)\n\}/.exec(css);
+  assert.ok(wide, "桌面宽屏限幅的媒体查询存在");
+  assert.match(wide[1], /max-width: 1680px/);
+  assert.match(wide[1], /margin-inline: auto/);
+  // ≤900px 的 R1 吸底规则没有被改动过（移动端 / 平板不回退）
+  assert.match(css, /#tts-text \{ height: calc\(3 \* 1\.55em \+ 16px\); \}/);
+
+  const html = readWeb("index.html");
+  assert.match(html, /<details id="tts-advanced"><summary data-i18n="common\.advanced">/);
+  assert.doesNotMatch(html, /<details id="tts-advanced" open/);
+});
+
 function shuffle(list) {
   const a = list.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -618,7 +725,10 @@ test("an hour with no real task keeps faint baselines and a centred caption", ()
   const world = createDomWorld();
   const ui = mount(world);
   const mod = worldModule(world, {
-    instances: [{ id: "i1", instanceName: "voice" }, { id: "i2", instanceName: "song" }]
+    instances: [
+      { id: "i1", instanceName: "voice" },
+      { id: "i2", instanceName: "song" }
+    ]
   });
   const now = 1_700_000_000_000;
   mod.seedActivity([
@@ -648,10 +758,7 @@ test("an hour with no real task keeps faint baselines and a centred caption", ()
   assert.match(svg, />now</);
   // 居中说明 + 「最近任务：2h 前」（实例名来自实例列表，不只来自历史行）
   assert.match(svg, /aria-label="No task in the last hour across 2 instances"/);
-  assert.match(
-    ui.strip.innerHTML,
-    /act-strip-empty-caption">No activity in the last hour/
-  );
+  assert.match(ui.strip.innerHTML, /act-strip-empty-caption">No activity in the last hour/);
   assert.match(ui.strip.innerHTML, /act-strip-sub">Last task: 1h ago</);
   assert.match(ui.list.innerHTML, />voice</);
   assert.doesNotMatch(ui.strip.innerHTML, /style=/);
@@ -680,15 +787,15 @@ test("stripEmptyLanes / lastTaskAt: one lane per real instance, sorted by id", (
   ];
   const fromRows = mod.stripEmptyLanes(rows, []);
   assert.deepEqual(
-    Array.from(fromRows, l => l.instanceId),
+    Array.from(fromRows, (l) => l.instanceId),
     ["i1", "i2"]
   );
   assert.deepEqual(
-    Array.from(fromRows, l => l.instanceName),
+    Array.from(fromRows, (l) => l.instanceName),
     ["voice", "song"]
   );
   assert.deepEqual(
-    Array.from(fromRows, l => l.rects.length),
+    Array.from(fromRows, (l) => l.rects.length),
     [0, 0]
   );
   // 实例列表优先，并按实例 id 排序（与 stripRects 同一套，落第一条任务时不换位）
@@ -698,7 +805,7 @@ test("stripEmptyLanes / lastTaskAt: one lane per real instance, sorted by id", (
     { id: "i3", modelId: "breeze" }
   ]);
   assert.deepEqual(
-    Array.from(fromList, l => l.instanceId),
+    Array.from(fromList, (l) => l.instanceId),
     ["i1", "i2", "i3", "i9"]
   );
   assert.equal(fromList[0].instanceName, "voice", "实例列表缺名字时用行上的");
@@ -864,14 +971,22 @@ test("activeActivityRows: a queued/running row stays only while a source still v
   fireTaskEvent(mod, "task.started", { taskId: "r1", instanceId: "i1", ts: now });
   fireTaskEvent(mod, "task.queued", { taskId: "q1", instanceId: "i1", ts: now - 1000 });
   assert.deepEqual(
-    mod.activeActivityRows().map((r) => r.taskId).sort().join(","),
+    mod
+      .activeActivityRows()
+      .map((r) => r.taskId)
+      .sort()
+      .join(","),
     "q1,r1"
   );
 
   // 清单里两条都在 -> 都活跃
   mod.seedActivity([running, queued]);
   assert.deepEqual(
-    mod.activeActivityRows().map((r) => r.taskId).sort().join(","),
+    mod
+      .activeActivityRows()
+      .map((r) => r.taskId)
+      .sort()
+      .join(","),
     "q1,r1"
   );
 
@@ -884,13 +999,19 @@ test("activeActivityRows: a queued/running row stays only while a source still v
   // 但清单之后又收到它的事件 -> 重新算活跃（事件比清单新）
   fireTaskEvent(mod, "task.started", { taskId: "r1", instanceId: "i1", ts: Date.now() });
   assert.deepEqual(
-    mod.activeActivityRows().map((r) => r.taskId).join(","),
+    mod
+      .activeActivityRows()
+      .map((r) => r.taskId)
+      .join(","),
     "r1"
   );
 
   // 文本摘要与队列位次：GET /api/tasks 已经有的两个字段，行上要带过来
   mod.resetActivity();
-  mod.seedActivity([Object.assign({}, running, { text: "hello" }), Object.assign({}, queued, { position: 2 })]);
+  mod.seedActivity([
+    Object.assign({}, running, { text: "hello" }),
+    Object.assign({}, queued, { position: 2 })
+  ]);
   const rows = mod.activeActivityRows();
   assert.equal(rows.find((r) => r.taskId === "r1").text, "hello");
   assert.equal(rows.find((r) => r.taskId === "q1").position, 2);

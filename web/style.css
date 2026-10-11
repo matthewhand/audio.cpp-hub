@@ -449,6 +449,99 @@ footer { flex: none; }
   #tts-text { height: calc(3 * 1.55em + 16px); }
 }
 
+/* ---------- 矮笔记本横向布局（>900px 宽且 ≤800px 高） ----------
+   矩阵里只有 1280x720 一档落在这里，也正是最挤的一档。两个症状同时出现：
+   ① 右栏 TTS 面板里「上一条录音 + 合成按钮」被挤出首屏，只能滚面板才点得到；
+   ② 左栏实例卡片下面的「最近活动」与模型行整块落在折叠线下，侧栏自己滚却
+      没有一点提示。
+   处理：① 底部操作条吸在面板滚动区底部（与 ≤900px 同一形态，这段只管横向
+   布局），并收掉面板里的垂直间距 / 文本框行高，让「合成文本框 + 合成按钮」
+   都留在首屏 720px 内；② 左栏自己滚、卡片压缩（内存块保留，卡片内重复的
+   图例行收起——全局图例 #mem-markers 那一行还在），「最近活动」默认收起
+   （标题 + 计数还在，由 activity.js 的 startActivity 按视口高度决定），模型行
+   以收起态紧随其后，侧栏末尾一条渐隐提示下面还有内容。 */
+@media (min-width: 901px) and (max-height: 800px) {
+  /* --- 整体节奏收紧 --- */
+  main { padding: 12px 18px; gap: 16px; }
+  #instance-bar { gap: 6px 8px; }
+  #now-queue { padding-top: 6px; padding-bottom: 6px; }
+  .nq-body { gap: 6px; }
+  .panel-card { padding: 14px 16px; }
+  .panel-card h2 { margin: 0 0 4px; }
+  label { margin-bottom: 7px; }
+  .picker { padding: 9px 11px; margin-bottom: 9px; }
+  .picker-title { margin-bottom: 6px; }
+  .dropzone { padding: 12px; }
+  #tts-result { margin-top: 10px; }
+
+  /* --- ① 底部操作条：合成按钮 + 上一条录音吸在面板滚动区底部 --- */
+  /* 实底取 --bg-elevated（两套主题下都是不透的颜色，内容不从底下透上来），
+     顶部一根细线替代原本的间距，滚到底时它就是这一屏的收尾。 */
+  #panel-tts .tts-action-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin-top: var(--space-3);
+    padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--card-border);
+  }
+  #panel-tts .tts-action-bar .last-take { margin-top: 0; }
+  /* 合成文本框维持默认 4 行；指令框从 4 行收到 ~3 行（仍可右下角拖大）。
+     桌面高视口默认行数不受影响——这段只管 ≤800px 高。 */
+  #tts-primary-instruction-row textarea { min-height: calc(3 * 1.55em + 16px); }
+  /* 「高级参数」保持收起的 <details>：index.html 里本就没有 open 属性，
+     这里只把它的上间距收小，省下的高度留给文本框与合成按钮。 */
+  #tts-advanced { margin-top: 4px; }
+
+  /* --- ② 左栏：自己滚 + 压缩 --- */
+  #left { flex: 0 0 340px; }
+  /* 侧栏末尾的滚动提示：sticky 伪元素粘在滚动区底边，滚不到底时留一条渐隐。 */
+  #left::after {
+    content: "";
+    position: sticky;
+    bottom: 0;
+    display: block;
+    height: 20px;
+    margin-top: -20px;
+    background: linear-gradient(to top, var(--bg), rgba(0, 0, 0, 0));
+    pointer-events: none;
+  }
+  .sec-head { margin: 8px 0 6px; }
+  .card-list { gap: 6px; }
+  .card { padding: 7px 11px; }
+  .card-title { font-size: 13px; }
+  .card-family { font-size: 11px; }
+  .card-actions { margin-top: 6px; }
+  /* 内存块本身保留（「这块卡占多少」照旧可读），只把它末尾重复的图例行收起：
+     同樣的记号说明在列表上方的 #mem-markers 全局图例里有一份。 */
+  .mem { margin-top: 5px; padding: 4px 8px; }
+  .card .mem-legend { display: none; }
+  .mem-markers { margin: 0 2px 4px; }
+  .activity-panel { margin: 8px 0 2px; }
+  .model-panel { margin: 6px 0 0; }
+}
+
+/* ---------- 桌面宽屏内容上限（≥1600px） ----------
+   1920x1080 上两栏被拉满整幅宽，左右各剩一大片空白（内容不加限幅的代价）。
+   给内容定一个上限并居中：页头 inner 与 main 两栏收在同一个 1680px 里，左栏
+   宽度不受影响（flex-basis 仍是固定值），也不会横向溢出——max-width 只在视口
+   更宽时生效，1920px 下左右边距各 ~120px，完全对称。 */
+@media (min-width: 1600px) {
+  /* footer 自己还带着 .hint（margin: 6px 0），类选择器比元素选择器更具体，
+     所以这里必须写成 footer.hint 才压得住那两条 0 边距。 */
+  header,
+  main,
+  footer.hint {
+    /* width 必须是定值：只写 max-width + margin:auto 的话，弹性子项会退化成
+       fit-content（main 收成内容宽、页头收成按钮行宽度），限幅就变成了收缩。
+       定值宽度 + max-width 才既撑满又不超出 1680px。 */
+    width: 100%;
+    max-width: 1680px;
+    margin-inline: auto;
+  }
+}
+
 /* ============================ L4: COMPONENTS ============================ */
 
 /* ---------- 卡片 ---------- */

@@ -15,6 +15,10 @@ import { isTaskStreamLive } from "./task-events.js";
 
 const OPEN_KEY = "hub-activity-open";
 const JUNK_KEY = "hub-activity-show-junk";
+/* 矮笔记本横向布局（>900px 宽且 ≤800px 高，矩阵里的 1280x720）下，左栏要在一屏里
+   同时露出实例卡片、「最近活动」标题与模型摘要行，所以「最近活动」默认收起：
+   标题与计数还在，点开即是内容。与 style.css 的同名媒体查询保持同一断点。 */
+const SHORT_SIDEBAR_MQ = "(min-width: 901px) and (max-height: 800px)";
 const SEED_POLL_MS = 5000;
 const STRIP_TICK_MS = 5000;
 const STORE_CAP = 100;
@@ -709,12 +713,40 @@ function ensureStrip() {
   }, STRIP_TICK_MS);
 }
 
+/* 用户显式记下的开合（"1" 展开 / "0" 收起 / null 没记过）。private mode 读不出按没记过。 */
+function storedActivityOpen() {
+  try {
+    if (typeof localStorage !== "undefined") return localStorage.getItem(OPEN_KEY);
+  } catch { /* private mode */ }
+  return null;
+}
+
+/** 当前视口是否落进「矮笔记本横向布局」。没有 matchMedia 的环境按否处理。纯函数。 */
+export function shortSidebarViewport(win) {
+  const w = win || (typeof window !== "undefined" ? window : null);
+  return !!w && typeof w.matchMedia === "function" && w.matchMedia(SHORT_SIDEBAR_MQ).matches === true;
+}
+
+/** 默认开合：矮视口收起（标题 + 计数仍可见），其余视口展开。纯函数。 */
+export function defaultActivityOpen(shortHeight) {
+  return !shortHeight;
+}
+
+/** 套用默认开合：用户没有显式记录时才动。返回面板最终的开合状态。 */
+function applyActivityPanelDefault() {
+  const panel = panelEl();
+  if (!panel) return null;
+  if (storedActivityOpen() !== null) return panel.open;
+  panel.open = defaultActivityOpen(shortSidebarViewport());
+  return panel.open;
+}
+
 export function startActivity() {
   const panel = panelEl();
   if (panel) {
-    try {
-      if (typeof localStorage !== "undefined" && localStorage.getItem(OPEN_KEY) === "0") panel.open = false;
-    } catch { /* private mode */ }
+    const stored = storedActivityOpen();
+    if (stored === "0") panel.open = false;
+    else if (stored === null) applyActivityPanelDefault();
     if (panel.addEventListener) {
       panel.addEventListener("toggle", () => {
         try {
@@ -734,6 +766,14 @@ export function startActivity() {
       if (typeof isTaskStreamLive === "function" && isTaskStreamLive()) stopPoll();
       else ensurePoll();
     });
+    /* 视口高度跨过 800px 时重套默认开合（用户手动开合过就不插手），
+       缩放 / 外接显示器切换时左右栏布局也跟着变。 */
+    if (typeof window.matchMedia === "function") {
+      const mq = window.matchMedia(SHORT_SIDEBAR_MQ);
+      if (mq && typeof mq.addEventListener === "function") {
+        mq.addEventListener("change", () => applyActivityPanelDefault());
+      }
+    }
   }
   pullTasks();
   ensurePoll();
