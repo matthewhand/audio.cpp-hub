@@ -86,6 +86,7 @@ function render() {
   const list = $("activity-queue-list");
   list.tabIndex = -1; // focus fallback if a task becomes terminal
   const focusWithin = list.contains(document.activeElement);
+  const priorFocus = focusWithin ? document.activeElement : null;
   const existing = new Map([...list.querySelectorAll(".aq-row")].map(el => [el.dataset.aqTaskId, el]));
   const ordered = [];
   for (const task of orderActivity(rows)) {
@@ -147,7 +148,10 @@ function render() {
       cursor = next;
     }
   }
-  if (focusWithin && !list.contains(document.activeElement)) list.focus({ preventScroll: true });
+  if (focusWithin && !list.contains(document.activeElement)) {
+    const target = priorFocus?.isConnected && list.contains(priorFocus) ? priorFocus : list;
+    target.focus({ preventScroll: true });
+  }
 }
 async function reconcile() {
   if (!opened) return;
@@ -169,6 +173,7 @@ async function reconcile() {
 }
 async function cancel(id) {
   if (!opened || stale || pending.has(id)) return;
+  const current = generation;
   pending.add(id);
   render();
   try {
@@ -176,14 +181,18 @@ async function cancel(id) {
     // A GET that began before DELETE is not valid cancellation confirmation.
     const previous = inFlight;
     if (previous) await previous;
-    if (!opened) return;
+    if (!opened || generation !== current) return;
     await reconcile(); // must issue a new authoritative GET after DELETE
     if (stale) showToast("error", t("aq.confirmFailed"));
   } catch (error) {
-    if (opened) showToast("error", t("aq.cancelFailed") + ": " + (error?.message || ""));
+    if (opened && generation === current) {
+      showToast("error", t("aq.cancelFailed") + ": " + (error?.message || ""));
+    }
   } finally {
-    pending.delete(id);
-    render();
+    if (opened && generation === current) {
+      pending.delete(id);
+      render();
+    }
   }
 }
 function schedulePoll() {
