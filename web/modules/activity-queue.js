@@ -73,52 +73,81 @@ function node(tag, value, cls) {
   el.textContent = value;
   return el;
 }
+function updateText(el, value) {
+  if (el.textContent !== value) el.textContent = value;
+}
 function render() {
   if (!opened) return;
   const status = $("activity-queue-status");
   const message = stale ? t("aq.stale") : streamLive ? t("aq.live") : t("aq.polling");
-  if (status.textContent !== message) status.textContent = message;
+  updateText(status, message); // avoid repeat aria-live announcements
   const state = stale ? "stale" : streamLive ? "live" : "polling";
   if (status.dataset.state !== state) status.dataset.state = state;
   const list = $("activity-queue-list");
-  list.tabIndex = -1;
+  list.tabIndex = -1; // focus fallback if a task becomes terminal
   const focusWithin = list.contains(document.activeElement);
-  const focusedTaskId = focusWithin ? document.activeElement.dataset?.aqCancelTaskId : null;
-  list.replaceChildren();
-  if (!rows.length) {
-    list.append(node("li", stale ? t("aq.unavailable") : t("aq.empty")));
-    if (focusWithin) list.focus({ preventScroll: true });
-    return;
-  }
-  const privacy = privacyOn();
+  const existing = new Map([...list.querySelectorAll(".aq-row")].map(el => [el.dataset.aqTaskId, el]));
+  const ordered = [];
   for (const task of orderActivity(rows)) {
-    const line = node("li", "", "aq-row");
-    const statusLabel = t("aq.status." + task.status);
-    const instance = String(task.instanceName || task.modelId || task.instanceId || "");
-    const preview = privacy ? t("history.masked") : String(task.text || "");
-    line.append(node("span", statusLabel, "aq-status"),
-      node("span", instance, "aq-instance"),
-      node("span", preview, "aq-preview"));
-    if (stale) {
-      line.append(node("span", t("aq.unverified"), "aq-status"));
-    } else if (ACTIVE.has(task.status)) {
-      const button = node("button", pending.has(task.id) ? t("aq.cancelling") : t("aq.cancel"), "btn-ghost");
-      button.type = "button";
-      // Keep the pending control focusable; cancel() guards against duplicate clicks.
-      button.setAttribute("aria-disabled", String(pending.has(task.id)));
-      button.dataset.aqCancelTaskId = task.id;
-      button.setAttribute("aria-label", t(pending.has(task.id) ? "aq.cancelling" : "aq.cancel"));
-      button.addEventListener("click", () => void cancel(task.id));
-      line.append(button);
+    let line = existing.get(task.id);
+    if (!line) {
+      line = node("li", "", "aq-row");
+      line.dataset.aqTaskId = task.id; // id only, never the task text
+      line.append(node("span", "", "aq-status"), node("span", "", "aq-instance"),
+        node("span", "", "aq-preview"));
     }
-    list.append(line);
+    updateText(line.querySelector(".aq-status"), t("aq.status." + task.status));
+    updateText(line.querySelector(".aq-instance"),
+      String(task.instanceName || task.modelId || task.instanceId || ""));
+    updateText(line.querySelector(".aq-preview"),
+      privacyOn() ? t("history.masked") : String(task.text || ""));
+    let unverified = line.querySelector(".aq-unverified");
+    let button = line.querySelector("button");
+    if (stale) {
+      if (button) button.remove();
+      if (!unverified) {
+        unverified = node("span", "", "aq-status aq-unverified");
+        line.append(unverified);
+      }
+      updateText(unverified, t("aq.unverified"));
+    } else if (ACTIVE.has(task.status)) {
+      if (unverified) unverified.remove();
+      if (!button) {
+        button = node("button", "", "btn-ghost");
+        button.type = "button";
+        button.dataset.aqCancelTaskId = task.id;
+        button.addEventListener("click", () => void cancel(task.id));
+        line.append(button);
+      }
+      const cancelling = pending.has(task.id);
+      button.setAttribute("aria-disabled", String(cancelling));
+      updateText(button, t(cancelling ? "aq.cancelling" : "aq.cancel"));
+      button.setAttribute("aria-label", t(cancelling ? "aq.cancelling" : "aq.cancel"));
+    } else {
+      if (button) button.remove();
+      if (unverified) unverified.remove();
+    }
+    ordered.push(line);
   }
-  if (focusWithin) {
-    const button = [...list.querySelectorAll("button")].find(
-      el => el.dataset.aqCancelTaskId === focusedTaskId
-    );
-    (button || list).focus({ preventScroll: true });
+  if (!ordered.length) {
+    if (list.children.length !== 1 || !list.firstElementChild.classList.contains("aq-empty")) {
+      list.replaceChildren(node("li", "", "aq-empty"));
+    }
+    updateText(list.firstElementChild, stale ? t("aq.unavailable") : t("aq.empty"));
+  } else {
+    // Move only out-of-order rows, never remount a row that remains in position.
+    let cursor = list.firstChild;
+    for (const row of ordered) {
+      if (row === cursor) cursor = cursor.nextSibling;
+      else list.insertBefore(row, cursor);
+    }
+    while (cursor) {
+      const next = cursor.nextSibling;
+      cursor.remove();
+      cursor = next;
+    }
   }
+  if (focusWithin && !list.contains(document.activeElement)) list.focus({ preventScroll: true });
 }
 async function reconcile() {
   if (!opened) return;
