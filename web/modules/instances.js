@@ -1,7 +1,4 @@
-/* web/modules/instances.js — 实例
- *
- * 左栏实例列表、顶部实例状态条（选择 / 停止 / 详情）、实例详情弹窗，
- * 以及 2s 轮询的建立与复用（Api.poll 句柄在模块内保存，单飞 + 可见性语义不变）。 */
+/* web/modules/instances.js — 实例 * * 左栏实例列表 */
 
 import { focusDialog, renderEmptyState, renderListError, restoreDialogFocus, showSkeleton, showToast } from "./async-ui.js";
 import { $, Api, esc, t } from "./dom.js";
@@ -25,7 +22,7 @@ export let instances = [];
 
 /* ---------- 实例列表 + 状态条（每 2s 轮询） ---------- */
 export let instancePoller = null;
-let instancesLoaded = false;   // 首次成功拉取前显示骨架屏 / 失败时给可见错误+重试
+let instancesLoaded = false;   // First-load placeholder.
 /* 轮询数据回调：只在成功时更新视图；失败由 Api.poll 的 onError 处理 */
 export function applyInstances(data) {
   instancesLoaded = true;
@@ -49,9 +46,7 @@ export function refreshInstances() {
   return Api.list("/api/instances").then(applyInstances).catch(onInstancesError);
 }
 
-/* 建立 2s 轮询（由 web/app.js 在启动时调用一次）。句柄只在本模块持有：
-   Api.poll 保证上一轮结束才排下一轮、标签页隐藏时不发请求、重新可见立即补一次。
-   Api.poll 默认 immediate：建轮询时首轮请求已发出，所以这里只需在首轮回来之前占位。 */
+/* 建立 2s 轮询（由 web/app.js 在启动时调用一次）。句柄只在本模块持 */
 export function startInstancePolling() {
   if (!instancesLoaded) showSkeleton($("instance-list"), 3);
   instancePoller = Api.poll("/api/instances", applyInstances, { list: true, onError: onInstancesError });
@@ -61,7 +56,7 @@ export function startInstancePolling() {
 export function renderInstanceList() {
   const list = $("instance-list");
   list.removeAttribute("aria-busy");
-  // 展示全部实例（不再按选中模型过滤）：就绪 > 启动中 > 其它，可用的始终排在最前
+  // Sort READY first.
   const order = { READY: 0, STARTING: 1 };
   const sorted = [...instances].sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2));
   list.innerHTML = "";
@@ -78,7 +73,7 @@ export function renderInstanceList() {
     const card = document.createElement("div");
     const statusClass = STATUS_CLASS[inst.status] || "stopped";
     card.className = "card" + (inst.id === activeInstanceId ? " selected" : "");
-    // 有活跃任务（QUEUED/RUNNING）时追加转圈“工作中”徽标，随 2s 轮询自动出现/消失
+    // Show when queued/running.
     const workingBadge = (inst.taskCount || 0) > 0
       ? ` <span class="badge working">${esc(inst.taskCount > 1 ? t("instance.workingCount", { n: inst.taskCount }) : t("instance.working"))}</span>`
       : "";
@@ -125,8 +120,8 @@ export function updateInstanceBar() {
   } else {
     setActiveInstanceId(null);
   }
-  // 注意：历史按 modelId 维度记录，与激活哪个实例无关，实例启停/切换不得刷新历史列表
-  // （重建 DOM 会打断行内播放、折叠已展开的播放器）
+  // Keep history DOM stable on instance changes.
+
   select.disabled = !has;
   $("instance-stop").disabled = !has;
   $("instance-detail").disabled = !has;
@@ -139,6 +134,19 @@ export function updateInstanceBar() {
   const pill = $("instance-pill");
   pill.textContent = has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
+
+  // Load the alternatives UI only if needed.
+  const context = $("instance-context");
+  if (has) {
+    context.classList.add("hidden");
+  } else {
+    const target = selectedModelId;
+    void import("./readiness.js").then(({ renderReadiness }) => {
+      if (selectedModelId === target && !instances.some(i => i.modelId === target && i.status === "READY")) {
+        renderReadiness(instances, models, target);
+      }
+    }).catch(() => { context.classList.add("hidden"); });
+  }
 
   for (const id of SUBMIT_BTNS) {
     const btn = $(id);
