@@ -1,4 +1,4 @@
-/* Optional ASR speaker-turn renderer. Loaded only for results with speaker turns. */
+/* Optional ASR speaker-turn renderer. Loaded when an ASR result is opened, outside initial startup. */
 import { $, t } from "./dom.js";
 
 /* Upstream timestamps are samples, not milliseconds. Never guess the sample rate. */
@@ -51,13 +51,12 @@ export function renderSpeakerTurns(json) {
 }
 
 /* ASR 结果渲染（任务完成后由 renderTaskResult 调用） */
-export async function renderAsrResult(json) {
+export function renderAsrResult(json) {
   $("asr-text").textContent = json.text || t("asr.noText");
   const timeline = $("asr-speaker-timeline");
   timeline.classList.add("hidden");
   $("asr-speaker-turns").replaceChildren();
   if (Array.isArray(json.speaker_turns) && json.speaker_turns.length > 0) {
-    const { renderSpeakerTurns } = await import("./diarization-lazy.js");
     renderSpeakerTurns(json);
   }
   const details = {};
