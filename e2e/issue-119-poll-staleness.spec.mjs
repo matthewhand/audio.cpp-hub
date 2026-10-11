@@ -12,6 +12,9 @@ for (const [lang, warning] of [
       instances: [{
         id: "ready-breeze", modelId: "breeze-tts", instanceName: "Breeze",
         status: "READY", backend: "vulkan", device: 0, port: 19090
+      }, {
+        id: "ready-index", modelId: "index_tts2", instanceName: "Index TTS",
+        status: "READY", backend: "cpu", device: 0, port: 19091
       }]
     });
     await openApp(page, backend, { modelId: "breeze-tts", lang });
@@ -29,6 +32,11 @@ for (const [lang, warning] of [
     await expect(page.locator("#instance-stop")).toBeDisabled();
     await expect(page.locator("#instance-list .stop-btn").first()).toBeDisabled();
     await expect(page.locator("#instance-context")).toBeHidden();
+
+    // A user navigation while offline must not resurrect cached READY state.
+    await page.evaluate(() => { location.hash = "#/model/index_tts2"; });
+    await expect(page.locator("#instance-pill")).toContainText(warning);
+    await expect(page.locator("#tts-submit")).toBeDisabled();
 
     await page.unroute("**/api/instances", fail);
     await expect(page.locator("#instance-pill")).toHaveClass(/ok/, { timeout: 12000 });
