@@ -41,5 +41,8 @@ export function closeDrawer() {
   $("drawer-overlay").classList.add("hidden");
   $("menu-toggle").setAttribute("aria-expanded", "false");
 }
+$("activity-queue-open").onclick = () => {
+  void import("./activity-queue.js").then(m => m.toggleActivityQueue());
+};
 $("menu-toggle").onclick = openDrawer;
 $("drawer-overlay").onclick = closeDrawer;
