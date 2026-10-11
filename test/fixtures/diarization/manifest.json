@@ -1,0 +1,93 @@
+{
+  "cases": {
+    "overlap_2spk": {
+      "duration_seconds": 12.0,
+      "rttm_sha256": "1edb21fac177b8817a4a1ca14de9603fd58e1287cca461983ebbd05da224666c",
+      "speaker_count_scripted": 2,
+      "tracks": [
+        {
+          "output_end_sample": 127680,
+          "output_start_sample": 8000,
+          "source_end_sample": 122400,
+          "source_start_sample": 2720,
+          "speaker_id": "speaker_1"
+        },
+        {
+          "output_end_sample": 175520,
+          "output_start_sample": 84800,
+          "source_end_sample": 225920,
+          "source_start_sample": 135200,
+          "speaker_id": "speaker_2"
+        }
+      ],
+      "wav_sha256": "baf59a8a4b8152a93a353bff4b57f57c43018351482e57c01a0e13f8e1a4ad55"
+    },
+    "overlap_4spk": {
+      "duration_seconds": 19.0,
+      "rttm_sha256": "65ad3d92b845930ee15ce5555a437eb1f5dee92b8ac7fdf0e658bca27efb0830",
+      "speaker_count_scripted": 4,
+      "tracks": [
+        {
+          "output_end_sample": 127680,
+          "output_start_sample": 8000,
+          "source_end_sample": 122400,
+          "source_start_sample": 2720,
+          "speaker_id": "speaker_1"
+        },
+        {
+          "output_end_sample": 175520,
+          "output_start_sample": 84800,
+          "source_end_sample": 225920,
+          "source_start_sample": 135200,
+          "speaker_id": "speaker_2"
+        },
+        {
+          "output_end_sample": 223040,
+          "output_start_sample": 142400,
+          "source_end_sample": 339840,
+          "source_start_sample": 259200,
+          "speaker_id": "speaker_3"
+        },
+        {
+          "output_end_sample": 289600,
+          "output_start_sample": 198400,
+          "source_end_sample": 447840,
+          "source_start_sample": 356640,
+          "speaker_id": "speaker_4"
+        }
+      ],
+      "wav_sha256": "80d6268546799c02bab0aa3244e6f413fa5d78198e8663ba86f1384476554b89"
+    },
+    "silence_0spk": {
+      "duration_seconds": 6.0,
+      "rttm_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "speaker_count_scripted": 0,
+      "tracks": [],
+      "wav_sha256": "47b589098cc9e4b92774cd5b6a57ccca0713c02396bf755b2318f7e81cdc534e"
+    },
+    "solo_1spk": {
+      "duration_seconds": 8.5,
+      "rttm_sha256": "b6e592a040235af1e338b03cc832e7b118f3f852e9054869747be3fbe1354110",
+      "speaker_count_scripted": 1,
+      "tracks": [
+        {
+          "output_end_sample": 127680,
+          "output_start_sample": 8000,
+          "source_end_sample": 122400,
+          "source_start_sample": 2720,
+          "speaker_id": "speaker_1"
+        }
+      ],
+      "wav_sha256": "2843bb38e4dd6d67c6f70fcb07a4c7d713bafca0a87337a2646c931dc4c3f079"
+    }
+  },
+  "human_voice_identity_verified": false,
+  "independent_label_origin": "four_speaker_short.txt: ordered speaker_1..4, with source windows based on silence detection",
+  "phoneme_boundary_verified": false,
+  "sample_rate": 16000,
+  "source_commit": "f6277c1695a83cf388a8282c1c1a8757cf626f18",
+  "source_path": "assets/resources/four_speaker_short.wav",
+  "source_repo": "https://github.com/0xShug0/audio.cpp",
+  "source_sha256": "81c96c07c7bd4ace825dd02b66a51adb299952fda69e88a22fa456b8dc98a139",
+  "use": "deterministic script-attributed regression fixtures; not a calibrated DER benchmark until independently audited"
+}

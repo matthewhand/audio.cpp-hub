@@ -96,3 +96,55 @@ Sources:
 - https://huggingface.co/nvidia/diar_sortformer_4spk-v1
 - https://huggingface.co/audio-cpp/audio.cpp-gguf
 - https://github.com/0xShug0/audio.cpp/blob/main/docs/speech_analysis.md
+
+## Model-free RTTM fixture and scoring suite (PR #149)
+
+Deterministic fixture WAVs/RTTMs live in
+`test/fixtures/diarization/` with a SHA-256/source-provenance manifest
+and an offline builder at `scripts/build-diarization-fixtures.py`.
+The four scenarios are silence (0 speakers), one speaker, two
+overlapping speaker tracks, and four ordered tracks with overlap.
+They are constructed from upstream `four_speaker_short.wav` using its
+separate four-speaker **script**, never the model output.
+
+**Label integrity limitation:** The labels are precise references for
+source-track placement; the underlying voice identities and phonetic
+boundaries have not been independently human-audited. Treat these as
+script-attributed synthetic engineering fixtures, not certified
+human-annotated ground truth. Do not present DER from these examples as a
+measured real-world Sortformer accuracy score.
+
+`node scripts/score-diarization-rttm.mjs --ref FILE.rttm --hyp
+PREDICTION.rttm --duration SECONDS` compares speaker turns using global
+speaker-ID permutation, overlap-aware misses/false alarms/confusion and
+zero collar. The script also accepts saved CLI turn JSON with an
+**explicit** sample rate. Empty-reference DER is `null`, not a false
+zero; false-alarm seconds remain observable. The scorer never loads
+audio or runs the model. See
+`test/fixtures/diarization/README.md` for source/license/provenance,
+rebuild instructions and limitations.
+
+## Model-free RTTM fixtures and scoring suite (PR #149)
+
+Deterministic fixture WAVs/RTTMs live in
+`test/fixtures/diarization/`, with a SHA-256/source-provenance
+manifest and an offline builder at `scripts/build-diarization-fixtures.py`.
+The four scenarios are silence, one speaker, two overlapping speaker
+tracks, and four source-script speaker tracks with overlap.
+They are constructed from upstream `four_speaker_short.wav` and its
+independently authored four-speaker script, not from Sortformer output.
+
+**Label integrity limitation:** The labels precisely record source-track
+placement; acoustic voice identities and phonetic boundaries have not
+been human-audited. These are script-attributed engineering fixtures,
+**not certified human-annotated diarization ground truth**. Do not
+report their DER as measured real-world model accuracy.
+
+`scripts/score-diarization-rttm.mjs` compares RTTM hypothesis with RTTM
+reference using one-to-one global speaker permutation, overlap-aware
+misses/false alarms/confusion and zero collar. It also accepts
+saved native CLI turn JSON with an explicit sample rate.
+Empty-reference DER is `null`, not a false zero; false-alarm seconds
+remain observable. The scorer never loads audio or runs inference.
+See `test/fixtures/diarization/README.md` for provenance, limitations,
+rebuild instructions and CLI examples.
