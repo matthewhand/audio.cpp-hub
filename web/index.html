@@ -79,7 +79,7 @@
   <a id="skip-to-content" class="skip-link" href="#main-content" data-i18n="a11y.skipToContent">跳到主要内容</a>
   <header>
     <div class="brand">
-      <button id="menu-toggle" class="theme-btn" data-i18n-title="a11y.openMenu" data-i18n-aria-label="a11y.openMenu" aria-label="打开菜单" title="模型与实例菜单"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-menu"/></svg></button>
+      <button id="menu-toggle" class="theme-btn" data-i18n-title="a11y.openMenu" data-i18n-aria-label="a11y.openMenu" aria-label="打开菜单" title="模型与实例菜单" aria-expanded="false" aria-controls="left"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-menu"/></svg></button>
       <h1 class="logo">audio.cpp-hub</h1>
       <span class="subtitle" data-i18n="header.subtitle">audiocpp_server 进程管理 &amp; 音频工作台</span>
     </div>
@@ -100,6 +100,9 @@
   <main id="main-content" tabindex="-1">
     <!-- 左栏：模型 + 实例 -->
     <aside id="left" data-i18n-aria-label="nav.sidebarLabel" aria-label="模型与实例">
+      <!-- 抽屉关闭键：桌面端 display:none；窄屏（≤1100px）时吸附在抽屉顶部，
+           pointer-events / click 由 web/modules/shell.js 的 closeDrawer 处理 -->
+      <button id="drawer-close" class="theme-btn drawer-close" data-i18n-title="history.closeTitle" data-i18n-aria-label="history.closeTitle" title="关闭" aria-label="关闭"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-x"/></svg></button>
       <div class="sec-head">
         <h2 data-i18n="nav.instances">实例</h2>
         <div class="sec-head-right">
@@ -202,7 +205,10 @@
 
           <details id="tts-advanced"><summary data-i18n="common.advanced">高级参数</summary><div class="grid" id="tts-advanced-grid"></div></details>
           <!-- 上一条录音条（web/modules/last-take.js）：合成按钮上方，第一次合成完成前收起 -->
-          <div id="last-take" class="last-take hidden" role="group" aria-labelledby="last-take-title">
+          <!-- 底部操作条：窄屏（≤900px）时 position:sticky 吸在 TTS 面板底部，
+               「上一条录音」与合成按钮一起跟着视口走，不再要滚到面板末尾 -->
+          <div class="tts-action-bar">
+            <div id="last-take" class="last-take hidden" role="group" aria-labelledby="last-take-title">
             <button type="button" id="last-take-play" class="take-play" data-i18n-aria-label="take.play" data-i18n-title="take.play" aria-label="播放上一条录音" title="播放上一条录音"><svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false"><use href="#i-play"/></svg></button>
             <div class="take-head">
               <span class="take-ttl" id="last-take-title" data-i18n="take.title">上一条录音</span>
@@ -214,6 +220,7 @@
             <button type="button" id="last-take-rerun" class="take-rerun" data-i18n-title="take.rerunTitle" title="用相同文本再生成一次"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-rotate-ccw"/></svg><span data-i18n="take.rerun">再生成</span></button>
           </div>
           <button id="tts-submit" class="btn" data-i18n="tts.submit">合成</button>
+          </div>
           <div id="tts-live" class="live-ticker hidden" role="status" aria-live="polite"></div>
           <p id="tts-ready-hint" class="hint ready-hint hidden" role="status" data-i18n="tts.needReady">请先在上方启动或选择一个就绪实例，才能合成。</p>
           <div id="tts-msg" class="msg" role="status" aria-live="polite"></div>

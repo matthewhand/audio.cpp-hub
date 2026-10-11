@@ -51,3 +51,7 @@ export function closeDrawer() {
 }
 $("menu-toggle").onclick = openDrawer;
 $("drawer-overlay").onclick = closeDrawer;
+/* 抽屉内的关闭键（×）：桌面端 display:none 不渲染，窄屏吸附在抽屉顶部。
+   与点遮罩、按 Esc（web/app.js 的全局按键）走同一条 closeDrawer。 */
+const drawerCloseBtn = $("drawer-close");
+if (drawerCloseBtn) drawerCloseBtn.onclick = closeDrawer;

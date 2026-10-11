@@ -332,6 +332,8 @@ footer { flex: none; }
 
 /* 移动端菜单按钮：桌面端隐藏 */
 #menu-toggle { display: none; flex: none; }
+/* 抽屉关闭键：桌面端没有抽屉，整支不渲染（display:none 同时把它移出 Tab 顺序） */
+#drawer-close { display: none; }
 
 @media (max-width: 1100px) {
   main { flex-direction: column; overflow-y: auto; }
@@ -354,8 +356,29 @@ footer { flex: none; }
     box-shadow: var(--shadow-hover);
     transform: translateX(-105%);
     transition: transform var(--dur-3) var(--ease-out);
+    /* 抽屉自己滚：max-height 顶住动态视口（移动浏览器工具栏伸缩时 100vh 会不准），
+       overscroll-behavior 防止滚到抽屉末端时把遮罩后的页面一起带走 */
+    max-height: 100dvh;
+    overscroll-behavior: contain;
   }
   #left.open { transform: translateX(0); }
+  /* 抽屉关闭键：吸附在滚动区顶部（sticky），横贯抽屉宽度、靠右一颗 ×。
+     display:none 是桌面端的默认态，这里在抽屉模式里放开。 */
+  #drawer-close {
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    justify-content: flex-end;
+    width: auto;
+    height: 44px;
+    padding: 0 12px;
+    margin: -16px -12px 4px;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--bg-elevated);
+  }
   .drawer-overlay {
     position: fixed;
     inset: 0;
@@ -372,6 +395,58 @@ footer { flex: none; }
     visibility: hidden;
     pointer-events: none;
   }
+}
+
+/* ---------- 紧凑页头（≤900px） ----------
+   根因：.header-actions 是一条不换行的 flex 行，chip + 7 个图标按钮的固有宽度
+   （360px 视口实测 353px）超过页头可用宽度，语言切换被裁、设置与主题按钮整体
+   冲出右边缘——documentElement.scrollWidth 在 360px 下被顶到 520px。
+   修法不是把它们藏起来，而是让页头自己分行：第一行 logo + ☰，第二行图标工具栏
+   整组（flex:1 1 100%）并允许自身换行。保留整排可见小图标（而不是溢出菜单）：
+   每个按钮都直接可见、直接可达，键盘焦点顺序与视觉顺序一致，也不需要额外管理
+   aria-expanded / 焦点回跳。 */
+@media (max-width: 900px) {
+  header {
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+    padding: 10px 14px;
+  }
+  /* 副标题让位（≤720px 那一档早就这么做了，这里提前到 900px） */
+  .subtitle { display: none; }
+  .header-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+  /* 触摸目标 ≥40px（≤720px 那一档再收到 44px，规则在文件末尾的 L6 附近） */
+  .theme-btn { width: 40px; height: 40px; }
+  #lang-toggle { min-height: 40px; }
+  /* 农场 chip 收缩：GPU 名那一节整段收起，只留状态点 + 「Farm n/n · n failures」 */
+  #hub-chip { height: 32px; padding: 0 9px; }
+  #hub-chip .chip-hub,
+  #hub-chip .chip-hub-sep { display: none; }
+  /* 实例工具栏：select 独占一行，按钮行自己换行，每颗 ≥40px */
+  #instance-bar { flex-wrap: wrap; row-gap: var(--space-2); }
+  #instance-select { flex: 1 1 100%; }
+  #instance-bar .btn,
+  #instance-bar .btn-ghost,
+  #instance-bar .stop-btn { min-height: 40px; }
+  /* Now / Queue 条：自己横向滚动兜底（子项本来就 flex-wrap，正常不会触发） */
+  #now-queue { max-width: 100%; overflow-x: auto; }
+  /* TTS 底部操作条：合成按钮 + 「上一条录音」吸在面板底部，不滚也点得到。
+     实底与卡片同色（不用半透明，内容不从底下透上来），底距带 safe-area。 */
+  #panel-tts .tts-action-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin-top: var(--space-3);
+    padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
+    background: var(--card);
+    border-top: 1px solid var(--card-border);
+  }
+  #panel-tts .tts-action-bar .last-take { margin-top: 0; }
+  /* 首屏要同时看到文本框与合成按钮：合成文本从 4 行压到 3 行（仍可右下角拖大） */
+  #tts-text { height: calc(3 * 1.55em + 16px); }
 }
 
 /* ============================ L4: COMPONENTS ============================ */
@@ -1228,6 +1303,15 @@ details summary:hover { text-decoration: underline; }
 }
 .take-rerun:hover { background: var(--ring); }
 .take-rerun .icon { width: 12px; height: 12px; color: var(--text-dim); }
+
+/* ---------- TTS 底部操作条（#last-take + #tts-submit 的容器） ----------
+   桌面端就是一列纵向堆叠（与加容器之前的形态一致）。
+   ≤900px 的 sticky 形态写在 L3 的紧凑页头媒体查询里（#panel-tts .tts-action-bar）。 */
+.tts-action-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
 
 /* ---------- AudioPicker ---------- */
 .picker {

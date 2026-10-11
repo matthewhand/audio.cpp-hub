@@ -219,6 +219,19 @@ export default [
     }
   },
 
+  /* ---- e2e/responsive.spec.mjs：Node 驱动 + 注入页面的度量回调 ----
+   * 与 ui-shots.mjs / axe-audit.js 同一形状：文件里同时存在 Node 侧的启动/编排
+   * （page.setViewportSize、page.locator、page.evaluate 调用）与 page.evaluate 里
+   * 「在浏览器上下文执行」的四个回调。后者合法地用到 document 与 getComputedStyle
+   * ——它们序列化后跑在页面里，Node 侧碰不到。对这两个名字做显式声明，而不是把整个
+   * browser globals 打开（否则 Node 侧的拼写错误也会一起消失）。 */
+  {
+    files: ["e2e/responsive.spec.mjs"],
+    languageOptions: {
+      globals: { document: "readonly", getComputedStyle: "readonly" }
+    }
+  },
+
   /* ---- 唯一的单规则降级：scripts/ui-inventory.mjs 的 curly（现为两处） ----
    * 该文件由另一条工作流独占，本 PR 不能改它。里面有 3 处
    * 「if/for 的单条语句体被 Prettier 换到下一行」（第 111、114、329 行），

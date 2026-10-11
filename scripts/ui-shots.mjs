@@ -14,14 +14,24 @@
  *   BASE_URL=http://127.0.0.1:18080 OUT_DIR=./ui-shots-out node scripts/ui-shots.mjs
  *   ONLY=mobile-360x800,laptop-1280x720 node scripts/ui-shots.mjs   (subset)
  *   ACTION=generating BASE_URL=... node scripts/ui-shots.mjs        (optional note)
+ *   LABEL=mock-backend node scripts/ui-shots.mjs                    (image label;
+ *       default "production" — mock shots must not pass as production results)
  *
  * One JSON document goes to stdout (a copy lands in OUT_DIR/ui-shots.json);
  * exit code is 1 when any viewport fails its pass criteria. Fold failures are
  * reported separately and never flip the verdict on their own.
  *
- * The pure helpers (VIEWPORTS / LIGHT_SHOT / KEY_CONTROLS / evaluateOverflow /
+ * The pure helpers (VIEWPORTS / LIGHT_SHOT / KEY_CONTROLS / SIDEBAR_CONTROL_IDS /
+ * DRAWER_MAX_WIDTH / shouldOpenDrawer / resolveShotLabel / evaluateOverflow /
  * buildReport) are exported so test/unit/ui-shots.test.mjs can pin them
- * without launching a browser. main() only runs when executed directly. */
+ * without launching a browser. main() only runs when executed directly.
+ *
+ * Narrow viewports (<= DRAWER_MAX_WIDTH) put the models / instances / activity
+ * column in an off-canvas drawer: those runs click the hamburger (#menu-toggle)
+ * AFTER the closed-state dark shot and BEFORE measuring instance-list /
+ * activity-panel / models-panel, so reachability is judged with the drawer
+ * actually open. A second shot `<name>-drawer-open-dark.png` records that state,
+ * and horizontal overflow is measured both closed and drawer-open. */
 import { chromium } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
@@ -45,17 +55,63 @@ export const KEY_CONTROLS = {
   "tts-submit": "#tts-submit", // Synthesize button
   "instance-list": "#instance-list .card", // instance cards
   "activity-panel": "#activity-panel", // recent activity panel
+  "models-panel": "#model-panel", // models <details> (same drawer as the two above)
   "voices-btn": "#voices-btn",
   "history-btn": "#history-btn",
   "downloads-btn": "#downloads-btn",
+  "stats-btn": "#stats-btn",
   "lang-toggle": "#lang-toggle",
   "settings-btn": "#settings-btn",
   "theme-toggle": "#theme-toggle"
 };
 
+/**
+ * Controls that live inside the hamburger drawer (#left, opened by #menu-toggle).
+ * On viewports at or below DRAWER_MAX_WIDTH the runner opens the drawer before
+ * measuring these; everything else is measured in the closed state.
+ */
+export const SIDEBAR_CONTROL_IDS = ["instance-list", "activity-panel", "models-panel"];
+
+/**
+ * Viewport width at or below which the left column is an off-canvas drawer.
+ * Mirrors the AGENTS.md "UI verification standard" line: on these viewports the
+ * hamburger is clicked before the sidebar controls are evaluated.
+ */
+export const DRAWER_MAX_WIDTH = 900;
+
+/** True when a viewport of this width needs the hamburger opened first. */
+export function shouldOpenDrawer(width) {
+  const w = Number(width);
+  return Number.isFinite(w) && w > 0 && w <= DRAWER_MAX_WIDTH;
+}
+
+/**
+ * How the header action buttons were evaluated. "closed" = every icon button was
+ * visible in the page header itself (this UI keeps a compact wrapping row instead
+ * of an overflow menu, so there is no second phase to measure).
+ */
+export const HEADER_BUTTONS_PHASES = ["closed", "overflow-open"];
+
+/** Allowed image labels (AGENTS.md "UI verification standard"). */
+export const SHOT_LABELS = ["production", "mock-backend"];
+
+/**
+ * Label attached to every screenshot of the run: LABEL=mock-backend when the
+ * shots were taken against the e2e mock, otherwise (empty / unset) production.
+ * Unknown values throw instead of silently publishing a mislabelled image.
+ */
+export function resolveShotLabel(value) {
+  const label = value == null || String(value).trim() === "" ? "production" : String(value).trim();
+  if (!SHOT_LABELS.includes(label)) {
+    throw new Error(`LABEL must be one of ${SHOT_LABELS.join(" / ")}: ${label}`);
+  }
+  return label;
+}
+
 const DEFAULT_BASE_URL = "http://127.0.0.1:4173";
 const DEFAULT_OUT_DIR = "./ui-shots-out";
 const SETTLE_MS = 4000; // let the 2s pollers settle before measuring / shooting
+const DRAWER_SETTLE_MS = 600; // drawer slide-in transition (var(--dur-3)) + a frame
 const CONSOLE_ERROR_CAP = 50; // keep the JSON sane; a non-empty list still fails
 const READ_ONLY_METHODS = new Set(["GET", "HEAD"]);
 /* The storage key web/boot.js reads synchronously in <head> (before first paint)
@@ -77,8 +133,17 @@ export function evaluateOverflow(metrics) {
  * A viewport passes when there are no console errors, no horizontal overflow and
  * every key control is reachable. Fold is reported on its own and never gates
  * the verdict.
+ *
+ * Added (additive-only) fields:
+ *   drawerOpened   - the hamburger drawer was opened before the sidebar controls
+ *                    were measured (only on viewports <= DRAWER_MAX_WIDTH)
+ *   headerButtons  - which phase the header action buttons were measured in
+ *   overflowDrawerOpen - overflow measured with the drawer open (null when the
+ *                    drawer never opened)
+ *   shotsLabelled  - every screenshot of the viewport mapped to its image label
  */
 export function buildReport(results, meta = {}) {
+  const shotLabel = resolveShotLabel(meta.label);
   const viewports = (results || []).map((raw) => {
     const controls = {};
     let allReachable = true;
@@ -94,6 +159,9 @@ export function buildReport(results, meta = {}) {
     const failing = Object.keys(controls).filter((id) => !controls[id].aboveFold);
     const consoleErrors = Array.isArray(raw.consoleErrors) ? raw.consoleErrors.slice() : [];
     const overflow = evaluateOverflow(raw.overflow);
+    const drawerOpen = raw.overflowDrawerOpen;
+    const overflowDrawerOpen = drawerOpen == null ? null : evaluateOverflow(drawerOpen);
+    const shots = Array.isArray(raw.shots) ? raw.shots.slice() : [];
     return {
       name: raw.name,
       width: raw.width,
@@ -102,8 +170,12 @@ export function buildReport(results, meta = {}) {
       overflow,
       controls,
       fold: { pass: failing.length === 0, failing },
+      drawerOpened: !!raw.drawerOpened,
+      headerButtons: raw.headerButtons || "closed",
+      overflowDrawerOpen,
+      shotsLabelled: Object.fromEntries(shots.map((shot) => [shot, shotLabel])),
       pass: consoleErrors.length === 0 && overflow.pass && allReachable,
-      shots: Array.isArray(raw.shots) ? raw.shots.slice() : []
+      shots
     };
   });
   return {
@@ -121,6 +193,12 @@ function readOverflowMetrics() {
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth
   };
+}
+
+/** True when the hamburger button is actually rendered (drawer mode). */
+function hamburgerVisible() {
+  const btn = document.querySelector("#menu-toggle");
+  return !!btn && getComputedStyle(btn).display !== "none" && btn.offsetParent !== null;
 }
 
 /**
@@ -198,7 +276,16 @@ function selectViewports(only) {
   return selected;
 }
 
-/** One context + page: load, settle, screenshot, then measure. */
+/** One context + page: load, settle, screenshot, then measure.
+ *
+ * Order of operations for the dark run:
+ *   1. closed-state screenshot + closed-state overflow + header / synthesize
+ *      controls (the hamburger is only *rendered*, never clicked);
+ *   2. on viewports <= DRAWER_MAX_WIDTH (shouldOpenDrawer): click the
+ *      hamburger, screenshot `<name>-drawer-open-dark.png`, re-measure overflow
+ *      and the sidebar controls with the drawer actually open, close it again.
+ * Only the hamburger is ever clicked: it toggles a CSS class, submits nothing
+ * and issues no request, so the run stays read-only in substance. */
 async function shootViewport(browser, viewport, theme, opts) {
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
@@ -235,21 +322,61 @@ async function shootViewport(browser, viewport, theme, opts) {
   try {
     await page.goto(bustCache(opts.baseUrl), { waitUntil: "load" });
     await page.waitForTimeout(SETTLE_MS);
-    const shot = `${viewport.name}-${theme}.png`;
+    const shots = [`${viewport.name}-${theme}.png`];
     await page.screenshot({
-      path: path.join(opts.outDir, shot),
+      path: path.join(opts.outDir, shots[0]),
       animations: "disabled"
     });
-    let overflow = null;
-    let controls = null;
-    if (opts.checks) {
-      overflow = await page.evaluate(readOverflowMetrics);
-      controls = {};
-      for (const [id, selector] of Object.entries(KEY_CONTROLS)) {
-        controls[id] = await page.evaluate(measureControl, selector);
-      }
+    if (!opts.checks) {
+      return { ...viewport, consoleErrors, overflow: null, controls: null, shots };
     }
-    return { ...viewport, consoleErrors, overflow, controls, shots: [shot] };
+    // Closed state: page overflow + everything that is not inside the drawer.
+    const overflow = await page.evaluate(readOverflowMetrics);
+    const controls = {};
+    for (const [id, selector] of Object.entries(KEY_CONTROLS)) {
+      if (SIDEBAR_CONTROL_IDS.includes(id)) continue;
+      controls[id] = await page.evaluate(measureControl, selector);
+    }
+    let drawerOpened = false;
+    let overflowDrawerOpen = null;
+    const wantsDrawer = shouldOpenDrawer(viewport.width);
+    const hasHamburger = await page.evaluate(hamburgerVisible);
+    if (wantsDrawer && hasHamburger) {
+      drawerOpened = true;
+      await page.click("#menu-toggle");
+      await page.waitForSelector("#left.open", { state: "attached" });
+      await page.waitForTimeout(DRAWER_SETTLE_MS);
+      const drawerShot = `${viewport.name}-drawer-open-dark.png`;
+      await page.screenshot({
+        path: path.join(opts.outDir, drawerShot),
+        animations: "disabled"
+      });
+      shots.push(drawerShot);
+      overflowDrawerOpen = await page.evaluate(readOverflowMetrics);
+      for (const id of SIDEBAR_CONTROL_IDS) {
+        controls[id] = await page.evaluate(measureControl, KEY_CONTROLS[id]);
+      }
+      await page.evaluate(() => document.querySelector("#drawer-overlay").click());
+      await page.waitForSelector("#left.open", { state: "detached" });
+    } else {
+      // No drawer at this width (laptop / desktop): the sidebar is part of the
+      // page itself, so measure it in place. A viewport that should have had a
+      // drawer but has no hamburger still reports unreachable, loudly.
+      for (const id of SIDEBAR_CONTROL_IDS) {
+        controls[id] = await page.evaluate(measureControl, KEY_CONTROLS[id]);
+      }
+      if (wantsDrawer) consoleErrors.push("drawer: #menu-toggle not rendered at this viewport");
+    }
+    return {
+      ...viewport,
+      consoleErrors,
+      overflow,
+      controls,
+      drawerOpened,
+      headerButtons: "closed",
+      overflowDrawerOpen,
+      shots
+    };
   } finally {
     await context.close();
   }
@@ -268,6 +395,9 @@ function failedViewport(viewport, err) {
         { present: false, visible: false, reachable: false, aboveFold: false }
       ])
     ),
+    drawerOpened: false,
+    headerButtons: "closed",
+    overflowDrawerOpen: null,
     shots: []
   };
 }
@@ -277,6 +407,7 @@ async function main() {
   if (action) process.stderr.write(`ui-shots: ACTION=${action} (informational only)\n`);
   const baseUrl = process.env.BASE_URL || DEFAULT_BASE_URL;
   const outDir = path.resolve(process.env.OUT_DIR || DEFAULT_OUT_DIR);
+  const label = resolveShotLabel(process.env.LABEL); // throws on an unknown label
   const selected = selectViewports(process.env.ONLY);
   fs.mkdirSync(outDir, { recursive: true });
 
@@ -308,7 +439,11 @@ async function main() {
     await browser.close();
   }
 
-  const report = buildReport(raw, { baseUrl, generatedAt: new Date().toISOString() });
+  const report = buildReport(raw, {
+    baseUrl,
+    generatedAt: new Date().toISOString(),
+    label
+  });
   const json = `${JSON.stringify(report, null, 2)}\n`;
   process.stdout.write(json);
   fs.writeFileSync(path.join(outDir, "ui-shots.json"), json);

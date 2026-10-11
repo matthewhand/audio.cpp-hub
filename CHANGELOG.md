@@ -7,6 +7,7 @@
 ### Fixed
 
 - 修复 TTS 头部「声音设计 / 克隆 / 音色库」分段控件在真实浏览器里整块不渲染：`web/modules/panels.js` 把 `querySelectorAll` 返回的 **NodeList** 当数组 `.map`（Chromium 控制台 `sel.querySelectorAll(...).map is not a function`，`renderTtsSegments` 每次调用都抛，控件永远画不出来——NodeList 只有 `length` / `item()` / 下标 / `forEach` / 迭代，没有 Array 方法）。改为 `Array.from(...)` 后再 `map`。同类问题在单测里抓不到，因为 DOM 桩的 `querySelectorAll` 返回的是 Array；现在桩改成 **NodeList 形状**（显式不给 `map` / `filter` / `reduce` 等），`test/unit/tts-segments.test.mjs` 的渲染路径用例先炸（生产调用栈：`panels.js:318` → `ttsModeOptions` → `renderTtsSegments` → `updateTtsBlocks`），修复后转绿；另修掉该形状暴露出的 3 处测试自身误用（`elapsed-timer` / `last-take` / `model-panel`）
+- 修复 mobile / tablet 窄屏下的横向溢出与不可达控件（≤900px 一档）：根因是 `.header-actions` 这条**不换行的 flex 行**——农场 chip + 7 个图标按钮的固有宽度（360px 视口实测 353px、768px 实测 548px，农场 chip 带 GPU 名时更宽）超出页头可用宽度，语言切换被裁、设置与主题按钮整体冲出右边缘，`documentElement.scrollWidth` 在 360/390 下被顶到 520px、768 下 827px（农场 chip 填充时 891px）。修法不是加溢出菜单，而是让页头自己分行（`header { flex-wrap: wrap }`，`.header-actions` 整组 `flex: 1 1 100%` 并允许自身换行），整排图标按钮仍然直接可见、直接可达，键盘焦点顺序与视觉顺序一致。同时：`.theme-btn` / `#lang-toggle` 触摸目标收到 ≥40px（≤720px 一档 44px）；农场 chip 收缩（收起 GPU 名，只留状态点 + 失败次数）；`.subtitle` 在 900px 起隐藏；实例工具栏的 select 独占一行、按钮行自换行且每颗 ≥40px；Now / Queue 状态条加 `overflow-x: auto` 兜底；TTS 面板底部新增 `.tts-action-bar` 容器，「上一条录音」与合成按钮在窄屏 `position: sticky` 吸在面板底部（实底 + `env(safe-area-inset-bottom)`），合成文本框从 4 行压到 3 行，首屏同时看见文本框与按钮；左栏抽屉补 `max-height: 100dvh` + `overscroll-behavior: contain` 自己滚、不把底层页面带走，并新增吸附在抽屉顶部的 `#drawer-close` 关闭键（桌面端 `display:none`，与遮罩点击、Esc 走同一条 `closeDrawer`）；`#menu-toggle` 补 `aria-expanded` / `aria-controls`
 - 修复左栏 1280x800 的收纳：实例卡片第三行身份信息（`#<id> · <后端>`）确认已从卡片 markup 去掉（完整 id / 后端 / 设备 / 可执行文件只在卡片 `title` 提示与「详情」弹窗），并把卡片、内存条、卡片列表、小节标题、活动 / 模型面板的垂直 padding 与 gap 收紧一轮（实例卡 266px → 241px，卡片列表 gap 10 → 8，内存条内外距、进度条边距、图例与操作行距各收 2–4px，小节标题与两个 `<details>` 面板的 margin 各收 2–4px，模型卡 padding 8px → 6px）。实测首屏（1280×800、两号就绪实例带内存条）可见：实例列表两张卡 + 「最近活动」面板头（模型行在面板收起时同样落在首屏内；面板展开时其「最近一小时」时间条是内容，不属间距调整范围）
 
 ### Added
@@ -54,6 +55,7 @@
 - `SECURITY.md`：威胁模型、未鉴权可变接口清单与漏洞上报渠道
 - `CONTRIBUTING.md`、`CHANGELOG.md`、`CODE_OF_CONDUCT.md` 及 `.github` issue / PR 模板
 - `README.md` / `README_EN.md` 增加前置条件、全部配置键、故障排查与截图占位
+- 新增移动端 / 平板响应式 e2e（`e2e/responsive.spec.mjs`，headless Chromium + MockBackend，无 Go / GPU / 模型）：360x800 与 390x844、768x1024 三档各钉「无横向溢出 + 页头 7 个操作按钮可见且触摸目标 ≥40px 且在视口内」；抽屉用例钉「汉堡打开后实例 / 最近活动 / 模型三块都在、`overflow-y` 可用且 `max-height` 非 `none`、压矮到 420px 后内容确实在抽屉内滚动、`#drawer-close` 可点且 Esc 能收起、打开抽屉不把页面撑宽」；360x800 另钉合成按钮 sticky 在首屏内、高度 ≥44px、合成文本框高度落在 40–90px；1280x720 与 1920x1080 两档钉「不回归」：无横向溢出、汉堡键与抽屉关闭键不渲染、左栏是常驻列、页头仍是单行 `nowrap`
 
 ### Changed
 
