@@ -155,6 +155,7 @@ func (b *EventBus) OnTaskEvent(ev taskEvent) {
 		"instanceId": ev.InstanceID,
 		"modelId":    ev.ModelID,
 		"category":   ev.Category,
+		"status":     ev.Status,
 		"ts":         time.Now().UnixMilli(),
 	}
 	switch ev.Name {
@@ -170,10 +171,16 @@ func (b *EventBus) OnTaskEvent(ev taskEvent) {
 	case eventTaskFailed:
 		payload["ok"] = false
 		payload["durationMs"] = ev.DurationMs
-		if ev.Error != "" {
-			payload["error"] = ev.Error
+	case eventTaskCancelled:
+		payload["durationMs"] = ev.DurationMs
+		if ev.PeakRam != nil {
+			payload["peakRamBytes"] = *ev.PeakRam
+		}
+		if ev.PeakVram != nil {
+			payload["peakVramBytes"] = *ev.PeakVram
 		}
 	}
+	// Error messages may echo private prompts; clients fetch authoritative task state.
 	b.Publish(ev.Name, payload)
 }
 

@@ -269,3 +269,27 @@ take the direct hub (`transcribe()` is hub-direct shape (b) above).
   timeout, but a long generation delays later jobs on the **same** instance only.
 - LAN-only, no auth: put a reverse proxy with TLS + auth in front before any
   non-LAN exposure.
+
+### Task lifecycle push stream (draft Issue #121 backend)
+
+`GET /api/events/stream` is a **hub-local** Server-Sent Events endpoint
+(`Content-Type: text/event-stream`); it is not proxied through fan-out.
+Clients receive an initial `hello` event with `{}`, periodic comment pings,
+and named `task.queued`, `task.started`, `task.finished`, `task.failed`, and
+`task.cancelled` events. Each task event carries `taskId`, `instanceId`,
+`modelId`, `category`, `status`, and a millisecond `ts`.
+Terminal events include `durationMs`; available observed peaks appear as
+`peakRamBytes` and `peakVramBytes`. The failure event deliberately omits
+backend error strings because these could contain user-authored task content.
+
+The stream is transient: no event-history replay is provided. A slow reader
+can miss events, and subscriptions disconnect cleanly when the client closes.
+**Always** fetch the authoritative state using `GET /api/tasks` after
+connecting or reconnecting and on relevant task events. Fall back to bounded
+polling when the stream is unavailable or disconnected.
+
+`GET /api/instances` may supply an optional `memory` object on supported
+platforms. Current `vramBytes` is omitted when the latest GPU probe failed;
+historically *measured* peak/average fields may remain available. Neither
+absence nor an old peak should be interpreted as zero or as a live reading.
+The sampler does not run on platforms lacking process-RSS instrumentation.
