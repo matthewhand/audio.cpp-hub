@@ -337,7 +337,7 @@ footer { flex: none; }
 .tts-card h2 { margin-top: 0; }
 
 /* ---- 用量与性能看板（#/stats） ---- */
-.stats-body { padding: var(--space-4) var(--space-5); overflow-y: auto; }
+.stats-body {flex:1;min-height:0;padding:var(--space-4) var(--space-5);overflow-y:auto;}
 .stats-totals {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -1367,7 +1367,8 @@ footer { padding: 4px 24px 18px; }
 
 /* ---------- TTS 操作历史（右侧边栏） ---------- */
 #history-panel .history-panel-card,
-#voices-panel .history-panel-card {
+#voices-panel .history-panel-card,
+#stats-panel .history-panel-card {
   width: min(1100px, calc(100vw - 48px));
   height: calc(100vh - 96px);
   min-height: 0;
@@ -1383,11 +1384,13 @@ footer { padding: 4px 24px 18px; }
   transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
 }
 #history-panel:not(.hidden) .history-panel-card,
-#voices-panel:not(.hidden) .history-panel-card { opacity: 1; transform: none; }
+#voices-panel:not(.hidden) .history-panel-card,
+#stats-panel:not(.hidden) .history-panel-card { opacity: 1; transform: none; }
 @media (max-width: 1100px) {
   /* 窄屏下全屏面板进一步收紧边距 */
   #history-panel .history-panel-card,
-  #voices-panel .history-panel-card {
+  #voices-panel .history-panel-card,
+  #stats-panel .history-panel-card {
     width: calc(100vw - 16px);
     height: calc(100vh - 24px);
     border-radius: 10px;
