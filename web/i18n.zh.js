@@ -167,6 +167,7 @@ window.I18N_ZH = {
   "history.refresh": "刷新",
   "history.clear": "清空",
   "history.empty": "暂无历史记录",
+  "history.emptyFor": "{model} 暂无生成记录（按模型显示）。",
   "history.load": "载入",
   "history.play": "播放",
   "history.pause": "暂停",
