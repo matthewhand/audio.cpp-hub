@@ -934,6 +934,7 @@
     { "key": "Home", "negated": false, "source": "web/audio-picker.js" },
     { "key": "Home", "negated": false, "source": "web/modules/async-ui.js" },
     { "key": "Home", "negated": false, "source": "web/modules/file-browser.js" },
+    { "key": "hub-privacy", "negated": false, "source": "web/modules/sidebar.js" },
     { "key": "k", "negated": false, "source": "web/modules/command-palette-lazy.js" },
     { "key": "K", "negated": false, "source": "web/modules/command-palette-lazy.js" },
     { "key": "Tab", "negated": true, "source": "web/app.js" }
