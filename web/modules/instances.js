@@ -10,6 +10,12 @@ export function statusText(s) {
   return v === "instance.status." + s ? s : v;
 }
 
+// Unknown samples stay unknown; never infer VRAM from RAM or historical peaks.
+export function memoryMiB(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? (value / 1048576).toFixed(1) + " MiB" : "—";
+}
+
 export const SUBMIT_BTNS = ["tts-submit", "asr-submit", "sep-submit", "music-submit", "other-submit"];
 export const SUBMIT_KEYS = { "tts-submit": "tts.submit", "asr-submit": "asr.submit", "sep-submit": "sep.submit", "music-submit": "music.submit", "other-submit": "other.submit" };
 export function submitLabel(id) {
@@ -85,6 +91,16 @@ export function renderInstanceList() {
     let html = `<div class="card-title">${esc(inst.instanceName || inst.modelId)} <span class="badge ${statusClass}">${esc(statusText(inst.status))}</span>${workingBadge}</div>
       <div class="card-family">${esc(modelName)} ｜ #${esc(inst.id)}</div>
       <div class="card-desc">${esc(inst.backend)}${inst.device != null ? ":" + esc(inst.device) : ""} ｜ ${esc(t("instance.port"))} ${esc(inst.port)}${inst.executableName ? " ｜ " + esc(inst.executableName) : ""}</div>`;
+    if (inst.memory && typeof inst.memory === "object") {
+      for (const [label, keys] of Object.entries({
+        RAM: ["ramBytes", "ramPeakBytes", "ramAvgBytes"],
+        VRAM: ["vramBytes", "vramPeakBytes", "vramAvgBytes"]
+      })) {
+        if (!keys.some(key => inst.memory[key] != null)) continue;
+        const readings = keys.map(key => memoryMiB(inst.memory[key]));
+        html += `<div class="card-desc">${esc(label)} · ${esc(t("instance.memoryLegend"))}: ${esc(readings.join(" / "))}</div>`;
+      }
+    }
     if (inst.status === "ERROR" && inst.errorMessage) {
       html += `<div class="error-text">${esc(inst.errorMessage)}</div>`;
     }
