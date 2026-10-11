@@ -39,13 +39,12 @@ $("history-panel").addEventListener("mousedown", (e) => {
 export function privacyOn() {
   return localStorage.getItem("hub-privacy") === "1";
 }
-/* Preserve preview text in JavaScript only, never in DOM attributes or hidden nodes. */
+/* Keep raw previews outside the DOM. */
 const privateRowText = new WeakMap();
 export function rememberHistoryRowText(node, text) {
   privateRowText.set(node, text || "");
 }
-/* Refresh visible previews; rebuild the full row when privacy mode changes to
- * update expanded details, playback ARIA labels and cached row signatures. */
+/* Refresh rows and ARIA on privacy changes. */
 export function applyHistoryPrivacy() {
   const btn = $("history-privacy");
   btn.textContent = t("history.privacyBtn");
@@ -69,7 +68,7 @@ window.addEventListener("storage", (event) => {
     renderSidebarList();
   }
 });
-// 语言切换后重新生成隐藏的详情/播放标签，避免陈旧的 DOM 数据
+// Rebuild translated details and labels.
 I18N.onChange(() => {
   applyHistoryPrivacy();
   renderSidebarList();
@@ -500,7 +499,7 @@ export function makeHistoryRow(item) {
   const timeEl = row.querySelector(".history-time");
   timeEl.textContent = I18N.date(item.time);
   const textEl = row.querySelector(".history-text");
-  // Keep raw text outside serialized DOM attributes, even when privacy is off.
+  // Keep raw previews off the DOM.
   rememberHistoryRowText(textEl, item.text);
   textEl.textContent = privacyOn() && item.text ? t("history.masked") : item.text || t("history.noText");
   if (item.text && !privacyOn()) textEl.title = item.text;

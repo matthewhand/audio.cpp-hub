@@ -326,14 +326,13 @@ func (s *MemorySampler) record(instanceID string, now time.Time, ram, vram int64
 		}
 	}
 	st.addSample(now, ram, vram, vramKnown, source, !busy)
-	vramSticky, vramKnownSticky, vramSourceSticky := st.lastVRAM, st.vramKnown, st.vramSource
 	s.mu.Unlock()
 
-	// Per-task peaks for RUNNING tasks of this instance (peaks only grow).
-	// vram < 0 means "unknown" and is skipped there.
+	// Never attribute a cached VRAM reading to a different task after an
+	// unavailable probe: a task peak is valid only for a measured sample.
 	taskVram := int64(-1)
-	if vramKnownSticky {
-		taskVram = vramSticky
+	if vramKnown {
+		taskVram = vram
 	}
 	s.tasks.NoteInstanceSample(instanceID, ram, taskVram)
 
@@ -343,9 +342,9 @@ func (s *MemorySampler) record(instanceID string, now time.Time, ram, vram int64
 			"ramBytes":   ram,
 			"ts":         now.UnixMilli(),
 		}
-		if vramKnownSticky {
-			payload["vramBytes"] = vramSticky
-			payload["vramSource"] = vramSourceSticky
+		if vramKnown {
+			payload["vramBytes"] = vram
+			payload["vramSource"] = source
 		}
 		s.bus.Publish(eventInstanceMemory, payload)
 	}
@@ -387,7 +386,9 @@ func (s *MemorySampler) MemoryJSON(instanceID string) map[string]any {
 		out["idleSinceMs"] = st.idleSince.UnixMilli()
 	}
 	if st.vramKnown {
-		out["vramBytes"] = st.lastVRAM
+		if st.vramCurrentKnown {
+			out["vramBytes"] = st.lastVRAM
+		}
 		out["vramPeakBytes"] = st.peakVRAM
 		out["vramAvgBytes"] = st.vramAvg()
 		out["vramSource"] = st.vramSource
@@ -525,25 +526,26 @@ func (s *MemorySampler) nvidiaOnce(now time.Time) map[int]int64 {
 // are fixed-size inline arrays: the per-instance overhead is 2 × 60 × 8 bytes
 // and never grows with instance lifetime.
 type memRolling struct {
-	lastRAM       int64
-	lastVRAM      int64
-	vramKnown     bool   // sticky: a failed VRAM probe keeps the last known value
-	vramSource    string // "drm" | "nvidia-smi"
-	peakRAM       int64
-	peakVRAM      int64
-	ramIdleBytes  int64 // min while idle (ramIdleKnown = an idle sample exists)
-	ramIdleKnown  bool
-	vramIdleBytes int64
-	vramIdleKnown bool
-	idleSince     time.Time // last busy→idle, or first idle sample if never busy
-	idleSinceSet  bool
-	ramIntegral   float64 // byte·ms
-	vramIntegral  float64 // byte·ms
-	spanMs        float64 // RAM weighting span
-	vramSpanMs    float64 // only intervals where VRAM was already known
-	samples       int
-	lastTime      time.Time
-	hasSample     bool
+	lastRAM          int64
+	lastVRAM         int64
+	vramKnown        bool   // ever observed, for lifetime peak and average
+	vramCurrentKnown bool   // latest probe succeeded; never present stale VRAM as current
+	vramSource       string // "drm" | "nvidia-smi"
+	peakRAM          int64
+	peakVRAM         int64
+	ramIdleBytes     int64 // min while idle (ramIdleKnown = an idle sample exists)
+	ramIdleKnown     bool
+	vramIdleBytes    int64
+	vramIdleKnown    bool
+	idleSince        time.Time // last busy→idle, or first idle sample if never busy
+	idleSinceSet     bool
+	ramIntegral      float64 // byte·ms
+	vramIntegral     float64 // byte·ms
+	spanMs           float64 // RAM weighting span
+	vramSpanMs       float64 // only intervals where VRAM was already known
+	samples          int
+	lastTime         time.Time
+	hasSample        bool
 
 	ramRing  memRing
 	vramRing memRing
@@ -587,13 +589,14 @@ func (r *memRolling) addSample(now time.Time, ram, vram int64, vramKnown bool, s
 		if dt > 0 {
 			r.spanMs += dt
 			r.ramIntegral += float64(r.lastRAM) * dt
-			if r.vramKnown {
+			if r.vramCurrentKnown && vramKnown {
 				r.vramIntegral += float64(r.lastVRAM) * dt
 				r.vramSpanMs += dt
 			}
 		}
 	}
 	r.lastRAM = ram
+	r.vramCurrentKnown = vramKnown
 	if ram > r.peakRAM {
 		r.peakRAM = ram
 	}

@@ -42,7 +42,9 @@ export class MockBackend {
     this.history = structuredClone(opts.history || {});
     this.groups = structuredClone(opts.groups || {});
     this.events = opts.events || [];
+    this.asrResult = opts.asrResult;
     this.tasks = [];
+    this.autoCompleteTasks = opts.autoCompleteTasks !== false;
     this.seq = 1;
     this.requests = [];
   }
@@ -366,7 +368,7 @@ export class MockBackend {
       if (method === "GET") {
         if (!task) return this.json(route, { ok: false, code: "TASK_NOT_FOUND" }, 404);
         // 首次查询即进入终态，让前端 2s 轮询快速收尾（确定性）
-        if (task.status === "RUNNING" || task.status === "QUEUED") {
+        if (this.autoCompleteTasks && (task.status === "RUNNING" || task.status === "QUEUED")) {
           task.status = "DONE";
           task.finishedAt = Date.now();
         }
@@ -465,7 +467,9 @@ export class MockBackend {
 
   defaultResult(category, req) {
     if (category === "asr") {
-      return { text: "mock transcript: hello from audio.cpp-hub", language: "en" };
+      return (
+        this.asrResult || { text: "mock transcript: hello from audio.cpp-hub", language: "en" }
+      );
     }
     return { text: req.text || "mock result" };
   }

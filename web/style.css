@@ -495,7 +495,7 @@ footer { flex: none; }
   border-radius: 999px;
   font-size: 11.5px;
   font-weight: 600;
-  /* 徽标底色为状态色：文字用与背景成对的强调对比色（深色主题深字、浅色主题白字） */
+  /* Badge text contrasts with its status background. */
   color: var(--accent-contrast);
 }
 .badge.ready { background: var(--ok); }
@@ -1123,7 +1123,7 @@ footer { padding: 4px 24px 18px; }
 }
 .modal-overlay:not(.hidden) .modal, .dialog-overlay:not(.hidden) .dialog { opacity: 1; transform: none; }
 
-/* 启动模型弹窗：字段多且权重行有 3 个控件，加宽；固定两列，长字段独占整行 */
+/* Launch form uses two columns with full-width long fields. */
 #launch-modal .modal { width: min(880px, 94vw); }
 #launch-modal .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #launch-modal .grid .span-all { grid-column: 1 / -1; }
@@ -1235,7 +1235,7 @@ footer { padding: 4px 24px 18px; }
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--input-bg);
-  /* 内边距 + 行圆角：让 hover/选中高亮不顶到容器圆角，避免直角高亮在圆角处被裁切 */
+  /* Keep hover outlines inside rounded list rows. */
   padding: 4px;
   display: flex;
   flex-direction: column;
@@ -1469,7 +1469,7 @@ footer { padding: 4px 24px 18px; }
   vertical-align: 1px;
 }
 .history-error { margin-top: 4px; }
-/* 任务行（队列并入侧栏）：状态/耗时用主色，与历史记录的弱化 meta 区分 */
+/* Task status uses accent rather than history metadata color. */
 .task-row .history-meta { color: var(--accent); font-weight: 600; }
 /* 任务「详情」展开区：完整结果文本，自动换行 + 限高滚动 */
 .task-detail {
@@ -1561,7 +1561,7 @@ footer { padding: 4px 24px 18px; }
 .history-detail .detail-ref .btn-ghost { flex: none; padding: 2px 8px; font-size: 11px; }
 .history-detail .detail-params { color: var(--text-dim); white-space: pre-wrap; word-break: break-word; }
 
-/* 「移动到分组」弹出菜单：共享元素挂 body，JS 定位（与 #hf-menu 同款） */
+/* Group menu is positioned in the body. */
 #group-menu {
   position: fixed;
   z-index: 1000;
@@ -1714,7 +1714,7 @@ footer { padding: 4px 24px 18px; }
   from { background-position: -45% 0; }
   to { background-position: 145% 0; }
 }
-/* 进度条宽度变化时平滑过渡；新建行的进度条从 0 生长到当前值 （用 sc */
+/* Animate progress width updates. */
 .dl-row.row-enter .dl-progress-fill {
   transform-origin: left center;
   animation: bar-grow var(--dur-3) var(--ease-out);
@@ -1895,7 +1895,7 @@ footer { padding: 4px 24px 18px; }
   padding: 0 4px;
   background: var(--input-bg);
 }
-/* 弹窗容器仅作程序化焦点落点，不显示轮廓（首个可聚焦控件会接管焦点） */
+/* Programmatic modal focus does not draw an outline. */
 .modal[tabindex="-1"]:focus, .history-panel-card[tabindex="-1"]:focus { outline: none; }
 
 /* ---------- 新增规范组件（按钮尺寸/加载态、表 */
@@ -1965,7 +1965,7 @@ footer { padding: 4px 24px 18px; }
 
 /* ============================ L5: UTILITIES ============================ */
 
-/* 统一键盘焦点环：所有可交互控件键盘聚焦时显示，鼠标点击不显示 */
+/* Focus outlines appear only for keyboard navigation. */
 :where(a, button, select, textarea, input, summary, [tabindex]):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -1980,6 +1980,10 @@ footer { padding: 4px 24px 18px; }
   .brand { gap: var(--space-2); }
   .subtitle { display: none; }
   .header-actions { gap: var(--space-1); flex-wrap: wrap; }
+  /* Keep narrow modal actions reachable. */
+  .history-header { flex-wrap: wrap; }
+  .history-actions { flex-wrap: wrap; justify-content: flex-end; width: 100%; }
+  .history-actions button { min-height: 44px; }
   main { padding: var(--space-3); gap: var(--space-4); overflow-x: hidden; }
   .theme-btn { width: 44px; height: 44px; }
   #lang-toggle { min-height: 44px; border-radius: var(--radius-full); }
@@ -1995,6 +1999,16 @@ footer { padding: 4px 24px 18px; }
     min-height: 44px;
   }
   .modal-close { min-width: 44px; min-height: 44px; }
+}
+
+@media (max-width: 359px) {
+  .header-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    justify-items: center;
+    row-gap: var(--space-2);
+  }
 }
 
 /* ---------- 列表行进入动画 ---------- */

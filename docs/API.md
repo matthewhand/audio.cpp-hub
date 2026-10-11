@@ -256,6 +256,13 @@ body 同上，更新后返回条目；不存在 `404 EXEC_NOT_FOUND`。
 
 流式回写非 TTS 结果 JSON；TTS 任务或结果不存在返回 `404 RESULT_NOT_FOUND`（提示走 `/api/history`）。
 
+**说话人分段（Sortformer / VibeVoice）**：任务返回保留上游原始 JSON；
+`speaker_turns[]` 和 `sample_rate` 仅在后端实际返回时用于生成浏览器
+`{status,segments:[{start,end,speakerId,text,confidence?}]}` 展示结果。
+`start/end` 为秒，`speakerId` 仅在当前音频内有意义；单独 Sortformer
+**不生成转写文本**。完整数据契约、限制与独立推理验证计划参见
+[docs/diarization.md](diarization.md)。
+
 ### `DELETE /api/tasks/{id}`
 
 `QUEUED` 直接取消；`RUNNING` 中断 hub 侧等待（引擎会跑完，属已知限制）；已结束则删除记录。返回 `{"ok":true,"data":{"id":"..."}}`。
@@ -487,3 +494,8 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 | `GET /api/tasks/{id}` | `web/modules/tasks.js:55`（每个进行中任务一个轮询句柄，到终态即 `stop()`） |
 
 全局 2s 轮询的启动顺序在 `web/app.js:110`–`112`（实例 → 事件 → 下载）。上表只列 2s 轮询与首屏加载涉及的端点；其余接口（证书、executables、profiles、history、任务结果、voices、fs 等）同样已全部经 `Api.*` 发出——`web/` 内除 Service Worker 自身外没有裸 `fetch`。
+
+
+### ASR speaker-turn display (hub UI)
+
+When a completed ASR task returns `speaker_turns` and numeric positive `sample_rate`, the browser renders the model-supplied speaker IDs and timestamped turn list alongside its ordinary transcript. Times come from `start_sample / sample_rate` and `end_sample / sample_rate`, never guesses. Missing or invalid timing fields suppress corresponding turns; plain ASR stays transcript-only. The raw JSON remains available. The hub does not identify people by name or add an inference endpoint.

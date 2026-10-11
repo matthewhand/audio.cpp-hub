@@ -92,6 +92,7 @@
           <button id="instance-detail" class="btn-ghost" disabled data-i18n="instance.detail">详情</button>
           <button id="instance-stop" class="stop-btn" disabled data-i18n="instance.stopCurrent">停止当前实例</button>
           <button id="launch-open-btn" class="btn" data-i18n="instance.create">启动模型</button>
+          <button type="button" id="activity-queue-open" class="btn-ghost" data-i18n="aq.open" aria-controls="activity-queue-panel" aria-expanded="false">Activity / Queue</button>
         </div>
 
         <section id="instance-context" class="card instance-context hidden" aria-labelledby="instance-context-title">
@@ -105,6 +106,16 @@
               <div class="instance-context-options" role="group"></div>
             </div>
           </div>
+        </section>
+
+
+        <section id="activity-queue-panel" class="card hidden" aria-labelledby="activity-queue-heading">
+          <div class="aq-head">
+            <h3 id="activity-queue-heading">Activity / Queue</h3>
+            <button type="button" id="activity-queue-close" class="btn-ghost">Close</button>
+          </div>
+          <p id="activity-queue-status" role="status" aria-live="polite"></p>
+          <ul id="activity-queue-list" aria-label="Activity queue"></ul>
         </section>
 
         <!-- TTS studio: script / controls / output keep original IDs for model renderers. -->
@@ -201,6 +212,11 @@
               <div id="asr-text"></div>
               <button id="asr-copy" class="btn-ghost" data-i18n="asr.copy">复制</button>
             </div>
+            <section id="asr-speaker-timeline" class="hidden" aria-labelledby="asr-speaker-heading">
+              <h3 id="asr-speaker-heading" data-i18n="asr.speakerTimeline">说话人时间线</h3>
+              <ol id="asr-speaker-turns" class="asr-speaker-turns"></ol>
+            </section>
+            <p id="asr-diar-status" class="hint hidden" role="status"></p>
             <details id="asr-json-details"><summary data-i18n="asr.details">详细输出</summary><pre id="asr-json" class="json-pre"></pre></details>
           </div>
         </div>
