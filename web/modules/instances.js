@@ -20,14 +20,16 @@ export function submitLabel(id) {
 
 export let instances = [];
 
-/* ---------- 实例列表 + 状态条（每 2s 轮询） ---------- */
+
 export let instancePoller = null;
-let instancesLoaded = false;   // First-load placeholder.
-/* 轮询数据回调：只在成功时更新视图；失败由 Api.poll 的 onError 处理 */
+let instancesLoaded = false;
+let instanceFeedStale = false;
+
 export function applyInstances(data) {
   instancesLoaded = true;
+  instanceFeedStale = false;
   instances = data;
-  // 深链接 #/instance/<id>：实例列表就绪后补齐打开详情
+  
   const want = getPendingInstanceId();
   if (want) {
     const inst = instances.find(i => i.id === want);
@@ -36,9 +38,17 @@ export function applyInstances(data) {
   renderInstanceList();
   updateInstanceBar();
 }
-/* 轮询中的瞬时失败保留上次列表，仅在从未加载成功时显示错误/重试 */
+
 export function onInstancesError(e) {
-  if (instances.length === 0) renderListError($("instance-list"), t("common.loadFailed") + t("common.colon") + e.message, refreshInstances);
+  instanceFeedStale = true;
+  const pill = $("instance-pill");
+  pill.textContent = t("instance.feedStale");
+  pill.className = "pill warn";
+  for (const id of SUBMIT_BTNS) $(id).disabled = true;
+  for (const id of ["instance-select", "instance-stop", "instance-detail"]) $(id).disabled = true;
+  document.querySelectorAll("#instance-list .stop-btn").forEach(btn => btn.setAttribute("disabled", ""));
+  $("instance-context").classList.add("hidden");
+  if (!instancesLoaded) renderListError($("instance-list"), t("common.loadFailed") + t("common.colon") + e.message, refreshInstances);
 }
 
 export function refreshInstances() {
@@ -46,7 +56,7 @@ export function refreshInstances() {
   return Api.list("/api/instances").then(applyInstances).catch(onInstancesError);
 }
 
-/* 建立 2s 轮询（由 web/app.js 在启动时调用一次）。句柄只在本模块持 */
+
 export function startInstancePolling() {
   if (!instancesLoaded) showSkeleton($("instance-list"), 3);
   instancePoller = Api.poll("/api/instances", applyInstances, { list: true, onError: onInstancesError });
@@ -56,7 +66,7 @@ export function startInstancePolling() {
 export function renderInstanceList() {
   const list = $("instance-list");
   list.removeAttribute("aria-busy");
-  // Sort READY first.
+  
   const order = { READY: 0, STARTING: 1 };
   const sorted = [...instances].sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2));
   list.innerHTML = "";
@@ -73,7 +83,7 @@ export function renderInstanceList() {
     const card = document.createElement("div");
     const statusClass = STATUS_CLASS[inst.status] || "stopped";
     card.className = "card" + (inst.id === activeInstanceId ? " selected" : "");
-    // Show when queued/running.
+    
     const workingBadge = (inst.taskCount || 0) > 0
       ? ` <span class="badge working">${esc(inst.taskCount > 1 ? t("instance.workingCount", { n: inst.taskCount }) : t("instance.working"))}</span>`
       : "";
@@ -91,6 +101,7 @@ export function renderInstanceList() {
     if (detailBtn) detailBtn.onclick = () => go("#/instance/" + encodeURIComponent(inst.id));
     const stopBtn = card.querySelector(".stop-btn");
     if (stopBtn) {
+      if (instanceFeedStale) stopBtn.setAttribute("disabled", "");
       stopBtn.onclick = async () => {
         stopBtn.setAttribute("disabled", "");
         await stopInstance(inst.id);
@@ -120,12 +131,12 @@ export function updateInstanceBar() {
   } else {
     setActiveInstanceId(null);
   }
-  // Keep history DOM stable on instance changes.
+  
 
   select.disabled = !has;
   $("instance-stop").disabled = !has;
   $("instance-detail").disabled = !has;
-  // 详情弹窗打开时跟随轮询刷新；实例已消失则自动关闭
+  
   if (detailInstanceId) {
     const cur = instances.find(i => i.id === detailInstanceId);
     if (cur) renderInstanceDetail(cur); else closeInstanceDetail();
@@ -135,14 +146,14 @@ export function updateInstanceBar() {
   pill.textContent = has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
 
-  // Load the alternatives UI only if needed.
+  
   const context = $("instance-context");
   if (has) {
     context.classList.add("hidden");
   } else {
     const target = selectedModelId;
     void import("./readiness.js").then(({ renderReadiness }) => {
-      if (selectedModelId === target && !instances.some(i => i.modelId === target && i.status === "READY")) {
+      if (!instanceFeedStale && selectedModelId === target && !instances.some(i => i.modelId === target && i.status === "READY")) {
         renderReadiness(instances, models, target);
       }
     }).catch(() => { context.classList.add("hidden"); });
@@ -177,7 +188,7 @@ $("instance-stop").onclick = async () => {
   await stopInstance(activeInstanceId);
 };
 
-/* ---------- 实例详情弹窗 ---------- */
+
 export const instanceDetailModal = $("instance-detail-modal");
 export let detailInstanceId = null;
 export function openInstanceDetail(inst) {
