@@ -35,19 +35,38 @@ def sha256(data):
 
 
 def audio_bytes(path):
-    return subprocess.check_output(
-        ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-i", str(path),
-         "-ac", "1", "-ar", str(RATE), "-f", "s16le", "-acodec", "pcm_s16le", "-"],
-        timeout=15,
-    )
+    command = [
+        "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+        "-i", str(path), "-ac", "1", "-ar", str(RATE),
+        "-f", "s16le", "-acodec", "pcm_s16le", "-",
+    ]
+    try:
+        result = subprocess.run(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            check=True, timeout=15,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("Cannot build diarization fixtures: ffmpeg is not installed or not in PATH") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Cannot build diarization fixtures: ffmpeg exceeded the 15-second conversion limit") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or b"").decode("utf-8", errors="replace").strip()
+        raise RuntimeError(
+            f"Cannot decode source audio {path}: ffmpeg exited {exc.returncode}"
+            + (f" ({detail[:300]})" if detail else "")
+        ) from exc
+    if not result.stdout or len(result.stdout) % 2:
+        raise RuntimeError(f"Source audio {path} produced no valid 16-bit PCM samples")
+    return result.stdout
 
 
 def build(source, destination):
     source = pathlib.Path(source)
     destination = pathlib.Path(destination)
-    destination.mkdir(parents=True, exist_ok=True)
+    if not source.is_file():
+        raise FileNotFoundError(f"Source WAV does not exist: {source}")
     pcm = audio_bytes(source)
-    assert len(pcm) % 2 == 0
+    destination.mkdir(parents=True, exist_ok=True)
     decoded = array.array("h")
     decoded.frombytes(pcm)
     if __import__("sys").byteorder != "little":
@@ -61,6 +80,7 @@ def build(source, destination):
         "independent_label_origin": "four_speaker_short.txt: ordered speaker_1..4, with source windows based on silence detection",
         "human_voice_identity_verified": False,
         "phoneme_boundary_verified": False,
+        "source_audio_redistribution_rights_verified": False,
         "use": "deterministic script-attributed regression fixtures; not a calibrated DER benchmark until independently audited",
         "cases": {},
     }
@@ -120,4 +140,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (OSError, RuntimeError, ValueError) as exc:
+        parser_message = f"Fixture build failed: {exc}"
+        raise SystemExit(parser_message) from None

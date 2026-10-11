@@ -131,6 +131,9 @@ jobs:
       - name: 单元测试
         run: npm run test:unit
 
+      - name: Diarization fixture builder failure-path tests (no models)
+        run: python3 test/unit/test_diarization_fixture_builder.py
+
       - name: UI 清单漂移检查
         run: npm run ui:inventory:check
 

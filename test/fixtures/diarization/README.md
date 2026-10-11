@@ -22,7 +22,10 @@ audited by listening and identity verification. A source window may contain
 internal silence and its edges are coarse, rather than human-annotated
 phonetic speech onset/offset. The source audio's individual recording /
 voice copyright permissions beyond the upstream Apache-2.0 repository
-license have not been separately verified. Therefore, **these tests are
+license have not been separately verified. **The manifest explicitly marks
+source-audio redistribution rights as unverified; keep this PR in draft and
+do not merge until usage and redistribution rights are documented, or replace
+the audio with independently rights-clear material.** Therefore, **these tests are
 script-labelled engineering fixtures, not certified diarization accuracy
 ground truth**. Do not publish Sortformer DER/JER on them as an
 externally validated accuracy benchmark until source identities, labels,

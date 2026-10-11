@@ -54,8 +54,10 @@ export function turnsToSegments(value, rateOverride) {
       !Number.isSafeInteger(b) ||
       a < 0 ||
       b <= a ||
-      (typeof speaker !== "string" && !Number.isSafeInteger(speaker)) ||
-      String(speaker).length === 0
+      !(
+        (typeof speaker === "string" && speaker.length > 0 && speaker.length <= 128) ||
+        (Number.isSafeInteger(speaker) && speaker >= 0)
+      )
     ) {
       throw new Error(`Turn ${i + 1}: invalid samples or speaker_id`);
     }
@@ -107,7 +109,7 @@ function bestMapping(refIds, hypIds, weights) {
       delete map[id];
     }
   }
-  search(0, new Set(), {}, 0);
+  search(0, new Set(), Object.create(null), 0);
   return winner;
 }
 
@@ -124,7 +126,9 @@ export function scoreSegments(reference, hypothesis, options = {}) {
     (a, b) => a - b
   );
   const pieces = [];
-  const weights = Object.fromEntries(hypIds.map((h) => [h, {}]));
+  // Speaker labels are data, not object property names: do not inherit
+  // constructor / toString or interpret __proto__ as a prototype setter.
+  const weights = Object.fromEntries(hypIds.map((h) => [h, Object.create(null)]));
   for (let i = 1; i < boundary.length; i++) {
     const dt = boundary[i] - boundary[i - 1];
     if (dt <= 0) continue;
@@ -178,16 +182,35 @@ export function scoreSegments(reference, hypothesis, options = {}) {
 
 function main(args) {
   const cfg = {};
+  const allowed = new Set([
+    "--ref",
+    "--hyp",
+    "--hyp-json",
+    "--recording",
+    "--duration",
+    "--sample-rate"
+  ]);
   for (let i = 0; i < args.length; i++) {
-    if (
-      !["--ref", "--hyp", "--hyp-json", "--recording", "--duration", "--sample-rate"].includes(
-        args[i]
-      )
-    ) {
-      throw new Error(`Unknown option: ${args[i]}`);
+    const flag = args[i];
+    if (!allowed.has(flag)) throw new Error(`Unknown option: ${flag}`);
+    if (i + 1 >= args.length || !args[i + 1] || args[i + 1].startsWith("--")) {
+      throw new Error(`Missing argument for ${flag}`);
     }
-    if (!args[i + 1]) throw new Error(`Missing argument for ${args[i]}`);
-    cfg[args[i].slice(2)] = args[++i];
+    const name = flag.slice(2);
+    if (Object.hasOwn(cfg, name)) throw new Error(`Duplicate option: ${flag}`);
+    cfg[name] = args[++i];
+  }
+  if (
+    cfg.duration !== undefined &&
+    (!Number.isFinite(Number(cfg.duration)) || Number(cfg.duration) <= 0)
+  ) {
+    throw new Error("--duration must be a positive finite number of seconds");
+  }
+  if (
+    cfg["sample-rate"] !== undefined &&
+    (!Number.isSafeInteger(Number(cfg["sample-rate"])) || Number(cfg["sample-rate"]) <= 0)
+  ) {
+    throw new Error("--sample-rate must be a positive integer");
   }
   if (!cfg.ref || !(cfg.hyp || cfg["hyp-json"]) || !!cfg.hyp === !!cfg["hyp-json"]) {
     throw new Error(

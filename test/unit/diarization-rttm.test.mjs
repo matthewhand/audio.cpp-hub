@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { spawnSync as nodeSpawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
   parseRttm,
@@ -19,6 +20,7 @@ test("all 0/1/2/4 speaker WAV files and RTTMs have recorded checksums and proper
   );
   assert.equal(manifest.human_voice_identity_verified, false);
   assert.equal(manifest.phoneme_boundary_verified, false);
+  assert.equal(manifest.source_audio_redistribution_rights_verified, false);
   for (const id of cases) {
     const spec = manifest.cases[id];
     const wav = readFileSync(new URL(`${id}.wav`, directory));
@@ -107,12 +109,32 @@ test("speaker confusion is not hidden by a global label mapping", () => {
   assert.equal(score.der, 0.5);
 });
 
+test("RTTM scoring safely maps unusual speaker labels without prototype collisions", () => {
+  const reference = [
+    { start: 0, end: 1, speaker: "toString" },
+    { start: 1, end: 2, speaker: "constructor" }
+  ];
+  const hypothesis = [
+    { start: 0, end: 1, speaker: "__proto__" },
+    { start: 1, end: 2, speaker: "hasOwnProperty" }
+  ];
+  const result = scoreSegments(reference, hypothesis, { duration: 2 });
+  assert.equal(result.der, 0);
+  assert.equal(result.confusionSeconds, 0);
+  assert.equal(result.speakerMapping["__proto__"], "toString");
+  assert.equal(result.speakerMapping.hasOwnProperty, "constructor");
+});
+
 test("native Sortformer bare JSON requires an explicit sample rate", () => {
   const native = [{ start_sample: 0, end_sample: 16000, speaker_id: "SPEAKER_00", confidence: 0 }];
   assert.throws(() => turnsToSegments(native), /sample_rate/);
   assert.deepEqual(turnsToSegments(native, 16000), [{ start: 0, end: 1, speaker: "SPEAKER_00" }]);
   assert.throws(
     () => turnsToSegments([{ ...native[0], end_sample: -1 }], 16000),
+    /invalid samples/
+  );
+  assert.throws(
+    () => turnsToSegments([{ ...native[0], speaker_id: -1 }], 16000),
     /invalid samples/
   );
 });
@@ -129,4 +151,23 @@ test("a hypothesis beyond clip duration fails instead of being clipped", () => {
     () => scoreSegments([], [{ start: 0, end: 9, speaker: "A" }], { duration: 6 }),
     /exceeds/
   );
+});
+
+test("RTTM CLI rejects missing option values and duplicate flags without stack traces", () => {
+  const tool = new URL("../../scripts/score-diarization-rttm.mjs", import.meta.url);
+  for (const args of [
+    ["--ref"],
+    ["--ref", "--hyp", "recording.rttm"],
+    ["--ref", "recording.rttm", "--ref", "again.rttm"],
+    ["--ref", "recording.rttm", "--hyp", "estimate.rttm", "--duration", "Infinity"],
+    ["--ref", "recording.rttm", "--hyp", "estimate.rttm", "--sample-rate", "-1"]
+  ]) {
+    const processResult = nodeSpawnSync(process.execPath, [tool.pathname, ...args], {
+      encoding: "utf8",
+      timeout: 4000
+    });
+    assert.equal(processResult.status, 1, `CLI unexpectedly accepted ${args.join(" ")}`);
+    assert.match(processResult.stderr, /RTTM score failed: /);
+    assert.doesNotMatch(processResult.stderr, /at node:|at file:/);
+  }
 });

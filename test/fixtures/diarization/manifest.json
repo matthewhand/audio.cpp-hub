@@ -85,6 +85,7 @@
   "independent_label_origin": "four_speaker_short.txt: ordered speaker_1..4, with source windows based on silence detection",
   "phoneme_boundary_verified": false,
   "sample_rate": 16000,
+  "source_audio_redistribution_rights_verified": false,
   "source_commit": "f6277c1695a83cf388a8282c1c1a8757cf626f18",
   "source_path": "assets/resources/four_speaker_short.wav",
   "source_repo": "https://github.com/0xShug0/audio.cpp",
