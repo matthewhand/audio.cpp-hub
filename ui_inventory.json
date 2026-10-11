@@ -22,6 +22,7 @@
       "web/modules/launch.js",
       "web/modules/models.js",
       "web/modules/panels.js",
+      "web/modules/readiness.js",
       "web/modules/routing.js",
       "web/modules/settings-lazy.js",
       "web/modules/settings.js",
