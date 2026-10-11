@@ -256,6 +256,13 @@ body 同上，更新后返回条目；不存在 `404 EXEC_NOT_FOUND`。
 
 流式回写非 TTS 结果 JSON；TTS 任务或结果不存在返回 `404 RESULT_NOT_FOUND`（提示走 `/api/history`）。
 
+**说话人分段（Sortformer / VibeVoice）**：任务返回保留上游原始 JSON；
+`speaker_turns[]` 和 `sample_rate` 仅在后端实际返回时用于生成浏览器
+`{status,segments:[{start,end,speakerId,text,confidence?}]}` 展示结果。
+`start/end` 为秒，`speakerId` 仅在当前音频内有意义；单独 Sortformer
+**不生成转写文本**。完整数据契约、限制与独立推理验证计划参见
+[docs/diarization.md](diarization.md)。
+
 ### `DELETE /api/tasks/{id}`
 
 `QUEUED` 直接取消；`RUNNING` 中断 hub 侧等待（引擎会跑完，属已知限制）；已结束则删除记录。返回 `{"ok":true,"data":{"id":"..."}}`。

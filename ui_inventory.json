@@ -29,6 +29,7 @@
       "web/modules/settings.js",
       "web/modules/shell.js",
       "web/modules/sidebar.js",
+      "web/modules/speaker-segments.js",
       "web/modules/state.js",
       "web/modules/stats-lazy.js",
       "web/modules/stats.js",

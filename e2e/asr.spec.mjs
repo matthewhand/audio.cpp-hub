@@ -107,3 +107,128 @@ test("missing or invalid sample rates never produce guessed speaker times", asyn
   await expect(page.locator("#asr-speaker-timeline")).toBeHidden();
   await expect(page.locator("#asr-text")).toHaveText("Without timing units.");
 });
+
+test("Sortformer diarization submits audio and displays timed, textless speaker turns", async ({
+  page
+}) => {
+  const backend = new MockBackend({
+    instances: [{ ...READY, modelId: "sortformer_diar", instanceName: "sortformer_diar" }],
+    asrResult: {
+      sample_rate: 16000,
+      speaker_turns: [
+        { speaker_id: "speaker_1", start_sample: 16000, end_sample: 48000 },
+        { speaker_id: "speaker_0", start_sample: 0, end_sample: 24000 }
+      ]
+    }
+  });
+  await openApp(page, backend, { modelId: "sortformer_diar", lang: "en" });
+  await expect(page.locator("#asr-title")).toContainText("Sortformer");
+  await expect(page.locator("#asr-submit")).toHaveText("Analyze speakers");
+  await pickAudioByPath(page, "#asr-audio-picker", "/audio/two-speakers.wav");
+  await page.locator("#asr-submit").click();
+  await expect(page.locator("#asr-result")).toBeVisible({ timeout: 12000 });
+  const timeline = page.locator("#asr-speaker-timeline");
+  await expect(timeline).toBeVisible();
+  await expect(timeline.locator("li")).toHaveCount(2);
+  await expect(timeline.locator("li").first()).toContainText("Speaker speaker_0");
+  await expect(timeline.locator("li").last()).toContainText("0:01.0 – 0:03.0");
+  await expect(page.locator("#asr-text")).toContainText("does not transcribe");
+  await expect(page.locator("#asr-diar-status")).toBeHidden();
+  expect(backend.tasks).toHaveLength(1);
+  expect(backend.tasks[0].category).toBe("asr");
+});
+
+test("Sortformer never fakes successful diarization for an unsupported backend", async ({
+  page
+}) => {
+  const backend = new MockBackend({
+    instances: [{ ...READY, modelId: "sortformer_diar", instanceName: "sortformer_diar" }],
+    asrResult: { text: "Not speaker aware" }
+  });
+  await openApp(page, backend, { modelId: "sortformer_diar", lang: "en" });
+  await pickAudioByPath(page, "#asr-audio-picker", "/audio/unsupported.wav");
+  await page.locator("#asr-submit").click();
+  await expect(page.locator("#asr-result")).toBeVisible({ timeout: 12000 });
+  await expect(page.locator("#asr-speaker-timeline")).toBeHidden();
+  await expect(page.locator("#asr-diar-status")).toContainText("diarization is unavailable");
+});
+
+test("Sortformer distinguishes silence from invalid timestamps", async ({ page }) => {
+  const backend = new MockBackend({
+    instances: [{ ...READY, modelId: "sortformer_diar", instanceName: "sortformer_diar" }],
+    asrResult: { sample_rate: 16000, speaker_turns: [] }
+  });
+  await openApp(page, backend, { modelId: "sortformer_diar", lang: "en" });
+  await pickAudioByPath(page, "#asr-audio-picker", "/audio/silent.wav");
+  await page.locator("#asr-submit").click();
+  await expect(page.locator("#asr-diar-status")).toContainText("No speaker turns");
+});
+
+test("Sortformer hides transcript copy control and restores it for regular ASR", async ({
+  page
+}) => {
+  const backend = new MockBackend({
+    instances: [
+      { ...READY, modelId: "sortformer_diar", instanceName: "sortformer_diar" },
+      { ...READY, id: "i3", modelId: "citrinet_asr", instanceName: "citrinet_asr" }
+    ],
+    asrResult: {
+      sample_rate: 16000,
+      speaker_turns: [{ speaker_id: 0, start_sample: 0, end_sample: 16000 }]
+    }
+  });
+  await openApp(page, backend, { modelId: "sortformer_diar", lang: "en" });
+  await pickAudioByPath(page, "#asr-audio-picker", "/audio/speaker.wav");
+  await page.locator("#asr-submit").click();
+  await expect(page.locator("#asr-result")).toBeVisible({ timeout: 12000 });
+  await expect(page.locator("#asr-copy")).toBeHidden();
+
+  await page.locator("#model-list .card", { hasText: "Citrinet ASR" }).click();
+  backend.asrResult = { text: "Plain transcript" };
+  await pickAudioByPath(page, "#asr-audio-picker", "/audio/plain.wav");
+  await page.locator("#asr-submit").click();
+  await expect(page.locator("#asr-result")).toBeVisible({ timeout: 12000 });
+  await expect(page.locator("#asr-copy")).toBeVisible();
+});
+
+test("delayed diarization result cannot repaint ASR after model switching", async ({ page }) => {
+  const result = {
+    sample_rate: 16000,
+    speaker_turns: [{ speaker_id: 0, start_sample: 0, end_sample: 16000 }]
+  };
+  const backend = new MockBackend({
+    instances: [{ ...READY, modelId: "sortformer_diar", instanceName: "sortformer_diar" }],
+    asrResult: result
+  });
+  await openApp(page, backend, { modelId: "sortformer_diar", lang: "en" });
+  let release;
+  let requestSeen = false;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/tasks/*/result", async (route) => {
+    requestSeen = true;
+    await gate;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(result)
+    });
+  });
+  try {
+    await pickAudioByPath(page, "#asr-audio-picker", "/audio/switch-during-result.wav");
+    await page.locator("#asr-submit").click();
+    await expect.poll(() => requestSeen, { timeout: 12000 }).toBe(true);
+    await page.locator("#model-list .card", { hasText: "Citrinet ASR" }).click();
+    await expect(page.locator("#asr-title")).toContainText("Citrinet ASR");
+    const answered = page.waitForResponse(
+      (r) => r.url().endsWith("/result") && r.url().includes("/api/tasks/")
+    );
+    release();
+    await answered;
+    await page.waitForTimeout(200);
+    await expect(page.locator("#asr-result")).toBeHidden();
+  } finally {
+    release();
+  }
+});
