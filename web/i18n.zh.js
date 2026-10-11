@@ -191,6 +191,7 @@ window.I18N_ZH = {
   "history.listFailed": "历史列表加载失败",
   "history.closeTitle": "关闭",
   "history.masked": "今天天气真不错，适合出门走走。",
+  "aq.open": "任务动态 / 队列",
   "history.privacyBtn": "隐私",
   "history.privacyOn": "隐私模式已开启：历史文本已隐藏，点击关闭",
   "history.privacyOff": "隐私模式：隐藏历史记录中的文本",

@@ -191,6 +191,7 @@ window.I18N_EN = {
   "history.listFailed": "Failed to load history list",
   "history.closeTitle": "Close",
   "history.masked": "Lovely weather today, perfect for a walk outside.",
+  "aq.open": "Activity / Queue",
   "history.privacyBtn": "Privacy",
   "history.privacyOn": "Privacy mode on: history texts hidden, click to turn off",
   "history.privacyOff": "Privacy mode: hide texts in history records",

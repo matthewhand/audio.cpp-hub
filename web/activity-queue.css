@@ -1,0 +1,9 @@
+/* #121: loaded only when the Activity panel opens. */
+#activity-queue-panel {margin-block:12px;padding:14px}
+.aq-head {display:flex;align-items:center;justify-content:space-between;gap:10px}
+#activity-queue-list {list-style:none;margin:12px 0 0;padding:0;max-height:40vh;overflow:auto}
+.aq-row {display:grid;grid-template-columns:auto minmax(80px,1fr) minmax(0,2fr) auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--border);font-size:12px}
+.aq-preview {overflow-wrap:anywhere;min-width:0}
+.aq-instance {min-width:0;overflow-wrap:anywhere}
+.aq-status {color:var(--text-dim)}
+@media(max-width:600px){.aq-row {grid-template-columns:1fr 1fr}.aq-preview {grid-column:1/-1}}
