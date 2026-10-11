@@ -487,3 +487,8 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 | `GET /api/tasks/{id}` | `web/modules/tasks.js:55`（每个进行中任务一个轮询句柄，到终态即 `stop()`） |
 
 全局 2s 轮询的启动顺序在 `web/app.js:110`–`112`（实例 → 事件 → 下载）。上表只列 2s 轮询与首屏加载涉及的端点；其余接口（证书、executables、profiles、history、任务结果、voices、fs 等）同样已全部经 `Api.*` 发出——`web/` 内除 Service Worker 自身外没有裸 `fetch`。
+
+
+### ASR speaker-turn display (hub UI)
+
+When a completed ASR task returns `speaker_turns` and numeric positive `sample_rate`, the browser renders the model-supplied speaker IDs and timestamped turn list alongside its ordinary transcript. Times come from `start_sample / sample_rate` and `end_sample / sample_rate`, never guesses. Missing or invalid timing fields suppress corresponding turns; plain ASR stays transcript-only. The raw JSON remains available. The hub does not identify people by name or add an inference endpoint.
