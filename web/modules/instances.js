@@ -1,7 +1,4 @@
-/* web/modules/instances.js — 实例
- *
- * 左栏实例列表、顶部实例状态条（选择 / 停止 / 详情）、实例详情弹窗，
- * 以及 2s 轮询的建立与复用（Api.poll 句柄在模块内保存，单飞 + 可见性语义不变）。 */
+/* web/modules/instances.js — 实例 * * 左栏实例列表 */
 
 import { focusDialog, renderEmptyState, renderListError, restoreDialogFocus, showSkeleton, showToast } from "./async-ui.js";
 import { $, Api, esc, t } from "./dom.js";
@@ -49,9 +46,7 @@ export function refreshInstances() {
   return Api.list("/api/instances").then(applyInstances).catch(onInstancesError);
 }
 
-/* 建立 2s 轮询（由 web/app.js 在启动时调用一次）。句柄只在本模块持有：
-   Api.poll 保证上一轮结束才排下一轮、标签页隐藏时不发请求、重新可见立即补一次。
-   Api.poll 默认 immediate：建轮询时首轮请求已发出，所以这里只需在首轮回来之前占位。 */
+/* 建立 2s 轮询（由 web/app.js 在启动时调用一次）。句柄只在本模块持 */
 export function startInstancePolling() {
   if (!instancesLoaded) showSkeleton($("instance-list"), 3);
   instancePoller = Api.poll("/api/instances", applyInstances, { list: true, onError: onInstancesError });
@@ -140,49 +135,16 @@ export function updateInstanceBar() {
   pill.textContent = has ? t("instance.ready") : t("instance.noReady");
   pill.className = "pill " + (has ? "ok" : "warn");
 
+  // Render alternative-model guidance only when needed; do not pay for it on first load.
   const context = $("instance-context");
-  const selected = models.find(m => m.id === selectedModelId);
-  const showContext = !has && !!selected;
-  context.classList.toggle("hidden", !showContext);
-  if (showContext) {
-    const name = I18N.pick(selected, "displayName");
-    const others = instances.filter(i => i.status === "READY" && i.modelId !== selectedModelId);
-    const options = [...new Map(others.map(i => [i.modelId, i])).entries()]
-      .filter(([id]) => models.some(m => m.id === id));
-    const key = !others.length ? "none" : options.length ? "others" : "unlisted";
-    const values = { model: name, count: others.length };
-    for (const [id, value] of [
-      ["instance-context-kicker", t("instance.readiness.kicker")],
-      ["instance-context-title", t("instance.readiness.title", values)],
-      ["instance-context-copy", t("instance.readiness." + key, values)]
-    ]) {
-      const node = $(id);
-      if (node.textContent !== value) node.textContent = value;
-    }
-    const choices = context.querySelector(".instance-context-choices");
-    choices.classList.toggle("hidden", options.length === 0);
-    const heading = t("instance.readiness.available");
-    choices.querySelector(".instance-context-choices-heading").textContent = heading;
-    const list = context.querySelector(".instance-context-options");
-    list.setAttribute("aria-label", heading);
-    const signature = I18N.lang() + options.map(([id, i]) => id + i.port + i.backend).join("|");
-    if (list.dataset.signature !== signature) {
-      list.dataset.signature = signature;
-      list.replaceChildren();
-      for (const [id, inst] of options) {
-        const m = models.find(x => x.id === id);
-        const modelName = I18N.pick(m, "displayName");
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "instance-context-option";
-        btn.textContent = t("instance.readiness.choice", {
-          model: modelName, backend: inst.backend, port: inst.port
-        });
-        btn.setAttribute("aria-label", t("instance.readiness.switch", { model: modelName }));
-        btn.onclick = () => go("#/model/" + encodeURIComponent(id));
-        list.appendChild(btn);
-      }
-    }
+  if (has) {
+    context.classList.add("hidden");
+  } else {
+    const target = selectedModelId;
+    void import("./readiness.js").then(({ renderReadiness }) => {
+      if (selectedModelId === target && !instances.some(i => i.modelId === target && i.status === "READY"))
+        renderReadiness(instances, models, target);
+    }).catch(() => { context.classList.add("hidden"); });
   }
 
   for (const id of SUBMIT_BTNS) {
