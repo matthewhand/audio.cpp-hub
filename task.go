@@ -505,7 +505,9 @@ func (m *TaskManager) runTTS(ctx context.Context, t *Task) error {
 	tmp := filepath.Join(dir, t.ID+".resp.tmp")
 	defer os.Remove(tmp)
 	if err := m.forwardToFile(ctx, t.inst, t.requestRaw, tmp); err != nil {
-		m.history.RecordTTS(t.inst, t.request, t.ID, nil, summarize(err.Error()))
+		if historyErr := m.history.RecordTTS(t.inst, t.request, t.ID, nil, summarize(err.Error())); historyErr != nil {
+			log.Printf("failed to persist upstream TTS failure history: %v", historyErr)
+		}
 		return err
 	}
 	result, errMsg := finalizeTTS(m.history, t.inst, t.request, t.ID, tmp)
@@ -545,7 +547,12 @@ func finalizeTTS(history *HistoryManager, inst *Instance, request map[string]any
 			"channels":    info.Channels,
 		}
 	}
-	history.RecordTTS(inst, request, taskID, result, errMsg)
+	if historyErr := history.RecordTTS(inst, request, taskID, result, errMsg); historyErr != nil {
+		log.Printf("failed to persist TTS history: %v", historyErr)
+		if errMsg == "" {
+			errMsg = "历史记录落盘失败: " + summarize(historyErr.Error())
+		}
+	}
 	return result, errMsg
 }
 
