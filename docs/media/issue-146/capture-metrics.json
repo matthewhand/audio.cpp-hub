@@ -1,0 +1,62 @@
+[
+  {
+    "name": "settings-before-320-en",
+    "lang": "en",
+    "width": 320,
+    "source": "clean-main-b5d8157",
+    "closeWidth": 19.6875,
+    "closeHeight": 20,
+    "insideViewport": true,
+    "screenshot": "settings-before-320-en.png"
+  },
+  {
+    "name": "settings-after-320-en",
+    "lang": "en",
+    "width": 320,
+    "source": "issue-146-isolated-patch",
+    "closeWidth": 44,
+    "closeHeight": 44,
+    "insideViewport": true,
+    "screenshot": "settings-after-320-en.png"
+  },
+  {
+    "name": "downloads-before-390-en",
+    "lang": "en",
+    "width": 390,
+    "source": "clean-main-b5d8157",
+    "closeWidth": 19.6875,
+    "closeHeight": 20,
+    "insideViewport": true,
+    "screenshot": "downloads-before-390-en.png"
+  },
+  {
+    "name": "downloads-after-390-en",
+    "lang": "en",
+    "width": 390,
+    "source": "issue-146-isolated-patch",
+    "closeWidth": 44,
+    "closeHeight": 44,
+    "insideViewport": true,
+    "screenshot": "downloads-after-390-en.png"
+  },
+  {
+    "name": "settings-after-390-zh",
+    "lang": "zh",
+    "width": 390,
+    "source": "issue-146-isolated-patch",
+    "closeWidth": 44,
+    "closeHeight": 44,
+    "insideViewport": true,
+    "screenshot": "settings-after-390-zh.png"
+  },
+  {
+    "name": "downloads-after-720-zh",
+    "lang": "zh",
+    "width": 720,
+    "source": "issue-146-isolated-patch",
+    "closeWidth": 44,
+    "closeHeight": 44,
+    "insideViewport": true,
+    "screenshot": "downloads-after-720-zh.png"
+  }
+]
