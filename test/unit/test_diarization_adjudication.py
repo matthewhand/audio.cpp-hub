@@ -166,9 +166,12 @@ class HumanAdjudicationTests(unittest.TestCase):
         self.fails("reused")
 
     def test_missing_final_roster_speaker_rejected(self):
-        self.bundle["adjudication"]["segments"] = [
-            self.bundle["adjudication"]["segments"][0]
-        ]
+        for reviewer in self.bundle["reviewers"]:
+            reviewer["segments"] = reviewer["segments"][:1]
+        self.bundle["adjudication"]["segments"] = (
+            self.bundle["adjudication"]["segments"][:1]
+        )
+        self.bundle["adjudication"]["decisions"] = []
         self.fails("Final annotation must contain")
 
     def test_agreed_overlap_cannot_be_silently_collapsed(self):
