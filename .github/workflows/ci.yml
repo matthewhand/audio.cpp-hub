@@ -140,6 +140,9 @@ jobs:
       - name: Human RTTM annotation QA tests (synthetic-only; no real audio)
         run: python3 test/unit/test_human_rttm_qa.py
 
+      - name: Diarization independent annotation/adjudication metadata tests (no audio)
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -B test/unit/test_diarization_adjudication.py
+
       - name: UI 清单漂移检查
         run: npm run ui:inventory:check
 
