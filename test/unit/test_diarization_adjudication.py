@@ -225,6 +225,26 @@ class HumanAdjudicationTests(unittest.TestCase):
             with self.assertRaisesRegex(audit.AuditError, "Duplicate JSON key"):
                 audit.read_json(p)
 
+    def test_rights_license_url_mismatch_rejected(self):
+        self.intake["rights"]["license_url"] = (
+            "https://creativecommons.org/publicdomain/zero/1.0/"
+        )
+        self.fails("licence URL/identifier")
+
+    def test_duplicate_source_digest_rejected(self):
+        self.intake["sources"][1]["sha256"] = self.intake["sources"][0]["sha256"]
+        self.fails("Duplicate claimed source")
+
+    def test_duplicate_release_reference_rejected(self):
+        self.intake["sources"][1]["performer_release_evidence_id"] = (
+            self.intake["sources"][0]["performer_release_evidence_id"]
+        )
+        self.fails("Duplicate performer-release")
+
+    def test_case_overlap_policy_cannot_be_weakened(self):
+        self.intake["cases"]["overlap_2spk"]["overlap_required"] = False
+        self.fails("Case plan does not match")
+
     def test_incomplete_rights_intake_schema_rejected(self):
         del self.intake["rights"]["license_id"]
         self.fails("schema mismatch")
@@ -263,6 +283,16 @@ class HumanAdjudicationTests(unittest.TestCase):
             report = json.loads(proc.stdout)
             self.assertEqual(report["disagreement_ms"], 100)
             self.assertFalse(report["source_audio_opened"])
+            preview = subprocess.run(
+                [sys.executable, "-B", str(SCRIPT), "--bundle", str(b),
+                 "--intake-v2", str(i), "--format", "rttm"],
+                capture_output=True, text=True, timeout=5,
+                env={"PYTHONDONTWRITEBYTECODE": "1"},
+            )
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertIn("# UNVERIFIED", preview.stdout)
+            self.assertIn("SPEAKER overlap_2spk 1 2.000 2.000", preview.stdout)
+            self.assertEqual(len(preview.stdout.splitlines()), 3)
 
 
 if __name__ == "__main__":
