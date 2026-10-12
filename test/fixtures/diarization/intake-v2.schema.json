@@ -44,7 +44,8 @@
         "public_attribution": {
           "type": "string",
           "minLength": 3,
-          "maxLength": 400
+          "maxLength": 400,
+          "pattern": "\\S"
         },
         "recording_redistribution_verified": {
           "const": true

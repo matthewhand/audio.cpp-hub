@@ -59,9 +59,24 @@ The v2 JSON declares:
 All four voice sources must be distinct local 16-kHz mono 16-bit PCM WAVs,
 each 3–120 seconds long and at most 16 MiB. Sources must be inside the
 explicit source root, with no traversal, absolute path or symlink.
-The preflight inspects WAV headers and checks SHA-256; it does not transcribe,
-listen, infer, mix, download, resample or rewrite any audio. These format
-constraints are **intentional input gates**, not a conversion facility.
+The preflight securely opens each source beneath the approved root using
+POSIX descriptor-relative opening with no-follow flags (including parent
+directories); unsupported platforms **fail closed**, rather than falling
+back to a race-prone path open. It reads at most 16 MiB + one sentinel
+byte into a bounded, immutable in-memory snapshot, checks file metadata
+for changes during that read, and evaluates the WAV structure, actual
+PCM frame payload length (not just the declared header duration) and
+SHA-256 against the **same bytes**. Manifest reads are also bounded.
+This is designed for a trusted, access-controlled source root, and the
+pinned digest remains the critical integrity control if a malicious
+actor can alter its files.
+
+The public-attribution field must contain non-whitespace content.
+JSON Schema numeric equality (for example, 6 and 6.0) is respected in
+the Python validator, while booleans remain distinct. The validator
+does not transcribe, listen, infer, mix, download, resample or rewrite
+any audio. These format constraints are **intentional input gates**,
+not a conversion facility.
 
 Passing the check returns only a non-sensitive metadata summary:
 

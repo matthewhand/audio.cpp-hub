@@ -1,6 +1,9 @@
 """Synthetic metadata-only intake tests; no audio recording or synthesis."""
 import copy
 import importlib.util
+import hashlib
+import os
+import struct
 import json
 import pathlib
 import subprocess
@@ -225,6 +228,83 @@ class IntakeOnlyValidation(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not allowed with argument", result.stderr)
+
+    def test_header_only_wav_claiming_three_seconds_fails_closed(self):
+        # A 44-byte synthetically packed RIFF header, not generated audio.
+        size = 3 * 16000 * 2
+        fmt = struct.pack("<HHIIHH", 1, 1, 16000, 32000, 2, 16)
+        header = (b"RIFF" + struct.pack("<I", 36 + size)
+                  + b"WAVEfmt " + struct.pack("<I", 16) + fmt
+                  + b"data" + struct.pack("<I", size))
+        self.assertEqual(len(header), 44)
+        with self.assertRaisesRegex(intake.IntakeError, "Truncated WAV sample payload"):
+            intake.inspect_wav(header)
+
+    def test_full_synthetic_in_memory_pcm_structure_passes(self):
+        # Synthetic zero samples exist only in memory for structural testing.
+        count = 3 * 16000
+        size = count * 2
+        fmt = struct.pack("<HHIIHH", 1, 1, 16000, 32000, 2, 16)
+        header = (b"RIFF" + struct.pack("<I", 36 + size)
+                  + b"WAVEfmt " + struct.pack("<I", 16) + fmt
+                  + b"data" + struct.pack("<I", size))
+        blob = header + bytes(size)
+        sha, frames = intake.inspect_wav(blob)
+        self.assertEqual(frames, count)
+        self.assertEqual(sha, hashlib.sha256(blob).hexdigest())
+
+    def test_directory_swap_after_fd_open_keeps_original_snapshot(self):
+        # Only ordinary text sentinels are used; no WAV files are generated.
+        original = self.root / "spk_01.wav"
+        original.write_bytes(b"original-content")
+        unrelated = self.root / "unrelated.bin"
+        unrelated.write_bytes(b"wrong-content")
+        old_open = os.open
+        replaced = [False]
+
+        def swap_after_open(path, flags, *args, **kwargs):
+            fd = old_open(path, flags, *args, **kwargs)
+            if path == "spk_01.wav" and not replaced[0]:
+                replaced[0] = True
+                original.unlink()
+                original.symlink_to(unrelated)
+            return fd
+
+        with mock.patch.object(intake.os, "open", side_effect=swap_after_open):
+            data = intake._read_source_snapshot(self.root, "spk_01.wav")
+        self.assertTrue(replaced[0])
+        self.assertEqual(data, b"original-content")
+        with self.assertRaisesRegex(intake.IntakeError, "Secure source open rejected"):
+            intake._read_source_snapshot(self.root, "spk_01.wav")
+
+    def test_nested_symlink_denied_by_secure_open(self):
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "voice.wav").touch()
+        (self.root / "nested").symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(intake.IntakeError, "Secure source open rejected"):
+            intake._read_source_snapshot(self.root, "nested/voice.wav")
+
+    def test_blank_public_attribution_rejected_and_padded_real_name_accepted(self):
+        self.data["rights"]["public_attribution"] = "   "
+        with self.assertRaisesRegex(intake.IntakeError, "invalid format"):
+            self.validate()
+        self.data["rights"]["public_attribution"] = "  Public rights holder  "
+        self.assertEqual(self.validate()["sources_checked"], 4)
+
+    def test_json_schema_numeric_const_consistency_not_bool(self):
+        self.data["cases"]["silence_0spk"]["duration_seconds"] = 6.0
+        self.data["schema_version"] = 2.0
+        self.assertEqual(self.validate()["schema_version"], 2)
+        self.data["schema_version"] = True
+        with self.assertRaisesRegex(intake.IntakeError, "unexpected value"):
+            self.validate()
+
+    def test_nonstandard_nan_json_is_rejected(self):
+        malformed = self.root / "nan.json"
+        malformed.write_text('{"schema_version": NaN}', encoding="utf-8")
+        with self.assertRaisesRegex(intake.IntakeError, "Non-finite JSON number"):
+            intake.validate_intake_file(malformed, self.root)
 
     def test_schema_itself_is_valid_json_and_strict(self):
         schema = json.loads(intake.SCHEMA_FILE.read_text())
