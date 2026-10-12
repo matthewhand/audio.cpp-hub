@@ -8,6 +8,7 @@ RTTM/WAV, invokes inference, or certifies benchmark-quality ground truth.
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 from pathlib import Path
@@ -19,6 +20,14 @@ SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 CASES = {"silence_0spk", "solo_1spk", "overlap_2spk", "overlap_4spk"}
 REASONS = {"boundary", "speaker_identity", "overlap", "speech_activity"}
+
+
+# Import the committed rights-clear v2 schema checker WITHOUT invoking its
+# separate WAV/source-opening validation path.
+INTAKE_V2_PATH = Path(__file__).with_name("diarization_intake_v2.py")
+INTAKE_SPEC = importlib.util.spec_from_file_location("diarization_intake_schema_only", INTAKE_V2_PATH)
+INTAKE_MODULE = importlib.util.module_from_spec(INTAKE_SPEC)
+INTAKE_SPEC.loader.exec_module(INTAKE_MODULE)
 
 
 class AuditError(ValueError):
@@ -132,6 +141,14 @@ def validate(bundle, intake, intake_digest):
     require(bundle["rights_intake_sha256"] == intake_digest, "Pinned intake metadata digest mismatch")
     identifier(bundle["rights_review_evidence_id"], "rights_review_evidence_id")
 
+    # Enforce the entire existing rights-clear v2 metadata schema without
+    # validating/opening audio; its source-intake validator remains separate.
+    try:
+        schema = json.loads(INTAKE_MODULE.SCHEMA_FILE.read_text(encoding="utf-8"))
+        INTAKE_MODULE._schema_check(intake, schema)
+    except (INTAKE_MODULE.IntakeError, ValueError) as exc:
+        raise AuditError("Rights intake v2 schema mismatch: " + str(exc)) from exc
+
     # The rights-clear source intake remains PENDING human annotation.
     # An adjudication bundle is a separate proposed review artifact.
     require(type(intake) is dict and intake.get("schema_version") == 2 and
@@ -219,15 +236,36 @@ def validate(bundle, intake, intake_digest):
     }
 
 
+def rttm_preview(case_id, rows):
+    """Lossless millisecond-to-RTTM text preview, still NOT certified truth."""
+    lines = ["# UNVERIFIED human review metadata; rights and identity not authenticated"]
+    for start, end, speaker in rows:
+        lines.append(
+            f"SPEAKER {case_id} 1 {start / 1000:.3f} "
+            f"{(end - start) / 1000:.3f} <NA> <NA> {speaker} <NA> <NA>"
+        )
+    return "\\n".join(lines) + "\\n"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle", required=True, help="private, manually authored review metadata JSON")
     parser.add_argument("--intake-v2", required=True, help="pinned rights-clear v2 metadata JSON")
+    parser.add_argument("--format", choices=("summary", "rttm"), default="summary",
+                        help="stdout report or clearly unverified RTTM preview")
     args = parser.parse_args()
     try:
         bundle, _ = read_json(args.bundle)
         intake, digest = read_json(args.intake_v2)
-        print(json.dumps(validate(bundle, intake, digest), sort_keys=True, indent=2))
+        report = validate(bundle, intake, digest)
+        if args.format == "rttm":
+            roster = intake["cases"][bundle["case_id"]]["speaker_ids"]
+            duration = int(intake["cases"][bundle["case_id"]]["duration_seconds"] * 1000)
+            rows = segments(bundle["adjudication"]["segments"], roster, duration,
+                            "adjudication.segments")
+            print(rttm_preview(bundle["case_id"], rows), end="")
+        else:
+            print(json.dumps(report, sort_keys=True, indent=2))
     except (OSError, AuditError) as exc:
         parser.exit(1, f"Adjudication check failed: {exc}\n")
 
