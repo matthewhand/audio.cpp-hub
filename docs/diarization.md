@@ -97,6 +97,21 @@ Sources:
 - https://huggingface.co/audio-cpp/audio.cpp-gguf
 - https://github.com/0xShug0/audio.cpp/blob/main/docs/speech_analysis.md
 
+## Human adjudication metadata preflight (draft PR #154)
+
+The independent model-blind annotation/adjudication validator at
+`scripts/validate-diarization-adjudication.py` accepts rights-clear v2
+metadata plus two human reviewer segment lists and an independent
+adjudicator's evidence-linked decisions. It enforces active-speaker
+agreement, explicit resolution for disagreements and overlapping speech
+as separate half-open speaker rows. The optional RTTM stdout preview
+is always marked UNVERIFIED. See
+[`diarization-human-adjudication.md`](diarization-human-adjudication.md).
+
+The validator **does not verify that real humans listened**, check
+recordings, authenticate rights, certify identities, or produce
+benchmark-ready DER. These still require an approved independent audit.
+
 ## Model-free RTTM fixtures and scoring suite (draft PR #154)
 
 A separate **rights-clear v2, validation-only source intake** is defined in
