@@ -102,7 +102,15 @@ performer identities or permission scope. A human rights reviewer must
 authenticate the release forms independently before any publication.
 The current code does **not** inspect or store releases.
 
-## Human ground-truth audit — future gate, not implemented
+## Human ground-truth audit — workflow gate, not yet performed
+
+A separate **synthetic-only, metadata-first** adjudication validator and
+RTTM preview are described in
+[`diarization-human-adjudication.md`](diarization-human-adjudication.md).
+It checks two blind reviewers, reviewer/adjudicator separation, overlap,
+evidence references, agreement/disagreement and the entire committed v2
+intake schema. **No real annotators, listening, consent authentication, or
+actual human ground truth have been supplied.** All such steps remain gated.
 
 1. Confirm four distinct consented speakers and verify public redistribution
    and derivative-mixing permission for each recording and voice.
@@ -135,5 +143,5 @@ python3 test/unit/test_diarization_fixture_builder.py
 ```
 
 In PR #154, existing WAVs, RTTMs, v1 hashes and Git history are preserved
-verbatim. The real v2 audio builder, human annotation tooling, content
+verbatim. The real v2 audio builder, actual human annotation/listening, content
 downloads, Sortformer inference, deployment and merge remain **out of scope**.
