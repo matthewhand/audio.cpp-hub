@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -140,5 +141,42 @@ func TestSSEUnsupportedWriteDeadlineFailsClosed(t *testing.T) {
 	}
 	if err := writeSSEFrame(w, http.NewResponseController(w), []byte(": test\\n\\n")); err == nil {
 		t.Fatal("writeSSEFrame silently ignored unsupported deadlines")
+	}
+}
+
+// A deadline failure other than ErrUnsupported must not silently return HTTP
+// 200. Real connections may already be broken, so the response is best-effort.
+type sseFailedDeadlineRecorder struct {
+	*httptest.ResponseRecorder
+}
+
+func (r *sseFailedDeadlineRecorder) SetWriteDeadline(time.Time) error {
+	return errors.New("synthetic deadline I/O failure -- do not echo to client")
+}
+
+func TestSSEDeadlinePreflightFailureReturns503AndReleasesSlot(t *testing.T) {
+	bus := NewEventBus()
+	defer bus.Close()
+	w := &sseFailedDeadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
+	(&Hub{bus: bus}).handleEventStream(w, httptest.NewRequest(http.MethodGet, "/api/events/stream", nil))
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("failed deadline response=%d, want 503", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "EVENTS_DEADLINE_FAILED") {
+		t.Fatalf("missing fail-closed error code: %s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "synthetic deadline I/O failure") {
+		t.Fatalf("internal transport error leaked to client")
+	}
+	if ct := w.Header().Get("Content-Type"); strings.Contains(ct, "text/event-stream") {
+		t.Fatalf("failed preflight advertised an SSE stream: %s", ct)
+	}
+	if got := qa135Subscribers(bus); got != 0 {
+		t.Fatalf("failed preflight leaked %d subscriber slots", got)
+	}
+	if next := bus.SubscribeHTTP(); next == nil {
+		t.Fatal("failed preflight left SSE admission unavailable")
+	} else {
+		bus.Unsubscribe(next)
 	}
 }

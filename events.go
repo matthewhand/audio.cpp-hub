@@ -242,6 +242,10 @@ func (h *Hub) handleEventStream(w http.ResponseWriter, r *http.Request) {
 	if err := rc.SetWriteDeadline(time.Now().Add(sseWriteTimeout)); err != nil {
 		if errors.Is(err, errors.ErrUnsupported) {
 			errJSON(w, http.StatusServiceUnavailable, "EVENTS_DEADLINE_UNSUPPORTED", nil, "event stream requires write deadline support; use /api/tasks polling")
+		} else {
+			// Best effort: the connection may already be unusable, but never
+			// silently let net/http default an unwritten response to HTTP 200.
+			errJSON(w, http.StatusServiceUnavailable, "EVENTS_DEADLINE_FAILED", nil, "event stream could not set a write deadline; use /api/tasks polling")
 		}
 		return
 	}

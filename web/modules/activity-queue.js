@@ -230,8 +230,9 @@ function scheduleStreamRetry() {
     streamRetry = null;
     if (!opened || document.hidden) return;
     // Native EventSource does NOT reconnect after fatal HTTP 503/404.
-    if (stream?.readyState === EventSource.CLOSED) {
-      stream.close();
+    // A synchronous constructor/setup failure leaves stream null.
+    if (!stream || stream.readyState === EventSource.CLOSED) {
+      stream?.close();
       stream = null;
       connectStream();
     }
@@ -253,8 +254,13 @@ function connectStream() {
       if (stream?.readyState === EventSource.CLOSED) scheduleStreamRetry();
     };
   } catch {
+    // Constructor and listener-registration exceptions leave no usable stream.
+    // Keep authoritative polling active, but rearm bounded SSE recovery.
+    stream?.close();
+    stream = null;
     streamLive = false;
     schedulePoll();
+    scheduleStreamRetry();
   }
 }
 function privacyClick(event) {

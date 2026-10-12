@@ -296,9 +296,11 @@ and each hello/event/ping frame has a renewed 10-second HTTP write deadline
 so a stalled recipient cannot occupy a handler indefinitely. A response
 writer unable to support write deadlines is rejected before HTTP 200 with
 HTTP 503 code `EVENTS_DEADLINE_UNSUPPORTED`, instead of running an unbounded
-stream; clients use the same authoritative polling fallback. Healthy streams
-remain open for as long as needed. These are resource-safety limits, not
-assurances that every transient event will be delivered.
+stream. A different failure to install the deadline returns a best-effort
+HTTP 503 `EVENTS_DEADLINE_FAILED` (the connection itself may already be
+unusable); clients use the same authoritative polling fallback. Healthy
+streams remain open for as long as needed. These are resource-safety limits,
+not assurances that every transient event will be delivered.
 
 The Activity/Queue browser client retains authoritative `/api/tasks` polling
 when SSE fails. Chromium leaves EventSource permanently CLOSED after an initial
@@ -306,6 +308,9 @@ HTTP 503 (or 404); the client therefore retries CLOSED streams only while
 Activity is open and visible, with exponential backoff from 2 to 60 seconds.
 The retry is cancelled on panel close or document hide; for an established
 stream in CONNECTING state, native EventSource reconnect remains authoritative.
+Synchronous EventSource construction or listener-registration errors also
+use the bounded retry schedule while polling continues; a partial stream is
+closed before retrying.
 
 `GET /api/instances` may supply an optional `memory` object on supported
 platforms. Current `vramBytes` is omitted when the latest GPU probe failed;
