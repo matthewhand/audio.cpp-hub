@@ -3,6 +3,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -217,6 +218,25 @@ class HumanAdjudicationTests(unittest.TestCase):
         self.assertEqual(out["disagreement_spans"], 0)
         self.assertEqual(out["adjudicated_overlap_ms"], 0)
         self.assertFalse(out["publication_ready"])
+
+    def test_symlinked_manifest_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            real = root / "private.json"
+            real.write_text('{"sentinel": true}', encoding="utf-8")
+            alias = root / "fake-intake.json"
+            alias.symlink_to(real)
+            with self.assertRaisesRegex(audit.AuditError, "securely"):
+                audit.read_json(alias)
+
+    def test_fifo_metadata_rejected_without_blocking(self):
+        if not hasattr(os, "mkfifo"):
+            self.skipTest("POSIX named pipes not supported")
+        with tempfile.TemporaryDirectory() as td:
+            fifo = Path(td) / "not-a-manifest"
+            os.mkfifo(fifo)
+            with self.assertRaisesRegex(audit.AuditError, "regular file"):
+                audit.read_json(fifo)
 
     def test_duplicate_json_keys_fail_closed(self):
         with tempfile.TemporaryDirectory() as td:
