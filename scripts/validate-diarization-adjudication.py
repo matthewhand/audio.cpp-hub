@@ -244,7 +244,7 @@ def rttm_preview(case_id, rows):
             f"SPEAKER {case_id} 1 {start / 1000:.3f} "
             f"{(end - start) / 1000:.3f} <NA> <NA> {speaker} <NA> <NA>"
         )
-    return "\\n".join(lines) + "\\n"
+    return "\n".join(lines) + "\n"
 
 
 def main():
