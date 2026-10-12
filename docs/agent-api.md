@@ -300,6 +300,13 @@ stream; clients use the same authoritative polling fallback. Healthy streams
 remain open for as long as needed. These are resource-safety limits, not
 assurances that every transient event will be delivered.
 
+The Activity/Queue browser client retains authoritative `/api/tasks` polling
+when SSE fails. Chromium leaves EventSource permanently CLOSED after an initial
+HTTP 503 (or 404); the client therefore retries CLOSED streams only while
+Activity is open and visible, with exponential backoff from 2 to 60 seconds.
+The retry is cancelled on panel close or document hide; for an established
+stream in CONNECTING state, native EventSource reconnect remains authoritative.
+
 `GET /api/instances` may supply an optional `memory` object on supported
 platforms. Current `vramBytes` is omitted when the latest GPU probe failed;
 historically *measured* peak/average fields may remain available. Neither
