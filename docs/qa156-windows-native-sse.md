@@ -58,7 +58,7 @@ W01/W05 are Winsock smoke tests, not full stalled-write simulations.
   GOPROXY=off, GOMAXPROCS=2, GOMEMLIMIT=768MiB, go test -c -p 1,
   external 45s timeout, nice/idle I/O. **Compilation PASS; not executed.**
   Final prepared Windows test executable (isolated teamstinky only):
-  SHA-256 d6f1603098b14f716cdcc619c9d574d0b3c99093a0cc5bd6c85d1c8f47ad29b2.
+  SHA-256 1c15acac69d2b279a7b1c7ea25aff3e599de56e3cee1adab93962f06d8d99099.
   This local compilation hash is evidence, not a transferred executable.
 - Read-only Windows2 SSH reachable: Windows Server 2022, 32 logical CPUs;
   ~22,683 MiB RAM available out of ~32,693 MiB; free C: 3.4 GiB,

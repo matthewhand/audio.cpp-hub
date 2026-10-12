@@ -324,7 +324,7 @@ func (c *win156TrackedPipe) Write(p []byte) (int, error) {
 		return n, err
 	}
 	n, err := c.Conn.Write(p)
-	if err == nil && n == len(p) && bytes.Contains(p, []byte("event: hello")) {
+	if err == nil && n == len(p) && bytes.Contains(p, []byte("event: hello\ndata: {}\n\n\r\n")) {
 		// Confirm the complete transport Write carrying hello has returned.
 		// Otherwise the next observed block could be the hello frame itself.
 		c.helloOnce.Do(func() { close(c.helloWritten) })

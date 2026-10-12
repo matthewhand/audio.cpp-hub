@@ -55,8 +55,8 @@ try {
     $env:TEMP = $work
     # A compiled Go test executable uses -test.* flags.
     # The regex runs only W01-W06, including W05's named subtests.
-    $args = @('-test.run=^TestSSEWinNativeW0[1-6]', '-test.count=1', '-test.timeout=30s', '-test.v')
-    $proc = Start-Process -FilePath $exe -WorkingDirectory $repo -ArgumentList $args -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    $testArgs = @('-test.run=^TestSSEWinNativeW0[1-6]', '-test.count=1', '-test.timeout=30s', '-test.v')
+    $proc = Start-Process -FilePath $exe -WorkingDirectory $repo -ArgumentList $testArgs -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     try {
         if (-not $proc.HasExited) { $proc.PriorityClass = 'BelowNormal' }
     } catch {
