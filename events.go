@@ -196,11 +196,11 @@ func (b *EventBus) OnTaskEvent(ev taskEvent) {
 
 // writeSSEFrame renews a finite write deadline on every frame. There is no
 // global HTTP WriteTimeout because the stream itself may remain open for hours.
-// Recorder-style test writers may not support deadlines; real net/http
-// connections do. A stalled client is disconnected instead of indefinitely
-// occupying a handler during shutdown.
+// Never silently ignore an unsupported deadline: doing so could leave a
+// wrapped HTTP writer blocked indefinitely. The handler checks support before
+// sending HTTP 200. A stalled client is disconnected on deadline expiry.
 func writeSSEFrame(w http.ResponseWriter, rc *http.ResponseController, frame []byte) error {
-	if err := rc.SetWriteDeadline(time.Now().Add(sseWriteTimeout)); err != nil && !errors.Is(err, errors.ErrUnsupported) {
+	if err := rc.SetWriteDeadline(time.Now().Add(sseWriteTimeout)); err != nil {
 		return err
 	}
 	if _, err := w.Write(frame); err != nil {
@@ -235,6 +235,16 @@ func (h *Hub) handleEventStream(w http.ResponseWriter, r *http.Request) {
 	}
 	defer h.bus.Unsubscribe(sub)
 	rc := http.NewResponseController(w)
+	// Reject response wrappers that cannot enforce per-frame write deadlines.
+	// Checking before WriteHeader avoids advertising a successful but unbounded
+	// stream. The normal net/http writer supports this; unknown wrappers must
+	// implement Unwrap or SetWriteDeadline.
+	if err := rc.SetWriteDeadline(time.Now().Add(sseWriteTimeout)); err != nil {
+		if errors.Is(err, errors.ErrUnsupported) {
+			errJSON(w, http.StatusServiceUnavailable, "EVENTS_DEADLINE_UNSUPPORTED", nil, "event stream requires write deadline support; use /api/tasks polling")
+		}
+		return
+	}
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
