@@ -75,14 +75,27 @@ The host unit may also contain an `EnvironmentFile`; confirm the exact
 environment precedence and effective values on the host before relying
 on a drop-in. Never log secrets or inspect credentials.
 
+## Standalone Go hub source check
+
+Independent static inspection of `main.go` and `instance.go` confirms that
+the Go startup path constructs an empty `InstanceManager`, starts its
+management/memory sampler, and binds HTTP; it does not by itself invoke the
+`Start` method that launches the child `audiocpp_server` executable.
+The two systemd `ExecStartPost` hooks are the identified automatic model
+startup path on GTX. This does **not** guarantee models cannot later start via
+authorised HTTP/API requests, other units, or agents. `hub-only` is a
+boot-suppression mechanism, not a firewall or service-wide model prohibition.
+
 ## Test policy
 
 `python3 -B -m unittest discover -s tests -p test_startup_warmup_policy.py -v`
 
-The regression uses isolated temporary dummy weight/executable files and
+The 14-case regression uses isolated temporary dummy weight/executable files and
 a fake `curl` on PATH. It tests shell syntax, no-network hub-only mode,
 strict legacy exit, skipped warm-up, best-effort failure/timeout behavior
-and synthetic valid/malformed/empty WAVs. Tests use a temporary copy of the
+and synthetic valid/malformed/empty WAVs, fails on upstream instance errors,
+checks invalid SanoTTS mode and isolates inherited `AUDIOCPP_*` settings.
+Tests use a temporary copy of the
 Breeze script with a test-local WAV path; **no arbitrary production WAV deletion
 path override is allowed**. The suite never loads a model, contacts a hub or
 uses real service APIs. Avoid broad integration or CI runs on GTX.
