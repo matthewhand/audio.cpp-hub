@@ -11,6 +11,8 @@ import hashlib
 import importlib.util
 import json
 import math
+import os
+import stat
 from pathlib import Path
 import re
 
@@ -62,11 +64,26 @@ def unique_pairs(pairs):
 
 
 def read_json(path):
-    # A bounded read even if stat information is stale. Caller supplies trusted
-    # manifest paths; audio files and rights documents are never opened.
-    with open(path, "rb") as stream:
-        data = stream.read(MAX_JSON + 1)
-    require(len(data) <= MAX_JSON, "Metadata JSON exceeds size limit")
+    """Bounded, immutable regular-file snapshot; reject symlink/FIFO targets."""
+    require(hasattr(os, "O_NOFOLLOW"), "Secure metadata opening unsupported")
+    flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise AuditError("Metadata file cannot be opened securely") from exc
+    try:
+        before = os.fstat(fd)
+        require(stat.S_ISREG(before.st_mode), "Metadata must be a regular file")
+        require(before.st_size <= MAX_JSON, "Metadata JSON exceeds size limit")
+        with os.fdopen(os.dup(fd), "rb") as stream:
+            data = stream.read(MAX_JSON + 1)
+        after = os.fstat(fd)
+        fingerprint = lambda x: (x.st_dev, x.st_ino, x.st_size, x.st_ctime_ns, x.st_mtime_ns)
+        require(fingerprint(before) == fingerprint(after) and len(data) == before.st_size,
+                "Metadata changed during read")
+        require(len(data) <= MAX_JSON, "Metadata JSON exceeds size limit")
+    finally:
+        os.close(fd)
     try:
         return json.loads(
             data.decode("utf-8"), object_pairs_hook=unique_pairs,
