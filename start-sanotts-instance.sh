@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # start-sanotts-instance.sh — host-local boot helper (10.0.0.36).
 # Starts the secondary 'sanotts' instance if absent and waits for READY.
-# Deliberately tolerant: never fails the service boot (breeze must still serve).
+# Runtime failures are nonfatal; invalid recovery mode is a configuration error.
 set -u
 
 HUB_URL="http://127.0.0.1:18080"
@@ -25,7 +25,7 @@ case "${AUDIOCPP_STARTUP_MODE:-normal}" in
     log "Hub-only startup selected; skipping SanoTTS instance and warm-up"
     exit 0
     ;;
-  *) log "Invalid AUDIOCPP_STARTUP_MODE; skipping SanoTTS bootstrap"; exit 0 ;;
+  *) log "ERROR: Invalid AUDIOCPP_STARTUP_MODE (expected normal or hub-only)"; exit 1 ;;
 esac
 
 # Wait for the hub API (ExecStartPost runs after ExecStart, but the hub needs a moment)
