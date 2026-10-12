@@ -16,7 +16,7 @@ printf '%s\n' "$*" >> "$FAKE_CURL_LOG"
 case " $* " in
   *"/api/models"*) printf '[]\n'; exit 0 ;;
   *"/api/instances"*)
-    printf '[{"id":"test","instanceName":"breeze-tts","status":"READY","port":18090}]\n'
+    printf '[{"id":"test","instanceName":"breeze-tts","status":"%s","port":18090}]\n' "${FAKE_INSTANCE_STATUS:-READY}"
     exit 0 ;;
   *"/v1/audio/speech"*)
     out=""
@@ -66,8 +66,21 @@ class StartupWarmupPolicyTests(unittest.TestCase):
             source.replace(marker, f'WARMUP_WAV="{self.dir / "warmup.wav"}"')
         )
         self.calls = self.dir / "curl.log"
+        # Do not inherit model/service aliases from a developer's terminal or
+        # CI runner: synthetic instance IDs/status must be deterministic.
+        aliases = {
+            "MODEL_ID", "SERVICE_NAME", "WEIGHTS", "BACKEND", "DEVICE",
+            "THREADS", "IDLE_UNLOAD_MS", "VOICE_REF", "EXECUTABLE_ID",
+            "SERVER_BIN", "HUB_URL", "WARMUP_TEXT",
+            "START_INSTANCE_WAIT_SECONDS", "FAKE_WARMUP_RESULT",
+            "FAKE_INSTANCE_STATUS", "FAKE_CURL_LOG",
+        }
+        clean_env = {
+            name: value for name, value in os.environ.items()
+            if not name.startswith("AUDIOCPP_") and name not in aliases
+        }
         self.env = {
-            **os.environ,
+            **clean_env,
             "PATH": str(bin_dir) + os.pathsep + os.environ.get("PATH", ""),
             "HUB_URL": "http://127.0.0.1:1",
             "AUDIOCPP_SERVER_BIN": str(fake_engine),
@@ -76,9 +89,6 @@ class StartupWarmupPolicyTests(unittest.TestCase):
             "FAKE_WARMUP_RESULT": "fail",
             "START_INSTANCE_WAIT_SECONDS": "1",
         }
-        for name in ("AUDIOCPP_STARTUP_MODE", "AUDIOCPP_WARMUP_POLICY",
-                     "AUDIOCPP_WARMUP_MAX_SECONDS"):
-            self.env.pop(name, None)
 
     def run_script(self, script: Path | None = None, **overrides: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(["bash", str(script or self.breeze_script)], env={**self.env, **overrides},
@@ -99,6 +109,13 @@ class StartupWarmupPolicyTests(unittest.TestCase):
         self.assertIn("Warm-up request failed", p.stderr)
         self.assertIn("/v1/audio/speech", self.call_log())
         self.assertIn("--max-time 300", self.call_log())
+
+    def test_best_effort_does_not_hide_failed_instance(self) -> None:
+        p = self.run_script(AUDIOCPP_WARMUP_POLICY="best-effort",
+                            FAKE_INSTANCE_STATUS="FAILED")
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("unexpected status", p.stderr)
+        self.assertNotIn("/v1/audio/speech", self.call_log())
 
     def test_best_effort_failure_does_not_restart(self) -> None:
         p = self.run_script(AUDIOCPP_WARMUP_POLICY="best-effort")
