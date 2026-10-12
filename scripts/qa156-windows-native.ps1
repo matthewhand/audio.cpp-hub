@@ -55,8 +55,26 @@ try {
     $env:TEMP = $work
     # A compiled Go test executable uses -test.* flags.
     # The regex runs only W01-W06, including W05's named subtests.
-    $testArgs = @('-test.run=^TestSSEWinNativeW0[1-6]', '-test.count=1', '-test.timeout=30s', '-test.v')
-    $proc = Start-Process -FilePath $exe -WorkingDirectory $repo -ArgumentList $testArgs -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    # PowerShell 5.1 Start-Process -PassThru yielded a null ExitCode
+    # after a successful native test. Use a directly owned .NET Process
+    # and fail closed unless the exact process returns a numeric zero.
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $exe
+    $psi.WorkingDirectory = $repo
+    $psi.Arguments = '-test.run=^TestSSEWinNativeW0[1-6] -test.count=1 -test.timeout=30s -test.v'
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $candidate = New-Object System.Diagnostics.Process
+    $candidate.StartInfo = $psi
+    if (-not $candidate.Start()) {
+        throw 'Test-owned native executable could not start.'
+    }
+    $proc = $candidate
+    # Concurrent read tasks prevent a redirected OS pipe from blocking.
+    $outTask = $proc.StandardOutput.ReadToEndAsync()
+    $errTask = $proc.StandardError.ReadToEndAsync()
     try {
         if (-not $proc.HasExited) { $proc.PriorityClass = 'BelowNormal' }
     } catch {
@@ -67,9 +85,16 @@ try {
         & "$env:SystemRoot\System32\taskkill.exe" /PID $proc.Id /T /F | Out-Null
         throw 'External 45-second watchdog expired; terminated test-owned process tree.'
     }
-    $proc.Refresh()
-    if ($proc.ExitCode -ne 0) {
-        throw ('Native synthetic tests failed with exit code ' + $proc.ExitCode)
+    $proc.WaitForExit()
+    [IO.File]::WriteAllText($stdout, $outTask.GetAwaiter().GetResult())
+    [IO.File]::WriteAllText($stderr, $errTask.GetAwaiter().GetResult())
+    $exitCode = $proc.ExitCode
+    if ($null -eq $exitCode) {
+        throw 'Test-owned native process completed without a readable exit code.'
+    }
+    Write-Output ('QA156_TEST_PROCESS_EXIT_CODE=' + $exitCode)
+    if ($exitCode -ne 0) {
+        throw ('Native synthetic tests failed with exit code ' + $exitCode)
     }
     Write-Output 'QA156_WINDOWS_NATIVE_W01_W06_PASS'
 }

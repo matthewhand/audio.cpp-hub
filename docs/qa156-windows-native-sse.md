@@ -1,9 +1,10 @@
 # PR #156 — Windows-native SSE resource safety (approval gated)
 
-Scope: Issue #155, draft PR #156. Synthetic test source only, not a
-production deployment. **Windows-native test execution has not been approved
-or performed.** Keep PR #156 draft and Issue #155 open. Issue #128 remains
-the independent deployment gate.
+Scope: Issue #155, draft PR #156. Synthetic test source and a separately
+owner-approved, isolated Windows2 native execution on 13 October 2026.
+**W01–W06 passed on Windows2; deployment is not authorised or performed.**
+Keep PR #156 draft and Issue #155 open. Issue #128 remains the
+independent deployment gate.
 
 ## Validation route
 
@@ -22,16 +23,16 @@ flowchart LR
 Winsock result. Cross-compiling Windows tests is not executing them.
 Deterministic net.Pipe backpressure is not Winsock TCP backpressure.
 
-## Prepared Windows-only fixtures
+## Windows-only fixture outcomes
 
 | ID | Fixture | Test transport | Expected check | Current status |
 | --- | --- | --- | --- | --- |
-| W01 | TestSSEWinNativeW01LoopbackHelloAndDeadlines | Native Windows TCP loopback | HTTP 200, SSE hello, observed write-deadline preflight and refresh | Prepared, not run |
-| W02 | TestSSEWinNativeW02UnsupportedDeadlineFailsClosed | Synthetic response writer | 503 EVENTS_DEADLINE_UNSUPPORTED, slot reusable | Prepared, not run |
-| W03 | TestSSEWinNativeW03OtherDeadlineFailure | Synthetic failing writer | Best-effort 503 EVENTS_DEADLINE_FAILED, no error leak, slot reusable | Prepared, not run |
-| W04 | TestSSEWinNativeW04ConcurrentCapacity64 | In-process goroutines | 192 simultaneous attempts; exactly 64 admissions, no oversubscription | Prepared, not run |
-| W05 | TestSSEWinNativeW05DisconnectAndShutdown | Native Windows TCP loopback | Disconnect and bus shutdown each release slots AND exit handler | Prepared, not run |
-| W06 | TestSSEWinNativeW06PipeBackpressureReclaimsHandler | **net.Pipe, not Winsock** | Genuinely blocked task write ends with 10s timeout, slot reclaimed, replacement hello and cleanup | Prepared, not run |
+| W01 | TestSSEWinNativeW01LoopbackHelloAndDeadlines | Native Windows TCP loopback | HTTP 200, SSE hello, observed write-deadline preflight and refresh | **PASS (Windows2)** |
+| W02 | TestSSEWinNativeW02UnsupportedDeadlineFailsClosed | Synthetic response writer | 503 EVENTS_DEADLINE_UNSUPPORTED, slot reusable | **PASS (Windows2)** |
+| W03 | TestSSEWinNativeW03OtherDeadlineFailure | Synthetic failing writer | Best-effort 503 EVENTS_DEADLINE_FAILED, no error leak, slot reusable | **PASS (Windows2)** |
+| W04 | TestSSEWinNativeW04ConcurrentCapacity64 | In-process goroutines | 192 simultaneous attempts; exactly 64 admissions, no oversubscription | **PASS (Windows2)** |
+| W05 | TestSSEWinNativeW05DisconnectAndShutdown | Native Windows TCP loopback | Disconnect and bus shutdown each release slots AND exit handler | **PASS (Windows2)** |
+| W06 | TestSSEWinNativeW06PipeBackpressureReclaimsHandler | **net.Pipe, not Winsock** | Genuinely blocked task write ends with 10s timeout, slot reclaimed, replacement hello and cleanup | **PASS (Windows2)** |
 
 W06 reserves 63 slots, admits one full HTTP handler in the 64th slot,
 receives hello, confirms the hello-carrying transport Write has finished,
@@ -56,23 +57,70 @@ W01/W05 are Winsock smoke tests, not full stalled-write simulations.
 - Go 1.27.1 on Linux ARM64 statically cross-compiled the new Windows-only
   test source to Windows AMD64, CGO disabled. Environment: GOTOOLCHAIN=local,
   GOPROXY=off, GOMAXPROCS=2, GOMEMLIMIT=768MiB, go test -c -p 1,
-  external 45s timeout, nice/idle I/O. **Compilation PASS; not executed.**
-  Final prepared Windows test executable (isolated teamstinky only):
-  SHA-256 1c15acac69d2b279a7b1c7ea25aff3e599de56e3cee1adab93962f06d8d99099.
-  This local compilation hash is evidence, not a transferred executable.
+  external 45s timeout, nice/idle I/O. **Compilation PASS**, then this
+  exact binary was transferred via SSH into a disposable test-owned directory,
+  verified again with Windows SHA-256, and executed only after approval.
+  Test executable SHA-256:
+  1c15acac69d2b279a7b1c7ea25aff3e599de56e3cee1adab93962f06d8d99099.
 - Read-only Windows2 SSH reachable: Windows Server 2022, 32 logical CPUs;
   ~22,683 MiB RAM available out of ~32,693 MiB; free C: 3.4 GiB,
   D: 0 GiB, E: 6.2 GiB. No Go toolchain discovered on PATH or five
   conventional locations (not an exhaustive inventory).
-- The manual PowerShell runner parsed without syntax errors using
-  Windows2's built-in PowerShell parser, with source sent via SSH stdin;
-  the runner itself was never executed.
+- PowerShell runner parsed with Windows2's own parser; corrected runner was
+  verified by full native execution with process exit code 0.
 - Isolated teamstinky source: /tmp/audio-156-win-fixtures-20261013.
   Dirty older review worktrees preserved. Teamstinky disk ~3 GiB free.
 
-## Separate approval required for native Windows execution
+## Native Windows2 measured evidence — 13 October 2026 AEDT
 
-1. Obtain explicit approval for native tests and any executable staging.
+- **Pinned test code:** 83d1f5f90ed051abe0a7748a3b45c8fe0e4a413a.
+  The Windows-only Go test executable was built offline from that commit;
+  its exact SHA-256 was checked before and after secure staging:
+  1c15acac69d2b279a7b1c7ea25aff3e599de56e3cee1adab93962f06d8d99099.
+- **Test source SHA-256:** 57d7ce385f19ebea2cc7b32610d51920c89a1b148a941aa56a1304b1a44cb122.
+  Staged source included only the Windows Go fixture, runner script and
+  go.mod, plus the hash-verified executable. No model or production files.
+- **Native outcomes:** all W01–W06 PASS, including two W05 subtests. W06
+  logged a genuine blocked net.Pipe transport-write timeout at
+  **10.000684s** on the corrected run; W06 test duration **12.00s** and
+  total runner wall time **12.295s**. It proved the 64th slot was
+  reclaimed while the original client stayed connected; replacement SSE
+  hello and its subsequent slot cleanup were asserted.
+- **Hard limits:** GOMAXPROCS=2, GOMEMLIMIT=768MiB, offline Go flags,
+  30-second native Go test timeout, 45-second external Windows process-tree
+  watchdog, best-effort BelowNormal CPU priority. No limit was reached.
+  Windows I/O priority and actual peak Go memory were **not measured**.
+- **Runner defect and correction:** the first run printed Go PASS for
+  W01–W06, but PowerShell 5.1 Start-Process -PassThru returned a null
+  ExitCode and the script correctly refused to claim overall success.
+  The runner was hardened to create and track a .NET Process directly,
+  asynchronously drain stdout/stderr, and require numeric exit code 0.
+  Corrected-run runner SHA-256:
+  0b2b2e39b68225cefa5120328734cc5503aee9dcc655c4da71ca5700b6772ddc.
+  **Corrected-run process exit code 0; complete Go PASS; empty stderr;
+  SSH command exit 0.**
+- **After-run cleanup:** Windows2 reported zero remaining audio156 test
+  processes, zero runner temp directories; removed the four-file staging
+  directory after checking its exact path, contents, and executable hash.
+  Cleanup recheck: staging absent, zero test processes and runner temps.
+- **Transport boundary:** W01/W05 exercised real native Windows Winsock
+  loopback for hello/deadlines and disconnect/shutdown. W06 used
+  deterministic net.Pipe; a live **Winsock nonreading-peer deadline and
+  recovery test remains unmeasured**, requiring its own approved fixture.
+- **CI provenance:** prior head 83d1f5f had GitHub CI run
+  [38289470181](https://github.com/matthewhand/audio.cpp-hub/actions/runs/38289470181)
+  **SUCCESS** (4/4). Runner fix and this measured evidence require
+  verification of *their own final-head CI* after commit.
+
+No production services, dependencies, recordings, models, inference,
+restarts, or deployment were touched. This is not independent approval
+to merge the draft.
+
+## Repeating native Windows execution (fresh approval required)
+
+1. Obtain separate explicit approval for each future native test session and
+   any executable staging. The 13 October 2026 approval covered the completed
+   run; it is not permission to deploy, install dependencies, or merge.
    Inspect a clean Windows2 worktree at the exact new PR head and recheck
    host RAM, CPU, disk, isolation and temp space. No production files.
 2. Build a precompiled test executable with an existing Go toolchain
@@ -119,7 +167,8 @@ W01/W05 are Winsock smoke tests, not full stalled-write simulations.
 - Middleware wrappers in production must still propagate deadline support
   (or provide Unwrap); independent review should inspect this contract.
 - Handler exit and slot count are distinct checks; W05 asserts both.
-- Native runtime, race-detector suitability, large-scale resource use,
+- W01–W06 native runtime is **PASS**, but native race-detector suitability,
+  heavy-load resource consumption, real Winsock stalled-write behavior,
   and service deployment remain **unverified**.
 
 No recordings, inference, models, service changes or production restarts.
