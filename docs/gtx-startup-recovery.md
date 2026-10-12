@@ -31,7 +31,6 @@ prove that Breeze caused the slab allocation.
 | `AUDIOCPP_WARMUP_POLICY=skip` | Breeze instance creation/READY waits still happen; skips only Breeze warm-up. **SanoTTS still starts/warms** |
 | `AUDIOCPP_WARMUP_POLICY=best-effort` | Breeze starts normally, but warm-up HTTP failure, empty WAV, or invalid WAV logs a warning and exits success; SanoTTS still starts/warms |
 | `AUDIOCPP_WARMUP_MAX_SECONDS=1..30` | Bounded HTTP warm-up duration in best-effort policy; default 15. Strict legacy timeout remains 300 |
-| `AUDIOCPP_WARMUP_WAV` | Override default `/tmp/audio-cpp-hub-warmup.wav`; useful for isolated tests without touching global temp paths |
 
 **Best option during a resource incident:** `hub-only`. The main Go hub
 can serve management functionality but no instance is automatically ready.
@@ -83,8 +82,10 @@ on a drop-in. Never log secrets or inspect credentials.
 The regression uses isolated temporary dummy weight/executable files and
 a fake `curl` on PATH. It tests shell syntax, no-network hub-only mode,
 strict legacy exit, skipped warm-up, best-effort failure/timeout behavior
-and synthetic valid/malformed/empty WAVs. It never loads a model, contacts a
-hub or uses real service APIs. Avoid broad integration or CI runs on GTX.
+and synthetic valid/malformed/empty WAVs. Tests use a temporary copy of the
+Breeze script with a test-local WAV path; **no arbitrary production WAV deletion
+path override is allowed**. The suite never loads a model, contacts a hub or
+uses real service APIs. Avoid broad integration or CI runs on GTX.
 
 ## Remaining risks
 
@@ -96,3 +97,7 @@ hub or uses real service APIs. Avoid broad integration or CI runs on GTX.
   9 GiB `kmalloc-rnd-01-64` kernel slab cache and repeated TTS HTTP 502
   rather than treating a boot policy as a root-cause cure.
 - All changes here are non-production source/documentation only.
+
+Review note (2026-10-12): fixed an arbitrary warm-up output path override
+that could delete unrelated user files, and corrected the invalid SanoTTS
+startup-mode path to fail closed instead of silently succeeding.
