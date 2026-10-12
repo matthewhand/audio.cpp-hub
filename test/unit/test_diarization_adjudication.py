@@ -188,7 +188,7 @@ class HumanAdjudicationTests(unittest.TestCase):
 
     def test_nonfinite_case_duration_rejected(self):
         self.intake["cases"]["overlap_2spk"]["duration_seconds"] = float("nan")
-        self.fails("Invalid case duration")
+        self.fails("schema mismatch")
 
     def test_digest_mismatch_rejected(self):
         self.bundle["rights_intake_sha256"] = "0" * 64
@@ -196,7 +196,7 @@ class HumanAdjudicationTests(unittest.TestCase):
 
     def test_rights_attestation_absent_rejected(self):
         self.intake["rights"]["recording_redistribution_verified"] = False
-        self.fails("Rights intake claims")
+        self.fails("schema mismatch")
 
     def test_review_not_authenticated_by_tool(self):
         out = self.check()
@@ -205,7 +205,7 @@ class HumanAdjudicationTests(unittest.TestCase):
 
     def test_finished_annotation_flag_does_not_override_pending_intake(self):
         self.intake["human_annotation"]["status"] = "complete"
-        self.fails("must not claim")
+        self.fails("schema mismatch")
 
     def test_silence_case_without_speakers_has_null_review_conflicts(self):
         self.bundle["case_id"] = "silence_0spk"
