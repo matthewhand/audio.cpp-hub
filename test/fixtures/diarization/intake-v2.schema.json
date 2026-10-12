@@ -85,7 +85,8 @@
           "relative_wav_path": {
             "type": "string",
             "minLength": 5,
-            "maxLength": 160
+            "maxLength": 160,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9][A-Za-z0-9_.-]*)*\\.wav$"
           },
           "sha256": {
             "type": "string",

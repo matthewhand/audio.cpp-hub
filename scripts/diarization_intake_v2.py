@@ -54,14 +54,45 @@ def _unique_keys(pairs):
 
 
 def _load_json(path):
-    path = pathlib.Path(path)
-    _require(path.is_file(), "Manifest file is missing")
-    _require(path.stat().st_size <= MAX_JSON_BYTES, "Manifest is too large")
+    """Read one bounded, stable JSON snapshot, without following symlinks.
+
+    Walk every parent with descriptor-relative no-follow opens, then reject
+    non-regular final targets (including FIFOs) without waiting for a writer.
+    This is metadata only; no audio or generated fixtures are involved.
+    """
+    _require(SECURE_OPEN_SUPPORTED and hasattr(os, "O_NONBLOCK"),
+             "Secure manifest opening unsupported on this platform")
+    absolute = pathlib.Path(path).absolute()
+    parts = absolute.parts
+    _require(len(parts) >= 2 and all(part not in (".", "..") for part in parts[1:]),
+             "Unsafe manifest path")
+    dir_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    file_flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
+    fds = []
     try:
-        # Bound the actual read, not just a potentially stale stat() result.
-        with path.open("rb") as stream:
+        fd = os.open(parts[0], dir_flags)
+        fds.append(fd)
+        for part in parts[1:-1]:
+            fd = os.open(part, dir_flags, dir_fd=fd)
+            fds.append(fd)
+        fd = os.open(parts[-1], file_flags, dir_fd=fd)
+        fds.append(fd)
+        before = os.fstat(fd)
+        _require(stat.S_ISREG(before.st_mode), "Manifest must be a regular file")
+        _require(before.st_size <= MAX_JSON_BYTES, "Manifest is too large")
+        with os.fdopen(os.dup(fd), "rb") as stream:
             raw = stream.read(MAX_JSON_BYTES + 1)
+        after = os.fstat(fd)
+        fingerprint = lambda x: (x.st_dev, x.st_ino, x.st_size, x.st_mtime_ns, x.st_ctime_ns)
+        _require(fingerprint(before) == fingerprint(after) and len(raw) == before.st_size,
+                 "Manifest changed during inspection")
         _require(len(raw) <= MAX_JSON_BYTES, "Manifest is too large")
+    except OSError as exc:
+        raise IntakeError("Manifest could not be opened securely") from exc
+    finally:
+        for opened in reversed(fds):
+            os.close(opened)
+    try:
         return json.loads(
             raw.decode("utf-8"), object_pairs_hook=_unique_keys,
             parse_constant=lambda _: (_ for _ in ()).throw(IntakeError("Non-finite JSON number rejected")),

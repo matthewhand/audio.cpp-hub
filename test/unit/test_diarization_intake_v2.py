@@ -3,6 +3,7 @@ import copy
 import importlib.util
 import hashlib
 import os
+import stat
 import struct
 import json
 import pathlib
@@ -77,7 +78,7 @@ class IntakeOnlyValidation(unittest.TestCase):
         sha = {source["relative_wav_path"]: source["sha256"] for source in data["sources"]}
         return intake.validate_intake(
             data, self.root,
-            inspect_audio=lambda path: (sha[path.name], 10 * 16000),
+            inspect_audio=lambda path: (sha[path.relative_to(self.root).as_posix()], 10 * 16000),
         )
 
     def test_valid_attested_intake_does_not_claim_legal_or_human_verification(self):
@@ -158,12 +159,12 @@ class IntakeOnlyValidation(unittest.TestCase):
 
     def test_relative_parent_traversal_rejected(self):
         self.data["sources"][0]["relative_wav_path"] = "../outside.wav"
-        with self.assertRaisesRegex(intake.IntakeError, "Unsafe source path"):
+        with self.assertRaisesRegex(intake.IntakeError, "relative_wav_path: invalid format"):
             self.validate()
 
     def test_absolute_path_rejected(self):
         self.data["sources"][0]["relative_wav_path"] = "/tmp/elsewhere.wav"
-        with self.assertRaisesRegex(intake.IntakeError, "Unsafe source path"):
+        with self.assertRaisesRegex(intake.IntakeError, "relative_wav_path: invalid format"):
             self.validate()
 
     def test_symlinked_source_rejected(self):
@@ -194,6 +195,109 @@ class IntakeOnlyValidation(unittest.TestCase):
         item.write_text('{"schema_version":2,"schema_version":2}', encoding="utf-8")
         with self.assertRaisesRegex(intake.IntakeError, "Duplicate JSON key"):
             intake.validate_intake_file(item, self.root)
+
+    def test_standalone_schema_rejects_unsafe_relative_wav_paths(self):
+        schema = json.loads(intake.SCHEMA_FILE.read_text())
+        for path in (
+            "../outside.wav", "/tmp/voice.wav", "folder/../voice.wav",
+            "folder/./voice.wav", "voice\\outside.wav", "a//voice.wav",
+            "a/voice.mp3", ".private.wav", "name with spaces.wav",
+            "folder/voice.wav/..",
+        ):
+            with self.subTest(path=path):
+                data = draft()
+                data["sources"][0]["relative_wav_path"] = path
+                with self.assertRaisesRegex(intake.IntakeError, "invalid format"):
+                    intake._schema_check(data, schema)
+
+    def test_standalone_schema_accepts_valid_nested_relative_wav_path(self):
+        schema = json.loads(intake.SCHEMA_FILE.read_text())
+        self.data["sources"][0]["relative_wav_path"] = "sessions/day_1/spk_01.wav"
+        intake._schema_check(self.data, schema)
+        nested = self.root / "sessions" / "day_1"
+        nested.mkdir(parents=True)
+        (nested / "spk_01.wav").touch()
+        self.assertEqual(self.validate()["sources_checked"], 4)
+
+    def test_manifest_symlink_target_rejected(self):
+        source = self.root / "actual.json"
+        source.write_text('{"ok":true}')
+        alias = self.root / "alias.json"
+        alias.symlink_to(source)
+        with self.assertRaisesRegex(intake.IntakeError, "opened securely"):
+            intake._load_json(alias)
+
+    def test_manifest_symlink_parent_rejected(self):
+        directory = self.root / "original"
+        directory.mkdir()
+        (directory / "intake.json").write_text('{"ok":true}')
+        alias = self.root / "linked"
+        alias.symlink_to(directory, target_is_directory=True)
+        with self.assertRaisesRegex(intake.IntakeError, "opened securely"):
+            intake._load_json(alias / "intake.json")
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "FIFO only available on POSIX")
+    def test_manifest_fifo_rejected_without_blocking(self):
+        fifo = self.root / "input.fifo"
+        os.mkfifo(fifo)
+        with self.assertRaisesRegex(intake.IntakeError, "regular file"):
+            intake._load_json(fifo)
+
+    def test_manifest_missing_file_rejected(self):
+        with self.assertRaisesRegex(intake.IntakeError, "opened securely"):
+            intake._load_json(self.root / "missing.json")
+
+    def test_manifest_oversized_file_rejected(self):
+        item = self.root / "large.json"
+        item.write_bytes(b"x" * (intake.MAX_JSON_BYTES + 1))
+        with self.assertRaisesRegex(intake.IntakeError, "too large"):
+            intake._load_json(item)
+
+    def test_manifest_exact_size_limit_accepted(self):
+        item = self.root / "limit.json"
+        data = b'{"ok": true}'
+        item.write_bytes(data + b" " * (intake.MAX_JSON_BYTES - len(data)))
+        self.assertEqual(intake._load_json(item), {"ok": True})
+
+    def test_manifest_swap_after_open_uses_original_descriptor(self):
+        source = self.root / "swapped.json"
+        source.write_text('{"version": "original"}')
+        alternate = self.root / "alternate.json"
+        alternate.write_text('{"version": "replacement"}')
+        original_open = os.open
+        replaced = [False]
+
+        def swap_after_open(path, flags, *args, **kwargs):
+            fd = original_open(path, flags, *args, **kwargs)
+            if path == "swapped.json" and not replaced[0]:
+                replaced[0] = True
+                source.unlink()
+                source.symlink_to(alternate)
+            return fd
+
+        with mock.patch.object(intake.os, "open", side_effect=swap_after_open):
+            self.assertEqual(intake._load_json(source), {"version": "original"})
+        self.assertTrue(replaced[0])
+        with self.assertRaisesRegex(intake.IntakeError, "opened securely"):
+            intake._load_json(source)
+
+    def test_manifest_mutation_during_read_rejected(self):
+        source = self.root / "mutated.json"
+        source.write_text('{"content": 1}')
+        original_fstat = os.fstat
+        mutated = [False]
+
+        def mutate_after_initial_fstat(fd):
+            status = original_fstat(fd)
+            if stat.S_ISREG(status.st_mode) and not mutated[0]:
+                mutated[0] = True
+                source.write_text('{"content": 11111111111}')
+            return status
+
+        with mock.patch.object(intake.os, "fstat", side_effect=mutate_after_initial_fstat):
+            with self.assertRaisesRegex(intake.IntakeError, "changed during inspection"):
+                intake._load_json(source)
+        self.assertTrue(mutated[0])
 
     def test_builder_v2_rejects_output_and_never_creates_a_target_directory(self):
         manifest = self.root / "source.json"

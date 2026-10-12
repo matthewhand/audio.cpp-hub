@@ -70,10 +70,24 @@ back to a race-prone path open. It reads at most 16 MiB + one sentinel
 byte into a bounded, immutable in-memory snapshot, checks file metadata
 for changes during that read, and evaluates the WAV structure, actual
 PCM frame payload length (not just the declared header duration) and
-SHA-256 against the **same bytes**. Manifest reads are also bounded.
-This is designed for a trusted, access-controlled source root, and the
-pinned digest remains the critical integrity control if a malicious
-actor can alter its files.
+SHA-256 against the **same bytes**.
+
+Manifest reads are likewise bounded to 64 KiB, using descriptor-relative
+no-follow opens for parent directories and final regular file. A stable
+file snapshot is verified against its initial metadata. Symlink parents,
+symlink targets, FIFOs, oversized files and concurrent mutations are
+rejected rather than processed. Secure POSIX opening is required; other
+platforms fail closed.
+
+The standalone JSON Schema restricts WAV source paths to relative,
+slash-separated, alphanumeric-leading segments ending in `.wav`; it
+rejects `..`, absolute paths, backslashes and empty segments.
+Cross-field checks (such as unique speakers and recording hashes,
+release references, case rosters) and actual source-root containment
+still require the **Python preflight**; JSON Schema alone is not a
+rights-clear or file-admission decision. This is designed for a trusted,
+access-controlled source root, and the pinned digest remains the
+critical integrity control if a malicious actor can alter its files.
 
 The public-attribution field must contain non-whitespace content.
 JSON Schema numeric equality (for example, 6 and 6.0) is respected in
