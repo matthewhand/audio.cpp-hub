@@ -10,15 +10,20 @@ import vm from "node:vm";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const source = readFileSync(resolve(root, "web/modules/activity-queue.js"), "utf8");
 function section(start, end) {
-  const a = source.indexOf(start), b = source.indexOf(end, a);
+  const a = source.indexOf(start),
+    b = source.indexOf(end, a);
   assert.ok(a >= 0 && b > a, "missing Activity source anchors: " + start + " / " + end);
   return source.slice(a, b);
 }
-const lifecycle = section("function schedulePoll()", "function privacyClick(") +
+const lifecycle =
+  section("function schedulePoll()", "function privacyClick(") +
   section("function visibilityChange()", "function relocalize()");
 
 function harness({ constructionFailures = 0, listenerFailures = 0 } = {}) {
-  let attempts = 0, closed = 0, polls = 0, reconciles = 0;
+  let attempts = 0,
+    closed = 0,
+    polls = 0,
+    reconciles = 0;
   let nextTimer = 0;
   const timers = new Map();
   const fakeElement = () => ({
@@ -49,40 +54,67 @@ function harness({ constructionFailures = 0, listenerFailures = 0 } = {}) {
     }
   }
   const scope = {
-    opened: true, rows: [], stale: true, streamLive: true,
-    stream: null, inFlight: null, generation: 1, pending: new Set(),
-    poll: null, streamRetry: null, streamRetryDelay: 2000,
-    STREAM_RETRY_INITIAL_MS: 2000, STREAM_RETRY_MAX_MS: 60000,
-    POLL_MS: 5000, LIVE_POLL_MS: 15000,
+    opened: true,
+    rows: [],
+    stale: true,
+    streamLive: true,
+    stream: null,
+    inFlight: null,
+    generation: 1,
+    pending: new Set(),
+    poll: null,
+    streamRetry: null,
+    streamRetryDelay: 2000,
+    STREAM_RETRY_INITIAL_MS: 2000,
+    STREAM_RETRY_MAX_MS: 60000,
+    POLL_MS: 5000,
+    LIVE_POLL_MS: 15000,
     document: { hidden: false, removeEventListener() {} },
-    window: { removeEventListener() {} }, $,
+    window: { removeEventListener() {} },
+    $,
     EventSource: FakeEventSource,
     setTimeout(fn, ms) {
       const id = ++nextTimer;
       timers.set(id, { fn, ms });
       return id;
     },
-    clearTimeout(id) { timers.delete(id); },
-    setInterval() { polls++; return 1; },
+    clearTimeout(id) {
+      timers.delete(id);
+    },
+    setInterval() {
+      polls++;
+      return 1;
+    },
     clearInterval() {},
-    reconcile() { reconciles++; return Promise.resolve(); },
-    privacyClick() {}, storageChange() {},
+    reconcile() {
+      reconciles++;
+      return Promise.resolve();
+    },
+    privacyClick() {},
+    storageChange() {},
     render() {}
   };
   vm.createContext(scope);
   vm.runInContext(lifecycle, scope, { filename: "activity-queue.js" });
   return {
-    scope, timers,
-    attempts: () => attempts, closed: () => closed,
-    polls: () => polls, reconciles: () => reconciles,
-    nextDelay() { return [...timers.values()][0]?.ms ?? null; },
+    scope,
+    timers,
+    attempts: () => attempts,
+    closed: () => closed,
+    polls: () => polls,
+    reconciles: () => reconciles,
+    nextDelay() {
+      return [...timers.values()][0]?.ms ?? null;
+    },
     fire() {
       assert.equal(timers.size, 1, "only one bounded retry may be scheduled");
       const [id, timer] = [...timers.entries()][0];
       timers.delete(id);
       timer.fn();
     },
-    setHidden(value) { scope.document.hidden = value; }
+    setHidden(value) {
+      scope.document.hidden = value;
+    }
   };
 }
 
