@@ -140,6 +140,27 @@ labels are correct. Exact millisecond half-open boundaries are preserved
 and concurrent speakers remain separate rows. Save or use the preview
 only in a separately approved protected annotation workflow.
 
+## Relationship to existing final QA
+
+The repository **already** contains a more complete final technical review
+pipeline at `scripts/validate-human-rttm.py`, its
+`human-rttm-completion-v1.schema.json` and
+`test/unit/test_human_rttm_qa.py`. That existing path checks pinned
+artifact bytes, secure file reads, actual WAV duration/format, sampled
+RTTM boundaries, reviewers' frozen RTTMs, logged adjudication decisions
+and their alignment with final RTTMs. **It is the later technical
+completion gate**, not replaced or weakened by this PR addition.
+
+The new `validate-diarization-adjudication.py` is an *early-stage,
+no-audio metadata triage and preview* that catches missing independent
+reviewers, unsourced decisions, consensus edits and provenance mistakes
+**before** a human team freezes actual RTTM files. Its reviewer JSON
+is not the frozen-artifact completion schema and does not automatically
+convert into a final completion manifest. Human reviewers must still
+preserve their original RTTMs, sign off separately, and run the existing
+full QA gate with explicit approval and real evidence. Neither tool
+authenticates consent or grants publication permission.
+
 ## Synthetic CI checks
 
 ```bash
