@@ -149,6 +149,29 @@ def validate(bundle, intake, intake_digest):
     except (INTAKE_MODULE.IntakeError, ValueError) as exc:
         raise AuditError("Rights intake v2 schema mismatch: " + str(exc)) from exc
 
+    # Mirror the metadata-only cross-field requirements of intake v2.
+    # Its full validate_intake() must not run here: that opens WAV files.
+    rights_meta = intake["rights"]
+    require(rights_meta["license_url"] ==
+            INTAKE_MODULE.LICENSE_URLS[rights_meta["license_id"]],
+            "Rights licence URL/identifier mismatch")
+    sources = intake["sources"]
+    require({entry["speaker_id"] for entry in sources} == INTAKE_MODULE.EXPECTED_IDS,
+            "Intake must contain four distinct speakers")
+    require(len({entry["sha256"] for entry in sources}) == 4,
+            "Duplicate claimed source recording digest")
+    require(len({entry["performer_release_evidence_id"] for entry in sources}) == 4,
+            "Duplicate performer-release evidence ID")
+    for case_name, (count, seconds, overlap) in INTAKE_MODULE.EXPECTED_CASES.items():
+        spec_meta = intake["cases"][case_name]
+        require(spec_meta["duration_seconds"] == seconds and
+                len(spec_meta["speaker_ids"]) == count and
+                spec_meta["overlap_required"] is overlap,
+                "Case plan does not match rights intake v2 contract")
+        if count == 4:
+            require(set(spec_meta["speaker_ids"]) == INTAKE_MODULE.EXPECTED_IDS,
+                    "Four-speaker roster must include all consented IDs")
+
     # The rights-clear source intake remains PENDING human annotation.
     # An adjudication bundle is a separate proposed review artifact.
     require(type(intake) is dict and intake.get("schema_version") == 2 and
