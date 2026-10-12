@@ -302,6 +302,11 @@ unusable); clients use the same authoritative polling fallback. Healthy
 streams remain open for as long as needed. These are resource-safety limits,
 not assurances that every transient event will be delivered.
 
+For the approval-gated Windows-native W01–W06 synthetic validation plan,
+transport distinctions and manual watchdog runner, see
+[PR #156 Windows SSE QA](qa156-windows-native-sse.md). Native Windows
+execution is not included in ordinary CI and requires separate approval.
+
 The Activity/Queue browser client retains authoritative `/api/tasks` polling
 when SSE fails. Chromium leaves EventSource permanently CLOSED after an initial
 HTTP 503 (or 404); the client therefore retries CLOSED streams only while
