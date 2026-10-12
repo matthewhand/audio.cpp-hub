@@ -243,6 +243,10 @@ def validate(bundle, intake, intake_digest):
             "Adjudicator must be independent of both reviewers")
     final = segments(adjudication["segments"], roster, duration, "adjudication.segments")
     spans, overlap_ms, agreed_ms = disagreement_spans(*streams, final, duration)
+    require({speaker for _, _, speaker in final} == set(roster),
+            "Final annotation must contain exactly the case speaker roster")
+    if spec["overlap_required"]:
+        require(overlap_ms > 0, "Required simultaneous-speech overlap missing from final review")
     decisions = adjudication["decisions"]
     require(type(decisions) is list and len(decisions) == len(spans),
             "Exactly one decision required for each disagreement span")
