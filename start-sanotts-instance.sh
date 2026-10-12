@@ -17,6 +17,17 @@ WARMUP_TEXT="Warm-up."
 
 log() { printf '[start-sanotts] %s\n' "$*" >&2; }
 
+# Both host ExecStartPost helpers honor the same opt-in recovery mode.
+# Check before contacting the hub or launching any model.
+case "${AUDIOCPP_STARTUP_MODE:-normal}" in
+  normal) ;;
+  hub-only)
+    log "Hub-only startup selected; skipping SanoTTS instance and warm-up"
+    exit 0
+    ;;
+  *) log "Invalid AUDIOCPP_STARTUP_MODE; skipping SanoTTS bootstrap"; exit 0 ;;
+esac
+
 # Wait for the hub API (ExecStartPost runs after ExecStart, but the hub needs a moment)
 for i in $(seq 1 30); do
   curl -fsS -m 2 "$HUB_URL/api/models" >/dev/null 2>&1 && break
