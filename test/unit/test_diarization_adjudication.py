@@ -165,6 +165,17 @@ class HumanAdjudicationTests(unittest.TestCase):
         self.bundle["adjudication"]["decisions"][0]["evidence_id"] = "review_log_a"
         self.fails("reused")
 
+    def test_missing_final_roster_speaker_rejected(self):
+        self.bundle["adjudication"]["segments"] = [
+            self.bundle["adjudication"]["segments"][0]
+        ]
+        self.fails("Final annotation must contain")
+
+    def test_agreed_overlap_cannot_be_silently_collapsed(self):
+        # Both reviewers agree on overlapping speech in 2000..2900ms.
+        self.bundle["adjudication"]["segments"][1]["start_ms"] = 3000
+        self.fails("reviewer agreement")
+
     def test_unauthorised_speaker_rejected(self):
         self.bundle["reviewers"][0]["segments"][0]["speaker_id"] = "spk_04"
         self.fails("roster")
