@@ -117,3 +117,28 @@ func TestSSEWriteDeadlineRenewedPerFrame(t *testing.T) {
 		t.Fatalf("frames not flushed: %q", w.Body.String())
 	}
 }
+
+func TestSSEUnsupportedWriteDeadlineFailsClosed(t *testing.T) {
+	bus := NewEventBus()
+	defer bus.Close()
+	// ResponseRecorder supports flushing but not net.Conn write deadlines.
+	// A wrapped production writer without Unwrap is equivalent: allowing an
+	// HTTP 200 here would silently disable the SSE resource bound.
+	w := httptest.NewRecorder()
+	(&Hub{bus: bus}).handleEventStream(w, httptest.NewRequest(http.MethodGet, "/api/events/stream", nil))
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("unsupported deadline response=%d, want 503", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "EVENTS_DEADLINE_UNSUPPORTED") {
+		t.Fatalf("unsupported deadline error missing: %q", w.Body.String())
+	}
+	if got := w.Header().Get("Content-Type"); strings.Contains(got, "text/event-stream") {
+		t.Fatalf("unsupported writer incorrectly advertised SSE: %q", got)
+	}
+	if got := qa135Subscribers(bus); got != 0 {
+		t.Fatalf("unsupported writer leaked %d subscriber slots", got)
+	}
+	if err := writeSSEFrame(w, http.NewResponseController(w), []byte(": test\\n\\n")); err == nil {
+		t.Fatal("writeSSEFrame silently ignored unsupported deadlines")
+	}
+}
