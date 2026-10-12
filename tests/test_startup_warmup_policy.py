@@ -65,6 +65,7 @@ class StartupWarmupPolicyTests(unittest.TestCase):
             "FAKE_CURL_LOG": str(self.calls),
             "FAKE_WARMUP_RESULT": "fail",
             "START_INSTANCE_WAIT_SECONDS": "1",
+            "AUDIOCPP_WARMUP_WAV": str(self.dir / "warmup.wav"),
         }
         for name in ("AUDIOCPP_STARTUP_MODE", "AUDIOCPP_WARMUP_POLICY",
                      "AUDIOCPP_WARMUP_MAX_SECONDS"):
