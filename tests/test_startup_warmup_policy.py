@@ -55,6 +55,16 @@ class StartupWarmupPolicyTests(unittest.TestCase):
         fake_engine.chmod(0o755)
         weights = self.dir / "dummy.gguf"
         weights.write_bytes(b"FAKE_NOT_A_MODEL")
+        # Run the exact draft script with only its fixed warm-up WAV path
+        # rewritten inside this temporary test copy. The production interface
+        # must not accept an arbitrary path for rm -f.
+        source = BREEZE.read_text()
+        marker = 'WARMUP_WAV="/tmp/audio-cpp-hub-warmup.wav"'
+        self.assertEqual(source.count(marker), 1)
+        self.breeze_script = self.dir / "start-instance.sh"
+        self.breeze_script.write_text(
+            source.replace(marker, f'WARMUP_WAV="{self.dir / "warmup.wav"}"')
+        )
         self.calls = self.dir / "curl.log"
         self.env = {
             **os.environ,
@@ -65,14 +75,13 @@ class StartupWarmupPolicyTests(unittest.TestCase):
             "FAKE_CURL_LOG": str(self.calls),
             "FAKE_WARMUP_RESULT": "fail",
             "START_INSTANCE_WAIT_SECONDS": "1",
-            "AUDIOCPP_WARMUP_WAV": str(self.dir / "warmup.wav"),
         }
         for name in ("AUDIOCPP_STARTUP_MODE", "AUDIOCPP_WARMUP_POLICY",
                      "AUDIOCPP_WARMUP_MAX_SECONDS"):
             self.env.pop(name, None)
 
-    def run_script(self, script: Path = BREEZE, **overrides: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(["bash", str(script)], env={**self.env, **overrides},
+    def run_script(self, script: Path | None = None, **overrides: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(["bash", str(script or self.breeze_script)], env={**self.env, **overrides},
                               cwd=self.dir, capture_output=True, text=True, timeout=6)
 
     def call_log(self) -> str:
@@ -135,7 +144,7 @@ class StartupWarmupPolicyTests(unittest.TestCase):
         self.assertNotIn("/v1/audio/speech", self.call_log())
 
     def test_hub_only_skips_both_helpers_and_all_network(self) -> None:
-        for path in (BREEZE, SANO):
+        for path in (self.breeze_script, SANO):
             with self.subTest(path=path):
                 self.calls.unlink(missing_ok=True)
                 p = self.run_script(path, AUDIOCPP_STARTUP_MODE="hub-only",
@@ -143,6 +152,16 @@ class StartupWarmupPolicyTests(unittest.TestCase):
                 self.assertEqual(p.returncode, 0, p.stderr)
                 self.assertIn("Hub-only", p.stderr)
                 self.assertEqual(self.call_log(), "")
+
+    def test_invalid_startup_mode_fails_sano_before_network(self) -> None:
+        p = self.run_script(SANO, AUDIOCPP_STARTUP_MODE="mistyped")
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("Invalid AUDIOCPP_STARTUP_MODE", p.stderr)
+        self.assertEqual(self.call_log(), "")
+
+    def test_source_does_not_accept_arbitrary_warmup_delete_path(self) -> None:
+        self.assertNotIn("AUDIOCPP_WARMUP_WAV", BREEZE.read_text())
+        self.assertIn('WARMUP_WAV="/tmp/audio-cpp-hub-warmup.wav"', BREEZE.read_text())
 
     def test_invalid_startup_mode_fails_breeze_before_network(self) -> None:
         p = self.run_script(AUDIOCPP_STARTUP_MODE="anything-else")
