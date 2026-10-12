@@ -243,7 +243,7 @@ class HumanAdjudicationTests(unittest.TestCase):
 
     def test_case_overlap_policy_cannot_be_weakened(self):
         self.intake["cases"]["overlap_2spk"]["overlap_required"] = False
-        self.fails("Case plan does not match")
+        self.fails("schema mismatch")
 
     def test_incomplete_rights_intake_schema_rejected(self):
         del self.intake["rights"]["license_id"]
