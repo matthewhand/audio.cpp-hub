@@ -293,7 +293,10 @@ connection receives HTTP 503 with code `EVENTS_BUSY` and must use the
 `GET /api/tasks` polling fallback. Each client queue holds at most 64
 notifications (new notifications are dropped for an overloaded subscriber),
 and each hello/event/ping frame has a renewed 10-second HTTP write deadline
-so a stalled recipient cannot occupy a handler indefinitely. Healthy streams
+so a stalled recipient cannot occupy a handler indefinitely. A response
+writer unable to support write deadlines is rejected before HTTP 200 with
+HTTP 503 code `EVENTS_DEADLINE_UNSUPPORTED`, instead of running an unbounded
+stream; clients use the same authoritative polling fallback. Healthy streams
 remain open for as long as needed. These are resource-safety limits, not
 assurances that every transient event will be delivered.
 
