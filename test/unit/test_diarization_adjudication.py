@@ -28,19 +28,46 @@ def fixture():
         "schema_version": 2,
         "fixture_set_id": "set_synthetic_01",
         "rights": {
-            "rights_reviewer_evidence_id": "rights_review_01",
+            "license_id": "CC-BY-4.0",
+            "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            "public_attribution": "Synthetic metadata only; no recordings or rights verified",
             "recording_redistribution_verified": True,
             "derivative_mixing_verified": True,
+            "rights_reviewer_evidence_id": "rights_review_01",
         },
-        "human_annotation": {"status": "pending"},
+        "sources": [
+            {
+                "speaker_id": f"spk_0{n}",
+                "relative_wav_path": f"speaker_0{n}.wav",
+                "sha256": f"{n}" * 64,
+                "recording_rights_evidence_id": f"rights_0{n}",
+                "performer_release_evidence_id": f"release_0{n}",
+                "recording_rights_verified": True,
+                "performer_release_verified": True,
+                "recording_type": "original-human-recording",
+                "recording_origin_evidence_id": f"origin_0{n}",
+            } for n in range(1, 5)
+        ],
+        "human_annotation": {
+            "status": "pending", "independent_annotators": [],
+            "speaker_identity_verified": False, "speech_boundaries_adjudicated": False,
+        },
         "cases": {
+            "silence_0spk": {
+                "duration_seconds": 6, "speaker_ids": [], "overlap_required": False,
+            },
+            "solo_1spk": {
+                "duration_seconds": 8.5, "speaker_ids": ["spk_01"], "overlap_required": False,
+            },
             "overlap_2spk": {
                 "duration_seconds": 12,
                 "speaker_ids": ["spk_01", "spk_02"],
                 "overlap_required": True,
             },
-            "silence_0spk": {
-                "duration_seconds": 6, "speaker_ids": [], "overlap_required": False
+            "overlap_4spk": {
+                "duration_seconds": 19,
+                "speaker_ids": ["spk_01", "spk_02", "spk_03", "spk_04"],
+                "overlap_required": True,
             },
         },
     }
@@ -197,6 +224,25 @@ class HumanAdjudicationTests(unittest.TestCase):
             p.write_text('{"case_id":"x","case_id":"y"}', encoding="utf-8")
             with self.assertRaisesRegex(audit.AuditError, "Duplicate JSON key"):
                 audit.read_json(p)
+
+    def test_incomplete_rights_intake_schema_rejected(self):
+        del self.intake["rights"]["license_id"]
+        self.fails("schema mismatch")
+
+    def test_rights_intake_extra_private_field_rejected(self):
+        self.intake["sources"][0]["legal_name"] = "Do not include identities"
+        self.fails("schema mismatch")
+
+    def test_rttm_preview_preserves_concurrent_speakers_without_certification(self):
+        valid = self.check()
+        self.assertFalse(valid["publication_ready"])
+        rows = audit.segments(self.bundle["adjudication"]["segments"],
+                              ["spk_01", "spk_02"], 12000, "final")
+        preview = audit.rttm_preview("overlap_2spk", rows)
+        self.assertIn("# UNVERIFIED", preview)
+        self.assertEqual(len(preview.splitlines()), 3)
+        self.assertIn("SPEAKER overlap_2spk 1 0.000 3.000", preview)
+        self.assertIn("SPEAKER overlap_2spk 1 2.000 2.000", preview)
 
     def test_cli_reads_only_private_metadata_json(self):
         with tempfile.TemporaryDirectory() as td:
