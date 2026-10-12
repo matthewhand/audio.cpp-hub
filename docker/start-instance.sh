@@ -13,6 +13,7 @@
 #   AUDIOCPP_VOICE_REF / VOICE_REF     参考音频路径（可选）
 #   AUDIOCPP_STARTUP_MODE               normal (default) | hub-only (no model work)
 #   AUDIOCPP_WARMUP_POLICY              required (default) | best-effort | skip
+#   AUDIOCPP_WARMUP_WAV                output file (default /tmp/audio-cpp-hub-warmup.wav)
 #   AUDIOCPP_WARMUP_MAX_SECONDS         best-effort timeout, 1..30 (default 15)
 #   WARMUP_TEXT                        预热句子（可选）
 #   HUB_URL                            hub 基础地址（默认 http://127.0.0.1:18080）
@@ -31,7 +32,7 @@ VOICE_REF="${AUDIOCPP_VOICE_REF:-${VOICE_REF:-}}"
 EXECUTABLE_ID="${AUDIOCPP_EXECUTABLE_ID:-}"
 SERVER_BIN="${AUDIOCPP_SERVER_BIN:-/audio.cpp/bin/audiocpp_server}"
 WARMUP_TEXT="${WARMUP_TEXT:-This is a short startup warm-up.}"
-WARMUP_WAV="/tmp/audio-cpp-hub-warmup.wav"
+WARMUP_WAV="${AUDIOCPP_WARMUP_WAV:-/tmp/audio-cpp-hub-warmup.wav}"
 STARTUP_MODE="${AUDIOCPP_STARTUP_MODE:-normal}"
 WARMUP_POLICY="${AUDIOCPP_WARMUP_POLICY:-required}"
 WAIT_SECONDS="${START_INSTANCE_WAIT_SECONDS:-180}"
