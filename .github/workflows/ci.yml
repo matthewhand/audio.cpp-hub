@@ -137,6 +137,9 @@ jobs:
       - name: Diarization v2 source-intake preflight tests (synthetic metadata only)
         run: python3 test/unit/test_diarization_intake_v2.py
 
+      - name: Human RTTM annotation QA tests (synthetic-only; no real audio)
+        run: python3 test/unit/test_human_rttm_qa.py
+
       - name: UI 清单漂移检查
         run: npm run ui:inventory:check
 

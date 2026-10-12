@@ -1,5 +1,9 @@
 # Rights-clear source-intake v2 (no audio generation)
 
+The separate **future human RTTM QA completion** contract is documented in
+[`diarization-human-rttm.md`](diarization-human-rttm.md); it never overrides
+the `pending` state in this v2 source-intake schema.
+
 This is an **approval-gated, source-only** companion to the existing v1
 Sortformer engineering fixtures under PR #154. The original upstream-derived
 WAV, RTTM and `manifest.json` remain untouched and **continue to be
