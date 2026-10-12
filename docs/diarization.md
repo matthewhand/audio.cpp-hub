@@ -99,6 +99,11 @@ Sources:
 
 ## Model-free RTTM fixtures and scoring suite (draft PR #154)
 
+A separate **rights-clear v2, validation-only source intake** is defined in
+[`diarization-rights-clear-v2.md`](diarization-rights-clear-v2.md). It
+does not create audio, replace the old fixtures, or authenticate consent.
+
+
 Deterministic fixture WAVs/RTTMs live in
 `test/fixtures/diarization/`, with a SHA-256/source-provenance
 manifest and an offline builder at `scripts/build-diarization-fixtures.py`.

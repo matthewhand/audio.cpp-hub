@@ -1,5 +1,9 @@
 # Diarization fixture set (model-free)
 
+For the separate **validation-only v2 rights-clear source intake design**, see
+[`docs/diarization-rights-clear-v2.md`](../../../docs/diarization-rights-clear-v2.md).
+This does not replace or relicense the current WAVs.
+
 Four **independently constructed, script-attributed** WAV/RTTM test pairs.
 These are prepared from upstream `0xShug0/audio.cpp`'s tracked
 `assets/resources/four_speaker_short.wav` and matching

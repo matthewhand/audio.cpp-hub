@@ -133,9 +133,22 @@ def build(source, destination):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", type=pathlib.Path, required=True, help="Local upstream four_speaker_short.wav; no downloads")
-    parser.add_argument("--output", type=pathlib.Path, required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--source", type=pathlib.Path, help="Legacy v1 source, explicitly requested")
+    mode.add_argument("--validate-intake", type=pathlib.Path, help="Validate v2 intake JSON only; never build WAVs")
+    parser.add_argument("--source-root", type=pathlib.Path, help="Allowed local source directory for v2")
+    parser.add_argument("--output", type=pathlib.Path, help="Legacy v1 output directory")
     args = parser.parse_args()
+    if args.validate_intake is not None:
+        if args.source_root is None or args.output is not None:
+            parser.error("v2 --validate-intake requires --source-root and forbids --output")
+        from diarization_intake_v2 import validate_intake_file
+
+        summary = validate_intake_file(args.validate_intake, args.source_root)
+        print(json.dumps(summary, sort_keys=True))
+        return
+    if args.output is None or args.source_root is not None:
+        parser.error("v1 --source requires --output and forbids --source-root")
     build(args.source, args.output)
 
 

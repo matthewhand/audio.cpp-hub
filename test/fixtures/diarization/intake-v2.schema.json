@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Rights-clear diarization source-intake v2 (preflight only)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "fixture_set_id",
+    "rights",
+    "sources",
+    "cases",
+    "human_annotation"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "fixture_set_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+    },
+    "rights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "license_id",
+        "license_url",
+        "public_attribution",
+        "recording_redistribution_verified",
+        "derivative_mixing_verified",
+        "rights_reviewer_evidence_id"
+      ],
+      "properties": {
+        "license_id": {
+          "enum": ["CC-BY-4.0", "CC0-1.0"]
+        },
+        "license_url": {
+          "type": "string",
+          "enum": [
+            "https://creativecommons.org/licenses/by/4.0/",
+            "https://creativecommons.org/publicdomain/zero/1.0/"
+          ]
+        },
+        "public_attribution": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 400
+        },
+        "recording_redistribution_verified": {
+          "const": true
+        },
+        "derivative_mixing_verified": {
+          "const": true
+        },
+        "rights_reviewer_evidence_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "speaker_id",
+          "relative_wav_path",
+          "sha256",
+          "recording_rights_evidence_id",
+          "performer_release_evidence_id",
+          "recording_rights_verified",
+          "performer_release_verified",
+          "recording_type",
+          "recording_origin_evidence_id"
+        ],
+        "properties": {
+          "speaker_id": {
+            "type": "string",
+            "pattern": "^spk_0[1-4]$"
+          },
+          "relative_wav_path": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 160
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "recording_rights_evidence_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+          },
+          "performer_release_evidence_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+          },
+          "recording_rights_verified": {
+            "const": true
+          },
+          "performer_release_verified": {
+            "const": true
+          },
+          "recording_type": {
+            "const": "original-human-recording"
+          },
+          "recording_origin_evidence_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+          }
+        }
+      }
+    },
+    "cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["silence_0spk", "solo_1spk", "overlap_2spk", "overlap_4spk"],
+      "properties": {
+        "silence_0spk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["duration_seconds", "speaker_ids", "overlap_required"],
+          "properties": {
+            "duration_seconds": {
+              "const": 6
+            },
+            "speaker_ids": {
+              "type": "array",
+              "minItems": 0,
+              "maxItems": 0,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^spk_0[1-4]$"
+              }
+            },
+            "overlap_required": {
+              "const": false
+            }
+          }
+        },
+        "solo_1spk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["duration_seconds", "speaker_ids", "overlap_required"],
+          "properties": {
+            "duration_seconds": {
+              "const": 8.5
+            },
+            "speaker_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^spk_0[1-4]$"
+              }
+            },
+            "overlap_required": {
+              "const": false
+            }
+          }
+        },
+        "overlap_2spk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["duration_seconds", "speaker_ids", "overlap_required"],
+          "properties": {
+            "duration_seconds": {
+              "const": 12
+            },
+            "speaker_ids": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^spk_0[1-4]$"
+              }
+            },
+            "overlap_required": {
+              "const": true
+            }
+          }
+        },
+        "overlap_4spk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["duration_seconds", "speaker_ids", "overlap_required"],
+          "properties": {
+            "duration_seconds": {
+              "const": 19
+            },
+            "speaker_ids": {
+              "type": "array",
+              "minItems": 4,
+              "maxItems": 4,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^spk_0[1-4]$"
+              }
+            },
+            "overlap_required": {
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    "human_annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "independent_annotators",
+        "speaker_identity_verified",
+        "speech_boundaries_adjudicated"
+      ],
+      "properties": {
+        "status": {
+          "const": "pending"
+        },
+        "independent_annotators": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "speaker_identity_verified": {
+          "const": false
+        },
+        "speech_boundaries_adjudicated": {
+          "const": false
+        }
+      }
+    }
+  }
+}
