@@ -81,7 +81,7 @@ platforms fail closed.
 
 The standalone JSON Schema restricts WAV source paths to relative,
 slash-separated, alphanumeric-leading segments ending in `.wav`; it
-rejects `..`, absolute paths, backslashes and empty segments.
+rejects `..`, absolute paths, backslashes, empty segments and trailing line breaks.
 Cross-field checks (such as unique speakers and recording hashes,
 release references, case rosters) and actual source-root containment
 still require the **Python preflight**; JSON Schema alone is not a

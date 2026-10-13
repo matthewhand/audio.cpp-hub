@@ -86,7 +86,7 @@
             "type": "string",
             "minLength": 5,
             "maxLength": 160,
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9][A-Za-z0-9_.-]*)*\\.wav$"
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9][A-Za-z0-9_.-]*)*\\.wav(?![\\s\\S])"
           },
           "sha256": {
             "type": "string",

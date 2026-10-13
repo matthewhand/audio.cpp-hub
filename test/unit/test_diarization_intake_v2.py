@@ -210,6 +210,15 @@ class IntakeOnlyValidation(unittest.TestCase):
                 with self.assertRaisesRegex(intake.IntakeError, "invalid format"):
                     intake._schema_check(data, schema)
 
+    def test_standalone_schema_rejects_terminal_newline_after_wav_suffix(self):
+        schema = json.loads(intake.SCHEMA_FILE.read_text())
+        for path in ("spk_01.wav\n", "sessions/spk_01.wav\n"):
+            with self.subTest(path=repr(path)):
+                data = draft()
+                data["sources"][0]["relative_wav_path"] = path
+                with self.assertRaisesRegex(intake.IntakeError, "invalid format"):
+                    intake._schema_check(data, schema)
+
     def test_standalone_schema_accepts_valid_nested_relative_wav_path(self):
         schema = json.loads(intake.SCHEMA_FILE.read_text())
         self.data["sources"][0]["relative_wav_path"] = "sessions/day_1/spk_01.wav"
