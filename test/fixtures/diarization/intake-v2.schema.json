@@ -17,7 +17,7 @@
     },
     "fixture_set_id": {
       "type": "string",
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}(?![\\s\\S])"
     },
     "rights": {
       "type": "object",
@@ -45,7 +45,7 @@
           "type": "string",
           "minLength": 3,
           "maxLength": 400,
-          "pattern": "\\S"
+          "pattern": "[^\\u0000-\\u0020\\u007F-\\u00A0\\u1680\\u180E\\u2000-\\u200F\\u2028-\\u202F\\u205F\\u2060-\\u206F\\u3000\\uFEFF]"
         },
         "recording_redistribution_verified": {
           "const": true
@@ -55,7 +55,7 @@
         },
         "rights_reviewer_evidence_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}(?![\\s\\S])"
         }
       }
     },
@@ -80,7 +80,7 @@
         "properties": {
           "speaker_id": {
             "type": "string",
-            "pattern": "^spk_0[1-4]$"
+            "pattern": "^spk_0[1-4](?![\\s\\S])"
           },
           "relative_wav_path": {
             "type": "string",
@@ -90,15 +90,15 @@
           },
           "sha256": {
             "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
+            "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
           },
           "recording_rights_evidence_id": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}(?![\\s\\S])"
           },
           "performer_release_evidence_id": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}(?![\\s\\S])"
           },
           "recording_rights_verified": {
             "const": true
@@ -111,7 +111,7 @@
           },
           "recording_origin_evidence_id": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}(?![\\s\\S])"
           }
         }
       }
@@ -136,7 +136,7 @@
               "uniqueItems": true,
               "items": {
                 "type": "string",
-                "pattern": "^spk_0[1-4]$"
+                "pattern": "^spk_0[1-4](?![\\s\\S])"
               }
             },
             "overlap_required": {
@@ -159,7 +159,7 @@
               "uniqueItems": true,
               "items": {
                 "type": "string",
-                "pattern": "^spk_0[1-4]$"
+                "pattern": "^spk_0[1-4](?![\\s\\S])"
               }
             },
             "overlap_required": {
@@ -182,7 +182,7 @@
               "uniqueItems": true,
               "items": {
                 "type": "string",
-                "pattern": "^spk_0[1-4]$"
+                "pattern": "^spk_0[1-4](?![\\s\\S])"
               }
             },
             "overlap_required": {
@@ -205,7 +205,7 @@
               "uniqueItems": true,
               "items": {
                 "type": "string",
-                "pattern": "^spk_0[1-4]$"
+                "pattern": "^spk_0[1-4](?![\\s\\S])"
               }
             },
             "overlap_required": {

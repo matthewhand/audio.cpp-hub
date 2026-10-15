@@ -419,6 +419,64 @@ class IntakeOnlyValidation(unittest.TestCase):
         with self.assertRaisesRegex(intake.IntakeError, "Non-finite JSON number"):
             intake.validate_intake_file(malformed, self.root)
 
+    def test_javascript_python_metadata_regex_parity(self):
+        schema = json.loads(intake.SCHEMA_FILE.read_text())
+        def fields(node, path=()):
+            if isinstance(node, dict):
+                if "pattern" in node:
+                    yield path, node
+                for key, value in node.items():
+                    yield from fields(value, path + (key,))
+            elif isinstance(node, list):
+                for i, value in enumerate(node):
+                    yield from fields(value, path + (str(i),))
+        vectors = []
+        for path, spec in fields(schema):
+            name = ".".join(path)
+            if "speaker_id" in name:
+                valid = "spk_01"
+            elif "relative_wav_path" in name:
+                valid = "folder/voice.wav"
+            elif "sha256" in name:
+                valid = "a" * 64
+            elif "public_attribution" in name:
+                valid = "Jane Doe"
+            else:
+                valid = "ABC-123"
+            cases = [(valid, True)]
+            if "public_attribution" in name:
+                cases += [(x, True) for x in ("山田 太郎", "José García", "Jane\u00a0Doe")]
+                cases += [(x * 3, False) for x in (
+                    " ", "\u0085", "\ufeff", "\u00a0", "\u1680",
+                    "\u180e", "\u2000", "\u200a", "\u200b", "\u200d",
+                    "\u200f", "\u2028", "\u2029", "\u202f", "\u205f",
+                    "\u2060", "\u3000", "\u001c", "\x00",
+                )]
+                cases += [("AB", False)]
+            else:
+                cases += [(valid + x, False) for x in ("\n", "\r", "\u2028", "\u2029", "\ufeff", "\u0085")]
+            for val, expected in cases:
+                vectors.append({"path": name, "spec": spec, "val": val, "expected": expected})
+        script = """const fs=require('node:fs');
+const cases=JSON.parse(fs.readFileSync(0,'utf8'));
+process.stdout.write(JSON.stringify(cases.map(({spec,val})=>
+  [...val].length >= (spec.minLength ?? 0) &&
+  [...val].length <= (spec.maxLength ?? Infinity) &&
+  new RegExp(spec.pattern).test(val))));"""
+        results = subprocess.run(["node", "-e", script], input=json.dumps(vectors),
+                                 capture_output=True, text=True, check=True, timeout=5)
+        javascript = json.loads(results.stdout)
+        self.assertEqual(len(vectors), len(javascript))
+        for case, js_ok in zip(vectors, javascript):
+            try:
+                intake._schema_check(case["val"], case["spec"])
+                py_ok = True
+            except intake.IntakeError:
+                py_ok = False
+            with self.subTest(field=case["path"], value=repr(case["val"])):
+                self.assertEqual(py_ok, js_ok, "Python/JavaScript mismatch")
+                self.assertEqual(py_ok, case["expected"], "Unexpected acceptance")
+
     def test_schema_itself_is_valid_json_and_strict(self):
         schema = json.loads(intake.SCHEMA_FILE.read_text())
         self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")

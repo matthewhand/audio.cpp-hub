@@ -89,7 +89,13 @@ rights-clear or file-admission decision. This is designed for a trusted,
 access-controlled source root, and the pinned digest remains the
 critical integrity control if a malicious actor can alter its files.
 
-The public-attribution field must contain non-whitespace content.
+Metadata identifiers, speaker IDs and SHA-256 patterns have a strict end-of-input
+check in both Python and JavaScript, including terminal newlines. Public
+attribution must contain at least one character outside an explicitly
+enumerated set of whitespace, control and invisible-format characters
+(including U+0085, U+FEFF and U+200B). Non-Latin names remain permitted.
+Cross-engine synthetic tests use the actual Node.js regular-expression engine.
+
 JSON Schema numeric equality (for example, 6 and 6.0) is respected in
 the Python validator, while booleans remain distinct. The validator
 does not transcribe, listen, infer, mix, download, resample or rewrite
