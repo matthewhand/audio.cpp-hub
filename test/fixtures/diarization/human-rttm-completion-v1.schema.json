@@ -1,0 +1,747 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Human RTTM adjudication completion manifest v1 \u2014 technical QA, not a release certificate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "fixture_set_id",
+    "state",
+    "intake",
+    "policy",
+    "reviewers",
+    "cases"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "human-rttm-completion"
+    },
+    "fixture_set_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+    },
+    "state": {
+      "const": "adjudicated_pending_qa"
+    },
+    "intake": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "manifest_sha256", "rights_evidence_id"],
+      "properties": {
+        "schema_version": {
+          "const": 2
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "rights_evidence_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_rate",
+        "boundary_review_ms",
+        "boundary_escalation_ms",
+        "overlap_included",
+        "scoring_collar_ms"
+      ],
+      "properties": {
+        "sample_rate": {
+          "const": 16000
+        },
+        "boundary_review_ms": {
+          "const": 50
+        },
+        "boundary_escalation_ms": {
+          "const": 100
+        },
+        "overlap_included": {
+          "const": true
+        },
+        "scoring_collar_ms": {
+          "const": 0
+        }
+      }
+    },
+    "reviewers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a", "b", "adjudicator", "qa"],
+      "properties": {
+        "a": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reviewer_id"],
+          "properties": {
+            "reviewer_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+            }
+          }
+        },
+        "b": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reviewer_id"],
+          "properties": {
+            "reviewer_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+            }
+          }
+        },
+        "adjudicator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reviewer_id"],
+          "properties": {
+            "reviewer_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+            }
+          }
+        },
+        "qa": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reviewer_id"],
+          "properties": {
+            "reviewer_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$"
+            }
+          }
+        }
+      }
+    },
+    "cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["silence_0spk", "solo_1spk", "overlap_2spk", "overlap_4spk"],
+      "properties": {
+        "silence_0spk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "audio",
+            "speaker_ids",
+            "reviewer_a",
+            "reviewer_b",
+            "adjudicated_rttm",
+            "adjudication_log",
+            "review_summary"
+          ],
+          "properties": {
+            "audio": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relative_path", "sha256", "duration_samples"],
+              "properties": {
+                "relative_path": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.wav$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "duration_samples": {
+                  "const": 96000
+                }
+              }
+            },
+            "speaker_ids": {
+              "type": "array",
+              "minItems": 0,
+              "maxItems": 0,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(spk_0[1-4])$"
+              }
+            },
+            "reviewer_a": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["rttm", "frozen"],
+              "properties": {
+                "rttm": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["relative_path", "sha256"],
+                  "properties": {
+                    "relative_path": {
+                      "type": "string",
+                      "minLength": 5,
+                      "maxLength": 160,
+                      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.rttm$"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                "frozen": {
+                  "const": true
+                }
+              }
+            },
+            "reviewer_b": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["rttm", "frozen"],
+              "properties": {
+                "rttm": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["relative_path", "sha256"],
+                  "properties": {
+                    "relative_path": {
+                      "type": "string",
+                      "minLength": 5,
+                      "maxLength": 160,
+                      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.rttm$"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                "frozen": {
+                  "const": true
+                }
+              }
+            },
+            "adjudicated_rttm": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relative_path", "sha256"],
+              "properties": {
+                "relative_path": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.rttm$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            },
+            "adjudication_log": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relative_path", "sha256"],
+              "properties": {
+                "relative_path": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.json$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            },
+            "review_summary": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["disagreement_regions", "recorded_disputes", "unresolved_disputes"],
+              "properties": {
+                "disagreement_regions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4096
+                },
+                "recorded_disputes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4096
+                },
+                "unresolved_disputes": {
+                  "const": 0
+                }
+              }
+            }
+          }
+        },
+        "solo_1spk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "audio",
+            "speaker_ids",
+            "reviewer_a",
+            "reviewer_b",
+            "adjudicated_rttm",
+            "adjudication_log",
+            "review_summary"
+          ],
+          "properties": {
+            "audio": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relative_path", "sha256", "duration_samples"],
+              "properties": {
+                "relative_path": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.wav$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "duration_samples": {
+                  "const": 136000
+                }
+              }
+            },
+            "speaker_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(spk_0[1-4])$"
+              }
+            },
+            "reviewer_a": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["rttm", "frozen"],
+              "properties": {
+                "rttm": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["relative_path", "sha256"],
+                  "properties": {
+                    "relative_path": {
+                      "type": "string",
+                      "minLength": 5,
+                      "maxLength": 160,
+                      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.rttm$"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                "frozen": {
+                  "const": true
+                }
+              }
+            },
+            "reviewer_b": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["rttm", "frozen"],
+              "properties": {
+                "rttm": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["relative_path", "sha256"],
+                  "properties": {
+                    "relative_path": {
+                      "type": "string",
+                      "minLength": 5,
+                      "maxLength": 160,
+                      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.rttm$"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                "frozen": {
+                  "const": true
+                }
+              }
+            },
+            "adjudicated_rttm": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relative_path", "sha256"],
+              "properties": {
+                "relative_path": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.rttm$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            },
+            "adjudication_log": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relative_path", "sha256"],
+              "properties": {
+                "relative_path": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.json$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            },
+            "review_summary": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["disagreement_regions", "recorded_disputes", "unresolved_disputes"],
+              "properties": {
+                "disagreement_regions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4096
+                },
+                "recorded_disputes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4096
+                },
+                "unresolved_disputes": {
+                  "const": 0
+                }
+              }
+            }
+          }
+        },
+        "overlap_2spk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "audio",
+            "speaker_ids",
+            "reviewer_a",
+            "reviewer_b",
+            "adjudicated_rttm",
+            "adjudication_log",
+            "review_summary"
+          ],
+          "properties": {
+            "audio": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relative_path", "sha256", "duration_samples"],
+              "properties": {
+                "relative_path": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.wav$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "duration_samples": {
+                  "const": 192000
+                }
+              }
+            },
+            "speaker_ids": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(spk_0[1-4])$"
+              }
+            },
+            "reviewer_a": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["rttm", "frozen"],
+              "properties": {
+                "rttm": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["relative_path", "sha256"],
+                  "properties": {
+                    "relative_path": {
+                      "type": "string",
+                      "minLength": 5,
+                      "maxLength": 160,
+                      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.rttm$"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                "frozen": {
+                  "const": true
+                }
+              }
+            },
+            "reviewer_b": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["rttm", "frozen"],
+              "properties": {
+                "rttm": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["relative_path", "sha256"],
+                  "properties": {
+                    "relative_path": {
+                      "type": "string",
+                      "minLength": 5,
+                      "maxLength": 160,
+                      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.rttm$"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                "frozen": {
+                  "const": true
+                }
+              }
+            },
+            "adjudicated_rttm": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relative_path", "sha256"],
+              "properties": {
+                "relative_path": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.rttm$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            },
+            "adjudication_log": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relative_path", "sha256"],
+              "properties": {
+                "relative_path": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.json$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            },
+            "review_summary": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["disagreement_regions", "recorded_disputes", "unresolved_disputes"],
+              "properties": {
+                "disagreement_regions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4096
+                },
+                "recorded_disputes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4096
+                },
+                "unresolved_disputes": {
+                  "const": 0
+                }
+              }
+            }
+          }
+        },
+        "overlap_4spk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "audio",
+            "speaker_ids",
+            "reviewer_a",
+            "reviewer_b",
+            "adjudicated_rttm",
+            "adjudication_log",
+            "review_summary"
+          ],
+          "properties": {
+            "audio": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relative_path", "sha256", "duration_samples"],
+              "properties": {
+                "relative_path": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.wav$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "duration_samples": {
+                  "const": 304000
+                }
+              }
+            },
+            "speaker_ids": {
+              "type": "array",
+              "minItems": 4,
+              "maxItems": 4,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(spk_0[1-4])$"
+              }
+            },
+            "reviewer_a": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["rttm", "frozen"],
+              "properties": {
+                "rttm": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["relative_path", "sha256"],
+                  "properties": {
+                    "relative_path": {
+                      "type": "string",
+                      "minLength": 5,
+                      "maxLength": 160,
+                      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.rttm$"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                "frozen": {
+                  "const": true
+                }
+              }
+            },
+            "reviewer_b": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["rttm", "frozen"],
+              "properties": {
+                "rttm": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["relative_path", "sha256"],
+                  "properties": {
+                    "relative_path": {
+                      "type": "string",
+                      "minLength": 5,
+                      "maxLength": 160,
+                      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.rttm$"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                "frozen": {
+                  "const": true
+                }
+              }
+            },
+            "adjudicated_rttm": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relative_path", "sha256"],
+              "properties": {
+                "relative_path": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.rttm$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            },
+            "adjudication_log": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relative_path", "sha256"],
+              "properties": {
+                "relative_path": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 160,
+                  "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.json$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            },
+            "review_summary": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["disagreement_regions", "recorded_disputes", "unresolved_disputes"],
+              "properties": {
+                "disagreement_regions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4096
+                },
+                "recorded_disputes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4096
+                },
+                "unresolved_disputes": {
+                  "const": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
