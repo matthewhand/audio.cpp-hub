@@ -90,8 +90,11 @@ export const groupCollapsed = new Map();
 export const historyDetails = new Map();
 
 export const sidebarRows = new Map();
+// Suppress older overlapping history requests, including A→B→A model switches.
+let historyLoadRevision = 0;
 
 export async function loadHistory() {
+  const revision = ++historyLoadRevision;
   $("history-list").removeAttribute("aria-busy");
   const modelId = historyModelId();
   const m = selectedModel();
@@ -115,14 +118,14 @@ export async function loadHistory() {
     ]);
   } catch (e) {
     // 等待响应期间用户可能已切换模型：过期响应直接丢弃，避免覆盖新模型的列表
-    if (historyModelId() !== modelId) return;
+    if (historyModelId() !== modelId || revision !== historyLoadRevision) return;
     sidebarHistoryItems = [];
     sidebarGroups = [];
     renderStateError($("history-list"), e, loadHistory);
     return;
   }
   // 同上：响应晚到时当前模型可能已不是 modelId，过期数据不得渲染
-  if (historyModelId() !== modelId) return;
+  if (historyModelId() !== modelId || revision !== historyLoadRevision) return;
   sidebarHistoryItems = items;
   sidebarGroups = groups;
   // 清理已不在列表中的详情展开缓存（记录被删/淘汰后不留残留）
