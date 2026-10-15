@@ -131,6 +131,18 @@ jobs:
       - name: 单元测试
         run: npm run test:unit
 
+      - name: Diarization fixture builder failure-path tests (no models)
+        run: python3 test/unit/test_diarization_fixture_builder.py
+
+      - name: Diarization v2 source-intake preflight tests (synthetic metadata only)
+        run: python3 test/unit/test_diarization_intake_v2.py
+
+      - name: Human RTTM annotation QA tests (synthetic-only; no real audio)
+        run: python3 test/unit/test_human_rttm_qa.py
+
+      - name: Diarization independent annotation/adjudication metadata tests (no audio)
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -B test/unit/test_diarization_adjudication.py
+
       - name: UI 清单漂移检查
         run: npm run ui:inventory:check
 

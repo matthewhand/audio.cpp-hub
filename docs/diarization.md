@@ -96,3 +96,51 @@ Sources:
 - https://huggingface.co/nvidia/diar_sortformer_4spk-v1
 - https://huggingface.co/audio-cpp/audio.cpp-gguf
 - https://github.com/0xShug0/audio.cpp/blob/main/docs/speech_analysis.md
+
+## Human adjudication metadata preflight (draft PR #154)
+
+The independent model-blind annotation/adjudication validator at
+`scripts/validate-diarization-adjudication.py` accepts rights-clear v2
+metadata plus two human reviewer segment lists and an independent
+adjudicator's evidence-linked decisions. It enforces active-speaker
+agreement, explicit resolution for disagreements and overlapping speech
+as separate half-open speaker rows. The optional RTTM stdout preview
+is always marked UNVERIFIED. See
+[`diarization-human-adjudication.md`](diarization-human-adjudication.md).
+
+The validator **does not verify that real humans listened**, check
+recordings, authenticate rights, certify identities, or produce
+benchmark-ready DER. These still require an approved independent audit.
+
+## Model-free RTTM fixtures and scoring suite (draft PR #154)
+
+A separate **rights-clear v2, validation-only source intake** is defined in
+[`diarization-rights-clear-v2.md`](diarization-rights-clear-v2.md). It
+does not create audio, replace the old fixtures, or authenticate consent.
+
+
+Deterministic fixture WAVs/RTTMs live in
+`test/fixtures/diarization/`, with a SHA-256/source-provenance
+manifest and an offline builder at `scripts/build-diarization-fixtures.py`.
+The four scenarios are silence, one speaker, two overlapping speaker
+tracks, and four source-script speaker tracks with overlap.
+They are constructed from upstream `four_speaker_short.wav` and its
+independently authored four-speaker script, not from Sortformer output.
+
+**Label integrity limitation:** The labels precisely record source-track
+placement; acoustic voice identities and phonetic boundaries have not
+been human-audited. These are script-attributed engineering fixtures,
+**not certified human-annotated diarization ground truth**. Do not
+report their DER as measured real-world model accuracy. The original source
+audio's redistribution permission is also unverified; preserve draft status
+until the usage rights are confirmed or the WAVs are replaced with
+rights-clear recordings.
+
+`scripts/score-diarization-rttm.mjs` compares RTTM hypothesis with RTTM
+reference using one-to-one global speaker permutation, overlap-aware
+misses/false alarms/confusion and zero collar. It also accepts
+saved native CLI turn JSON with an explicit sample rate.
+Empty-reference DER is `null`, not a false zero; false-alarm seconds
+remain observable. The scorer never loads audio or runs inference.
+See `test/fixtures/diarization/README.md` for provenance, limitations,
+rebuild instructions and CLI examples.
