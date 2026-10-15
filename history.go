@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -449,9 +450,16 @@ func (m *HistoryManager) Delete(modelID, taskID string) bool {
 	records := m.index[modelID]
 	for i, rec := range records {
 		if optString(rec, "taskId") == taskID {
-			m.index[modelID] = append(records[:i], records[i+1:]...)
+			remaining := make([]map[string]any, 0, len(records)-1)
+			remaining = append(remaining, records[:i]...)
+			remaining = append(remaining, records[i+1:]...)
+			m.index[modelID] = remaining
+			if err := m.rewriteLocked(modelID); err != nil {
+				m.index[modelID] = records
+				log.Printf("history delete: preserving audio after index error: %v", err)
+				return false
+			}
 			deleteHistoryTaskFiles(modelID, taskID)
-			m.rewriteLocked(modelID)
 			return true
 		}
 	}
@@ -473,24 +481,92 @@ func (m *HistoryManager) Clear(modelID string) {
 	os.Remove(filepath.Join(historyDir(modelID), historyIndexFile))
 }
 
-// rewriteLocked 按内存索引重写 index.jsonl；空则删除文件（调用方须持锁）。
-func (m *HistoryManager) rewriteLocked(modelID string) {
-	indexFile := filepath.Join(historyDir(modelID), historyIndexFile)
-	records := m.index[modelID]
-	if len(records) == 0 {
-		os.Remove(indexFile)
-		return
-	}
-	var sb strings.Builder
-	for _, rec := range records {
-		if data, err := json.Marshal(rec); err == nil {
-			sb.Write(data)
-			sb.WriteByte('\n')
+// historyRewriteIdentity omits the only field changed by grouping operations.
+func historyRewriteIdentity(rec map[string]any) (string, error) {
+	identity := make(map[string]any, len(rec))
+	for k, v := range rec {
+		if k != "groupId" {
+			identity[k] = v
 		}
 	}
-	if err := writeFileAtomic(indexFile, []byte(sb.String())); err != nil {
-		log.Printf("历史索引重写失败: %s: %v", modelID, err)
+	data, err := json.Marshal(identity)
+	return string(data), err
+}
+
+// rewriteLocked preserves damaged JSONL rows (including partial tail appends)
+// byte-for-byte while updating or removing only replayable records.
+// Caller must hold m.mu.
+func (m *HistoryManager) rewriteLocked(modelID string) error {
+	path := filepath.Join(historyDir(modelID), historyIndexFile)
+	original, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("history rewrite: read %s: %v", modelID, err)
 	}
+	records := m.index[modelID]
+	slots := make(map[string][]int, len(records))
+	for i, rec := range records {
+		key, err := historyRewriteIdentity(rec)
+		if err != nil {
+			return fmt.Errorf("history rewrite: invalid record %s: %v", modelID, err)
+		}
+		slots[key] = append(slots[key], i)
+	}
+	written := make([]bool, len(records))
+	var out bytes.Buffer
+	for len(original) > 0 {
+		line := original
+		if i := bytes.IndexByte(original, '\n'); i >= 0 {
+			line, original = original[:i+1], original[i+1:]
+		} else {
+			original = nil
+		}
+		var rec map[string]any
+		if len(bytes.TrimSpace(line)) == 0 || json.Unmarshal(bytes.TrimSpace(line), &rec) != nil {
+			out.Write(line)
+			continue
+		}
+		key, err := historyRewriteIdentity(rec)
+		if err != nil {
+			return fmt.Errorf("history rewrite: disk record %s: %v", modelID, err)
+		}
+		ids := slots[key]
+		if len(ids) == 0 {
+			continue
+		}
+		idx := ids[0]
+		slots[key] = ids[1:]
+		data, err := json.Marshal(records[idx])
+		if err != nil {
+			return fmt.Errorf("history rewrite: marshal %s: %v", modelID, err)
+		}
+		out.Write(data)
+		out.WriteByte('\n')
+		written[idx] = true
+	}
+	for i, rec := range records {
+		if written[i] {
+			continue
+		}
+		data, err := json.Marshal(rec)
+		if err != nil {
+			return fmt.Errorf("history rewrite: marshal extra %s: %v", modelID, err)
+		}
+		if out.Len() > 0 && out.Bytes()[out.Len()-1] != '\n' {
+			out.WriteByte('\n')
+		}
+		out.Write(data)
+		out.WriteByte('\n')
+	}
+	if out.Len() == 0 {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("history rewrite: remove empty %s: %w", modelID, err)
+		}
+		return nil
+	}
+	if err := writeFileAtomic(path, out.Bytes()); err != nil {
+		return fmt.Errorf("history rewrite: write %s: %w", modelID, err)
+	}
+	return nil
 }
 
 // ---------- 手动分组（groups.json） ----------
@@ -584,18 +660,27 @@ func (m *HistoryManager) DeleteGroup(modelID, groupID string) bool {
 	if found < 0 {
 		return false
 	}
-	changed := false
+	var changed []map[string]any
 	for _, rec := range m.index[modelID] {
 		if optString(rec, "groupId") == groupID {
+			changed = append(changed, rec)
 			delete(rec, "groupId")
-			changed = true
 		}
 	}
-	if changed {
-		m.rewriteLocked(modelID)
+	if len(changed) > 0 {
+		if err := m.rewriteLocked(modelID); err != nil {
+			for _, rec := range changed {
+				rec["groupId"] = groupID
+			}
+			log.Printf("history group delete: index not persisted: %v", err)
+			return false
+		}
 	}
 	groups = append(groups[:found], groups[found+1:]...)
-	m.writeGroupsLocked(modelID, groups)
+	if err := m.writeGroupsLocked(modelID, groups); err != nil {
+		log.Printf("history group delete: group file not persisted: %v", err)
+		return false
+	}
 	return true
 }
 
@@ -611,6 +696,7 @@ func (m *HistoryManager) SetRecordGroup(modelID, taskID, groupID string) (bool, 
 	if rec == nil {
 		return false, nil
 	}
+	oldGroup, hadGroup := rec["groupId"]
 	if groupID == "" {
 		delete(rec, "groupId")
 	} else {
@@ -620,7 +706,14 @@ func (m *HistoryManager) SetRecordGroup(modelID, taskID, groupID string) (bool, 
 		}
 		rec["groupId"] = groupID
 	}
-	m.rewriteLocked(modelID)
+	if err := m.rewriteLocked(modelID); err != nil {
+		if hadGroup {
+			rec["groupId"] = oldGroup
+		} else {
+			delete(rec, "groupId")
+		}
+		return false, fmt.Errorf("persist history group assignment: %w", err)
+	}
 	return true, nil
 }
 
