@@ -11,6 +11,9 @@
 #   AUDIOCPP_THREADS  / THREADS        CPU 线程数（默认 4）
 #   AUDIOCPP_IDLE_UNLOAD_MS / IDLE_UNLOAD_MS  空闲自动卸载毫秒数（可选，缺省常驻）
 #   AUDIOCPP_VOICE_REF / VOICE_REF     参考音频路径（可选）
+#   AUDIOCPP_STARTUP_MODE               normal (default) | hub-only (no model work)
+#   AUDIOCPP_WARMUP_POLICY              required (default) | best-effort | skip
+#   AUDIOCPP_WARMUP_MAX_SECONDS         best-effort timeout, 1..30 (default 15)
 #   WARMUP_TEXT                        预热句子（可选）
 #   HUB_URL                            hub 基础地址（默认 http://127.0.0.1:18080）
 #   AUDIOCPP_EXECUTABLE_ID             指定 executables.json 条目（可选，默认取第一条）
@@ -29,10 +32,43 @@ EXECUTABLE_ID="${AUDIOCPP_EXECUTABLE_ID:-}"
 SERVER_BIN="${AUDIOCPP_SERVER_BIN:-/audio.cpp/bin/audiocpp_server}"
 WARMUP_TEXT="${WARMUP_TEXT:-This is a short startup warm-up.}"
 WARMUP_WAV="/tmp/audio-cpp-hub-warmup.wav"
+STARTUP_MODE="${AUDIOCPP_STARTUP_MODE:-normal}"
+WARMUP_POLICY="${AUDIOCPP_WARMUP_POLICY:-required}"
 WAIT_SECONDS="${START_INSTANCE_WAIT_SECONDS:-180}"
 
 log()   { printf '[start-instance] %s\n' "$*" >&2; }
 fatal() { log "ERROR: $*"; exit 1; }
+
+# Recovery opt-in: bypass all Breeze model bootstrap work, not just warm-up.
+case "$STARTUP_MODE" in
+  normal) ;;
+  hub-only)
+    log "Hub-only startup selected; skipping Breeze instance and synthesis"
+    exit 0
+    ;;
+  *) fatal "Invalid AUDIOCPP_STARTUP_MODE: expected normal or hub-only" ;;
+esac
+
+# Preserve legacy mandatory warm-up by default.
+case "$WARMUP_POLICY" in
+  required|best-effort|skip) ;;
+  *) fatal "Invalid AUDIOCPP_WARMUP_POLICY: expected required, best-effort or skip" ;;
+esac
+
+warmup_fail() {
+  if [[ "$WARMUP_POLICY" == best-effort ]]; then
+    log "WARNING: $*; warm-up is nonfatal (READY does not imply model residency)"
+    exit 0
+  fi
+  fatal "$@"
+}
+
+WARMUP_TIMEOUT=300
+if [[ "$WARMUP_POLICY" == best-effort ]]; then
+  WARMUP_TIMEOUT="${AUDIOCPP_WARMUP_MAX_SECONDS:-15}"
+  [[ "$WARMUP_TIMEOUT" =~ ^([1-9]|[12][0-9]|30)$ ]] ||
+    fatal "AUDIOCPP_WARMUP_MAX_SECONDS must be 1..30 seconds"
+fi
 
 [[ -n "$WEIGHTS" ]]            || fatal "AUDIOCPP_WEIGHTS must be set"
 [[ -x "$SERVER_BIN" ]]         || fatal "audiocpp_server not found / not executable at $SERVER_BIN"
@@ -95,6 +131,11 @@ for ((i = 0; i < WAIT_SECONDS; i++)); do
 done
 [[ "$status" == READY ]] || fatal "Instance did not become READY within ${WAIT_SECONDS}s"
 
+if [[ "$WARMUP_POLICY" == skip ]]; then
+  log "Breeze warm-up skipped explicitly; READY only, model residency unverified"
+  exit 0
+fi
+
 log "Warming up '$SERVICE_NAME' (READY does not prove model is loaded into VRAM)"
 rm -f "$WARMUP_WAV"
 WARMUP_PAYLOAD="{\"model\":\"$SERVICE_NAME\",\"input\":\"$WARMUP_TEXT\",\"response_format\":\"wav\""
@@ -103,15 +144,15 @@ if [[ -n "$VOICE_REF" ]]; then
 fi
 WARMUP_PAYLOAD="$WARMUP_PAYLOAD}"
 
-curl -fsS --max-time 300 -X POST "$HUB_URL/v1/audio/speech" \
+curl -fsS --max-time "$WARMUP_TIMEOUT" -X POST "$HUB_URL/v1/audio/speech" \
   -H 'Content-Type: application/json' \
   --data-raw "$WARMUP_PAYLOAD" \
   -o "$WARMUP_WAV" \
-  || fatal "Warm-up request failed"
+  || warmup_fail "Warm-up request failed"
 
-[[ -s "$WARMUP_WAV" ]] || fatal "Warm-up output is empty"
+[[ -s "$WARMUP_WAV" ]] || warmup_fail "Warm-up output is empty"
 [[ "$(dd if="$WARMUP_WAV" bs=1 count=4 2>/dev/null)" == RIFF ]] \
-  || fatal "Warm-up output is not a valid WAV file"
+  || warmup_fail "Warm-up output is not a valid WAV file"
 
 wav_bytes="$(stat -c '%s' "$WARMUP_WAV")"
 log "Warm-up OK: $WARMUP_WAV (${wav_bytes} bytes) — instance $instance_id port $child_port"
