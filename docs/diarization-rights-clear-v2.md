@@ -92,9 +92,16 @@ critical integrity control if a malicious actor can alter its files.
 Metadata identifiers, speaker IDs and SHA-256 patterns have a strict end-of-input
 check in both Python and JavaScript, including terminal newlines. Public
 attribution must contain at least one character outside an explicitly
-enumerated set of whitespace, control and invisible-format characters
-(including U+0085, U+FEFF and U+200B). Non-Latin names remain permitted.
-Cross-engine synthetic tests use the actual Node.js regular-expression engine.
+enumerated set of whitespace, control and invisible-format characters,
+including soft hyphen, combining marks, Hangul fillers, variation selectors
+and supplementary-plane Unicode tag characters. These characters may still
+appear alongside visible attribution text, including non-Latin names.
+Cross-engine synthetic tests use both default and Unicode-mode Node.js
+regular expressions and Python's stdlib regex engine. Supplementary-plane
+tag and variation-selector ranges are enumerated explicitly so the schema
+remains compatible with default JavaScript regex mode. This is a targeted
+denylist, not a Unicode-wide proof that every non-rendering code point
+has been identified.
 
 JSON Schema numeric equality (for example, 6 and 6.0) is respected in
 the Python validator, while booleans remain distinct. The validator
