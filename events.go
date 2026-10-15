@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sync"
 	"time"
@@ -96,6 +97,21 @@ func (b *EventBus) Subscribe() *eventSubscriber {
 	return sub
 }
 
+// SubscribeHTTP admits only a bounded number of live SSE clients. Queue bounds
+// alone do not bound HTTP connections, goroutines or per-client write state.
+// The capacity check and registration share the EventBus mutex so concurrent
+// connections cannot oversubscribe the limit. A nil return means full/closed.
+func (b *EventBus) SubscribeHTTP() *eventSubscriber {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed || len(b.subs) >= maxSSESubscribers {
+		return nil
+	}
+	sub := &eventSubscriber{ch: make(chan sseEvent, eventBusBuffer)}
+	b.subs[sub] = struct{}{}
+	return sub
+}
+
 // Unsubscribe removes a subscriber (called by the SSE handler on client
 // disconnect). Idempotent.
 func (b *EventBus) Unsubscribe(sub *eventSubscriber) {
@@ -178,6 +194,21 @@ func (b *EventBus) OnTaskEvent(ev taskEvent) {
 	b.Publish(ev.Name, payload)
 }
 
+// writeSSEFrame renews a finite write deadline on every frame. There is no
+// global HTTP WriteTimeout because the stream itself may remain open for hours.
+// Never silently ignore an unsupported deadline: doing so could leave a
+// wrapped HTTP writer blocked indefinitely. The handler checks support before
+// sending HTTP 200. A stalled client is disconnected on deadline expiry.
+func writeSSEFrame(w http.ResponseWriter, rc *http.ResponseController, frame []byte) error {
+	if err := rc.SetWriteDeadline(time.Now().Add(sseWriteTimeout)); err != nil {
+		return err
+	}
+	if _, err := w.Write(frame); err != nil {
+		return err
+	}
+	return rc.Flush()
+}
+
 // handleEventStream serves GET /api/events/stream — the SSE push channel.
 // A "hello" event is sent on connect, a ": ping" comment keeps the connection
 // alive every ssePingInterval, and task lifecycle events arrive as named
@@ -197,16 +228,31 @@ func (h *Hub) handleEventStream(w http.ResponseWriter, r *http.Request) {
 	}
 	// Subscribe before hello so a task event published while the hello frame
 	// is flushing is queued instead of dropped on the floor.
-	sub := h.bus.Subscribe()
+	sub := h.bus.SubscribeHTTP()
+	if sub == nil {
+		errJSON(w, http.StatusServiceUnavailable, "EVENTS_BUSY", nil, "event stream capacity reached or shutting down; use /api/tasks polling")
+		return
+	}
 	defer h.bus.Unsubscribe(sub)
 	rc := http.NewResponseController(w)
+	// Reject response wrappers that cannot enforce per-frame write deadlines.
+	// Checking before WriteHeader avoids advertising a successful but unbounded
+	// stream. The normal net/http writer supports this; unknown wrappers must
+	// implement Unwrap or SetWriteDeadline.
+	if err := rc.SetWriteDeadline(time.Now().Add(sseWriteTimeout)); err != nil {
+		if errors.Is(err, errors.ErrUnsupported) {
+			errJSON(w, http.StatusServiceUnavailable, "EVENTS_DEADLINE_UNSUPPORTED", nil, "event stream requires write deadline support; use /api/tasks polling")
+		} else {
+			// Best effort: the connection may already be unusable, but never
+			// silently let net/http default an unwritten response to HTTP 200.
+			errJSON(w, http.StatusServiceUnavailable, "EVENTS_DEADLINE_FAILED", nil, "event stream could not set a write deadline; use /api/tasks polling")
+		}
+		return
+	}
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte("event: hello\ndata: {}\n\n")); err != nil {
-		return
-	}
-	if err := rc.Flush(); err != nil {
+	if err := writeSSEFrame(w, rc, []byte("event: hello\ndata: {}\n\n")); err != nil {
 		return
 	}
 	ping := time.NewTicker(ssePingInterval)
@@ -219,17 +265,11 @@ func (h *Hub) handleEventStream(w http.ResponseWriter, r *http.Request) {
 			if !ok { // EventBus.Close on process shutdown
 				return
 			}
-			if _, err := w.Write([]byte("event: " + ev.name + "\ndata: " + string(ev.data) + "\n\n")); err != nil {
-				return
-			}
-			if err := rc.Flush(); err != nil {
+			if err := writeSSEFrame(w, rc, []byte("event: "+ev.name+"\ndata: "+string(ev.data)+"\n\n")); err != nil {
 				return
 			}
 		case <-ping.C:
-			if _, err := w.Write([]byte(": ping\n\n")); err != nil {
-				return
-			}
-			if err := rc.Flush(); err != nil {
+			if err := writeSSEFrame(w, rc, []byte(": ping\n\n")); err != nil {
 				return
 			}
 		}

@@ -47,11 +47,14 @@ function t(key) { return AQ_LOCALES[I18N.lang()]?.[key] || globalT(key); }
 const MAX_ROWS = 12;
 const POLL_MS = 5000;
 const LIVE_POLL_MS = 15000;
+const STREAM_RETRY_INITIAL_MS = 2000;
+const STREAM_RETRY_MAX_MS = 60000;
 const ACTIVE = new Set(["RUNNING", "QUEUED"]);
 const ORDER = { RUNNING: 0, QUEUED: 1, DONE: 2, FAILED: 2, CANCELLED: 2 };
 
 let opened = false, rows = [], stale = true, streamLive = false;
 let poll = null, stream = null, inFlight = null, generation = 0;
+let streamRetry = null, streamRetryDelay = STREAM_RETRY_INITIAL_MS;
 const pending = new Set();
 
 export function orderActivity(items) {
@@ -207,10 +210,33 @@ function eventReceived(event) {
   if (!opened) return;
   if (event.type !== "hello") {
     try { JSON.parse(event.data); } catch { return; }
+  } else {
+    // A valid handshake, not merely TCP open, resets exponential retry.
+    streamRetryDelay = STREAM_RETRY_INITIAL_MS;
   }
   streamLive = true;
   schedulePoll();
   void reconcile();
+}
+function cancelStreamRetry() {
+  if (streamRetry !== null) clearTimeout(streamRetry);
+  streamRetry = null;
+}
+function scheduleStreamRetry() {
+  if (!opened || document.hidden || streamRetry !== null) return;
+  const delay = streamRetryDelay;
+  streamRetryDelay = Math.min(STREAM_RETRY_MAX_MS, delay * 2);
+  streamRetry = setTimeout(() => {
+    streamRetry = null;
+    if (!opened || document.hidden) return;
+    // Native EventSource does NOT reconnect after fatal HTTP 503/404.
+    // A synchronous constructor/setup failure leaves stream null.
+    if (!stream || stream.readyState === EventSource.CLOSED) {
+      stream?.close();
+      stream = null;
+      connectStream();
+    }
+  }, delay);
 }
 function connectStream() {
   if (typeof EventSource === "undefined" || document.hidden) return;
@@ -224,10 +250,17 @@ function connectStream() {
       streamLive = false;
       schedulePoll(); // 404/503/disconnect/reconnect use authoritative polling
       void reconcile();
+      // CONNECTING means native retry; CLOSED needs bounded manual retry.
+      if (stream?.readyState === EventSource.CLOSED) scheduleStreamRetry();
     };
   } catch {
+    // Constructor and listener-registration exceptions leave no usable stream.
+    // Keep authoritative polling active, but rearm bounded SSE recovery.
+    stream?.close();
+    stream = null;
     streamLive = false;
     schedulePoll();
+    scheduleStreamRetry();
   }
 }
 function privacyClick(event) {
@@ -239,6 +272,8 @@ function storageChange(event) {
 }
 function visibilityChange() {
   if (document.hidden) {
+    cancelStreamRetry();
+    streamRetryDelay = STREAM_RETRY_INITIAL_MS;
     if (poll) clearInterval(poll);
     poll = null;
     if (stream) stream.close();
@@ -253,6 +288,8 @@ function visibilityChange() {
 function close() {
   opened = false;
   generation++;
+  cancelStreamRetry();
+  streamRetryDelay = STREAM_RETRY_INITIAL_MS;
   if (poll) clearInterval(poll);
   poll = null;
   if (stream) stream.close();

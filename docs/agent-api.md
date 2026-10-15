@@ -270,7 +270,7 @@ take the direct hub (`transcribe()` is hub-direct shape (b) above).
 - LAN-only, no auth: put a reverse proxy with TLS + auth in front before any
   non-LAN exposure.
 
-### Task lifecycle push stream (draft Issue #121 backend)
+### Task lifecycle push stream (Issue #121; HTTP resource guards #155)
 
 `GET /api/events/stream` is a **hub-local** Server-Sent Events endpoint
 (`Content-Type: text/event-stream`); it is not proxied through fan-out.
@@ -287,6 +287,35 @@ can miss events, and subscriptions disconnect cleanly when the client closes.
 **Always** fetch the authoritative state using `GET /api/tasks` after
 connecting or reconnecting and on relevant task events. Fall back to bounded
 polling when the stream is unavailable or disconnected.
+
+The hub admits at most 64 concurrent HTTP SSE subscribers; an additional
+connection receives HTTP 503 with code `EVENTS_BUSY` and must use the
+`GET /api/tasks` polling fallback. Each client queue holds at most 64
+notifications (new notifications are dropped for an overloaded subscriber),
+and each hello/event/ping frame has a renewed 10-second HTTP write deadline
+so a stalled recipient cannot occupy a handler indefinitely. A response
+writer unable to support write deadlines is rejected before HTTP 200 with
+HTTP 503 code `EVENTS_DEADLINE_UNSUPPORTED`, instead of running an unbounded
+stream. A different failure to install the deadline returns a best-effort
+HTTP 503 `EVENTS_DEADLINE_FAILED` (the connection itself may already be
+unusable); clients use the same authoritative polling fallback. Healthy
+streams remain open for as long as needed. These are resource-safety limits,
+not assurances that every transient event will be delivered.
+
+For the approval-gated Windows-native W01–W06 synthetic validation plan,
+transport distinctions and manual watchdog runner, see
+[PR #156 Windows SSE QA](qa156-windows-native-sse.md). Native Windows
+execution is not included in ordinary CI and requires separate approval.
+
+The Activity/Queue browser client retains authoritative `/api/tasks` polling
+when SSE fails. Chromium leaves EventSource permanently CLOSED after an initial
+HTTP 503 (or 404); the client therefore retries CLOSED streams only while
+Activity is open and visible, with exponential backoff from 2 to 60 seconds.
+The retry is cancelled on panel close or document hide; for an established
+stream in CONNECTING state, native EventSource reconnect remains authoritative.
+Synchronous EventSource construction or listener-registration errors also
+use the bounded retry schedule while polling continues; a partial stream is
+closed before retrying.
 
 `GET /api/instances` may supply an optional `memory` object on supported
 platforms. Current `vramBytes` is omitted when the latest GPU probe failed;
