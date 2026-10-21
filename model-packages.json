@@ -1091,6 +1091,118 @@
       }
     ]
   },
+  "moss_ttsd": {
+    "displayName": "MOSS-TTSD",
+    "category": "tts",
+    "status": "supported",
+    "packages": [
+      {
+        "id": "moss_ttsd_q8_0_codec_f16",
+        "displayName": "MOSS-TTSD Q8_0 (codec F16) GGUF ~13 GB",
+        "format": "gguf",
+        "precision": "q8_0",
+        "default": true,
+        "repo": "christopherthompson81/MOSS-TTSD-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "MOSS-TTSD-GGUF",
+        "files": [
+          {
+            "remote": "moss_ttsd_q8_0_codec_f16.gguf",
+            "local": "moss_ttsd_q8_0_codec_f16.gguf"
+          }
+        ]
+      },
+      {
+        "id": "moss_ttsd_q4_k_codec_f16",
+        "displayName": "MOSS-TTSD Q4_K (codec F16) GGUF ~10 GB",
+        "format": "gguf",
+        "precision": "q4_k",
+        "repo": "christopherthompson81/MOSS-TTSD-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "MOSS-TTSD-GGUF",
+        "files": [
+          {
+            "remote": "moss_ttsd_q4_k_codec_f16.gguf",
+            "local": "moss_ttsd_q4_k_codec_f16.gguf"
+          }
+        ]
+      },
+      {
+        "id": "moss_ttsd_bf16_codec_f16",
+        "displayName": "MOSS-TTSD BF16 (codec F16) GGUF ~20 GB",
+        "format": "gguf",
+        "precision": "bf16",
+        "repo": "christopherthompson81/MOSS-TTSD-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "MOSS-TTSD-GGUF",
+        "files": [
+          {
+            "remote": "moss_ttsd_bf16_codec_f16.gguf",
+            "local": "moss_ttsd_bf16_codec_f16.gguf"
+          }
+        ]
+      }
+    ]
+  },
+  "moss_transcribe_diarize": {
+    "displayName": "MOSS-Transcribe-Diarize",
+    "category": "asr",
+    "status": "supported",
+    "packages": [
+      {
+        "id": "moss_transcribe_diarize_q8_0",
+        "displayName": "MOSS-Transcribe-Diarize Q8_0 GGUF",
+        "format": "gguf",
+        "precision": "q8_0",
+        "default": true,
+        "repo": "audio-cpp/audio.cpp-gguf",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "MOSS-Transcribe-Diarize-GGUF",
+        "files": [
+          {
+            "remote": "MOSS-Transcribe-Diarize-GGUF/moss-transcribe-diarize-q8_0.gguf",
+            "local": "moss-transcribe-diarize-q8_0.gguf"
+          }
+        ]
+      },
+      {
+        "id": "moss_transcribe_diarize_q4_k",
+        "displayName": "MOSS-Transcribe-Diarize Q4_K GGUF",
+        "format": "gguf",
+        "precision": "q4_k",
+        "repo": "audio-cpp/audio.cpp-gguf",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "MOSS-Transcribe-Diarize-GGUF",
+        "files": [
+          {
+            "remote": "MOSS-Transcribe-Diarize-GGUF/moss-transcribe-diarize-q4_k.gguf",
+            "local": "moss-transcribe-diarize-q4_k.gguf"
+          }
+        ]
+      },
+      {
+        "id": "moss_transcribe_diarize_bf16",
+        "displayName": "MOSS-Transcribe-Diarize BF16 GGUF",
+        "format": "gguf",
+        "precision": "bf16",
+        "repo": "audio-cpp/audio.cpp-gguf",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "MOSS-Transcribe-Diarize-GGUF",
+        "files": [
+          {
+            "remote": "MOSS-Transcribe-Diarize-GGUF/moss-transcribe-diarize-bf16.gguf",
+            "local": "moss-transcribe-diarize-bf16.gguf"
+          }
+        ]
+      }
+    ]
+  },
   "moss_tts_nano": {
     "displayName": "MOSS-TTS-Nano",
     "category": "tts",

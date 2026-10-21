@@ -835,6 +835,131 @@
     }
   },
   {
+    "id": "moss_ttsd",
+    "family": "moss_ttsd",
+    "hfUrl": "https://huggingface.co/OpenMOSS-Team/MOSS-TTSD-v1.0",
+    "ggufUrl": "https://huggingface.co/christopherthompson81/MOSS-TTSD-GGUF",
+    "displayName": "MOSS-TTSD",
+    "description": "MOSS-TTSD 8B 对话语音合成：用 [S1]/[S2] 标注说话人，一次生成整段多人对话；可用 voice_samples（逗号分隔、按说话人顺序）加 reference_text 零样本克隆每位说话人，输出 24kHz。不支持流式。q8_0 约需 12 GB 显存（克隆约 14 GB）。",
+    "descriptionEn": "MOSS-TTSD 8B dialogue TTS: tag speakers with [S1]/[S2] and the whole multi-speaker conversation is rendered in one take; optional per-speaker zero-shot cloning via voice_samples (comma separated, positional) plus reference_text, outputs 24kHz. No streaming. q8_0 needs about 12 GB of device memory (about 14 GB when cloning).",
+    "category": "tts",
+    "serverTask": "tts",
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "optional"
+    },
+    "outputType": "audio",
+    "language": {
+      "values": [
+        "English",
+        "Chinese"
+      ],
+      "default": "English"
+    },
+    "backends": [
+      "cpu",
+      "cuda",
+      "vulkan",
+      "metal"
+    ],
+    "paramSchema": {
+      "language": {
+        "type": "enum",
+        "values": [
+          "English",
+          "Chinese"
+        ],
+        "default": "English",
+        "label": "语言",
+        "labelEn": "Language"
+      },
+      "voice_samples": {
+        "type": "string",
+        "default": "",
+        "hint": "运行 hub 的机器上的 wav 路径，逗号分隔，第一个对应 [S1]，第二个对应 [S2]；留空项表示该说话人不克隆",
+        "hintEn": "Comma-separated wav paths on the machine running the hub; first is [S1], second is [S2]; an empty entry leaves that speaker invented"
+      },
+      "reference_text": {
+        "type": "string",
+        "default": "",
+        "hint": "参考音频的说话人标注文本，如 [S1] ... [S2] ...",
+        "hintEn": "Speaker-tagged transcript of the reference audio, e.g. [S1] ... [S2] ..."
+      },
+      "instruct": {
+        "type": "string",
+        "default": ""
+      },
+      "seed": {
+        "type": "integer",
+        "default": null,
+        "min": 0,
+        "max": 2147483647,
+        "step": 1,
+        "label": "随机种子",
+        "labelEn": "Seed"
+      },
+      "temperature": {
+        "type": "number",
+        "default": 1.5,
+        "min": 0.1,
+        "max": 3.0,
+        "step": 0.05
+      },
+      "text_temperature": {
+        "type": "number",
+        "default": 1.5,
+        "min": 0.1,
+        "max": 3.0,
+        "step": 0.05
+      },
+      "repetition_penalty": {
+        "type": "number",
+        "default": 1.1,
+        "min": 0.5,
+        "max": 2.0,
+        "step": 0.05
+      }
+    }
+  },
+  {
+    "id": "moss_transcribe_diarize",
+    "family": "moss_transcribe_diarize",
+    "hfUrl": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize",
+    "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/MOSS-Transcribe-Diarize-GGUF",
+    "displayName": "MOSS 转写+说话人识别",
+    "displayNameEn": "MOSS Transcribe-Diarize",
+    "description": "MOSS-Transcribe-Diarize 一次推理同时输出转写文本与说话人分段（[S01]/[S02] 等），支持 50+ 种语言，自动语言检测。",
+    "descriptionEn": "MOSS-Transcribe-Diarize: one pass returns the transcript plus speaker turns ([S01]/[S02] ...), 50+ languages with automatic language detection.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "paramSchema": {
+      "max_tokens": {
+        "type": "integer",
+        "default": null,
+        "min": 16,
+        "max": 8192,
+        "step": 16
+      },
+      "instruct": {
+        "type": "string",
+        "default": ""
+      }
+    }
+  },
+  {
     "id": "omnivoice",
     "family": "omnivoice",
     "hfUrl": "https://huggingface.co/k2-fsa/OmniVoice",

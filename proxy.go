@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"os"
@@ -26,8 +28,8 @@ import (
 // "model" → 按服务名路由到 READY 实例 → 落盘文件作为 body 转发到实例同名路径 →
 // 响应状态码/Content-Type 透传，每读一块 Flush 一次（SSE/chunked 与整包都支持）。
 // 错误体为 OpenAI 风格 {"error":{"message","type"}}。
-// 已知限制（与 Java 一致）：multipart/form-data（如 /v1/audio/transcriptions）无法
-// 提取 model——extractor 只认 JSON，会回 400。
+// multipart/form-data（如 /v1/audio/transcriptions）从表单字段 model 取路由键，
+// body 不改写直接转发（extractV1MultipartModel）。
 
 const (
 	v1CacheDir          = "run/proxy-cache"
@@ -153,8 +155,14 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 	}
 	defer os.Remove(tmp) // 转发用的文件句柄在此之前已关闭（Windows 需先 close 再删）
 
-	// 2) 逐字节扫描提取顶层 "model"
-	model, err := extractV1Model(tmp, maxBody)
+	// 2) 提取 "model"：JSON 逐字节扫描顶层字段；multipart/form-data（/v1/audio/transcriptions
+	//    及 /details）读取表单字段 model，原始 body 与 Content-Type（含 boundary）原样转发
+	var model string
+	if ct := r.Header.Get("Content-Type"); isMultipartForm(ct) {
+		model, err = extractV1MultipartModel(tmp, ct)
+	} else {
+		model, err = extractV1Model(tmp, maxBody)
+	}
 	if err != nil {
 		if pe, ok := err.(*v1ProxyError); ok {
 			v1Error(w, pe.status, pe.msg)
@@ -621,4 +629,47 @@ func (l *v1LimitedWriter) Write(p []byte) (int, error) {
 		return 0, errV1CaptureLimit
 	}
 	return l.w.Write(p)
+}
+
+// isMultipartForm 判断请求是否为 multipart/form-data（大小写不敏感，允许参数）。
+func isMultipartForm(contentType string) bool {
+	mt, _, err := mime.ParseMediaType(contentType)
+	return err == nil && mt == "multipart/form-data"
+}
+
+// extractV1MultipartModel 从落盘的 multipart/form-data 请求体中读取表单字段 "model"。
+// 逐 part 流式扫描，文件 part（音频）只跳过不入内存；缺字段返回 ""（由调用方回 400）。
+func extractV1MultipartModel(path, contentType string) (string, error) {
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil || params["boundary"] == "" {
+		return "", &v1ProxyError{http.StatusBadRequest, "multipart/form-data request is missing its boundary"}
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	mr := multipart.NewReader(bufio.NewReader(f), params["boundary"])
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			return "", nil
+		}
+		if err != nil {
+			return "", &v1ProxyError{http.StatusBadRequest, "Malformed multipart/form-data body"}
+		}
+		if part.FormName() != "model" || part.FileName() != "" {
+			part.Close()
+			continue
+		}
+		val, err := io.ReadAll(io.LimitReader(part, v1ModelCaptureLimit+1))
+		part.Close()
+		if err != nil {
+			return "", &v1ProxyError{http.StatusBadRequest, "Malformed multipart/form-data body"}
+		}
+		if len(val) > v1ModelCaptureLimit {
+			return "", &v1ProxyError{http.StatusBadRequest, "model field is too long"}
+		}
+		return strings.TrimSpace(string(val)), nil
+	}
 }
