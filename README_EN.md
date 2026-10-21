@@ -138,7 +138,8 @@ The hub's `/v1/*` endpoints are a **transparent proxy** to each `audiocpp_server
   "hfEndpoint": "https://huggingface.co",
   "downloadThreads": 8,
   "downloadSegmentsPerFile": 4,
-  "proxyMaxBodyBytes": 1073741824
+  "proxyMaxBodyBytes": 1073741824,
+  "proxyResponseHeaderTimeoutMs": 60000
 }
 ```
 
@@ -151,6 +152,7 @@ The hub's `/v1/*` endpoints are a **transparent proxy** to each `audiocpp_server
 | `downloadThreads` | `8` | Global download concurrency |
 | `downloadSegmentsPerFile` | `4` | Segments per file (minimum segment granularity 32MB) |
 | `proxyMaxBodyBytes` | `1073741824` (1 GiB) | On-disk body size limit for `/v1/*` proxy requests |
+| `proxyResponseHeaderTimeoutMs` | `60000` (60 s) | How long `/v1/*` waits for an instance to start answering; raise it (e.g. `600000`) for slow models such as `fish_drama3` (lazy load + offline generation); a timeout returns `502` |
 
 > The development copy of `hub.config.json` in this repo sets `httpPort` to `18080`, so running from source listens on 18080.
 

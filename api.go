@@ -292,7 +292,7 @@ func (h *Hub) handleInstanceList(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleInstanceStart 启动实例：{"modelId","weightsPath","backend"?,"device"?,"port"?,
-// "threads"?,"idleUnloadMs"?,"executableId"?,"name"?,"sessionOptions"?}
+// "threads"?,"idleUnloadMs"?,"minFreeMemoryMb"?,"executableId"?,"name"?,"sessionOptions"?}
 func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 	body := readBodyMap(w, r)
 	if body == nil {
@@ -335,6 +335,11 @@ func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, http.StatusBadRequest, "IDLE_UNLOAD_POSITIVE", nil, "idleUnloadMs 不能为负数")
 		return
 	}
+	minFreeMemoryMb := optIntPtr(body, "minFreeMemoryMb")
+	if minFreeMemoryMb != nil && *minFreeMemoryMb < 0 {
+		errJSON(w, http.StatusBadRequest, "MIN_FREE_MEMORY_INVALID", nil, "minFreeMemoryMb 不能为负数")
+		return
+	}
 	var execEntry *Executable
 	if execID := optString(body, "executableId"); execID != "" {
 		execEntry = h.execs.FindByID(execID)
@@ -370,20 +375,21 @@ func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	inst, err := h.instances.Start(StartParams{
-		ModelID:        modelID,
-		EngineFamily:   engineFamily,
-		WeightsPath:    absWeights,
-		Backend:        backend,
-		Device:         optIntPtr(body, "device"),
-		Port:           optIntPtr(body, "port"),
-		Threads:        threads,
-		IdleUnloadMs:   idleUnloadMs,
-		ExecPath:       execPath,
-		ExecName:       execEntry.Name,
-		ServerTask:     serverTask,
-		Env:            execEntry.Env,
-		Name:           optString(body, "name"),
-		SessionOptions: sessionOptions,
+		ModelID:         modelID,
+		EngineFamily:    engineFamily,
+		WeightsPath:     absWeights,
+		Backend:         backend,
+		Device:          optIntPtr(body, "device"),
+		Port:            optIntPtr(body, "port"),
+		Threads:         threads,
+		IdleUnloadMs:    idleUnloadMs,
+		MinFreeMemoryMb: minFreeMemoryMb,
+		ExecPath:        execPath,
+		ExecName:        execEntry.Name,
+		ServerTask:      serverTask,
+		Env:             execEntry.Env,
+		Name:            optString(body, "name"),
+		SessionOptions:  sessionOptions,
 	})
 	if err != nil {
 		errFromErr(w, http.StatusInternalServerError, "LAUNCH_FAILED", err)

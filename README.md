@@ -139,7 +139,8 @@ hub 的 `/v1/*` 接口是对各 `audiocpp_server` 实例的**透明代理**：hu
   "hfEndpoint": "https://huggingface.co",
   "downloadThreads": 8,
   "downloadSegmentsPerFile": 4,
-  "proxyMaxBodyBytes": 1073741824
+  "proxyMaxBodyBytes": 1073741824,
+  "proxyResponseHeaderTimeoutMs": 60000
 }
 ```
 
@@ -152,6 +153,7 @@ hub 的 `/v1/*` 接口是对各 `audiocpp_server` 实例的**透明代理**：hu
 | `downloadThreads` | `8` | 下载任务全局并发线程数 |
 | `downloadSegmentsPerFile` | `4` | 单文件分段数（分段最小粒度 32MB） |
 | `proxyMaxBodyBytes` | `1073741824`（1 GiB） | `/v1/*` 代理请求体落盘上限 |
+| `proxyResponseHeaderTimeoutMs` | `60000`（60 s） | `/v1/*` 代理等待实例返回响应头的上限；慢模型（如 `fish_drama3` 懒加载 + 离线生成）可调到 `600000`，超时返回 `502` |
 
 > 本仓库开发副本的 `hub.config.json` 把 `httpPort` 设为 `18080`，因此从源码直接运行时会监听 18080。
 

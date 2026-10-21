@@ -22,20 +22,23 @@ import (
 
 // Instance 一个 audiocpp_server 进程实例。只有 STARTING/READY 的实例存在于管理器中。
 type Instance struct {
-	ID             string
-	Name           string // 服务名（instanceName）：/v1/* 路由键，写进 server.json 的 model id
-	ModelID        string
-	ServerTask     string // 引擎任务类型（tts/asr/...），来自模型注册表 serverTask
-	WeightsPath    string
-	Port           int
-	Backend        string
-	Device         *int
-	ExecName       string
-	Threads        *int
-	IdleUnloadMs   *int // 空闲自动卸载毫秒数（server.json 顶层 idle_unload_ms），nil 表示不卸载
-	SessionOptions map[string]string
-	Status         string // STARTING / READY
-	CreatedAt      string
+	ID           string
+	Name         string // 服务名（instanceName）：/v1/* 路由键，写进 server.json 的 model id
+	ModelID      string
+	ServerTask   string // 引擎任务类型（tts/asr/...），来自模型注册表 serverTask
+	WeightsPath  string
+	Port         int
+	Backend      string
+	Device       *int
+	ExecName     string
+	Threads      *int
+	IdleUnloadMs *int // 空闲自动卸载毫秒数（server.json 顶层 idle_unload_ms），nil 表示不卸载
+	// MinFreeMemoryMb 引擎加载守卫（server.json 顶层 min_free_memory_mb）：加载后主机与 GPU
+	// 都须保留这么多 MiB 才允许加载；nil/0 表示关闭。
+	MinFreeMemoryMb *int
+	SessionOptions  map[string]string
+	Status          string // STARTING / READY
+	CreatedAt       string
 
 	cmd      *exec.Cmd
 	done     chan struct{} // 进程退出后关闭，向所有观察者广播终止
@@ -100,20 +103,21 @@ func NewInstanceManager(portBase, hubPort int) *InstanceManager {
 
 // StartParams 启动一个实例所需的全部参数。
 type StartParams struct {
-	ModelID        string
-	EngineFamily   string
-	WeightsPath    string
-	Backend        string
-	Device         *int
-	Port           *int
-	Threads        *int
-	IdleUnloadMs   *int
-	ExecPath       string
-	ExecName       string
-	ServerTask     string
-	Env            map[string]string
-	Name           string
-	SessionOptions map[string]string
+	ModelID         string
+	EngineFamily    string
+	WeightsPath     string
+	Backend         string
+	Device          *int
+	Port            *int
+	Threads         *int
+	IdleUnloadMs    *int
+	MinFreeMemoryMb *int
+	ExecPath        string
+	ExecName        string
+	ServerTask      string
+	Env             map[string]string
+	Name            string
+	SessionOptions  map[string]string
 }
 
 // List 返回全部实例，顺序确定：先按 CreatedAt，再按 ID。
@@ -241,21 +245,22 @@ func (m *InstanceManager) Start(p StartParams) (*Instance, error) {
 
 	id := newID()
 	inst := &Instance{
-		ID:             id,
-		Name:           name,
-		ModelID:        p.ModelID,
-		ServerTask:     p.ServerTask,
-		WeightsPath:    p.WeightsPath,
-		Port:           port,
-		Backend:        p.Backend,
-		Device:         p.Device,
-		ExecName:       p.ExecName,
-		Threads:        p.Threads,
-		IdleUnloadMs:   p.IdleUnloadMs,
-		SessionOptions: p.SessionOptions,
-		Status:         "STARTING",
-		CreatedAt:      time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
-		done:           make(chan struct{}),
+		ID:              id,
+		Name:            name,
+		ModelID:         p.ModelID,
+		ServerTask:      p.ServerTask,
+		WeightsPath:     p.WeightsPath,
+		Port:            port,
+		Backend:         p.Backend,
+		Device:          p.Device,
+		ExecName:        p.ExecName,
+		Threads:         p.Threads,
+		IdleUnloadMs:    p.IdleUnloadMs,
+		MinFreeMemoryMb: p.MinFreeMemoryMb,
+		SessionOptions:  p.SessionOptions,
+		Status:          "STARTING",
+		CreatedAt:       time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
+		done:            make(chan struct{}),
 	}
 	// 原子预占：单临界区内校验服务名唯一并登记占位实例。
 	if err := m.reserve(inst); err != nil {
@@ -580,6 +585,9 @@ func writeServerJSON(path string, port int, p StartParams, instanceName string) 
 	if p.IdleUnloadMs != nil && *p.IdleUnloadMs > 0 {
 		root["idle_unload_ms"] = *p.IdleUnloadMs
 	}
+	if p.MinFreeMemoryMb != nil && *p.MinFreeMemoryMb > 0 {
+		root["min_free_memory_mb"] = *p.MinFreeMemoryMb
+	}
 	data, err := json.Marshal(root)
 	if err != nil {
 		return err
@@ -613,6 +621,9 @@ func (m *InstanceManager) ToJSON(inst *Instance, taskCount int) map[string]any {
 	}
 	if inst.IdleUnloadMs != nil {
 		out["idleUnloadMs"] = *inst.IdleUnloadMs
+	}
+	if inst.MinFreeMemoryMb != nil {
+		out["minFreeMemoryMb"] = *inst.MinFreeMemoryMb
 	}
 	return out
 }

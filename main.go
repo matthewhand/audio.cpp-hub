@@ -31,17 +31,21 @@ type HubConfig struct {
 	DownloadThreads         int    `json:"downloadThreads"`
 	DownloadSegmentsPerFile int    `json:"downloadSegmentsPerFile"`
 	ProxyMaxBodyBytes       int64  `json:"proxyMaxBodyBytes"`
+	// ProxyResponseHeaderTimeoutMs bounds how long /v1/* waits for an instance to start
+	// answering (lazy load + offline generation). <= 0 falls back to 60 s.
+	ProxyResponseHeaderTimeoutMs int64 `json:"proxyResponseHeaderTimeoutMs"`
 }
 
 func loadConfig() HubConfig {
 	cfg := HubConfig{
-		HttpPort:                8080,
-		InstancePortBase:        18090,
-		ModelsDir:               "models",
-		HfEndpoint:              "https://huggingface.co",
-		DownloadThreads:         8,
-		DownloadSegmentsPerFile: 4,
-		ProxyMaxBodyBytes:       1 << 30,
+		HttpPort:                     8080,
+		InstancePortBase:             18090,
+		ModelsDir:                    "models",
+		HfEndpoint:                   "https://huggingface.co",
+		DownloadThreads:              8,
+		DownloadSegmentsPerFile:      4,
+		ProxyMaxBodyBytes:            1 << 30,
+		ProxyResponseHeaderTimeoutMs: 60000,
 	}
 	if data, err := os.ReadFile("hub.config.json"); err == nil {
 		if err := json.Unmarshal(data, &cfg); err != nil {

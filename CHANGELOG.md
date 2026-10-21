@@ -6,6 +6,9 @@
 
 ### Added
 
+- Fish Audio Drama 3（引擎 family `fish_drama3`）：`models.json` 新增模型卡（`<|speaker:N|>` 说话人标签、`[laughs]`/`<whisper>` 等舞台提示，paramSchema 含 `max_tokens`/`seed`/`temperature`/`top_p`/`top_k`/`references`/`reference_text`），`model-packages.json` 新增 `Jmica/Drama-3-GGUF` 下载包（默认 Q4_K_S experts / Q8_0 backbone，另列 Q3_K_S、Q2_K 与 4-bit backbone）；建议以 `sessionOptions` 传 `fish_drama3.disk_experts=true`
+- `hub.config.json` 新增 `proxyResponseHeaderTimeoutMs`（默认 `60000`）：`/v1/*` 代理等待实例返回响应头的上限，慢模型（懒加载 + 离线生成）可调大，例如 `600000`
+- `POST /api/instances` 新增可选字段 `minFreeMemoryMb`，写入 server.json 顶层 `min_free_memory_mb`（引擎加载守卫：加载后主机与 GPU 都须保留该 MiB 数，否则拒绝加载），`GET /api/instances` 同步回显
 - `docs/farm.md` / `docs/agent-api.md` / `docs/deployment-10.0.0.36.md`：多机语音农场的拓扑、客户端契约与部署注意事项，入口统一指向 fan-out `http://10.0.0.36:18082`
 - Web UI：操作历史支持「复刻」上一条生成参数重新提交、音色库下拉支持按名搜索、用量看板增加近 14 天趋势
 - `cmd/fanout-proxy`：多机语音农场的统一 LAN 入口（独立二进制，stdlib only，默认 `:18082`）——轮询各 hub `GET /api/instances`，按模型别名（`breeze`/`expressive`、`qwen3-vd`/`voice-design-fast`、`sanotts`/`instant`、`citrinet`/`stt`）路由 `POST /v1/audio/speech` 并故障转移，暴露 `GET /farm/health`、聚合 `GET /api/instances`、只列可用别名的 `GET /v1/models`；配置 `farm.routes.json`、systemd user unit 模板与表驱动单测。对 hub 零改动（不动预热策略），历史与音色库留在源 hub

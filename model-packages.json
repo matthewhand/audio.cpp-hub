@@ -1091,6 +1091,78 @@
       }
     ]
   },
+  "fish_drama3": {
+    "displayName": "Fish Audio Drama 3",
+    "category": "tts",
+    "status": "supported",
+    "packages": [
+      {
+        "id": "fish_drama3_q4_experts_q8_backbone",
+        "displayName": "Drama 3 Q4_K experts / Q8_0 backbone GGUF ~24.6 GB",
+        "format": "gguf",
+        "precision": "q4_k",
+        "default": true,
+        "repo": "Jmica/Drama-3-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Drama-3-GGUF",
+        "files": [
+          {
+            "remote": "drama-3-backbone-8bit-experts-Q4_K_S.gguf",
+            "local": "drama-3-backbone-8bit-experts-Q4_K_S.gguf"
+          }
+        ]
+      },
+      {
+        "id": "fish_drama3_q3_experts_q8_backbone",
+        "displayName": "Drama 3 Q3_K experts / Q8_0 backbone GGUF",
+        "format": "gguf",
+        "precision": "q3_k_s",
+        "repo": "Jmica/Drama-3-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Drama-3-GGUF",
+        "files": [
+          {
+            "remote": "drama-3-backbone-8bit-experts-Q3_K_S.gguf",
+            "local": "drama-3-backbone-8bit-experts-Q3_K_S.gguf"
+          }
+        ]
+      },
+      {
+        "id": "fish_drama3_q2_experts_q8_backbone",
+        "displayName": "Drama 3 Q2_K experts / Q8_0 backbone GGUF",
+        "format": "gguf",
+        "precision": "q2_k",
+        "repo": "Jmica/Drama-3-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Drama-3-GGUF",
+        "files": [
+          {
+            "remote": "drama-3-backbone-8bit-experts-Q2_K.gguf",
+            "local": "drama-3-backbone-8bit-experts-Q2_K.gguf"
+          }
+        ]
+      },
+      {
+        "id": "fish_drama3_q4_backbone",
+        "displayName": "Drama 3 Q4_K experts / Q4_K backbone GGUF",
+        "format": "gguf",
+        "precision": "q4_k",
+        "repo": "Jmica/Drama-3-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Drama-3-GGUF",
+        "files": [
+          {
+            "remote": "drama-3-backbone-4bit-experts-Q4_K_S.gguf",
+            "local": "drama-3-backbone-4bit-experts-Q4_K_S.gguf"
+          }
+        ]
+      }
+    ]
+  },
   "moss_ttsd": {
     "displayName": "MOSS-TTSD",
     "category": "tts",

@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/matthewhand/audio.cpp-hub/internal/idvalidate"
@@ -49,14 +50,40 @@ var errV1InvalidJSON = &v1ProxyError{http.StatusBadRequest, "Request body is not
 
 // v1UpstreamClient 上游实例通信：不设整体超时（TTS 可能跑很久），
 // 中断靠请求 context（客户端断开时 r.Context() 取消）；仅限制等待响应头的时间。
-var v1UpstreamClient = &http.Client{
-	Transport: &http.Transport{
-		DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
-		MaxIdleConns:          32,
-		MaxIdleConnsPerHost:   8,
-		IdleConnTimeout:       90 * time.Second,
-		ResponseHeaderTimeout: 60 * time.Second,
-	},
+const defaultProxyResponseHeaderTimeout = 60 * time.Second
+
+// proxyResponseHeaderTimeout 由 hub.config.json 的 proxyResponseHeaderTimeoutMs 决定；
+// <= 0 回落到 60 s。慢模型（如 fish_drama3 的 disk_experts 懒加载 + 离线生成）需要更长。
+func proxyResponseHeaderTimeout(cfg HubConfig) time.Duration {
+	if cfg.ProxyResponseHeaderTimeoutMs <= 0 {
+		return defaultProxyResponseHeaderTimeout
+	}
+	return time.Duration(cfg.ProxyResponseHeaderTimeoutMs) * time.Millisecond
+}
+
+var (
+	v1ClientsMu sync.Mutex
+	v1Clients   = map[time.Duration]*http.Client{}
+)
+
+// v1UpstreamClientFor 按响应头超时缓存客户端（连接池随之复用）。
+func v1UpstreamClientFor(timeout time.Duration) *http.Client {
+	v1ClientsMu.Lock()
+	defer v1ClientsMu.Unlock()
+	if c, ok := v1Clients[timeout]; ok {
+		return c
+	}
+	c := &http.Client{
+		Transport: &http.Transport{
+			DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+			MaxIdleConns:          32,
+			MaxIdleConnsPerHost:   8,
+			IdleConnTimeout:       90 * time.Second,
+			ResponseHeaderTimeout: timeout,
+		},
+	}
+	v1Clients[timeout] = c
+	return c
 }
 
 // hopByHopHeaders 逐跳头，按 RFC 7230 不跨代理转发。
@@ -238,7 +265,7 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 	if req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := v1UpstreamClient.Do(req)
+	resp, err := v1UpstreamClientFor(proxyResponseHeaderTimeout(h.cfg)).Do(req)
 	body.Close() // 请求体已完整发出（或失败），缓存文件使命结束
 	if err != nil {
 		log.Printf("转发到实例 #%s 失败: %v", inst.ID, err)
