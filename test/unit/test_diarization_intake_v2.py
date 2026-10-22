@@ -419,6 +419,98 @@ class IntakeOnlyValidation(unittest.TestCase):
         with self.assertRaisesRegex(intake.IntakeError, "Non-finite JSON number"):
             intake.validate_intake_file(malformed, self.root)
 
+    def test_invisible_only_attribution_rejected_in_full_preflight(self):
+        for hidden in ("\u00ad", "\u034f", "\ufe0f",
+                       "\U000E0001", "\U000E0020",
+                       "\U000E0100", "\u2800"):
+            with self.subTest(hidden=repr(hidden)):
+                self.data["rights"]["public_attribution"] = hidden * 3
+                with self.assertRaisesRegex(intake.IntakeError, "invalid format"):
+                    self.validate()
+        for visible in ("Jos\u00e9 Garc\u00eda",
+                        "\u5c71\u7530\u592a\u90ce",
+                        "\U00020BB7\u91ce\u82b1"):
+            with self.subTest(visible=repr(visible)):
+                self.data["rights"]["public_attribution"] = visible
+                self.assertEqual(self.validate()["sources_checked"], 4)
+
+    def test_javascript_python_metadata_regex_parity(self):
+        schema = json.loads(intake.SCHEMA_FILE.read_text())
+        def fields(node, path=()):
+            if isinstance(node, dict):
+                if "pattern" in node:
+                    yield path, node
+                for key, value in node.items():
+                    yield from fields(value, path + (key,))
+            elif isinstance(node, list):
+                for i, value in enumerate(node):
+                    yield from fields(value, path + (str(i),))
+        vectors = []
+        for path, spec in fields(schema):
+            name = ".".join(path)
+            if "speaker_id" in name:
+                valid = "spk_01"
+            elif "relative_wav_path" in name:
+                valid = "folder/voice.wav"
+            elif "sha256" in name:
+                valid = "a" * 64
+            elif "public_attribution" in name:
+                valid = "Jane Doe"
+            else:
+                valid = "ABC-123"
+            cases = [(valid, True)]
+            if "public_attribution" in name:
+                cases += [(x, True) for x in ("山田 太郎", "José García", "Jane\u00a0Doe")]
+                cases += [(x * 3, False) for x in (
+                    " ", "\u0085", "\ufeff", "\u00a0", "\u1680",
+                    "\u180e", "\u2000", "\u200a", "\u200b", "\u200d",
+                    "\u200f", "\u2028", "\u2029", "\u202f", "\u205f",
+                    "\u2060", "\u3000", "\u001c", "\x00",
+                )]
+                # Invisible-only text must not satisfy rights attribution.
+                cases += [(x * 3, False) for x in (
+                    "\u00ad", "\u034f", "\ufe0f", "\u115f", "\u1160",
+                    "\u3164", "\uffa0", "\U000E0001", "\U000E0020",
+                    "\U000E007F", "\U000E007E",
+                    "\U000E0100", "\U000E01EF", "\u2800",
+                )]
+                cases += [("  \u00ad  \u034f", False),
+                          ("  \u00ad\U000E0001\ufe0f\u034f", False)]
+                cases += [(x, True) for x in (
+                    "Jos\u00e9 \u00ad Garc\u00eda",
+                    "Jane \U000E0001 Doe",
+                    "\u5409\u91ce\u82b1", "\U00020BB7\u91ce\u82b1",
+                    "\u0928\u093e\u092e", "\u0623\u062d\u0645\u062f",
+                )]
+                cases += [("AB", False)]
+            else:
+                cases += [(valid + x, False) for x in ("\n", "\r", "\u2028", "\u2029", "\ufeff", "\u0085")]
+            for val, expected in cases:
+                vectors.append({"path": name, "spec": spec, "val": val, "expected": expected})
+        script = """const fs=require('node:fs');
+const cases=JSON.parse(fs.readFileSync(0,'utf8'));
+process.stdout.write(JSON.stringify(cases.map(({spec,val})=>{
+  const withinBounds = [...val].length >= (spec.minLength ?? 0) &&
+    [...val].length <= (spec.maxLength ?? Infinity);
+  return [new RegExp(spec.pattern).test(val),
+    new RegExp(spec.pattern, "u").test(val)].map(matches=>withinBounds && matches);
+})));"""
+        results = subprocess.run(["node", "-e", script], input=json.dumps(vectors),
+                                 capture_output=True, text=True, check=True, timeout=5)
+        javascript = json.loads(results.stdout)
+        self.assertEqual(len(vectors), len(javascript))
+        for case, js_modes in zip(vectors, javascript):
+            try:
+                intake._schema_check(case["val"], case["spec"])
+                py_ok = True
+            except intake.IntakeError:
+                py_ok = False
+            with self.subTest(field=case["path"], value=repr(case["val"])):
+                self.assertEqual(len(js_modes), 2)
+                self.assertEqual(js_modes[0], js_modes[1], "JS default versus Unicode-mode mismatch")
+                self.assertEqual(py_ok, js_modes[0], "Python/JavaScript mismatch")
+                self.assertEqual(py_ok, case["expected"], "Unexpected acceptance")
+
     def test_schema_itself_is_valid_json_and_strict(self):
         schema = json.loads(intake.SCHEMA_FILE.read_text())
         self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
