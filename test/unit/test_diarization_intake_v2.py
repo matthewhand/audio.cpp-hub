@@ -448,6 +448,66 @@ class IntakeOnlyValidation(unittest.TestCase):
                 self.data["rights"]["public_attribution"] = visible
                 self.assertEqual(self.validate()["sources_checked"], 4)
 
+    @staticmethod
+    def _surrogate_pair(codepoint):
+        scalar = codepoint - 0x10000
+        return chr(0xD800 + (scalar >> 10)) + chr(0xDC00 + (scalar & 0x3FF))
+
+    def test_programmatic_paired_surrogate_invisible_only_rejected(self):
+        schema = json.loads(intake.SCHEMA_FILE.read_text())
+        attribution_spec = schema["properties"]["rights"]["properties"]["public_attribution"]
+        for cp in (0x13430, 0x1343F, 0x1BCA0, 0x1BCA3,
+                   0x1D173, 0x1D17A, 0xE0000, 0xE007F,
+                   0xE0100, 0xE01EF):
+            pair = self._surrogate_pair(cp)
+            with self.subTest(codepoint=hex(cp)):
+                # Explicit code units differ from json.loads-canonical scalars.
+                self.assertEqual(len(pair), 2)
+                self.data["rights"]["public_attribution"] = pair * 3
+                with self.assertRaisesRegex(intake.IntakeError, "invalid format"):
+                    self.validate()
+                with self.assertRaisesRegex(intake.IntakeError, "invalid format"):
+                    intake._schema_check(pair * 3, attribution_spec)
+
+    def test_programmatic_valid_paired_surrogate_names_and_limits(self):
+        schema = json.loads(intake.SCHEMA_FILE.read_text())
+        attribution_spec = schema["properties"]["rights"]["properties"]["public_attribution"]
+        pair = self._surrogate_pair(0x20BB7)
+        for value in (pair + "\u91ce\u82b1",
+                      self._surrogate_pair(0x13400) + "\u540d\u6587",
+                      "\u5c71\u7530 " + pair + "\u82b1",
+                      pair * 400):
+            with self.subTest(value=repr(value[:12])):
+                self.data["rights"]["public_attribution"] = value
+                self.assertEqual(self.validate()["sources_checked"], 4)
+                intake._schema_check(value, attribution_spec)
+        with self.assertRaisesRegex(intake.IntakeError, "string too long"):
+            intake._schema_check(pair * 401, attribution_spec)
+
+    def test_canonical_json_file_surrogate_pair_input(self):
+        # JSON intake canonicalizes escaped surrogate pairs to scalar Unicode;
+        # do not access any recorded audio, only existing zero-byte sentinels.
+        path = self.root / "canonical-intake-v2.json"
+        sha = {source["relative_wav_path"]: source["sha256"]
+               for source in self.data["sources"]}
+        def inspect_source(p):
+            return sha[p.relative_to(self.root).as_posix()], 10 * 16000
+
+        for cp in (0x13430, 0x1BCA0, 0x1D173, 0xE0001, 0xE0100):
+            with self.subTest(codepoint=hex(cp)):
+                self.data["rights"]["public_attribution"] = self._surrogate_pair(cp) * 3
+                path.write_text(json.dumps(self.data, ensure_ascii=True), encoding="ascii")
+                with self.assertRaisesRegex(intake.IntakeError, "invalid format"):
+                    intake.validate_intake_file(path, self.root, inspect_audio=inspect_source)
+
+        for visible in (self._surrogate_pair(0x20BB7) + "\u91ce\u82b1",
+                        self._surrogate_pair(0x13400) + "\u5c71\u7530"):
+            with self.subTest(visible=repr(visible)):
+                self.data["rights"]["public_attribution"] = visible
+                path.write_text(json.dumps(self.data, ensure_ascii=True), encoding="ascii")
+                outcome = intake.validate_intake_file(path, self.root, inspect_audio=inspect_source)
+                self.assertEqual(outcome["sources_checked"], 4)
+
     def test_javascript_python_metadata_regex_parity(self):
         schema = json.loads(intake.SCHEMA_FILE.read_text())
         def fields(node, path=()):
@@ -509,6 +569,16 @@ class IntakeOnlyValidation(unittest.TestCase):
                     "\U00020BB7\u00ad\u91ce",
                     "\U00013430\U00020BB7\u91ce",
                 )]
+                paired = self._surrogate_pair
+                cases += [(paired(cp) * 3, False) for cp in (
+                    0x13430, 0x1343F, 0x1BCA0, 0x1BCA3, 0x1D173,
+                    0x1D17A, 0xE0001, 0xE007F, 0xE0100, 0xE01EF)]
+                cases += [(x, True) for x in (
+                    paired(0x20BB7) + "野花",
+                    paired(0x13400) + "山田",
+                    paired(0x20BB7) * 400,
+                    paired(0x13430) + "野花")]
+                cases += [(paired(0x20BB7) * 401, False)]
                 cases += [("AB", False)]
             else:
                 cases += [(valid + x, False) for x in ("\n", "\r", "\u2028", "\u2029", "\ufeff", "\u0085")]

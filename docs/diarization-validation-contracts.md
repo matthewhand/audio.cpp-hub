@@ -41,7 +41,12 @@ Egyptian, shorthand, and musical formatting controls) while retaining valid
 international names and supplementary-plane characters. Lone UTF-16 surrogate
 code units are invalid, including when mixed with visible characters; actual
 valid supplementary characters remain accepted in both JavaScript modes.
-This is an explicit denylist, not proof against every possible invisible
+The schema also rejects supplementary invisible controls presented as explicit
+UTF-16 surrogate pairs in Python in-memory strings, while the project intake
+validator canonicalizes well-formed surrogate pairs before length and pattern
+validation; malformed pairs are rejected. Canonical JSON-file intake decodes
+escaped pairs to Unicode scalar characters. This is an explicit denylist, not
+proof against every possible invisible
 Unicode string. Python and both default/Unicode-mode JavaScript regexes are
 exercised by the cross-engine synthetic intake tests.
 
