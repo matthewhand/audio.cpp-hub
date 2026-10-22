@@ -9,6 +9,7 @@
  * 两模块之间是一处刻意的循环依赖（只在运行期回调里互相调用）。 */
 
 import { bindMenuKeys, focusDialog, hideBusy, renderEmptyState, renderStateError, restoreDialogFocus, showBusy, showSkeleton, showToast } from "./async-ui.js";
+import { renderCharCount } from "./char-count.js";
 import { $, Api, el, markRowEnter, t } from "./dom.js";
 import { fillTtsForm } from "./panels.js";
 import { goPanel } from "./routing.js";
@@ -685,5 +686,6 @@ export async function remixHistoryRecord(taskId) {
   fillTtsForm(m, remix);
   const text = $("tts-text");
   if (text) { text.value = ""; text.focus(); }
+  renderCharCount();
   showToast("info", t("history.remixed"));
 }

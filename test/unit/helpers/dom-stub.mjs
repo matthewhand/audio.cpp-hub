@@ -1,6 +1,8 @@
 /* 极小 DOM 桩：只为在 node 里跑 web/modules/{async-ui,command-palette}.js 的焦点语义而存在，
    不追求通用（不实现布局、不实现 CSS 优先级），只实现这些模块真正用到的那几个动作：
    classList / 属性 / 子树查询 / 事件冒泡 / focus / blur / inert / 动画帧。
+   motion.js 另用这里的 MutationObserver（被观察节点的属性变更后异步回调、不含子树）、
+   可控 matchMedia 与手动时钟（微任务与定时器都由测试推进，不走真实事件循环）。
 
    关键点是 focus() 的前置条件必须和浏览器一致，否则测不出真问题：
      1. 元素在 visibility:hidden 的子树里 → focus() 是空操作（activeElement 不变）；
@@ -13,6 +15,21 @@
 const SETTLE_FRAMES = 2; // 去掉 .hidden 之后，visibility 过渡在第 2 帧才生效
 
 const FOCUSABLE_TAGS = new Set(["a", "button", "input", "select", "textarea", "area"]);
+
+/* 真浏览器 querySelectorAll 的形状（见 StubElement.querySelectorAll 的注释）：
+   只暴露 length / item() / 下标 / forEach / Symbol.iterator。刻意**不给**
+   map / filter / reduce 等 Array 方法——把这层皮丢掉就等于把 NodeList 用成
+   数组，真机上必炸。 */
+export function nodeListLike(nodes) {
+  const list = {
+    length: nodes.length,
+    item: (i) => (i >= 0 && i < nodes.length ? nodes[i] : null)
+  };
+  for (let i = 0; i < nodes.length; i++) list[i] = nodes[i];
+  list.forEach = (cb, thisArg) => nodes.forEach(cb, thisArg);
+  list[Symbol.iterator] = () => nodes[Symbol.iterator]();
+  return list;
+}
 
 /* ---- 选择器：只支持这些模块真正用到的子集 ----
    形如 `tag`、`#id`、`.class`、`.a.b`、`[attr]`、`[attr="v"]`、
@@ -41,7 +58,7 @@ function matchesSimple(node, selector) {
     } else if (m[3] !== undefined) {
       if (!node.classList.contains(m[3])) return false;
     } else {
-      const a = attrToken(m[4]);
+      const a = attrToken("[" + m[4] + "]");
       if (!a || !node.hasAttribute(a.name)) return false;
       if (a.op === "=" && node.getAttribute(a.name) !== a.value) return false;
     }
@@ -73,6 +90,55 @@ export function parseTemplate(html) {
   return node;
 }
 
+const VOID_TAGS = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr"
+]);
+
+/* innerHTML 要长出可 querySelector 的子树：实例卡片把整段 markup 写进 innerHTML。
+   只覆盖这些渲染器用到的子集（标签、引号属性、自闭合、嵌套），不建文本节点。 */
+function parseHTMLInto(parent, html) {
+  const stack = [parent];
+  const re = /<!--[\s\S]*?-->|<\/([A-Za-z][\w:-]*)\s*>|<([A-Za-z][\w:-]*)([^<>]*?)(\/?)>/g;
+  for (;;) {
+    const m = re.exec(html);
+    if (!m) break;
+    if (m[0].charCodeAt(1) === 33) continue;
+    if (m[1]) {
+      const name = m[1].toLowerCase();
+      for (let i = stack.length - 1; i > 0; i--) {
+        if (stack[i].tagName.toLowerCase() === name) {
+          stack.length = i;
+          break;
+        }
+      }
+      continue;
+    }
+    const tag = m[2].toLowerCase();
+    const el = new StubElement(parent.world, tag);
+    const attrRe = /([^\s=/"']+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'))?/g;
+    for (;;) {
+      const a = attrRe.exec(m[3]);
+      if (!a) break;
+      el.setAttribute(a[1], a[2] ?? a[3] ?? "");
+    }
+    stack[stack.length - 1].appendChild(el);
+    if (m[4] !== "/" && !VOID_TAGS.has(tag)) stack.push(el);
+  }
+}
+
 export class StubElement {
   constructor(world, tagName) {
     this.world = world;
@@ -86,19 +152,19 @@ export class StubElement {
     this.innerHTML = "";
     this.onclick = null;
     this.onmouseenter = null;
+    this.style = {};
     const self = this;
     this.classList = {
       contains: (c) => self.classes().has(c),
       add: (c) => {
         const s = self.classes();
-        if (!s.has(c)) {
-          s.add(c);
-          self.attrs.set("class", [...s].join(" "));
-        }
+        if (s.has(c)) return;
+        s.add(c);
+        self.setAttribute("class", [...s].join(" "));
       },
       remove: (c) => {
         const s = self.classes();
-        if (s.delete(c)) self.attrs.set("class", [...s].join(" "));
+        if (s.delete(c)) self.setAttribute("class", [...s].join(" "));
         self.world.onHiddenClassChange(self, s.has("hidden"));
       },
       toggle: (c, on) => (on ? this.classList.add(c) : this.classList.remove(c))
@@ -110,7 +176,7 @@ export class StubElement {
   }
 
   set className(v) {
-    this.attrs.set("class", String(v));
+    this.setAttribute("class", String(v));
   }
 
   get className() {
@@ -137,9 +203,17 @@ export class StubElement {
     return this.isConnected ? this.world.documentElement : null;
   }
 
+  get offsetWidth() {
+    this.world.reflows++;
+    return 0;
+  }
+
   setAttribute(name, value) {
-    this.attrs.set(name, String(value));
-    if (name === "id") this.id = String(value);
+    const str = String(value);
+    const prev = this.attrs.has(name) ? this.attrs.get(name) : undefined;
+    this.attrs.set(name, str);
+    if (name === "id") this.id = str;
+    if (prev !== str && this.world.onAttribute) this.world.onAttribute(this, name);
   }
 
   getAttribute(name) {
@@ -151,7 +225,9 @@ export class StubElement {
   }
 
   removeAttribute(name) {
+    if (!this.attrs.has(name)) return;
     this.attrs.delete(name);
+    if (this.world.onAttribute) this.world.onAttribute(this, name);
   }
 
   appendChild(child) {
@@ -160,13 +236,31 @@ export class StubElement {
     return child;
   }
 
+  /* ParentNode.append：等价于依次 appendChild（panels.js 的 breeze instruction 行用） */
+  append(...nodes) {
+    for (const n of nodes) this.appendChild(n);
+  }
+
+  /* instances.js 的工具栏「生成中」把计时片段插到胶囊末尾。只实现 beforeend。 */
+  insertAdjacentHTML(position, html) {
+    if (position !== "beforeend") {
+      throw new Error("dom-stub: unsupported insertAdjacentHTML " + position);
+    }
+    const holder = new StubElement(this.world, "div");
+    holder.innerHTML = html;
+    for (const child of holder.children.slice()) this.appendChild(child);
+  }
+
   set innerHTML(v) {
-    if (v === "") for (const c of this.children) c.parentElement = null;
+    const html = v == null ? "" : String(v);
+    this._html = html;
+    for (const c of this.children) c.parentElement = null;
     this.children = [];
+    if (html) parseHTMLInto(this, html);
   }
 
   get innerHTML() {
-    return "";
+    return this._html || "";
   }
 
   descendants() {
@@ -185,8 +279,13 @@ export class StubElement {
     return this.descendants().find((n) => matchesAny(n, selector)) || null;
   }
 
+  /* 浏览器语义：querySelectorAll 返回 **NodeList**——只有 length / item() /
+     下标访问 / forEach / 迭代，**没有任何 Array 方法**。桩如果悄悄返回 Array，
+     「sel.querySelectorAll(...).map is not a function」这类真机崩溃在 node 测试里
+     永远绿着（tests green，real Chromium 崩），所以这里刻意复刻 NodeList 形状。
+     新增把 querySelectorAll 结果当数组用的代码会让测试先炸，而不是用户先炸。 */
   querySelectorAll(selector) {
-    return this.descendants().filter((n) => matchesAny(n, selector));
+    return nodeListLike(this.descendants().filter((n) => matchesAny(n, selector)));
   }
 
   contains(node) {
@@ -198,9 +297,37 @@ export class StubElement {
     return false;
   }
 
+  /* 事件委托（nowqueue.js 的取消键命中判定；models.js / sidebar.js / motion.js 同形）：
+     沿 parentElement 向上找第一个匹配选择器的节点，含自身。 */
+  closest(selector) {
+    for (let n = this; n; n = n.parentElement) {
+      if (matchesAny(n, selector)) return n;
+    }
+    return null;
+  }
+
   addEventListener(type, cb) {
     if (!this.listeners.has(type)) this.listeners.set(type, []);
     this.listeners.get(type).push(cb);
+  }
+
+  /* 浏览器语义：dispatchEvent 先在目标上跑（addEventListener 注册的回调 + on* 属性
+     处理器都算事件监听器），再沿 parentElement 冒泡（ev.bubbles !== false），最后到
+     document。世界级 fire() 用同一套语义，只是自己造事件对象。 */
+  dispatchEvent(ev) {
+    const type = ev && ev.type;
+    if (!type) return true;
+    const fire = (n) => {
+      for (const cb of n.listeners.get(type) || []) cb.call(n, ev);
+      const prop = n["on" + type];
+      if (typeof prop === "function") prop.call(n, ev);
+    };
+    fire(this);
+    if (!ev || ev.bubbles !== false) {
+      for (let n = this.parentElement; n; n = n.parentElement) fire(n);
+      for (const cb of this.world.listeners.get(type) || []) cb.call(this.world.document, ev);
+    }
+    return true;
   }
 
   scrollIntoView() {
@@ -249,7 +376,128 @@ export function createDomWorld() {
     frame: 0,
     revealedAt: new Map(),
     rafQueue: [],
-    listeners: new Map()
+    listeners: new Map(),
+    classWrites: [],
+    classMutations: 0,
+    reflows: 0,
+    _micro: []
+  };
+
+  world.queueMicrotask = (fn) => {
+    world._micro.push(fn);
+  };
+  world.microtaskCount = () => world._micro.length;
+  world.flushMicrotasks = (max = 100) => {
+    let n = 0;
+    while (world._micro.length && n < max) {
+      world._micro.shift()();
+      n++;
+    }
+    return n;
+  };
+
+  world.onAttribute = (node, name) => {
+    if (name === "class") {
+      world.classMutations++;
+      world.classWrites.push({ node, value: node.className });
+    }
+    const obs = node._observers;
+    if (!obs || obs.size === 0) return;
+    for (const ob of obs) ob._push(node, name);
+  };
+
+  /* 只通知 observe 过的那个节点。回调走世界里的微任务队，由 flushMicrotasks 推进。 */
+  world.MutationObserver = class MutationObserver {
+    constructor(callback) {
+      this._cb = callback;
+      this._opts = new Map();
+      this._recs = [];
+      this._queued = false;
+    }
+
+    observe(target, options) {
+      this._opts.set(target, options || {});
+      if (!target._observers) target._observers = new Set();
+      target._observers.add(this);
+    }
+
+    disconnect() {
+      for (const t of this._opts.keys()) {
+        if (t._observers) t._observers.delete(this);
+      }
+      this._opts.clear();
+      this._recs = [];
+      this._queued = false;
+    }
+
+    takeRecords() {
+      const recs = this._recs;
+      this._recs = [];
+      return recs;
+    }
+
+    _push(target, name) {
+      const opt = this._opts.get(target);
+      if (!opt || (!opt.attributes && !opt.attributeFilter)) return;
+      if (opt.attributeFilter && !opt.attributeFilter.includes(name)) return;
+      this._recs.push({ type: "attributes", target, attributeName: name });
+      if (this._queued) return;
+      this._queued = true;
+      world.queueMicrotask(() => {
+        this._queued = false;
+        const recs = this._recs.splice(0);
+        if (recs.length) this._cb(recs, this);
+      });
+    }
+  };
+
+  const mediaLists = new Map();
+  world.matchMedia = (query) => {
+    const key = String(query);
+    let list = mediaLists.get(key);
+    if (!list) {
+      list = {
+        media: key,
+        matches: false,
+        addListener() {},
+        removeListener() {},
+        addEventListener() {},
+        removeEventListener() {}
+      };
+      mediaLists.set(key, list);
+    }
+    return list;
+  };
+  world.matchMedia.setMatches = (query, on) => {
+    world.matchMedia(query).matches = !!on;
+  };
+
+  let timerSeq = 1;
+  const timers = new Map();
+  let timersCleared = 0;
+  world.clock = {
+    setTimeout(fn, ms) {
+      const id = timerSeq++;
+      timers.set(id, { fn, ms: ms == null ? 0 : ms });
+      return id;
+    },
+    clearTimeout(id) {
+      if (timers.delete(id)) timersCleared++;
+    },
+    get size() {
+      return timers.size;
+    },
+    get cleared() {
+      return timersCleared;
+    },
+    delays() {
+      return [...timers.values()].map((t) => t.ms);
+    },
+    fireAll() {
+      const due = [...timers.entries()];
+      for (const [id] of due) timers.delete(id);
+      for (const [, t] of due) t.fn();
+    }
   };
 
   const documentElement = new StubElement(world, "html");

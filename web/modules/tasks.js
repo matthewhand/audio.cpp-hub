@@ -94,6 +94,10 @@ export async function reattachTasks() {
   try {
     // 已有句柄的任务会被 trackTask 直接跳过，不会重复建轮询
     const tasks = await Api.list("/api/tasks", { query: { modelId: m.id } });
+    // #177: after a reload / model switch, show the newest finished TTS take from this list.
+    if (tasks.some(x => x && x.category === "tts" && x.status === "DONE")) {
+      lastTake().then(mod => mod.refreshLastTake(tasks)).catch(() => {});
+    }
     for (const task of tasks) trackTask(task);
   } catch (e) { /* 忽略：下次切换/轮询再试 */ }
 }
@@ -181,6 +185,17 @@ export async function toggleTaskDetail(task) {
 /* ---------- 结果落版 ---------- */
 
 /* DONE 结果渲染：TTS 直接引用历史 wav URL（不碰 base64）；其余拉取 /result JSON 走原渲染分支 */
+/* #177: the Last take strip is a lazy chunk (only needed once a TTS result exists),
+   so it stays out of the initial JS budget. relocalizeLastTake redraws it after a
+   language switch, but only if it was ever loaded. */
+let lastTakeMod = null;
+function lastTake() {
+  return import("./last-take.js").then(mod => (lastTakeMod = mod));
+}
+export function relocalizeLastTake() {
+  if (lastTakeMod) lastTakeMod.renderLastTake();
+}
+
 export async function renderTaskResult(task) {
   if (task.category === "tts") {
     const url = "/api/history/" + task.modelId + "/" + task.id + "/audio";
@@ -189,6 +204,8 @@ export async function renderTaskResult(task) {
     download.href = url;
     download.download = "tts-" + task.id + ".wav";
     $("tts-result").classList.remove("hidden");
+    // #177: the Last take strip reuses this same history URL (no extra request).
+    lastTake().then(mod => mod.noteTtsTake(task)).catch(() => {});
     return;
   }
   try {

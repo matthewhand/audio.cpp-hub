@@ -2,6 +2,7 @@
  * voice and audio pickers, and task submission. Picker instances live here so
  * history restore can reuse them; sidebar callbacks form a runtime-only cycle. */
 
+import { renderCharCount } from "./char-count.js";
 import { $, el, esc, t } from "./dom.js";
 import { historyRefPath, loadHistory } from "./sidebar.js";
 import { activeInstanceId, selectedModel } from "./state.js";
@@ -612,6 +613,7 @@ export function fillTtsForm(m, rec) {
     }
     if (!lines.length && rec.text && speakerPickers[0]) speakerPickers[0].linesTa.value = rec.text;
   }
+  renderCharCount();
 }
 
 /* options 里的参数填回 paramSchema 渲染的控件：高级参数网格（adv- 前缀）+ 枚举行 */

@@ -20,6 +20,7 @@
 import { FOCUSABLE_SEL, focusDialog, parseApiError, renderEmptyState, renderStateError, restoreDialogFocus, showToast, startEventsPolling, topmostOverlay } from "./modules/async-ui.js";
 import { closeCommandPalette } from "./modules/command-palette-lazy.js";
 import { $ } from "./modules/dom.js";
+import { renderCharCount, startCharCount } from "./modules/char-count.js";
 import { closeDownloadsModal, closeModelDlModal, relocalizeDownloads, startDownloadsPolling } from "./modules/downloads-lazy.js";
 import { cancelFileBrowser, relocalizeFileBrowser } from "./modules/file-browser-lazy.js";
 import { closeInstanceDetail, renderInstanceList, startInstancePolling, updateInstanceBar } from "./modules/instances.js";
@@ -32,6 +33,7 @@ import { applyLangBtn, applyThemeIcon, closeDrawer } from "./modules/shell.js";
 import { closeHistoryPanel } from "./modules/sidebar.js";
 import { closeStatsPanel, reloadStats } from "./modules/stats-lazy.js";
 import { models, selectedModel } from "./modules/state.js";
+import { relocalizeLastTake } from "./modules/tasks.js";
 import { closeVoicesPanel } from "./modules/voices-panel-lazy.js";
 
 /* 回填经典脚本侧的转发器：audio-picker.js 的 toast 与 $ / el 在模块求值前就已从
@@ -58,6 +60,8 @@ function rerenderAll() {
   (window.__audioPickers || []).forEach(p => p.refreshLabels && p.refreshLabels());
   (window.__voiceSelects || []).forEach(v => v.refreshLabels && v.refreshLabels());
   relocalizeFileBrowser();
+  renderCharCount();
+  relocalizeLastTake();
 }
 
 function closeTopmostOverlay() {
@@ -110,6 +114,7 @@ buildEmotionSliders();
 startInstancePolling();
 startEventsPolling();
 startDownloadsPolling();
+startCharCount();
 
 loadModels();
 loadExecutables();
