@@ -16,21 +16,6 @@ const SETTLE_FRAMES = 2; // 去掉 .hidden 之后，visibility 过渡在第 2 �
 
 const FOCUSABLE_TAGS = new Set(["a", "button", "input", "select", "textarea", "area"]);
 
-/* 真浏览器 querySelectorAll 的形状（见 StubElement.querySelectorAll 的注释）：
-   只暴露 length / item() / 下标 / forEach / Symbol.iterator。刻意**不给**
-   map / filter / reduce 等 Array 方法——把这层皮丢掉就等于把 NodeList 用成
-   数组，真机上必炸。 */
-export function nodeListLike(nodes) {
-  const list = {
-    length: nodes.length,
-    item: (i) => (i >= 0 && i < nodes.length ? nodes[i] : null)
-  };
-  for (let i = 0; i < nodes.length; i++) list[i] = nodes[i];
-  list.forEach = (cb, thisArg) => nodes.forEach(cb, thisArg);
-  list[Symbol.iterator] = () => nodes[Symbol.iterator]();
-  return list;
-}
-
 /* ---- 选择器：只支持这些模块真正用到的子集 ----
    形如 `tag`、`#id`、`.class`、`.a.b`、`[attr]`、`[attr="v"]`、
    以及它们与 `:not(...)` 的组合；顶层可写成逗号分隔的列表。 */
@@ -58,7 +43,7 @@ function matchesSimple(node, selector) {
     } else if (m[3] !== undefined) {
       if (!node.classList.contains(m[3])) return false;
     } else {
-      const a = attrToken("[" + m[4] + "]");
+      const a = attrToken(m[4]);
       if (!a || !node.hasAttribute(a.name)) return false;
       if (a.op === "=" && node.getAttribute(a.name) !== a.value) return false;
     }
@@ -90,55 +75,6 @@ export function parseTemplate(html) {
   return node;
 }
 
-const VOID_TAGS = new Set([
-  "area",
-  "base",
-  "br",
-  "col",
-  "embed",
-  "hr",
-  "img",
-  "input",
-  "link",
-  "meta",
-  "param",
-  "source",
-  "track",
-  "wbr"
-]);
-
-/* innerHTML 要长出可 querySelector 的子树：实例卡片把整段 markup 写进 innerHTML。
-   只覆盖这些渲染器用到的子集（标签、引号属性、自闭合、嵌套），不建文本节点。 */
-function parseHTMLInto(parent, html) {
-  const stack = [parent];
-  const re = /<!--[\s\S]*?-->|<\/([A-Za-z][\w:-]*)\s*>|<([A-Za-z][\w:-]*)([^<>]*?)(\/?)>/g;
-  for (;;) {
-    const m = re.exec(html);
-    if (!m) break;
-    if (m[0].charCodeAt(1) === 33) continue;
-    if (m[1]) {
-      const name = m[1].toLowerCase();
-      for (let i = stack.length - 1; i > 0; i--) {
-        if (stack[i].tagName.toLowerCase() === name) {
-          stack.length = i;
-          break;
-        }
-      }
-      continue;
-    }
-    const tag = m[2].toLowerCase();
-    const el = new StubElement(parent.world, tag);
-    const attrRe = /([^\s=/"']+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'))?/g;
-    for (;;) {
-      const a = attrRe.exec(m[3]);
-      if (!a) break;
-      el.setAttribute(a[1], a[2] ?? a[3] ?? "");
-    }
-    stack[stack.length - 1].appendChild(el);
-    if (m[4] !== "/" && !VOID_TAGS.has(tag)) stack.push(el);
-  }
-}
-
 export class StubElement {
   constructor(world, tagName) {
     this.world = world;
@@ -152,7 +88,6 @@ export class StubElement {
     this.innerHTML = "";
     this.onclick = null;
     this.onmouseenter = null;
-    this.style = {};
     const self = this;
     this.classList = {
       contains: (c) => self.classes().has(c),
@@ -236,31 +171,13 @@ export class StubElement {
     return child;
   }
 
-  /* ParentNode.append：等价于依次 appendChild（panels.js 的 breeze instruction 行用） */
-  append(...nodes) {
-    for (const n of nodes) this.appendChild(n);
-  }
-
-  /* instances.js 的工具栏「生成中」把计时片段插到胶囊末尾。只实现 beforeend。 */
-  insertAdjacentHTML(position, html) {
-    if (position !== "beforeend") {
-      throw new Error("dom-stub: unsupported insertAdjacentHTML " + position);
-    }
-    const holder = new StubElement(this.world, "div");
-    holder.innerHTML = html;
-    for (const child of holder.children.slice()) this.appendChild(child);
-  }
-
   set innerHTML(v) {
-    const html = v == null ? "" : String(v);
-    this._html = html;
-    for (const c of this.children) c.parentElement = null;
+    if (v === "") for (const c of this.children) c.parentElement = null;
     this.children = [];
-    if (html) parseHTMLInto(this, html);
   }
 
   get innerHTML() {
-    return this._html || "";
+    return "";
   }
 
   descendants() {
@@ -279,13 +196,8 @@ export class StubElement {
     return this.descendants().find((n) => matchesAny(n, selector)) || null;
   }
 
-  /* 浏览器语义：querySelectorAll 返回 **NodeList**——只有 length / item() /
-     下标访问 / forEach / 迭代，**没有任何 Array 方法**。桩如果悄悄返回 Array，
-     「sel.querySelectorAll(...).map is not a function」这类真机崩溃在 node 测试里
-     永远绿着（tests green，real Chromium 崩），所以这里刻意复刻 NodeList 形状。
-     新增把 querySelectorAll 结果当数组用的代码会让测试先炸，而不是用户先炸。 */
   querySelectorAll(selector) {
-    return nodeListLike(this.descendants().filter((n) => matchesAny(n, selector)));
+    return this.descendants().filter((n) => matchesAny(n, selector));
   }
 
   contains(node) {
@@ -297,37 +209,9 @@ export class StubElement {
     return false;
   }
 
-  /* 事件委托（nowqueue.js 的取消键命中判定；models.js / sidebar.js / motion.js 同形）：
-     沿 parentElement 向上找第一个匹配选择器的节点，含自身。 */
-  closest(selector) {
-    for (let n = this; n; n = n.parentElement) {
-      if (matchesAny(n, selector)) return n;
-    }
-    return null;
-  }
-
   addEventListener(type, cb) {
     if (!this.listeners.has(type)) this.listeners.set(type, []);
     this.listeners.get(type).push(cb);
-  }
-
-  /* 浏览器语义：dispatchEvent 先在目标上跑（addEventListener 注册的回调 + on* 属性
-     处理器都算事件监听器），再沿 parentElement 冒泡（ev.bubbles !== false），最后到
-     document。世界级 fire() 用同一套语义，只是自己造事件对象。 */
-  dispatchEvent(ev) {
-    const type = ev && ev.type;
-    if (!type) return true;
-    const fire = (n) => {
-      for (const cb of n.listeners.get(type) || []) cb.call(n, ev);
-      const prop = n["on" + type];
-      if (typeof prop === "function") prop.call(n, ev);
-    };
-    fire(this);
-    if (!ev || ev.bubbles !== false) {
-      for (let n = this.parentElement; n; n = n.parentElement) fire(n);
-      for (const cb of this.world.listeners.get(type) || []) cb.call(this.world.document, ev);
-    }
-    return true;
   }
 
   scrollIntoView() {
@@ -378,11 +262,9 @@ export function createDomWorld() {
     rafQueue: [],
     listeners: new Map(),
     classWrites: [],
-    classMutations: 0,
     reflows: 0,
     _micro: []
   };
-
   world.queueMicrotask = (fn) => {
     world._micro.push(fn);
   };
@@ -398,7 +280,6 @@ export function createDomWorld() {
 
   world.onAttribute = (node, name) => {
     if (name === "class") {
-      world.classMutations++;
       world.classWrites.push({ node, value: node.className });
     }
     const obs = node._observers;
@@ -428,12 +309,6 @@ export function createDomWorld() {
       this._opts.clear();
       this._recs = [];
       this._queued = false;
-    }
-
-    takeRecords() {
-      const recs = this._recs;
-      this._recs = [];
-      return recs;
     }
 
     _push(target, name) {
