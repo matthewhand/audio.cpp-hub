@@ -4,17 +4,231 @@ import { openLaunchModal } from "./launch.js";
 import { getPendingInstanceId, go, setPendingInstanceId } from "./routing.js";
 import { activeInstanceId, models, selectedModelId, setActiveInstanceId } from "./state.js";
 
+/* #174 Instance cards: total-order sort (status, createdAt, name, id; ignores
+   selection/busy so cards don't jump on poll redraws) and RAM/VRAM bars with
+   peak/avg markers plus a client-side sparkline. Bar geometry is written via
+   CSSOM in applyMemBars because CSP style-src 'self' drops inline style="". */
+export function sortInstances(list) {
+  const rank = s => (s === "READY" ? 0 : s === "STARTING" ? 1 : 2);
+  const arr = Array.isArray(list) ? list.slice() : [];
+  return arr.sort((a, b) => {
+    const ar = rank(a.status), br = rank(b.status);
+    if (ar !== br) return ar - br;
+    const ac = String(a.createdAt || ""), bc = String(b.createdAt || "");
+    if (ac !== bc) return ac < bc ? -1 : 1;
+    const an = String(a.instanceName || a.modelId || ""), bn = String(b.instanceName || b.modelId || "");
+    if (an !== bn) return an < bn ? -1 : 1;
+    const ai = String(a.id || ""), bi = String(b.id || "");
+    return ai < bi ? -1 : ai > bi ? 1 : 0;
+  });
+}
+
+const MEM_MIB = 1024 * 1024;
+const SPARK_W = 74;
+const SPARK_H = 16;
+const SPARK_CAP = 60;
+
+function memMiB(bytes) {
+  return typeof bytes === "number" && Number.isFinite(bytes) && bytes >= 0 ? bytes / MEM_MIB : NaN;
+}
+function numOr(v, dflt) { return Number.isFinite(v) ? v : dflt; }
+function opt(v) { return Number.isFinite(v) ? v : null; }
+function num1(v) { return Math.round(v * 10) / 10; }
+
+export function formatMiB(mib) {
+  if (typeof mib !== "number" || !Number.isFinite(mib) || mib < 0) return "";
+  return mib >= 1024 ? `${(mib / 1024).toFixed(1)} GiB` : `${Math.round(mib)} MiB`;
+}
+
+export function clampPct(n) {
+  if (typeof n !== "number" || !Number.isFinite(n) || n <= 0) return 0;
+  return n >= 100 ? 100 : Math.round(n * 10) / 10;
+}
+
+export function memBarScale(kind, cur, peak, avg, total) {
+  if (typeof total === "number" && Number.isFinite(total) && total > 0) return total;
+  const head = kind === "vram" ? Math.max(peak, cur, avg) : Math.max(peak, cur);
+  const scale = (Number.isFinite(head) ? head : 0) * 1.25;
+  return scale > 0 ? scale : 1;
+}
+
+export function memRowModel(kind, mem) {
+  if (!mem) return null;
+  const vram = kind === "vram";
+  const cur = memMiB(vram ? mem.vramBytes : mem.ramBytes);
+  if (!Number.isFinite(cur)) return null;
+  const peak = numOr(memMiB(vram ? mem.vramPeakBytes : mem.ramPeakBytes), cur);
+  const avg = numOr(memMiB(vram ? mem.vramAvgBytes : mem.ramAvgBytes), cur);
+  const idle = opt(memMiB(vram ? mem.vramIdleBytes : mem.ramIdleBytes));
+  const totalRaw = opt(memMiB(vram ? mem.vramTotalBytes : mem.ramTotalBytes));
+  const total = totalRaw != null && totalRaw > 0 ? totalRaw : null;
+  const scale = memBarScale(kind, cur, peak, avg, total);
+  const fillPct = clampPct((cur / scale) * 100);
+  return {
+    kind, cur, peak, avg, idle, total, scale, fillPct,
+    peakPct: clampPct((peak / scale) * 100),
+    avgPct: clampPct((avg / scale) * 100),
+    idlePct: idle == null ? null : clampPct((idle / scale) * 100),
+    hot: vram && fillPct >= 85,
+    series: memSeries(vram ? mem.vramSeries : mem.ramSeries)
+  };
+}
+
+export function memSeries(series) {
+  if (!Array.isArray(series)) return [];
+  const vals = series.filter(v => typeof v === "number" && Number.isFinite(v) && v >= 0);
+  return vals.length > SPARK_CAP ? vals.slice(vals.length - SPARK_CAP) : vals;
+}
+
+export function sparkPoints(series, w, h) {
+  const vals = memSeries(series);
+  if (vals.length < 2) return "";
+  const W = Number(w) > 0 ? Number(w) : SPARK_W;
+  const H = Number(h) > 0 ? Number(h) : SPARK_H;
+  const step = W / (vals.length - 1);
+  const r1 = n => Math.round(n * 10) / 10;
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (!(hi > lo)) {
+    const y = r1(H / 2);
+    return vals.map((_, i) => `${r1(i * step)},${y}`).join(" ");
+  }
+  const pad = (hi - lo) * 0.15;
+  lo -= pad;
+  hi += pad;
+  const top = 1, bottom = H - 1;
+  return vals.map((v, i) => {
+    const y = bottom - ((v - lo) / (hi - lo)) * (bottom - top);
+    return `${r1(i * step)},${r1(Math.min(bottom, Math.max(top, y)))}`;
+  }).join(" ");
+}
+
+export function nextSparkState(prev, mem) {
+  const state = prev && typeof prev === "object" ? prev : { at: 0, ram: [], vram: [] };
+  if (!mem || typeof mem !== "object") return state;
+  const at = Number(mem.sampledAt) || 0;
+  if (at > 0 && at === state.at) return state;
+  return {
+    at,
+    ram: pushSparkSample(state.ram, mem.ramBytes),
+    vram: pushSparkSample(state.vram, mem.vramBytes)
+  };
+}
+
+export function pushSparkSample(series, value) {
+  const list = Array.isArray(series) ? series.slice() : [];
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return list;
+  list.push(value);
+  return list.length > SPARK_CAP ? list.slice(list.length - SPARK_CAP) : list;
+}
+
+const sparkStore = new Map();
+
+function withSparkSeries(inst) {
+  const mem = inst && inst.memory;
+  if (!mem || typeof mem !== "object") return null;
+  const state = nextSparkState(sparkStore.get(inst.id), mem);
+  sparkStore.set(inst.id, state);
+  if (Array.isArray(mem.ramSeries) && Array.isArray(mem.vramSeries)) return mem;
+  const next = { ...mem };
+  if (!Array.isArray(mem.ramSeries) && state.ram.length >= 2) next.ramSeries = state.ram;
+  if (!Array.isArray(mem.vramSeries) && state.vram.length >= 2) next.vramSeries = state.vram;
+  return next;
+}
+
+function pruneSparkStore() {
+  for (const id of [...sparkStore.keys()]) {
+    if (!instances.some(i => i.id === id)) sparkStore.delete(id);
+  }
+}
+
+export function memUnitFormat(values) {
+  const vals = values.filter(v => Number.isFinite(v));
+  const unit = vals.length && Math.max(...vals) >= 1024 ? "GiB" : "MiB";
+  return { unit, fmt: v => (unit === "GiB" ? (v / 1024).toFixed(1) : String(Math.round(v))) };
+}
+
+export function memStatsLabel(row) {
+  const { unit, fmt } = memUnitFormat([row.peak, row.avg, row.idle]);
+  const parts = [`${t("instance.memStatPeak")} ${fmt(row.peak)}`, `${t("instance.memStatAvg")} ${fmt(row.avg)}`];
+  if (Number.isFinite(row.idle)) parts.push(`${t("instance.memStatIdle")} ${fmt(row.idle)}`);
+  return `${parts.join(" · ")} ${unit}`;
+}
+
+export function memAriaText(row) {
+  const base = row.kind === "vram" ? "instance.memAriaVram" : "instance.memAriaRam";
+  const { unit, fmt } = memUnitFormat([row.peak, row.avg, row.idle]);
+  const params = { cur: formatMiB(row.cur), peak: fmt(row.peak), avg: fmt(row.avg), unit };
+  return Number.isFinite(row.idle)
+    ? t(base + "Idle", { ...params, idle: fmt(row.idle) })
+    : t(base, params);
+}
+
+function memRowHtml(row) {
+  const key = row.kind === "vram" ? t("instance.memKeyVram") : t("instance.memKeyRam");
+    const valueTail = row.total
+    ? `<span class="of num">/ ${esc(formatMiB(row.total))}</span>`
+    : `<span class="of">${esc(t("instance.memNow"))}</span>`;
+  const aria = memAriaText(row);
+  return `<div class="mem-row">
+      <div class="mem-l"><span class="k">${esc(key)}</span><span class="v num">${esc(formatMiB(row.cur))}</span>${valueTail}${sparkHtml(row)}</div>
+      <div class="bar" role="meter" aria-label="${esc(aria)}" aria-valuetext="${esc(aria)}" aria-valuemin="0" aria-valuemax="${num1(row.scale)}" aria-valuenow="${num1(row.cur)}">
+        <div class="fill ${row.kind}${row.hot ? " hot" : ""}" data-w="${row.fillPct}"></div>
+        <div class="pk" data-l="${row.peakPct}" aria-hidden="true"></div>
+        <div class="avg" data-l="${row.avgPct}" aria-hidden="true"></div>
+        ${row.idlePct == null ? "" : `<div class="idle" data-l="${row.idlePct}" aria-hidden="true"></div>`}
+      </div>
+      <div class="stats3">${esc(memStatsLabel(row))}</div>
+    </div>`;
+}
+
+function sparkHtml(row) {
+  const pts = sparkPoints(row.series, SPARK_W, SPARK_H);
+  if (!pts) return "";
+  return `<svg class="spark ${esc(row.kind)}" width="${SPARK_W}" height="${SPARK_H}" viewBox="0 0 ${SPARK_W} ${SPARK_H}" aria-hidden="true" focusable="false"><polyline points="${pts}" fill="none" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
+export function memBlockHtml(mem) {
+  const ramp = memRowModel("ram", mem);
+  const vram = memRowModel("vram", mem);
+  const rows = [ramp, vram].filter(Boolean);
+  if (!rows.length) return "";
+  const tip = rows.map(memAriaText);
+  if (vram) {
+    tip.push(t("instance.memTipVram", {
+      cur: formatMiB(vram.cur), peak: formatMiB(vram.peak), avg: formatMiB(vram.avg),
+      source: t("instance.memSource." + (mem.vramSource || "none"))
+    }));
+  }
+  tip.push(t("instance.memTipMeta", {
+    n: mem.samples != null ? mem.samples : 0,
+    state: mem.busy ? t("instance.memBusy") : t("instance.memIdle")
+  }));
+  const legend = `<div class="mem-legend"><span><i class="pk"></i>${esc(t("instance.memStatPeak"))}</span><span><i class="avg"></i>${esc(t("instance.memStatAvg"))}</span>${hasIdle(rows) ? `<span><i class="id"></i>${esc(t("instance.memStatIdle"))}</span>` : ""}</div>`;
+  return `<div class="mem" title="${esc(tip.join("\n"))}">${rows.map(memRowHtml).join("")}${legend}</div>`;
+}
+
+function hasIdle(rows) {
+  return rows.some(r => Number.isFinite(r.idle));
+}
+
+export function applyMemBars(rootEl) {
+  if (!rootEl || typeof rootEl.querySelectorAll !== "function") return;
+  for (const el of rootEl.querySelectorAll("[data-w]")) {
+    const v = el.getAttribute("data-w");
+    if (v != null && v !== "") el.style.width = v + "%";
+  }
+  for (const el of rootEl.querySelectorAll("[data-l]")) {
+    const v = el.getAttribute("data-l");
+    if (v != null && v !== "") el.style.left = v + "%";
+  }
+}
+
 export const STATUS_CLASS = { STARTING: "starting", READY: "ready", ERROR: "error", STOPPED: "stopped" };
 export function statusText(s) {
   const v = t("instance.status." + s);
   return v === "instance.status." + s ? s : v;
 }
 
-// Unknown samples stay unknown; never infer VRAM from RAM or historical peaks.
-export function memoryMiB(value) {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? (value / 1048576).toFixed(1) + " MiB" : "—";
-}
 
 export const SUBMIT_BTNS = ["tts-submit", "asr-submit", "sep-submit", "music-submit", "other-submit"];
 export const SUBMIT_KEYS = { "tts-submit": "tts.submit", "asr-submit": "asr.submit", "sep-submit": "sep.submit", "music-submit": "music.submit", "other-submit": "other.submit" };
@@ -38,6 +252,7 @@ export function applyInstances(data) {
     const inst = instances.find(i => i.id === want);
     if (inst) { setPendingInstanceId(null); openInstanceDetail(inst); }
   }
+  pruneSparkStore();
   renderInstanceList();
   updateInstanceBar();
 }
@@ -68,8 +283,7 @@ export function renderInstanceList() {
   const list = $("instance-list");
   list.removeAttribute("aria-busy");
 
-  const order = { READY: 0, STARTING: 1 };
-  const sorted = [...instances].sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2));
+  const sorted = sortInstances(instances);
   list.innerHTML = "";
   if (instances.length === 0) {
     renderEmptyState(list, t("instance.empty"), {
@@ -91,16 +305,7 @@ export function renderInstanceList() {
     let html = `<div class="card-title">${esc(inst.instanceName || inst.modelId)} <span class="badge ${statusClass}">${esc(statusText(inst.status))}</span>${workingBadge}</div>
       <div class="card-family">${esc(modelName)} ｜ #${esc(inst.id)}</div>
       <div class="card-desc">${esc(inst.backend)}${inst.device != null ? ":" + esc(inst.device) : ""} ｜ ${esc(t("instance.port"))} ${esc(inst.port)}${inst.executableName ? " ｜ " + esc(inst.executableName) : ""}</div>`;
-    if (inst.memory && typeof inst.memory === "object") {
-      for (const [label, keys] of Object.entries({
-        RAM: ["ramBytes", "ramPeakBytes", "ramAvgBytes"],
-        VRAM: ["vramBytes", "vramPeakBytes", "vramAvgBytes"]
-      })) {
-        if (!keys.some(key => inst.memory[key] != null)) continue;
-        const readings = keys.map(key => memoryMiB(inst.memory[key]));
-        html += `<div class="card-desc">${esc(label)} · ${esc(t("instance.memoryLegend"))}: ${esc(readings.join(" / "))}</div>`;
-      }
-    }
+    html += memBlockHtml(withSparkSeries(inst));
     if (inst.status === "ERROR" && inst.errorMessage) {
       html += `<div class="error-text">${esc(inst.errorMessage)}</div>`;
     }
@@ -121,6 +326,7 @@ export function renderInstanceList() {
     }
     list.appendChild(card);
   }
+  applyMemBars(list);
 }
 
 export function updateInstanceBar() {
