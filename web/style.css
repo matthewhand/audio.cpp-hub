@@ -2259,3 +2259,53 @@ html.theme-switching header {
 .stats3, .mem-legend { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 10.5px; color: var(--text-dim); }
 .mem-legend { margin-top: 4px; font-size: 10px; }
 .mem-legend i { display: inline-block; width: 2px; height: 8px; margin-right: 4px; vertical-align: -1px; border-radius: 1px; }
+
+/* ---------- #178 header farm / hub status chip (#hub-chip) ----------
+   Farm summary from same-origin GET /api/farm/health when available, else this hub's
+   ready/total instances. Dot: all up green, partial amber, none red. */
+#hub-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+#hub-chip b { color: var(--text); font-weight: 600; }
+#hub-chip .chip-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
+}
+#hub-chip.warn .chip-dot {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 22%, transparent);
+}
+#hub-chip.err .chip-dot {
+  background: var(--err);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 22%, transparent);
+}
+#hub-chip .chip-sep { width: 1px; height: 12px; flex: none; background: var(--border); }
+#hub-chip .chip-failures { font-weight: 600; }
+#hub-chip.has-fail .chip-failures { color: var(--err); }
+/* 第三段：这台 hub 的标签（如 "studio-a"）。不进 aria-label（tooltip 已有），
+   视觉上比前两段更淡，避免抢「就绪台数」这个主信息。 */
+#hub-chip .chip-hub { color: var(--text-dim); font-weight: 500; }
+@media (max-width: 1100px) {
+  #hub-chip { height: 32px; padding: 0 9px; }
+  #hub-chip .chip-hub,
+  #hub-chip #hub-chip-hub-sep { display: none; }
+}
+@media (max-width: 1023px) {
+  #hub-chip { display: none; }
+}

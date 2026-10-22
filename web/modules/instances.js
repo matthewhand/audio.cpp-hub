@@ -255,6 +255,10 @@ export function applyInstances(data) {
   pruneSparkStore();
   renderInstanceList();
   updateInstanceBar();
+  // #178: tell the header farm/hub chip a fresh list arrived (a window event, not an import, to avoid a cycle).
+  if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+    window.dispatchEvent(new CustomEvent("hub-instances-updated", { detail: { instances } }));
+  }
 }
 
 export function onInstancesError(e) {

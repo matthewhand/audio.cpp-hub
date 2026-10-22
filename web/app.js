@@ -20,6 +20,7 @@
 import { FOCUSABLE_SEL, focusDialog, parseApiError, renderEmptyState, renderStateError, restoreDialogFocus, showToast, startEventsPolling, topmostOverlay } from "./modules/async-ui.js";
 import { closeCommandPalette } from "./modules/command-palette-lazy.js";
 import { $ } from "./modules/dom.js";
+import { renderHubChip, startHubChip } from "./modules/hub-chip.js";
 import { closeDownloadsModal, closeModelDlModal, relocalizeDownloads, startDownloadsPolling } from "./modules/downloads-lazy.js";
 import { cancelFileBrowser, relocalizeFileBrowser } from "./modules/file-browser-lazy.js";
 import { closeInstanceDetail, renderInstanceList, startInstancePolling, updateInstanceBar } from "./modules/instances.js";
@@ -58,6 +59,7 @@ function rerenderAll() {
   (window.__audioPickers || []).forEach(p => p.refreshLabels && p.refreshLabels());
   (window.__voiceSelects || []).forEach(v => v.refreshLabels && v.refreshLabels());
   relocalizeFileBrowser();
+  renderHubChip();
 }
 
 function closeTopmostOverlay() {
@@ -110,6 +112,7 @@ buildEmotionSliders();
 startInstancePolling();
 startEventsPolling();
 startDownloadsPolling();
+startHubChip();
 
 loadModels();
 loadExecutables();

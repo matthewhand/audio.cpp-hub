@@ -1,0 +1,199 @@
+/* 页头 chip 的纯显示模型。失败次数是 GET /api/stats totals.failed 的全量累计
+   （不是最近一小时）；统计还没到时 failed 为空，调用方不画那一截。 */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import vm from "node:vm";
+import { extractFunction, loadI18n, makeBrowserSandbox, readWeb } from "./helpers/vm.mjs";
+
+function load(lang) {
+  const browser = makeBrowserSandbox({
+    navigator: { language: lang === "en" ? "en-US" : "zh-CN" }
+  });
+  const I18N = loadI18n(browser);
+  I18N.setLang(lang);
+  const src = readWeb("modules/hub-chip.js");
+  const bundle = ["hubChipModel", "farmChipModel", "selectChip", "gpuHubLabel"]
+    .map((n) => extractFunction(src, n))
+    .join("\n");
+  const context = vm.createContext({ t: (k, p) => I18N.t(k, p), I18N });
+  return vm.runInContext(
+    `${bundle}\n({ hubChipModel, farmChipModel, selectChip, gpuHubLabel })`,
+    context
+  );
+}
+
+const en = load("en");
+const zh = load("zh");
+
+test("hubChipModel：en 就绪点颜色与失败复数", () => {
+  const all = en.hubChipModel({ total: 2, ready: 2, failed: 0 });
+  assert.equal(all.dot, "ok");
+  assert.equal(all.text, "Hub 2/2 ready");
+  assert.equal(all.failed, "0 failures");
+  assert.equal(all.failN, 0);
+  assert.match(all.aria, /Hub 2\/2 ready/);
+  assert.match(all.aria, /0 failures/);
+
+  const some = en.hubChipModel({ total: 2, ready: 1, failed: 1 });
+  assert.equal(some.dot, "warn");
+  assert.equal(some.failed, "1 failure");
+
+  const none = en.hubChipModel({ total: 2, ready: 0, failed: 3 });
+  assert.equal(none.dot, "err");
+  assert.equal(none.failed, "3 failures");
+
+  const unknown = en.hubChipModel({ total: 2, ready: 2, failed: null });
+  assert.equal(unknown.failed, "");
+  assert.equal(unknown.failN, null);
+  assert.equal(unknown.dot, "ok");
+});
+
+test("hubChipModel：zh 文案", () => {
+  const all = zh.hubChipModel({ total: 2, ready: 2, failed: 0 });
+  assert.equal(all.text, "Hub 2/2 就绪");
+  assert.equal(all.failed, "失败 0 次");
+  assert.equal(all.dot, "ok");
+  const none = zh.hubChipModel({ total: 1, ready: 0, failed: 2 });
+  assert.equal(none.dot, "err");
+  assert.equal(none.failed, "失败 2 次");
+  assert.match(none.aria, /失败 2 次/);
+});
+
+test("farm chip 第三段：这台 hub 的 GPU 名", () => {
+  const withLabel = en.farmChipModel({
+    hubsUp: 4,
+    hubsTotal: 4,
+    failures: 0,
+    hubLabel: "GTX 1080 hub"
+  });
+  assert.equal(withLabel.hub, "GTX 1080 hub");
+  assert.equal(withLabel.text, "Farm 4/4");
+  assert.equal(withLabel.failed, "0 failures");
+  assert.match(withLabel.tip, /hubs up \/ hubs total/);
+  assert.match(withLabel.tip, /this hub: GTX 1080 hub/);
+
+  const partial = en.farmChipModel({
+    hubsUp: 3,
+    hubsTotal: 4,
+    failures: 2,
+    hubLabel: "GTX 1080 hub"
+  });
+  assert.equal(partial.hub, "GTX 1080 hub");
+  assert.match(partial.tip, /2 failures/);
+  assert.match(partial.tip, /this hub: GTX 1080 hub/);
+
+  // 没有标签 → 第三段为空，tooltip 不添那句话
+  const none = en.farmChipModel({ hubsUp: 4, hubsTotal: 4, failures: 0 });
+  assert.equal(none.hub, "");
+  assert.doesNotMatch(none.tip, /this hub/);
+
+  // aria 只描述就绪台数与失败次数，不重复第三段（tooltip 已说明）
+  assert.doesNotMatch(withLabel.aria, /GTX/);
+});
+
+test("gpuHubLabel：从本机实例的 gpuName 推短标签", () => {
+  const label = en.gpuHubLabel([{ memory: { gpuName: "NVIDIA GeForce GTX 1080" } }]);
+  assert.equal(label, "GTX 1080 hub");
+  assert.equal(en.gpuHubLabel([{ memory: { gpuName: "RTX 4090" } }]), "RTX 4090 hub");
+  assert.equal(
+    en.gpuHubLabel([{ memory: { gpuName: "  nvidia geforce GTX 1660  " } }]),
+    "GTX 1660 hub"
+  );
+  assert.equal(
+    en.gpuHubLabel([{ memory: { gpuName: "NVIDIA" } }, { memory: { gpuName: "GeForce" } }]),
+    ""
+  );
+  assert.equal(
+    en.gpuHubLabel([
+      { memory: {} },
+      { memory: { gpuName: "GTX 1080" } },
+      { memory: { gpuName: "RTX 4090" } }
+    ]),
+    "GTX 1080 hub"
+  );
+  // 没有 memory / 空列表 / 非数组：一律省略
+  assert.equal(en.gpuHubLabel([{ id: "i1" }, { memory: { gpuName: 42 } }]), "");
+  assert.equal(en.gpuHubLabel([]), "");
+  assert.equal(en.gpuHubLabel(null), "");
+  assert.equal(
+    zh.gpuHubLabel([{ memory: { gpuName: "NVIDIA GeForce GTX 1080" } }]),
+    "GTX 1080 主机"
+  );
+});
+
+test("selectChip：服务端 hubLabel 优先，其次本机 GPU 名", () => {
+  const local = {
+    total: 2,
+    ready: 2,
+    failed: 0,
+    instances: [{ id: "i1", memory: { gpuName: "NVIDIA GeForce RTX 4090" } }]
+  };
+  const fromServer = en.selectChip(
+    { available: true, hubsUp: 4, hubsTotal: 4, failures: 0, hubLabel: "GTX 1080 hub" },
+    local
+  );
+  assert.equal(fromServer.source, "farm");
+  assert.equal(fromServer.model.hub, "GTX 1080 hub");
+
+  const derived = en.selectChip({ available: true, hubsUp: 4, hubsTotal: 4, failures: 0 }, local);
+  assert.equal(derived.model.hub, "RTX 4090 hub");
+
+  // 服务端给了空串（旧 hub 没有这个字段）也要能退回 GPU 名
+  const blank = en.selectChip(
+    { available: true, hubsUp: 1, hubsTotal: 1, failures: 0, hubLabel: "  " },
+    local
+  );
+  assert.equal(blank.model.hub, "RTX 4090 hub");
+
+  // 一台都没有 gpuName：第三段省略，chip 回到两段
+  const noGpu = en.selectChip(
+    { available: true, hubsUp: 1, hubsTotal: 1, failures: 0 },
+    { total: 1, ready: 1, failed: 0, instances: [{ id: "i1" }] }
+  );
+  assert.equal(noGpu.model.hub, "");
+
+  // 本机 chip 不画第三段
+  const hub = en.selectChip({ available: false }, local);
+  assert.equal(hub.source, "hub");
+  assert.equal(hub.model.hub, "");
+});
+
+test("farmChipModel / selectChip：农场可用走农场，否则退回本机", () => {
+  const ok = en.farmChipModel({ hubsUp: 4, hubsTotal: 4, failures: 0 });
+  assert.equal(ok.dot, "ok");
+  assert.equal(ok.text, "Farm 4/4");
+  assert.equal(ok.failed, "0 failures");
+
+  const partial = en.farmChipModel({ hubsUp: 3, hubsTotal: 4, failures: 1 });
+  assert.equal(partial.dot, "warn");
+  assert.equal(partial.text, "Farm 3/4");
+  assert.equal(partial.failed, "1 failure");
+
+  const down = en.farmChipModel({ hubsUp: 0, hubsTotal: 4, failures: 2 });
+  assert.equal(down.dot, "err");
+  assert.equal(down.failed, "2 failures");
+
+  const farm = en.selectChip(
+    { available: true, hubsUp: 3, hubsTotal: 4, failures: 1 },
+    { total: 2, ready: 2, failed: 0 }
+  );
+  assert.equal(farm.source, "farm");
+  assert.equal(farm.model.text, "Farm 3/4");
+
+  const local = en.selectChip({ available: false }, { total: 2, ready: 2, failed: 0 });
+  assert.equal(local.source, "hub");
+  assert.equal(local.model.text, "Hub 2/2 ready");
+
+  const zhFarm = zh.selectChip(
+    { available: true, hubsUp: 1, hubsTotal: 2, failures: 0 },
+    { total: 1, ready: 0, failed: 9 }
+  );
+  assert.equal(zhFarm.source, "farm");
+  assert.equal(zhFarm.model.text, "农场 1/2");
+  assert.equal(zhFarm.model.dot, "warn");
+  assert.equal(zhFarm.model.failed, "失败 0 次");
+
+  const zhLocal = zh.selectChip(null, { total: 1, ready: 0, failed: 2 });
+  assert.equal(zhLocal.source, "hub");
+  assert.equal(zhLocal.model.text, "Hub 0/1 就绪");
+});

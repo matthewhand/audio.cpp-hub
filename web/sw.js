@@ -62,6 +62,7 @@ const PRECACHE_URLS = [
   "/modules/instances.js",
   "/modules/downloads-lazy.js",
   "/modules/tasks.js",
+  "/modules/hub-chip.js",
   "/modules/diarization-lazy.js",
   "/modules/speaker-segments.js",
   "/modules/sidebar.js",

@@ -3,7 +3,7 @@
 > 由 `npm run ui:inventory` 从 `web/index.html` 与 `web/*.js`、`web/modules/*.js` 自动生成，请勿手改。
 > 漂移检查：`npm run ui:inventory:check`（CI 会跑）。
 
-来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/legacy-globals.js`、`web/modules/activity-queue.js`、`web/modules/async-ui.js`、`web/modules/command-palette-lazy.js`、`web/modules/command-palette.js`、`web/modules/diarization-lazy.js`、`web/modules/dom.js`、`web/modules/downloads-lazy.js`、`web/modules/downloads.js`、`web/modules/file-browser-lazy.js`、`web/modules/file-browser.js`、`web/modules/instances.js`、`web/modules/launch.js`、`web/modules/models.js`、`web/modules/panels.js`、`web/modules/readiness.js`、`web/modules/routing.js`、`web/modules/settings-lazy.js`、`web/modules/settings.js`、`web/modules/shell.js`、`web/modules/sidebar.js`、`web/modules/speaker-segments.js`、`web/modules/state.js`、`web/modules/stats-lazy.js`、`web/modules/stats.js`、`web/modules/tasks.js`、`web/modules/voices-panel-lazy.js`、`web/modules/voices-panel.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/wav.js`
+来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/legacy-globals.js`、`web/modules/activity-queue.js`、`web/modules/async-ui.js`、`web/modules/command-palette-lazy.js`、`web/modules/command-palette.js`、`web/modules/diarization-lazy.js`、`web/modules/dom.js`、`web/modules/downloads-lazy.js`、`web/modules/downloads.js`、`web/modules/file-browser-lazy.js`、`web/modules/file-browser.js`、`web/modules/hub-chip.js`、`web/modules/instances.js`、`web/modules/launch.js`、`web/modules/models.js`、`web/modules/panels.js`、`web/modules/readiness.js`、`web/modules/routing.js`、`web/modules/settings-lazy.js`、`web/modules/settings.js`、`web/modules/shell.js`、`web/modules/sidebar.js`、`web/modules/speaker-segments.js`、`web/modules/state.js`、`web/modules/stats-lazy.js`、`web/modules/stats.js`、`web/modules/tasks.js`、`web/modules/voices-panel-lazy.js`、`web/modules/voices-panel.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/wav.js`
 
 ## 面板地图
 
@@ -179,6 +179,7 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | DELETE | `/api/executables/{param}` | `web/modules/settings.js` |
 | PUT | `/api/executables/{param}` | `web/modules/launch.js` |
 | GET | `/api/executables/{param}/devices` | `web/modules/launch.js` |
+| GET | `/api/farm/health` | `web/modules/hub-chip.js` |
 | GET | `/api/fs/list` | `web/modules/file-browser.js` |
 | GET | `/api/fs/list?path={param}` | `web/modules/file-browser.js` |
 | POST | `/api/fs/mkdir` | `web/modules/file-browser.js` |
@@ -202,7 +203,7 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | POST | `/api/profiles` | `web/modules/launch.js` |
 | DELETE | `/api/profiles/{param}` | `web/modules/launch.js` |
 | PUT | `/api/profiles/{param}` | `web/modules/launch.js` |
-| GET | `/api/stats` | `web/modules/stats.js` |
+| GET | `/api/stats` | `web/modules/hub-chip.js`, `web/modules/stats.js` |
 | GET | `/api/tasks` | `web/modules/activity-queue.js` |
 | POST | `/api/tasks` | `web/modules/tasks.js` |
 | GET | `/api/tasks?modelId={param}` | `web/modules/tasks.js` |

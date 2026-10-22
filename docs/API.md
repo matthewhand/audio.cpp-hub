@@ -2,7 +2,7 @@
 
 audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README.md`](../README.md) 配置章节）。所有接口**无鉴权**，仅适用于本机 / 局域网，详见 [`SECURITY.md`](../SECURITY.md)。
 
-本文以 `api.go` 中注册的路由为准（`registerRoutes` 的 `apiRoute` 表共 49 条；另有 `/v1/*` 代理与 `web/` 静态服务）。响应约定：
+本文以 `api.go` 中注册的路由为准（`registerRoutes` 的 `apiRoute` 表共 52 条；另有 `/v1/*` 代理与 `web/` 静态服务）。响应约定：
 
 - 绝大多数 `GET` / 增删改接口直接返回对象或数组（JSON）
 - 部分删除 / 更新接口返回包装体 `{"ok": true, "data": {...}}`
@@ -25,6 +25,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 | POST | `/api/instances` | 启动实例 |
 | DELETE | `/api/instances/{id}` | 停止实例 |
 | GET | `/api/events` | 实例事件日志 |
+| GET | `/api/farm/health` | 同域农场摘要（hub 去拉配置里的 fan-out URL；浏览器不跨源） |
 | GET | `/api/stats` | 用量与性能统计（按模型聚合） |
 | GET | `/api/executables` | 可执行文件列表 |
 | POST | `/api/executables` | 添加可执行文件 |
@@ -130,6 +131,33 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 ### `GET /api/events`
 
 实例事件数组，元素为 `{"time","level","message"}`。
+
+### `GET /api/farm/health`
+
+同域的农场摘要。浏览器只打这条（CSP `connect-src 'self'`），hub 自己去拉 fan-out 的 `GET /farm/health`。
+
+URL 来自进程环境变量 `AUDIOCPP_HUB_FANOUT_URL`。未设置时用 `http://127.0.0.1:18082/farm/health`。设成空字符串（或只有空白）则关闭探测。这个 URL 是进程配置，**不读请求里的 query / header / body**，所以不是 SSRF 入口。
+
+服务端超时 1.5 秒，成功和失败都缓存约 5 秒，并发请求共用一次在途拉取（single-flight）。不跟随重定向。正文超过 1 MiB 视为无效。
+
+始终 `200`。fan-out 给出可用摘要时：
+
+```json
+{"available":true,"hubsUp":3,"hubsTotal":4,"failures":1,"checkedAt":"2026-10-10T00:00:00Z","inFlightCap":2}
+```
+
+- `hubsUp` / `hubsTotal` 来自 fan-out 正文里的同名字段（必须都在，且 `0 <= hubsUp <= hubsTotal`）
+- `failures` 是 `hubs[].failures` 之和（`hubs` 可以没有；有但不是数组则整段无效）。`0` 也写出来
+- `checkedAt` 优先用 fan-out 的 `updatedAt`（非空字符串），否则是 hub 这次检查的 UTC 时间
+- `inFlightCap` **可选**：fan-out 的 `MaxInFlightPerTarget` 逐字透传。没有这个键表示 fan-out 没报（旧版本或单机部署），客户端回落到自己的默认值，**不会**把「缺字段」读成「额度为 0」；上报 `0` 则照实写 `0`。存在但不是 `0 <= n <= 1e9` 的整数时整份摘要无效（同 `hubs[].failures` 的规则）。WebUI 目前不使用此字段
+- `hubLabel` **可选**：fan-out 的 `hubs[]` 里，`instances` 含有本 hub 自己某个实例 id 的那一项的 `label`（WebUI chip 用它标出「正在看的这台」）。匹配不到就省略
+- fan-out 的 `ok` 若出现必须是布尔，但不决定 `available`。`available: true` 只表示「拿到了一份能用的摘要」
+
+连不上、非 200、正文不是这份形状时，同样 `200`，正文只有：
+
+```json
+{"available":false}
+```
 
 ### `GET /api/stats`
 
@@ -486,6 +514,7 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 | `GET /api/models` | `web/modules/models.js:27`（`Api.list`） |
 | `GET /api/instances` | `web/modules/instances.js:49` 首屏加载 + `web/modules/instances.js:57` 2s 轮询 |
 | `GET /api/events` | `web/modules/async-ui.js:189`（`startEventsPolling`）2s 轮询（失败静默） |
+| `GET /api/farm/health` | `web/modules/hub-chip.js`（约 5s 轮询；不可用时 chip 退回本机实例计数） |
 | `GET /api/stats` | `web/modules/stats.js:46`（`loadStats`）打开 `#/stats` 时按需拉取，非轮询 |
 | `GET /api/downloads` | `web/modules/downloads-lazy.js:60` 首屏加载 + `web/modules/downloads-lazy.js:65` 2s 轮询 |
 | `POST /api/tasks` | `web/modules/tasks.js:27` |

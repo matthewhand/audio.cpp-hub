@@ -34,6 +34,7 @@
   <link rel="modulepreload" href="/modules/instances.js">
   <link rel="modulepreload" href="/modules/downloads-lazy.js">
   <link rel="modulepreload" href="/modules/tasks.js">
+  <link rel="modulepreload" href="/modules/hub-chip.js">
   <link rel="modulepreload" href="/modules/sidebar.js">
   <link rel="modulepreload" href="/modules/stats-lazy.js">
   <link rel="modulepreload" href="/modules/voices-panel-lazy.js">
@@ -61,6 +62,9 @@
       <span class="subtitle" data-i18n="header.subtitle">audiocpp_server 进程管理 &amp; 音频工作台</span>
     </div>
     <div class="header-actions">
+      <span id="hub-chip" class="chip hidden" role="status" aria-label="hub status">
+        <i id="hub-chip-dot" class="chip-dot ok" aria-hidden="true"></i><b id="hub-chip-text"></b><i id="hub-chip-sep" class="chip-sep hidden" aria-hidden="true"></i><span id="hub-chip-failures" class="chip-failures"></span><i id="hub-chip-hub-sep" class="chip-sep hidden" aria-hidden="true"></i><span id="hub-chip-hub" class="chip-hub"></span>
+      </span>
       <button id="voices-btn" class="theme-btn" data-i18n-title="voices.title" data-i18n-aria-label="voices.title" title="音色库" aria-label="音色库"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-mic-vocal"/></svg></button>
       <button id="history-btn" class="theme-btn" data-i18n-title="history.title" data-i18n-aria-label="history.title" title="操作历史" aria-label="操作历史"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-history"/></svg></button>
       <button id="downloads-btn" class="theme-btn" data-i18n-title="dl.managerTitle" data-i18n-aria-label="dl.managerTitle" title="下载管理" aria-label="下载管理"><svg width="18" height="18" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-download"/></svg><span id="dl-badge" class="dl-badge hidden">0</span></button>

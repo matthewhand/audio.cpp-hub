@@ -47,6 +47,9 @@ export class MockBackend {
     this.autoCompleteTasks = opts.autoCompleteTasks !== false;
     this.seq = 1;
     this.requests = [];
+    /* #178: farm summary for GET /api/farm/health; default unavailable, so the header
+       chip falls back to this hub's instance counts. */
+    this.farm = opts.farm || { available: false };
   }
 
   nextId() {
@@ -207,6 +210,7 @@ export class MockBackend {
 
     // ---------- 事件 / 证书 ----------
     if (method === "GET" && p === "/api/events") return this.json(route, this.events);
+    if (method === "GET" && p === "/api/farm/health") return this.json(route, this.farm);
     // 用量与性能看板（#74 起懒加载，这里提供两个模型的样本以覆盖多卡片渲染）
     if (method === "GET" && p === "/api/stats") {
       return this.json(route, {
