@@ -36,10 +36,14 @@ The rights-clear v2 identifier and WAV-relative-path schema patterns use strict
 end-of-input checks across Python and JavaScript, rejecting trailing newlines.
 The public-attribution rule rejects blank, whitespace-only, and enumerated
 invisible-only strings (including soft hyphens, combining joiners, variation
-selectors, Hangul fillers, and Unicode tag characters) while retaining
-international names. This is an explicit denylist, not proof against every
-possible invisible Unicode string. Python and both default/Unicode-mode
-JavaScript regexes are exercised by the cross-engine synthetic intake tests.
+selectors, Hangul fillers, Unicode tag characters, and supplementary-plane
+Egyptian, shorthand, and musical formatting controls) while retaining valid
+international names and supplementary-plane characters. Lone UTF-16 surrogate
+code units are invalid, including when mixed with visible characters; actual
+valid supplementary characters remain accepted in both JavaScript modes.
+This is an explicit denylist, not proof against every possible invisible
+Unicode string. Python and both default/Unicode-mode JavaScript regexes are
+exercised by the cross-engine synthetic intake tests.
 
 The four Python commands above are wired into the existing CI quality workflow
 for future authorised integration; **no hosted CI was run or authorised for

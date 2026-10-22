@@ -422,14 +422,28 @@ class IntakeOnlyValidation(unittest.TestCase):
     def test_invisible_only_attribution_rejected_in_full_preflight(self):
         for hidden in ("\u00ad", "\u034f", "\ufe0f",
                        "\U000E0001", "\U000E0020",
-                       "\U000E0100", "\u2800"):
+                       "\U000E0100", "\u2800",
+                       "\U00013430", "\U0001343F",
+                       "\U0001BCA0", "\U0001BCA3",
+                       "\U0001D173", "\U0001D17A",
+                       "\ud800", "\udb40", "\udc00", "\udfff"):
             with self.subTest(hidden=repr(hidden)):
                 self.data["rights"]["public_attribution"] = hidden * 3
                 with self.assertRaisesRegex(intake.IntakeError, "invalid format"):
                     self.validate()
+        # Mixed visible text must not conceal a malformed surrogate.
+        for broken in ("Jane\ud800 Doe", "\udc00 Jane", "Jane\udfff",
+                       "\U00020BB7\u91ce\udb40"):
+            with self.subTest(broken=repr(broken)):
+                self.data["rights"]["public_attribution"] = broken
+                with self.assertRaisesRegex(intake.IntakeError, "invalid format"):
+                    self.validate()
         for visible in ("Jos\u00e9 Garc\u00eda",
                         "\u5c71\u7530\u592a\u90ce",
-                        "\U00020BB7\u91ce\u82b1"):
+                        "\U00020BB7\u91ce\u82b1",
+                        "\U00013400\U00020BB7\U00013401",
+                        "\U0001D11E Music",
+                        "\U00020BB7\u00ad\u91ce"):
             with self.subTest(visible=repr(visible)):
                 self.data["rights"]["public_attribution"] = visible
                 self.assertEqual(self.validate()["sources_checked"], 4)
@@ -467,20 +481,33 @@ class IntakeOnlyValidation(unittest.TestCase):
                     "\u200f", "\u2028", "\u2029", "\u202f", "\u205f",
                     "\u2060", "\u3000", "\u001c", "\x00",
                 )]
-                # Invisible-only text must not satisfy rights attribution.
+                # Excluded invisible supplementary formatting controls and
+                # isolated UTF-16 surrogates must not count as attribution.
                 cases += [(x * 3, False) for x in (
                     "\u00ad", "\u034f", "\ufe0f", "\u115f", "\u1160",
                     "\u3164", "\uffa0", "\U000E0001", "\U000E0020",
                     "\U000E007F", "\U000E007E",
                     "\U000E0100", "\U000E01EF", "\u2800",
+                    "\U00013430", "\U0001343F",
+                    "\U0001BCA0", "\U0001BCA3",
+                    "\U0001D173", "\U0001D17A",
+                    "\ud800", "\udb40", "\udc00", "\udfff",
                 )]
                 cases += [("  \u00ad  \u034f", False),
-                          ("  \u00ad\U000E0001\ufe0f\u034f", False)]
+                          ("  \u00ad\U000E0001\ufe0f\u034f", False),
+                          ("\U00013430\U0001BCA0\U0001D173", False),
+                          ("\ud800Jane Doe", False),
+                          ("Jane\udfff Doe", False),
+                          ("\U00020BB7\u91ce\udb40", False)]
                 cases += [(x, True) for x in (
                     "Jos\u00e9 \u00ad Garc\u00eda",
                     "Jane \U000E0001 Doe",
                     "\u5409\u91ce\u82b1", "\U00020BB7\u91ce\u82b1",
                     "\u0928\u093e\u092e", "\u0623\u062d\u0645\u062f",
+                    "\U00013400\U00020BB7\U00013401",
+                    "\U0001D11E Music",
+                    "\U00020BB7\u00ad\u91ce",
+                    "\U00013430\U00020BB7\u91ce",
                 )]
                 cases += [("AB", False)]
             else:
