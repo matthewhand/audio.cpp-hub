@@ -2101,8 +2101,8 @@
     "hfUrl": "https://huggingface.co/hexgrad/Kokoro-82M",
     "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Kokoro-82M-GGUF",
     "displayName": "Kokoro 82M",
-    "description": "Kokoro 82M 多语言语音合成：内置 54 个预置音色（不支持参考音频克隆），共享 eSpeak-ng 音素化，轻量快速。",
-    "descriptionEn": "Kokoro 82M multilingual speech synthesis with 54 built-in preset voices (no reference-audio cloning), shared eSpeak-ng phonemization, small and fast.",
+    "description": "Kokoro 82M 多语言语音合成：内置 54 个预置音色（不支持参考音频克隆），共享 eSpeak-ng 音素化，轻量快速。日语音色需要内嵌 UniDic 资源的 GGUF（发行版 GGUF 不含）。",
+    "descriptionEn": "Kokoro 82M multilingual speech synthesis with 54 built-in preset voices (no reference-audio cloning), shared eSpeak-ng phonemization, small and fast. Japanese voices need a GGUF exported with embedded UniDic resources (not in the release GGUF).",
     "category": "tts",
     "serverTask": "tts",
     "modes": [
