@@ -6,6 +6,7 @@
 
 ### Added
 
+- Kokoro 82M（引擎 family `kokoro_tts`）：`models.json` 新增模型卡（54 个内置预置音色的 `voice_id` 枚举、`speed`，不支持参考音频克隆），`model-packages.json` 新增 `audio-cpp/audio.cpp-gguf` 下载包（默认 Q8_0，另列 BF16）；需要含 `kokoro_tts` 的较新引擎（2026-09 之前的构建不含），并要求主机有 eSpeak-ng 共享库（引擎运行时 dlopen）
 - Fish Audio Drama 3（引擎 family `fish_drama3`）：`models.json` 新增模型卡（`<|speaker:N|>` 说话人标签、`[laughs]`/`<whisper>` 等舞台提示，paramSchema 含 `max_tokens`/`seed`/`temperature`/`top_p`/`top_k`/`references`/`reference_text`），`model-packages.json` 新增 `Jmica/Drama-3-GGUF` 下载包（默认 Q4_K_S experts / Q8_0 backbone，另列 Q3_K_S、Q2_K 与 4-bit backbone）；建议以 `sessionOptions` 传 `fish_drama3.disk_experts=true`
 - `hub.config.json` 新增 `proxyResponseHeaderTimeoutMs`（默认 `60000`）：`/v1/*` 代理等待实例返回响应头的上限，慢模型（懒加载 + 离线生成）可调大，例如 `600000`
 - `POST /api/instances` 新增可选字段 `minFreeMemoryMb`，写入 server.json 顶层 `min_free_memory_mb`（引擎加载守卫：加载后主机与 GPU 都须保留该 MiB 数，否则拒绝加载），`GET /api/instances` 同步回显

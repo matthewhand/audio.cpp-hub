@@ -531,7 +531,9 @@
     "category": "asr",
     "serverTask": "diar",
     "diarizationOnly": true,
-    "modes": ["offline"],
+    "modes": [
+      "offline"
+    ],
     "inputs": {
       "text": "none",
       "audio": "required",
@@ -2090,6 +2092,109 @@
         "step": 1,
         "label": "随机种子",
         "labelEn": "Seed"
+      }
+    }
+  },
+  {
+    "id": "kokoro_tts",
+    "family": "kokoro_tts",
+    "hfUrl": "https://huggingface.co/hexgrad/Kokoro-82M",
+    "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Kokoro-82M-GGUF",
+    "displayName": "Kokoro 82M",
+    "description": "Kokoro 82M 多语言语音合成：内置 54 个预置音色（不支持参考音频克隆），共享 eSpeak-ng 音素化，轻量快速。",
+    "descriptionEn": "Kokoro 82M multilingual speech synthesis with 54 built-in preset voices (no reference-audio cloning), shared eSpeak-ng phonemization, small and fast.",
+    "category": "tts",
+    "serverTask": "tts",
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "none"
+    },
+    "outputType": "audio",
+    "language": {
+      "values": [
+        "en-us",
+        "en-gb",
+        "es",
+        "fr-fr",
+        "hi",
+        "it",
+        "ja",
+        "pt-br",
+        "zh"
+      ],
+      "default": "en-us"
+    },
+    "paramSchema": {
+      "voice_id": {
+        "type": "enum",
+        "values": [
+          "af_alloy",
+          "af_aoede",
+          "af_bella",
+          "af_heart",
+          "af_jessica",
+          "af_kore",
+          "af_nicole",
+          "af_nova",
+          "af_river",
+          "af_sarah",
+          "af_sky",
+          "am_adam",
+          "am_echo",
+          "am_eric",
+          "am_fenrir",
+          "am_liam",
+          "am_michael",
+          "am_onyx",
+          "am_puck",
+          "am_santa",
+          "bf_alice",
+          "bf_emma",
+          "bf_isabella",
+          "bf_lily",
+          "bm_daniel",
+          "bm_fable",
+          "bm_george",
+          "bm_lewis",
+          "ef_dora",
+          "em_alex",
+          "em_santa",
+          "ff_siwis",
+          "hf_alpha",
+          "hf_beta",
+          "hm_omega",
+          "hm_psi",
+          "if_sara",
+          "im_nicola",
+          "jf_alpha",
+          "jf_gongitsune",
+          "jf_nezumi",
+          "jf_tebukuro",
+          "jm_kumo",
+          "pf_dora",
+          "pm_alex",
+          "pm_santa",
+          "zf_xiaobei",
+          "zf_xiaoni",
+          "zf_xiaoxiao",
+          "zf_xiaoyi",
+          "zm_yunjian",
+          "zm_yunxi",
+          "zm_yunxia",
+          "zm_yunyang"
+        ],
+        "default": "af_heart"
+      },
+      "speed": {
+        "type": "number",
+        "default": 1.0,
+        "min": 0.5,
+        "max": 2.0,
+        "step": 0.05
       }
     }
   }
