@@ -41,3 +41,9 @@
 - If candidate fails before cutover, stop only candidate service and leave 9093, :18080, Breeze and Sanotts untouched.
 - If TalkingHead acceptance fails after its endpoint update, restore only those two original config files via an owner-approved supported path, verify checksums, and keep 9093 online.
 - No 9093 Docker/container/image/source deletion before separate acceptance and explicit approval.
+
+## Effective TalkingHead state verified after implementation
+- settings.load_config on the existing GTX user directory returns tts.active=kokoro and tts.fallback=kokoro; the explicit saved user selection takes precedence over the .env F5 primary.
+- In-memory simulation of the future endpoint change to the Kokoro provider and 9093-specific extra endpoints yields loopback candidate first, three unchanged remote endpoints, then Piper. No live config was edited.
+- Client application-level F5-failure routing and a live sustained soak are **not yet proven**, and need explicit cutover acceptance.
+- Live endpoint files are private 0600 and contain secrets; make verified restricted snapshots immediately before an approved change and never expose their contents in evidence.
