@@ -38,6 +38,7 @@ https://huggingface.co/audio-cpp/audio.cpp-gguf
 | Nemotron 3.5 ASR | `Nemotron-3.5-ASR-Streaming-0.6B-GGUF/` |
 | OmniVoice | `OmniVoice-GGUF/` |
 | PocketTTS | `PocketTTS-GGUF/`（含多语言子目录） |
+| Kokoro 82M | `Kokoro-82M-GGUF/` |
 | Qwen3-ASR | `Qwen3-ASR-*-GGUF/` |
 | Qwen3 ForcedAligner | `Qwen3-ForcedAligner-0.6B-GGUF/` |
 | Qwen3-TTS | `Qwen3-TTS-12Hz-*-GGUF/` |
@@ -180,6 +181,9 @@ https://huggingface.co/phuocnguyen90/VieNeu-TTS-v3-Turbo-GGUF
 
 ### Stable Audio 3 Small Music（需授权 gated）
 - `https://huggingface.co/stabilityai/stable-audio-3-small-music`
+
+### Kokoro 82M
+- `https://huggingface.co/hexgrad/Kokoro-82M`
 
 ### Stable Audio 3 Small SFX（需授权 gated）
 - `https://huggingface.co/stabilityai/stable-audio-3-small-sfx`
