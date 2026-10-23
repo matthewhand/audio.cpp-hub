@@ -280,8 +280,19 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 		v1Error(w, http.StatusInternalServerError, "Failed to read cached request body")
 		return
 	}
+	rewritten, encodeMP3, mp3Err := prepareKokoroMP3(r, inst, bodyPath, bodyLen)
+	if mp3Err != nil {
+		body.Close()
+		v1Error(w, http.StatusBadRequest, "Invalid Kokoro MP3 request")
+		return
+	}
+	var forwardedBody io.Reader = body
+	if encodeMP3 {
+		forwardedBody = bytes.NewReader(rewritten)
+		bodyLen = int64(len(rewritten))
+	}
 	upstreamURL := fmt.Sprintf("http://127.0.0.1:%d%s", inst.Port, r.URL.RequestURI())
-	req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, body)
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, forwardedBody)
 	if err != nil {
 		body.Close()
 		v1Error(w, http.StatusInternalServerError, "Proxy internal error")
@@ -307,6 +318,10 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 	defer resp.Body.Close()
 	// ming3_audio ASR: strip the leading "<Language>\t" and return it as "language" (#190).
 	rewriteV1ASRResponse(r.URL.Path, inst, resp)
+	if encodeMP3 {
+		h.sendKokoroMP3(w, r, resp, inst, bodyPath)
+		return
+	}
 
 	// 回写非逐跳响应头（X-Request-Id/Retry-After/限流头等），Content-Length 按实际值设置
 	copyNonHopHeaders(w.Header(), resp.Header)
