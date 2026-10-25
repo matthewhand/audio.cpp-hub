@@ -49,7 +49,8 @@ func (f *fakeStartJSONHub) handler() http.Handler {
 				if st == "STARTING" {
 					f.polls[name]++
 					if f.polls[name] > 1 {
-						f.status[name] = "READY"
+						st = "READY"
+						f.status[name] = st
 					}
 				}
 				list = append(list, map[string]string{"instanceName": name, "status": st})
@@ -69,6 +70,9 @@ func (f *fakeStartJSONHub) postCount() int {
 func (f *fakeStartJSONHub) post(i int) string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if i < 0 || i >= len(f.posts) {
+		return ""
+	}
 	return string(f.posts[i])
 }
 
@@ -94,8 +98,11 @@ func runStartJSONInstance(t *testing.T, payload, hubURL string) (int, string) {
 func writeStartJSONPayload(t *testing.T, dir, name, weights string) string {
 	t.Helper()
 	path := filepath.Join(dir, name+".json")
-	body := `{"modelId":"m","name":"` + name + `","weightsPath":"` + weights + `","idleUnloadMs":180000}`
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+	body, err := json.Marshal(map[string]any{"modelId": "m", "name": name, "weightsPath": weights, "idleUnloadMs": 180000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, body, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return path

@@ -23,5 +23,15 @@ log "$NAME: starting from $PAYLOAD"
 if ! curl -fsS -m30 -X POST "$HUB_URL/api/instances" -H 'Content-Type: application/json' --data-binary "@$PAYLOAD" >/dev/null; then
   log "$NAME: POST /api/instances failed"; exit 1
 fi
-for _ in $(seq "$WAIT"); do s="$(st)"; [ "$s" = READY ] && { log "$NAME: READY"; exit 0; }; case "$s" in ERROR|FAILED|STOPPED|"") break;; esac; sleep 1; done
+s=""
+for _ in $(seq "$WAIT"); do
+  # A failed poll (hub briefly unreachable) is retried; only an answered poll can end the wait early.
+  if s="$(st)"; then
+    [ "$s" = READY ] && { log "$NAME: READY"; exit 0; }
+    case "$s" in ERROR|FAILED|STOPPED|"") break;; esac
+  else
+    s="unreachable"
+  fi
+  sleep 1
+done
 log "$NAME: not READY (status ${s:-gone})"; exit 1
