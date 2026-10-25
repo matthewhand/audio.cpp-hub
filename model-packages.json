@@ -3074,5 +3074,85 @@
         ]
       }
     ]
+  },
+  "ming3_tts": {
+    "displayName": "Ming 3.0 TTS 0.5B",
+    "category": "tts",
+    "status": "community",
+    "packages": [
+      {
+        "id": "ming3_tts_q8_0",
+        "displayName": "Ming 3.0 TTS 0.5B Q8_0 GGUF ~1.7 GB",
+        "format": "gguf",
+        "precision": "q8_0",
+        "default": true,
+        "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-TTS-0.5B-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-tts-0.5b-q8_0.gguf",
+            "local": "ming-3.0-tts-0.5b-q8_0.gguf"
+          }
+        ]
+      },
+      {
+        "id": "ming3_tts_bf16",
+        "displayName": "Ming 3.0 TTS 0.5B BF16 GGUF ~3.0 GB",
+        "format": "gguf",
+        "precision": "bf16",
+        "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-TTS-0.5B-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-tts-0.5b-bf16.gguf",
+            "local": "ming-3.0-tts-0.5b-bf16.gguf"
+          }
+        ]
+      }
+    ]
+  },
+  "ming3_tts_voicedesign": {
+    "displayName": "Ming 3.0 TTS 0.5B",
+    "category": "tts",
+    "status": "community",
+    "packages": [
+      {
+        "id": "ming3_tts_voicedesign_q8_0",
+        "displayName": "Ming 3.0 TTS 0.5B Q8_0 GGUF ~1.7 GB",
+        "format": "gguf",
+        "precision": "q8_0",
+        "default": true,
+        "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-TTS-0.5B-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-tts-0.5b-q8_0.gguf",
+            "local": "ming-3.0-tts-0.5b-q8_0.gguf"
+          }
+        ]
+      },
+      {
+        "id": "ming3_tts_voicedesign_bf16",
+        "displayName": "Ming 3.0 TTS 0.5B BF16 GGUF ~3.0 GB",
+        "format": "gguf",
+        "precision": "bf16",
+        "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-TTS-0.5B-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-tts-0.5b-bf16.gguf",
+            "local": "ming-3.0-tts-0.5b-bf16.gguf"
+          }
+        ]
+      }
+    ]
   }
 }
