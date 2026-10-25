@@ -275,6 +275,8 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 		return
 	}
 	defer resp.Body.Close()
+	// ming3_audio ASR: strip the leading "<Language>\t" and return it as "language" (#190).
+	rewriteV1ASRResponse(r.URL.Path, inst, resp)
 
 	// 回写非逐跳响应头（X-Request-Id/Retry-After/限流头等），Content-Length 按实际值设置
 	copyNonHopHeaders(w.Header(), resp.Header)
