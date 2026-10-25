@@ -26,6 +26,7 @@ type Instance struct {
 	Name         string // 服务名（instanceName）：/v1/* 路由键，写进 server.json 的 model id
 	ModelID      string
 	ServerTask   string // 引擎任务类型（tts/asr/...），来自模型注册表 serverTask
+	EngineFamily string // engine family (server.json model.family), e.g. ming3_audio
 	WeightsPath  string
 	Port         int
 	Backend      string
@@ -248,6 +249,7 @@ func (m *InstanceManager) Start(p StartParams) (*Instance, error) {
 		ID:              id,
 		Name:            name,
 		ModelID:         p.ModelID,
+		EngineFamily:    p.EngineFamily,
 		ServerTask:      p.ServerTask,
 		WeightsPath:     p.WeightsPath,
 		Port:            port,
