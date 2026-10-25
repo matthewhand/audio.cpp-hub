@@ -88,11 +88,15 @@ def write_safetensors(path: Path, tensors: dict, metadata: dict | None = None) -
     blob = json.dumps(header, separators=(",", ":")).encode()
     blob += b" " * ((8 - (8 + len(blob)) % 8) % 8)
     tmp = path.with_suffix(path.suffix + ".part")
-    with open(tmp, "wb") as f:
-        f.write(struct.pack("<Q", len(blob)))
-        f.write(blob)
-        for name in sorted(tensors):
-            f.write(tensors[name].astype("<f4", copy=False).tobytes())
+    try:
+        with open(tmp, "wb") as f:
+            f.write(struct.pack("<Q", len(blob)))
+            f.write(blob)
+            for name in sorted(tensors):
+                f.write(tensors[name].astype("<f4", copy=False).tobytes())
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     tmp.replace(path)
 
 
@@ -126,7 +130,12 @@ def gguf_command(tool: Path, staged: Path, output: Path, qtype: str, model_spec:
 
 
 def load_bark(bark_dir: Path):
-    spec = importlib.util.spec_from_file_location("bark_loader", Path(bark_dir) / "bark_loader.py")
+    loader = Path(bark_dir) / "bark_loader.py"
+    if not loader.is_file():
+        raise FileNotFoundError(f"bark_loader.py not found in {bark_dir}")
+    spec = importlib.util.spec_from_file_location("bark_loader", loader)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {loader}")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod.load_state_dict(str(Path(bark_dir) / "model.bark"), as_numpy=True)

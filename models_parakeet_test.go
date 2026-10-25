@@ -37,6 +37,9 @@ func TestUnderdogBark3Card(t *testing.T) {
 func assertASRCard(t *testing.T, id, family string, wantModes []any) {
 	t.Helper()
 	model := findModel(id)
+	if model == nil {
+		t.Fatalf("%s model is not registered", id)
+	}
 	for key, want := range map[string]string{"family": family, "serverTask": "asr", "category": "asr", "outputType": "text"} {
 		if got, _ := model[key].(string); got != want {
 			t.Errorf("%s.%s = %q; want %q", id, key, got, want)

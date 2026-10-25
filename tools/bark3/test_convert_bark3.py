@@ -147,5 +147,23 @@ class GgufCommand(unittest.TestCase):
             cb.gguf_command(Path("g"), Path("s"), Path("o"), "q3_xs", None)
 
 
+class FailureCleanup(unittest.TestCase):
+    def test_failed_write_leaves_no_partial_file(self):
+        class Boom(np.ndarray):
+            def astype(self, *a, **k):
+                raise OSError("disk full")
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "model.safetensors"
+            t = np.zeros((2,), np.float32).view(Boom)
+            with self.assertRaises(OSError):
+                cb.write_safetensors(out, {"w": t})
+            self.assertEqual(list(Path(d).iterdir()), [])
+
+    def test_missing_loader_is_a_clear_error(self):
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaisesRegex(FileNotFoundError, "bark_loader.py"):
+                cb.load_bark(Path(d))
+
+
 if __name__ == "__main__":
     unittest.main()
