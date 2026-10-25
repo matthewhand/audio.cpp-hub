@@ -2465,5 +2465,69 @@
         "labelEn": "Voice description"
       }
     }
+  },
+  {
+    "id": "parakeet_tdt",
+    "family": "parakeet_tdt",
+    "hfUrl": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Parakeet-TDT-0.6B-v3-GGUF",
+    "displayName": "Parakeet-TDT 0.6B v3",
+    "description": "NVIDIA Parakeet-TDT 0.6B v3 语音识别（CC-BY-4.0），25 种欧洲语言自动识别，带词级时间戳；支持离线与缓冲流式。长音频可在实例高级选项加会话选项 parakeet_tdt.offline_mode=long_form（有界窗口）。",
+    "descriptionEn": "NVIDIA Parakeet-TDT 0.6B v3 speech recognition (CC-BY-4.0): 25 European languages with automatic detection and word timestamps; offline and buffered streaming. For long recordings add the session option parakeet_tdt.offline_mode=long_form (bounded windows) in the instance's advanced options.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline",
+      "streaming"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "language": {
+      "values": [
+        "auto"
+      ],
+      "default": "auto"
+    },
+    "backends": [
+      "cpu",
+      "cuda",
+      "vulkan"
+    ],
+    "paramSchema": {}
+  },
+  {
+    "id": "underdog_bark3",
+    "family": "parakeet_tdt",
+    "hfUrl": "https://huggingface.co/ConwayResearch/Underdog-Bark-3.0",
+    "displayName": "Underdog Bark 3.0 (English ASR)",
+    "description": "ConwayResearch Underdog Bark 3.0（CC-BY-4.0）：Parakeet-TDT 0.6B v3 的英文微调版。官方只发布 model.bark 格式，没有托管 GGUF：请用仓库内 tools/bark3 转换器生成 parakeet_tdt GGUF（q8_0 约 0.9 GB），放入模型目录后在此卡片选择。仅离线（已验证）。长音频可在实例高级选项加会话选项 parakeet_tdt.offline_mode=long_form（有界窗口）。",
+    "descriptionEn": "ConwayResearch Underdog Bark 3.0 (CC-BY-4.0): an English fine-tune of Parakeet-TDT 0.6B v3. Upstream ships only a model.bark file and no hosted GGUF: build a parakeet_tdt GGUF (q8_0 about 0.9 GB) with the converter in tools/bark3, put it in the models directory and pick it on this card. Offline only (verified). For long recordings add the session option parakeet_tdt.offline_mode=long_form (bounded windows) in the instance's advanced options.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "language": {
+      "values": [
+        "en"
+      ],
+      "default": "en"
+    },
+    "backends": [
+      "cpu",
+      "cuda",
+      "vulkan"
+    ],
+    "paramSchema": {}
   }
 ]
