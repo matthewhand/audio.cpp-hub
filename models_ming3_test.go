@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -107,5 +108,45 @@ func TestMing3TTSPackages(t *testing.T) {
 	for _, id := range []string{"ming3_tts", "ming3_tts_voicedesign"} {
 		assertGGUFPackages(t, id, "audio-cpp/Ming-3.0-TTS-0.5B-GGUF", "ming-3.0-tts-0.5b-q8_0.gguf",
 			"ming-3.0-tts-0.5b-q8_0.gguf", "ming-3.0-tts-0.5b-bf16.gguf")
+	}
+}
+
+func TestMing3AudioCards(t *testing.T) {
+	assertMing3Card(t, ming3Card{id: "ming3_audio_asr", family: "ming3_audio", serverTask: "asr", category: "asr",
+		outputType: "text", text: "none", audio: "required", voiceRef: "none",
+		schemaKeys: []string{"prompt", "system_prompt", "enable_thinking", "max_tokens"}})
+	assertMing3Card(t, ming3Card{id: "ming3_audio", family: "ming3_audio", serverTask: "tts", category: "tts",
+		outputType: "audio", text: "required", audio: "none", voiceRef: "optional",
+		schemaKeys: []string{"voice_id", "language", "reference_text", "seed", "guidance_scale", "sigma",
+			"temperature", "max_audio_tokens", "text_chunk_size", "text_chunk_mode", "trim_silence"}})
+	// The 16B MoE is usable on modest RAM only with disk-streamed experts; the cards must say how.
+	for _, id := range []string{"ming3_audio_asr", "ming3_audio"} {
+		if desc, _ := findModel(id)["descriptionEn"].(string); !strings.Contains(desc, "ming3_audio.disk_experts=true") {
+			t.Errorf("%s descriptionEn should document the ming3_audio.disk_experts=true session option", id)
+		}
+	}
+}
+
+func TestMing3AudioPackages(t *testing.T) {
+	for _, id := range []string{"ming3_audio_asr", "ming3_audio"} {
+		assertGGUFPackages(t, id, "audio-cpp/Ming-3.0-Audio-Tiny-GGUF", "ming-3.0-audio-tiny-q4_k.gguf",
+			"ming-3.0-audio-tiny-q4_k.gguf", "ming-3.0-audio-tiny-q8_0.gguf", "ming-3.0-audio-tiny-bf16.gguf")
+	}
+}
+
+// Package families render by displayName, so a card's download family must not reuse another's name.
+func TestPackageFamilyDisplayNamesUnique(t *testing.T) {
+	var fams map[string]struct {
+		DisplayName string `json:"displayName"`
+	}
+	if err := json.Unmarshal(modelPackagesRaw, &fams); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]string{}
+	for id, f := range fams {
+		if prev, ok := seen[f.DisplayName]; ok {
+			t.Errorf("package families %s and %s share displayName %q", prev, id, f.DisplayName)
+		}
+		seen[f.DisplayName] = id
 	}
 }
