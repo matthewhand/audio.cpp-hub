@@ -2529,5 +2529,210 @@
       "vulkan"
     ],
     "paramSchema": {}
+  },
+  {
+    "id": "ming3_audio_asr",
+    "family": "ming3_audio",
+    "hfUrl": "https://huggingface.co/inclusionAI/Ming-3.0-audio-tiny",
+    "ggufUrl": "https://huggingface.co/audio-cpp/Ming-3.0-Audio-Tiny-GGUF",
+    "modes": [
+      "offline"
+    ],
+    "backends": [
+      "cpu",
+      "cuda",
+      "vulkan"
+    ],
+    "displayName": "Ming 3.0 Audio Tiny (ASR / Understanding)",
+    "category": "asr",
+    "serverTask": "asr",
+    "outputType": "text",
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "language": {
+      "values": [
+        "auto"
+      ],
+      "default": "auto"
+    },
+    "description": "inclusionAI Ming 3.0 Audio Tiny（MIT）：Whisper 音频编码器 + 16B 混合专家 Thinker。默认提示词输出“语言标签<Tab>转写”；改 prompt 可做音频理解（如描述声音）。仅离线。q4_k 约 10 GB。在 16 GB 级显存/内存上运行时，启动实例的高级选项里加会话选项 ming3_audio.disk_experts=true（可选 ming3_audio.expert_cache_size=8–128、ming3_audio.disk_expert_read_threads=4），专家权重留在主机内存，按需调入 GPU 缓存。需要 v0.9.2 之后的 audio.cpp 构建。",
+    "descriptionEn": "inclusionAI Ming 3.0 Audio Tiny (MIT): Whisper audio encoder with a 16B mixture-of-experts Thinker. The default prompt returns a language label, a tab and the transcript; change prompt for audio understanding (e.g. describe the sounds). Offline only. q4_k is about 10 GB. On 16 GB-class GPUs or hosts, add the session option ming3_audio.disk_experts=true in the instance's advanced options (optionally ming3_audio.expert_cache_size=8-128 and ming3_audio.disk_expert_read_threads=4) to keep Thinker experts in host memory and stage them into a bounded GPU cache. Needs an audio.cpp build newer than v0.9.2.",
+    "paramSchema": {
+      "prompt": {
+        "type": "string",
+        "default": "",
+        "label": "提示词",
+        "labelEn": "Prompt",
+        "hint": "留空为转写；可改为音频理解指令",
+        "hintEn": "Empty = transcription; set an instruction for audio understanding"
+      },
+      "system_prompt": {
+        "type": "string",
+        "default": "",
+        "label": "系统提示词",
+        "labelEn": "System prompt"
+      },
+      "enable_thinking": {
+        "type": "boolean",
+        "default": false,
+        "label": "深度思考",
+        "labelEn": "Enable thinking"
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 256,
+        "min": 1,
+        "max": 4096,
+        "step": 1,
+        "label": "最大文本 token",
+        "labelEn": "Max text tokens"
+      }
+    }
+  },
+  {
+    "id": "ming3_audio",
+    "family": "ming3_audio",
+    "hfUrl": "https://huggingface.co/inclusionAI/Ming-3.0-audio-tiny",
+    "ggufUrl": "https://huggingface.co/audio-cpp/Ming-3.0-Audio-Tiny-GGUF",
+    "modes": [
+      "offline"
+    ],
+    "backends": [
+      "cpu",
+      "cuda",
+      "vulkan"
+    ],
+    "displayName": "Ming 3.0 Audio Tiny (TTS / Clone)",
+    "category": "tts",
+    "serverTask": "tts",
+    "outputType": "audio",
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "optional"
+    },
+    "language": {
+      "values": [
+        "Chinese",
+        "English"
+      ],
+      "default": "English"
+    },
+    "description": "Ming 3.0 Audio Tiny 的 Talker 语音合成：无参考音频时用 voice_id 官方音色（默认 灵小柔，英文可用 US_James 等），有参考音频则零样本克隆（加 reference_text 提供声学前缀）。中英为主，输出 44.1kHz，仅离线。在 16 GB 级显存/内存上运行时，启动实例的高级选项里加会话选项 ming3_audio.disk_experts=true（可选 ming3_audio.expert_cache_size=8–128、ming3_audio.disk_expert_read_threads=4），专家权重留在主机内存，按需调入 GPU 缓存。语音对话（s2s）暂无界面面板，可通过 CLI 或 /api/run 使用。",
+    "descriptionEn": "Ming 3.0 Audio Tiny Talker speech synthesis: official named voices via voice_id when no reference is given (default 灵小柔; English e.g. US_James), or zero-shot cloning from reference audio (add reference_text for an acoustic prefix). Chinese and English primarily; 44.1kHz, offline only. On 16 GB-class GPUs or hosts, add the session option ming3_audio.disk_experts=true in the instance's advanced options (optionally ming3_audio.expert_cache_size=8-128 and ming3_audio.disk_expert_read_threads=4) to keep Thinker experts in host memory and stage them into a bounded GPU cache. Spoken response (s2s) has no UI panel yet; use the CLI or /api/run.",
+    "paramSchema": {
+      "voice_id": {
+        "type": "string",
+        "default": "灵小柔",
+        "label": "官方音色",
+        "labelEn": "Named voice",
+        "hint": "仅在无参考音频时使用",
+        "hintEn": "Used only without reference audio"
+      },
+      "language": {
+        "type": "enum",
+        "values": [
+          "",
+          "zh",
+          "en"
+        ],
+        "default": "",
+        "label": "目标语言",
+        "labelEn": "Target language"
+      },
+      "reference_text": {
+        "type": "string",
+        "default": "",
+        "label": "参考文本",
+        "labelEn": "Reference text",
+        "hint": "参考音频的转写；提供后同时作为声学前缀",
+        "hintEn": "Transcript of the reference audio; enables its acoustic prefix"
+      },
+      "seed": {
+        "type": "integer",
+        "default": 42,
+        "min": 0,
+        "max": 2147483647,
+        "step": 1,
+        "label": "随机种子",
+        "labelEn": "Seed"
+      },
+      "guidance_scale": {
+        "type": "number",
+        "default": 2.0,
+        "min": 0.0,
+        "max": 10.0,
+        "step": 0.1,
+        "label": "引导强度",
+        "labelEn": "Guidance scale"
+      },
+      "sigma": {
+        "type": "number",
+        "default": 0.25,
+        "min": 0.0,
+        "max": 2.0,
+        "step": 0.05,
+        "label": "SDE 噪声",
+        "labelEn": "Flow SDE sigma"
+      },
+      "temperature": {
+        "type": "number",
+        "default": 0.0,
+        "min": 0.0,
+        "max": 2.0,
+        "step": 0.05,
+        "label": "采样温度",
+        "labelEn": "Temperature",
+        "hint": "0 仍使用带种子的初始噪声",
+        "hintEn": "Zero still uses seeded initial noise"
+      },
+      "max_audio_tokens": {
+        "type": "integer",
+        "default": 1000,
+        "min": 1,
+        "max": 1000,
+        "step": 1,
+        "label": "最大声学块数",
+        "labelEn": "Max acoustic patches"
+      },
+      "text_chunk_size": {
+        "type": "integer",
+        "default": 100,
+        "min": 1,
+        "max": 1000,
+        "step": 1,
+        "label": "分块长度",
+        "labelEn": "Chunk size",
+        "hint": "Unicode 码点",
+        "hintEn": "Unicode codepoints"
+      },
+      "text_chunk_mode": {
+        "type": "enum",
+        "values": [
+          "tag_aware",
+          "default",
+          "japanese",
+          "endline"
+        ],
+        "default": "tag_aware",
+        "label": "分块模式",
+        "labelEn": "Chunk mode"
+      },
+      "raw_text": {
+        "type": "boolean",
+        "default": false,
+        "label": "不分块",
+        "labelEn": "Raw text (no chunking)"
+      },
+      "trim_silence": {
+        "type": "boolean",
+        "default": true,
+        "label": "裁剪尾部静音",
+        "labelEn": "Trim trailing silence"
+      }
+    }
   }
 ]
