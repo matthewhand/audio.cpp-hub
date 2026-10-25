@@ -92,7 +92,11 @@ func normalizeASRResultFile(family, path string) error {
 	if err := os.WriteFile(tmp, out, 0644); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 // rewriteV1ASRResponse buffers and normalizes a ming3_audio /v1/audio/transcriptions*

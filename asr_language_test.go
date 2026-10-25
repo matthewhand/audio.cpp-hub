@@ -107,11 +107,16 @@ func TestNormalizeASRResponseNonJSONUntouched(t *testing.T) {
 func TestNormalizeASRResultFile(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "x.result.json")
-	os.WriteFile(p, []byte(`{"text":"English\thello there"}`), 0644)
+	if err := os.WriteFile(p, []byte(`{"text":"English\thello there"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
 	if err := normalizeASRResultFile("ming3_audio", p); err != nil {
 		t.Fatal(err)
 	}
-	data, _ := os.ReadFile(p)
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
 	obj := decodeASR(t, data)
 	if obj["text"] != "hello there" || obj["language"] != "English" {
 		t.Fatalf("result file not normalized: %s", data)
@@ -122,7 +127,9 @@ func TestNormalizeASRResultFile(t *testing.T) {
 
 	q := filepath.Join(dir, "y.result.json")
 	orig := []byte(`{"text":"English\thello there"}`)
-	os.WriteFile(q, orig, 0644)
+	if err := os.WriteFile(q, orig, 0644); err != nil {
+		t.Fatal(err)
+	}
 	if err := normalizeASRResultFile("moss_transcribe_diarize", q); err != nil {
 		t.Fatal(err)
 	}
