@@ -135,7 +135,8 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if r.Method == http.MethodOptions {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, OpenAI-*")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, OpenAI-*, X-Client, X-Hub-No-Archive")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Hub-Request-Id, X-Hub-Stream")
 		w.Header().Set("Access-Control-Max-Age", "86400")
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -148,6 +149,16 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 		v1Error(w, http.StatusMethodNotAllowed, "Method not allowed: "+r.Method)
 		return
 	}
+	// Request log (#198): meter this request; X-Client is hub-only and never forwarded.
+	if rec := h.metrics.Begin(r, r.URL.Path); rec != nil {
+		defer rec.Finish()
+		w = rec.Wrap(w)
+		w.Header().Set(requestIDHeader, rec.ID())
+		w.Header().Set("Access-Control-Expose-Headers", "X-Hub-Request-Id, X-Hub-Stream")
+		r = withRequestRecorder(r, rec)
+	}
+	r.Header.Del(clientTagHeader)
+	rec := requestRecorderFrom(r.Context())
 	maxBody := h.cfg.ProxyMaxBodyBytes
 	if maxBody <= 0 {
 		maxBody = 1 << 30
@@ -181,6 +192,7 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer os.Remove(tmp) // 转发用的文件句柄在此之前已关闭（Windows 需先 close 再删）
+	rec.MeasureInput(tmp, r.Header.Get("Content-Type"), n)
 
 	// 2) 提取 "model"：JSON 逐字节扫描顶层字段；multipart/form-data（/v1/audio/transcriptions
 	//    及 /details）读取表单字段 model，原始 body 与 Content-Type（含 boundary）原样转发
@@ -206,6 +218,7 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 	// 3) 按服务名路由（READY 才转发；非 READY 409；不存在 404）
 	inst := h.instances.FindByName(model)
 	if inst == nil {
+		rec.SetRequestedModel(model)
 		if h.instances.FindAnyByName(model) != nil {
 			v1Error(w, http.StatusConflict, "Model is still starting: "+model)
 		} else {
@@ -213,6 +226,8 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
+	rec.SetInstance(inst)
 
 	// 4) 落盘文件作为 body 转发到实例同名路径，5) 响应流式回写
 	// Opt-in sentence-chunked streaming for offline-only TTS families (#196).

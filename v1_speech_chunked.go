@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/matthewhand/audio.cpp-hub/internal/idvalidate"
 )
@@ -152,6 +153,7 @@ func (h *Hub) chunkedV1Speech(w http.ResponseWriter, r *http.Request, inst *Inst
 		archive = &chunkArchive{req: v1SpeechArchiveRequest(body)}
 		defer archive.discard()
 	}
+	rec := requestRecorderFrom(ctx) // request log (#198); nil-safe
 	var format wavFormat
 	var firstMs int64
 	sent := false
@@ -159,7 +161,13 @@ func (h *Hub) chunkedV1Speech(w http.ResponseWriter, r *http.Request, inst *Inst
 		if ctx.Err() != nil {
 			return
 		}
+		callStart := time.Now()
 		status, ctype, reply, err := h.speechChunkCall(ctx, r, inst, body, text)
+		segErr := ""
+		if err != nil {
+			segErr = summarize(err.Error())
+		}
+		rec.AddSegment(utf8.RuneCountInString(text), time.Since(callStart), status, segErr)
 		if err == nil && status != http.StatusOK {
 			if !sent {
 				if ctype == "" {
@@ -185,6 +193,9 @@ func (h *Hub) chunkedV1Speech(w http.ResponseWriter, r *http.Request, inst *Inst
 				return // client left; nothing to report
 			}
 			log.Printf("/v1/audio/speech chunked stream: chunk %d/%d failed: %v", i+1, len(chunks), err)
+			if sent {
+				rec.SetError(fmt.Sprintf("chunk %d/%d failed: %s", i+1, len(chunks), summarize(err.Error())))
+			}
 			if !sent {
 				v1Error(w, http.StatusBadGateway, "Model instance failed: "+summarize(err.Error()))
 			} else if mode == chunkedSSE {
@@ -209,6 +220,9 @@ func (h *Hub) chunkedV1Speech(w http.ResponseWriter, r *http.Request, inst *Inst
 		}
 		if !writeChunkPCM(w, mode, pcm, flush) {
 			return // client disconnected; ctx cancellation stops the rest
+		}
+		if mode == chunkedSSE {
+			rec.AddAudioBytes(len(pcm)) // SSE carries base64; count the PCM it encodes
 		}
 		if archive != nil {
 			archive.write(pcm)

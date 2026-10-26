@@ -28,6 +28,7 @@ function makeRouting({ hash = "", instances = [], selectedModelId = null } = {})
   const voices = panel("openVoicesPanel", "closeVoicesPanel", "voices-panel");
   const downloads = panel("openDownloadsModal", "closeDownloadsModal", "downloads-modal");
   const stats = panel("openStatsPanel", "closeStatsPanel", "stats-panel");
+  const requests = panel("openRequestsPanel", "closeRequestsPanel", "requests-panel");
   const settings = panel("openSettingsModal", "closeSettingsModal", "settings-modal");
   const detail = panel("openInstanceDetail", "closeInstanceDetail", "instance-detail-modal");
   const wired = [];
@@ -42,6 +43,7 @@ function makeRouting({ hash = "", instances = [], selectedModelId = null } = {})
     /* 四个懒加载外观（stats-lazy / voices-panel-lazy / downloads-lazy / settings-lazy）
        各自负责自己的页头按钮接线，routing.js 把导航函数传进去以避开与它们的模块环。 */
     wireStatsButton: (...a) => wired.push(["wireStatsButton", ...a]),
+    wireRequestsButton: (...a) => wired.push(["wireRequestsButton", ...a]),
     wireVoicesButton: (...a) => wired.push(["wireVoicesButton", ...a]),
     wireDownloadsButton: (...a) => wired.push(["wireDownloadsButton", ...a]),
     wireSettingsButtons: (...a) => wired.push(["wireSettingsButtons", ...a]),
@@ -51,6 +53,8 @@ function makeRouting({ hash = "", instances = [], selectedModelId = null } = {})
     openDownloadsModal: downloads.open,
     closeStatsPanel: stats.close,
     openStatsPanel: stats.open,
+    closeRequestsPanel: requests.close,
+    openRequestsPanel: requests.open,
     closeSettingsModal: settings.close,
     openSettingsModal: settings.open,
     closeInstanceDetail: detail.close,
@@ -88,6 +92,7 @@ test("routing: ROUTE_VIEWS 列出面板路由（顺序即页头按钮顺序）",
     "voices",
     "downloads",
     "stats",
+    "requests",
     "settings"
   ]);
 });
@@ -104,6 +109,7 @@ test("routing: parseRoute 表驱动——模型 / 实例 / 面板 / 兜底", () 
     ["#/voices", { view: "voices" }],
     ["#/downloads", { view: "downloads" }],
     ["#/stats", { view: "stats" }],
+    ["#/requests", { view: "requests" }],
     ["#/settings", { view: "settings" }],
     // 空 / 畸形 hash → home
     ["", { view: "home" }],
@@ -193,6 +199,7 @@ test("routing: applyRoute 按视图开面板 / 选模型（表驱动）", () => 
     ["#/voices", ["openVoicesPanel"]],
     ["#/downloads", ["openDownloadsModal"]],
     ["#/stats", ["openStatsPanel"]],
+    ["#/requests", ["openRequestsPanel"]],
     ["#/settings", ["openSettingsModal"]],
     ["#/model/qwen3-tts", ["selectModelById"]],
     ["#/nope", []],
@@ -225,14 +232,20 @@ test("routing: applyRoute 对未打开的面板不调用关闭函数", () => {
   assert.deepEqual(r.names(), ["openHistoryPanel"], "isOpen 为假 → 不关，避免误触焦点还原");
 });
 
-test("routing: 四个懒加载外观的页头按钮接线在模块求值时各调一次", () => {
+test("routing: 五个懒加载外观的页头按钮接线在模块求值时各调一次", () => {
   /* 看板 / 音色库 / 下载 / 设置都是「点开才拉 chunk」的弹窗，页头按钮必须在 chunk
      到位前就能用，因此由 routing.js 在求值期把 go / goPanel 交给各自外观层接线。
      漏掉任何一个，页头按钮就会静默失灵（chunk 里绑了 onclick 也没人加载它）。 */
   const r = makeRouting();
   assert.deepEqual(
     r.wired.map(([name]) => name),
-    ["wireStatsButton", "wireVoicesButton", "wireDownloadsButton", "wireSettingsButtons"]
+    [
+      "wireStatsButton",
+      "wireRequestsButton",
+      "wireVoicesButton",
+      "wireDownloadsButton",
+      "wireSettingsButtons"
+    ]
   );
   // 传下去的是 routing.js 自己的导航函数（设了 window.hub* 钩子的那几个）
   for (const [, ...args] of r.wired) {

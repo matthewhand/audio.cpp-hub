@@ -598,6 +598,13 @@ func writeServerJSON(path string, port int, p StartParams, instanceName string) 
 }
 
 // ToJSON 实例的 API 输出形状（对应 Java 版 ApiHandler.toJson）。
+// StatusOf reads an instance's status under the manager lock.
+func (m *InstanceManager) StatusOf(inst *Instance) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return inst.Status
+}
+
 func (m *InstanceManager) ToJSON(inst *Instance, taskCount int) map[string]any {
 	m.mu.Lock()
 	status := inst.Status

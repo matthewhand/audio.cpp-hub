@@ -66,12 +66,15 @@ const PRECACHE_URLS = [
   "/modules/speaker-segments.js",
   "/modules/sidebar.js",
   "/modules/stats-lazy.js",
+  "/modules/requests-lazy.js",
   "/modules/voices-panel-lazy.js",
   // 下面是懒加载 chunk（不在首屏，也不进 index.html 的 modulepreload）：各自只被对应
   // 外观层的 import("./x.js") 拉取，但离线冷启动点开时仍要能用，因此只进预缓存。
   "/modules/activity-queue.js", // on-demand Activity/Queue
   "/activity-queue.css", // loaded only while Activity opens
   "/modules/stats.js",          // 看板（#/stats）
+  "/modules/requests.js",       // 请求与延迟（#/requests，#198）
+  "/requests.css",              // 仅在打开 #/requests 时加载
   "/modules/file-browser.js",   // 服务器端文件选择器
   "/modules/voices-panel.js",   // 音色库管理面板
   "/modules/downloads.js",      // 下载管理弹窗 + 按模型下载弹窗

@@ -30,6 +30,7 @@ import { applyRoute } from "./modules/routing.js";
 import { closeSettingsModal, loadExecutables, relocalizeSettings, updateLaunchExec } from "./modules/settings-lazy.js";
 import { applyLangBtn, applyThemeIcon, closeDrawer } from "./modules/shell.js";
 import { closeHistoryPanel } from "./modules/sidebar.js";
+import { closeRequestsPanel, reloadRequests } from "./modules/requests-lazy.js";
 import { closeStatsPanel, reloadStats } from "./modules/stats-lazy.js";
 import { models, selectedModel } from "./modules/state.js";
 import { closeVoicesPanel } from "./modules/voices-panel-lazy.js";
@@ -55,6 +56,7 @@ function rerenderAll() {
   relocalizeSettings();
   relocalizeDownloads();
   if (!$("stats-panel").classList.contains("hidden")) reloadStats();
+  if (!$("requests-panel").classList.contains("hidden")) reloadRequests();
   (window.__audioPickers || []).forEach(p => p.refreshLabels && p.refreshLabels());
   (window.__voiceSelects || []).forEach(v => v.refreshLabels && v.refreshLabels());
   relocalizeFileBrowser();
@@ -69,6 +71,7 @@ function closeTopmostOverlay() {
   else if (overlay.id === "launch-modal") closeLaunchModal();
   else if (overlay.id === "downloads-modal") closeDownloadsModal();
   else if (overlay.id === "stats-panel") closeStatsPanel();
+  else if (overlay.id === "requests-panel") closeRequestsPanel();
   else if (overlay.id === "model-dl-modal") closeModelDlModal();
   else if (overlay.id === "instance-detail-modal") closeInstanceDetail();
   else if (overlay.id === "command-palette") closeCommandPalette();

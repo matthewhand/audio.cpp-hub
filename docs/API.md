@@ -26,6 +26,9 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 | DELETE | `/api/instances/{id}` | 停止实例 |
 | GET | `/api/events` | 实例事件日志 |
 | GET | `/api/stats` | 用量与性能统计（按模型聚合） |
+| GET | `/api/metrics/summary` | 每实例状态 + 15 分钟 / 1 小时延迟分位（#198） |
+| GET | `/api/metrics/recent` | 最近的 `/v1` 请求日志（只含元数据，#198） |
+| GET | `/api/metrics/requests/{id}` | 单条请求详情（含分块时间线，#198） |
 | GET | `/api/executables` | 可执行文件列表 |
 | POST | `/api/executables` | 添加可执行文件 |
 | PUT | `/api/executables/{id}` | 更新可执行文件 |
@@ -164,6 +167,90 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 ```
 
 模型数组按 `total` 降序、`lastAt` 次序。
+
+### 请求日志与延迟（`/api/metrics/*`，#198）
+
+用于排查流式 TTS 卡顿（冷加载、分块间隔、重启重叠）。**只记录元数据，绝不保存输入文本或音频**
+（只留字数 / 字节数 / 音频秒数）；**只在内存中**，Hub 重启即清空；不影响历史归档。
+仅统计经 Hub 转发的 `POST|PUT /v1/*`（引擎 audio.cpp 的 OpenAI 兼容接口），`/api/tasks` 不计入。
+
+- 每个实例（按服务名）一个环形缓冲，保留最近 **100** 条，新的在前；没路由到实例的请求
+  （404 / 409 / 400）进 `_unrouted`。
+- 延迟样本保留 1 小时，用于 15m / 1h 滚动分位（最近秩法，nearest-rank）。
+
+**调用方标记（`X-Client`）**：请求可带可选头 `X-Client: <tag>`（如 `X-Client: reachy`）。
+Hub 去首尾空白，`[A-Za-z0-9._:@/+=-]` 以外的字符替换成 `_`，截到 64 字符，记为 `client`；
+该头**在转发给引擎之前删除**（含 Hub 分句流式的子请求），CORS 预检已放行。不带则 `client` 省略。
+每个被记录的 `/v1` 响应都带 `X-Hub-Request-Id: <id>`（CORS 已 expose），可直接拿去查
+`/api/metrics/requests/{id}`。
+
+#### `GET /api/metrics/recent?instance=&limit=&chunks=`
+
+`instance` 为服务名（或 `_unrouted`），空 = 全部实例合并按时间倒序；`limit` 默认 50、最大 1000；
+`chunks=1` 时附带 `chunks` / `segments`（默认省略以控制体积）。
+
+```json
+{ "ringSize": 100, "requests": [ RequestRecord, ... ] }
+```
+
+`RequestRecord` 字段（时间均为毫秒，`*` 表示可能省略）：
+
+| 字段 | 含义 |
+| --- | --- |
+| `id` / `time` / `startMs` | 请求 ID（同 `X-Hub-Request-Id`）、开始时间（RFC 3339 UTC / epoch ms） |
+| `instance` / `instanceId`* / `modelId`* / `modelFamily`* / `task`* | 服务的实例 |
+| `method` / `route` / `callerIp` / `client`* | 来源；`callerIp` 仅在对端为回环地址时采信 `X-Forwarded-For` |
+| `inputBytes` / `inputChars`* / `inputAudioSec`* | 输入大小（JSON `input` 字数 / 上传音频秒数），不存内容 |
+| `inFlightAtStart` / `queueWaitMs`* | 到达时同实例在途请求数、排在前面请求上等待的时间 |
+| `ttfbMs`* / `firstAudioMs`* / `totalMs`* / `elapsedMs` | 首字节、首段音频、完成耗时；`elapsedMs` 对进行中请求持续增长 |
+| `outputBytes` / `outputAudioSec`* / `rtf`* | 输出大小、音频秒数、实时率（总耗时 ÷ 音频秒，越小越快） |
+| `status` / `error`* | HTTP 状态；失败时错误文本前 300 字符 |
+| `streamed` / `streamMode`* / `chunkedTransfer` | 请求了 `stream`、SSE 回复或 Hub 分句流式（`streamMode: "sentence-chunked"`）；`chunkedTransfer` = 回复无 `Content-Length` |
+| `inFlight` / `clientAborted` | 仍在进行 / 客户端提前断开 |
+| `coldLoad`* / `coldLoadSource`* | 是否冷加载：`engine`（请求前探测引擎 `/v1/models` 的 `loaded`，探测不重置空闲卸载计时）/ `inferred`（按上次使用与 `idleUnloadMs` 推断）/ `queued`（前面有请求，必然已热） |
+| `hubUptimeMsAtStart` / `instanceUptimeMsAtStart`* | 请求开始时 Hub / 实例已运行多久 |
+| `nearRestart` / `restartReason`* | 重启重叠：Hub 或实例启动后 2 分钟内、或同服务名的实例被替换后首个请求；`hub` / `instance-start` / `instance-replaced` |
+| `chunkCount` / `gapsOver100ms` / `maxGapMs` | 回复分块数（10 ms 内的写合并为一块）、间隔 >100 ms 的次数、最大间隔 |
+| `minHeadroomMs`* / `underrun` | 每块到达时播放端剩余缓冲的最小值（按 PCM / WAV 码率换算）；<0 即 `underrun`（播放会断） |
+| `chunks`* | `[{atMs, bytes, gapMs, audioMs*, headroomMs*, slow}]`，`slow` = 间隔 >100 ms；最多 400 块 |
+| `segments`* | Hub 分句流式的每句子请求 `[{index, chars, engineMs, status, error*}]` |
+
+#### `GET /api/metrics/requests/{id}`
+
+返回单条 `RequestRecord`（始终含 `chunks` / `segments`）；已被环形缓冲挤出或 Hub 已重启则
+`404 REQUEST_NOT_FOUND`。
+
+#### `GET /api/metrics/summary`
+
+```json
+{
+  "now": 1756400000000, "hubStartedAt": 1756389200000, "hubUptimeMs": 10800000,
+  "instances": [
+    { "instance": "moss-tts", "instanceId": "a1", "modelId": "moss-tts-nano", "task": "tts",
+      "hubStatus": "READY", "state": "loaded", "stateSource": "engine",
+      "backend": "vulkan", "device": "vulkan:1", "port": 18190, "startedAt": 1756389200000,
+      "inFlight": 1, "queueDepth": 0, "tasksActive": 0,
+      "lastUseAt": 1756399996000, "sinceLastUseMs": 4000,
+      "idleUnloadMs": 600000, "unloadInMs": 596000, "lastColdLoadAt": 1756396400000,
+      "memory": { "ramBytes": 1610612736, "vramBytes": 3221225472 },
+      "windows": {
+        "15m": { "count": 6, "errors": 0, "coldLoads": 0, "underruns": 0,
+                 "firstAudioP50Ms": 380, "firstAudioP90Ms": 2900,
+                 "totalP50Ms": 1450, "totalP90Ms": 4100, "rtfP50": 0.42 },
+        "1h": { "count": 14, "...": "..." }
+      } }
+  ]
+}
+```
+
+- `state`：`loaded` / `cold` / `loading` / `starting` / `unknown` / `gone`；`stateSource` 为
+  `engine`（向引擎 `/v1/models` 探测 `loaded`，250 ms 超时，不重置空闲卸载）、`inferred`（按使用记录推断）
+  或 `hub`（实例未 READY）。已停止但日志里还有请求的实例以 `hubStatus: "GONE"` 列出。
+- `unloadInMs`：已加载且空闲时距空闲卸载还剩多久（实例未配 `idleUnloadMs` 时省略）。
+- `inFlight`：正在经 `/v1` 转发的请求；`tasksActive`：该实例上 `/api/tasks` 进行中的任务；
+  `queueDepth` = `inFlight + tasksActive - 1`（不小于 0），即在等前一个的请求数。
+- `memory`：与 `/api/instances` 的 `memory` 同源（RAM / VRAM 采样），未采样时省略。
+- `windows`：`15m` / `1h` 滚动窗口；分位只统计成功请求，没有样本时省略对应字段。
 
 ---
 
@@ -487,6 +574,7 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 | `GET /api/instances` | `web/modules/instances.js:49` 首屏加载 + `web/modules/instances.js:57` 2s 轮询 |
 | `GET /api/events` | `web/modules/async-ui.js:189`（`startEventsPolling`）2s 轮询（失败静默） |
 | `GET /api/stats` | `web/modules/stats.js:46`（`loadStats`）打开 `#/stats` 时按需拉取，非轮询 |
+| `GET /api/metrics/summary` / `recent` / `requests/{id}` | `web/modules/requests.js`（`loadRequests`）打开 `#/requests` 时拉取，面板可见期间每 2s 轮询（可暂停），关闭即停 |
 | `GET /api/downloads` | `web/modules/downloads-lazy.js:60` 首屏加载 + `web/modules/downloads-lazy.js:65` 2s 轮询 |
 | `POST /api/tasks` | `web/modules/tasks.js:27` |
 | `DELETE /api/tasks/{id}` | `web/modules/tasks.js:42` |

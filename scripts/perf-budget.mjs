@@ -184,13 +184,16 @@ export const BUDGETS = {
   // #174 recalibration: main was already at 312.2 KiB raw JS (over by 0.2) before this
   // change; the instance memory bars add ~10 KiB raw / ~2.8 KiB gzip JS and ~2.3 KiB raw CSS.
   // Gzip budgets are unchanged and still pass.
-  jsRawKiB: 326, // 初始 JS 未压缩合计（实测 322.3，#174）
+  // #198 recalibration: the #/requests panel adds only a ~1 KiB lazy facade plus routing /
+  // app.js hooks and two i18n keys (+2.3 KiB raw JS, +0.9 KiB gzip; 324.6 -> 326.9). Its module,
+  // strings and CSS (requests.js / requests.css) load on first open, so CSS is unchanged.
+  jsRawKiB: 328, // 初始 JS 未压缩合计（实测 326.9，#198）
   // #174: gzip sizes vary by zlib build (113.8 KiB on one host, 115.9 on the Linux CI-like host).
   jsGzipKiB: 118, // 初始 JS gzip 传输合计（实测 115.9，#174）
   cssRawKiB: 72, // 初始 CSS 未压缩（实测 70.3，#174）
   cssGzipKiB: 18, // 初始 CSS gzip 传输（实测 17.2）
   totalGzipKiB: 135, // JS + CSS gzip 合计（实测 132.7，#174，不含 HTML)
-  subresourceRequests: 31, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 30）
+  subresourceRequests: 31, // 初始 <script src> + 模块图 + <link stylesheet> 数量（实测 31，#198）
   ttiTargetMs: 1500 // 目标 TTI（本地/局域网，中端笔电）——浏览器指标，本脚本不测量
 };
 const CSS = ["style.css"];
