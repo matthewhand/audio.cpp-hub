@@ -215,6 +215,10 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 4) 落盘文件作为 body 转发到实例同名路径，5) 响应流式回写
+	// Opt-in sentence-chunked streaming for offline-only TTS families (#196).
+	if h.maybeChunkedV1Speech(w, r, inst, tmp) {
+		return
+	}
 	h.forwardV1(w, r, inst, tmp, n)
 }
 
@@ -310,23 +314,7 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 		}
 		archive := v1SpeechShouldArchive(h.cfg.v1SpeechArchiveDefault(), r.Header.Get(noArchiveHeader), parsed)
 		if archive {
-			if parsed != nil {
-				if s := optString(parsed, "input"); s != "" {
-					archiveReq["text"] = s
-				}
-				if s := optString(parsed, "voice_ref"); s != "" {
-					archiveReq["voice_ref"] = s
-				}
-				if s := optString(parsed, "reference_text"); s != "" {
-					archiveReq["reference_text"] = s
-				}
-				if s := optString(parsed, "seed"); s != "" {
-					archiveReq["seed"] = parsed["seed"]
-				}
-				if o, ok := parsed["options"].(map[string]any); ok {
-					archiveReq["options"] = o
-				}
-			}
+			archiveReq = v1SpeechArchiveRequest(parsed)
 			archiveTaskID = newID() + newID()
 			if idvalidate.SafeKey(archiveTaskID) && idvalidate.SafeKey(inst.ModelID) {
 				dir := historyDir(inst.ModelID)

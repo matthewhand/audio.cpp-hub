@@ -38,6 +38,10 @@ type HubConfig struct {
 	// into operation history (nil = true). Requests override it with the JSON body field
 	// "archive": true|false or the header X-Hub-No-Archive: 1.
 	V1SpeechArchive *bool `json:"v1SpeechArchive,omitempty"`
+	// V1SpeechChunkedStreamModels lists the model families whose /v1/audio/speech gets
+	// hub-side sentence-chunked streaming when a request sets "stream": true or
+	// "stream_format" (nil = ming3_tts only; [] turns it off). See v1_speech_chunked.go.
+	V1SpeechChunkedStreamModels []string `json:"v1SpeechChunkedStreamModels,omitempty"`
 }
 
 func loadConfig() HubConfig {

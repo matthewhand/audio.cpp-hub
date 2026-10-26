@@ -8,6 +8,7 @@
 
 - Fish Audio Drama 3（引擎 family `fish_drama3`）：`models.json` 新增模型卡（`<|speaker:N|>` 说话人标签、`[laughs]`/`<whisper>` 等舞台提示，paramSchema 含 `max_tokens`/`seed`/`temperature`/`top_p`/`top_k`/`references`/`reference_text`），`model-packages.json` 新增 `Jmica/Drama-3-GGUF` 下载包（默认 Q4_K_S experts / Q8_0 backbone，另列 Q3_K_S、Q2_K 与 4-bit backbone）；建议以 `sessionOptions` 传 `fish_drama3.disk_experts=true`
 - `hub.config.json` 新增 `proxyResponseHeaderTimeoutMs`（默认 `60000`）：`/v1/*` 代理等待实例返回响应头的上限，慢模型（懒加载 + 离线生成）可调大，例如 `600000`
+- `/v1/audio/speech` 按句分块流式（#196）：离线 TTS 家族（默认仅 `ming3_tts`）在请求带 `"stream": true` 或 `"stream_format": "audio"|"sse"` 时由 hub 按句/分句切分（首块较短以尽快出声），在同一实例上依序合成并逐块回写——`audio/wav`（流式头，data 长度 `0xFFFFFFFF`）、`response_format: "pcm"` 的 `audio/pcm`，或 `stream_format: "sse"` 的 `speech.audio.delta` / `speech.audio.done` / `[DONE]` 事件；每块沿用 voice、seed、`options`，采样格式变化即中止，客户端断开即取消剩余块；拼接结果照常归档（遵守 `archive` / `X-Hub-No-Archive`）。`hub.config.json` 新增 `v1SpeechChunkedStreamModels` 可为其它家族开启
 - `/v1/audio/speech` 归档可关闭：请求 JSON 字段 `"archive": false` 或请求头 `X-Hub-No-Archive: 1` 跳过本次历史归档（请求头不转发给实例）；`hub.config.json` 新增 `v1SpeechArchive`（默认 `true`），设为 `false` 时默认不归档，单个请求可用 `"archive": true` 重新开启
 - `POST /api/instances` 新增可选字段 `minFreeMemoryMb`，写入 server.json 顶层 `min_free_memory_mb`（引擎加载守卫：加载后主机与 GPU 都须保留该 MiB 数，否则拒绝加载），`GET /api/instances` 同步回显
 - `docs/farm.md` / `docs/agent-api.md` / `docs/deployment-10.0.0.36.md`：多机语音农场的拓扑、客户端契约与部署注意事项，入口统一指向 fan-out `http://10.0.0.36:18082`
