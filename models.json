@@ -460,7 +460,8 @@
     "category": "asr",
     "serverTask": "asr",
     "modes": [
-      "offline"
+      "offline",
+      "streaming"
     ],
     "inputs": {
       "text": "optional",
@@ -1020,7 +1021,8 @@
     "category": "asr",
     "serverTask": "asr",
     "modes": [
-      "offline"
+      "offline",
+      "streaming"
     ],
     "inputs": {
       "text": "none",
@@ -2528,6 +2530,82 @@
       "cuda",
       "vulkan"
     ],
+    "paramSchema": {}
+  },
+  {
+    "id": "voxtral_realtime",
+    "family": "voxtral_realtime",
+    "hfUrl": "https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602",
+    "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Voxtral-Mini-4B-Realtime-2602-GGUF",
+    "displayName": "Voxtral Mini 4B Realtime",
+    "description": "Mistral Voxtral Mini 4B Realtime 实时语音识别（13 种语言）。以流式模式创建实例后可通过 /v1/audio/transcriptions/live 边说边转写，也支持离线转写。",
+    "descriptionEn": "Mistral Voxtral Mini 4B Realtime speech recognition (13 languages). Create the instance in streaming mode to transcribe while you speak through /v1/audio/transcriptions/live; offline transcription also works.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline",
+      "streaming"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "language": {
+      "values": [
+        "en",
+        "zh",
+        "hi",
+        "es",
+        "ar",
+        "fr",
+        "pt",
+        "ru",
+        "de",
+        "ja",
+        "ko",
+        "it",
+        "nl"
+      ],
+      "default": "en"
+    },
+    "paramSchema": {}
+  },
+  {
+    "id": "kroko_asr",
+    "family": "kroko_asr",
+    "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Kroko-ASR-GGUF",
+    "displayName": "Kroko Community ASR",
+    "description": "Kroko 社区版流式语音识别（轻量，带词级时间戳）。以流式模式创建实例后可通过 /v1/audio/transcriptions/live 实时转写。",
+    "descriptionEn": "Kroko community streaming speech recognition (lightweight, word timestamps). Create the instance in streaming mode for live transcription through /v1/audio/transcriptions/live.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline",
+      "streaming"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "language": {
+      "values": [
+        "en",
+        "de",
+        "es",
+        "fr",
+        "it",
+        "he",
+        "nl",
+        "pt",
+        "sv",
+        "tr"
+      ],
+      "default": "en"
+    },
     "paramSchema": {}
   },
   {
