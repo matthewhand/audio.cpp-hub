@@ -155,6 +155,7 @@ hub 的 `/v1/*` 接口是对各 `audiocpp_server` 实例的**透明代理**：hu
 | `proxyMaxBodyBytes` | `1073741824`（1 GiB） | `/v1/*` 代理请求体落盘上限 |
 | `proxyResponseHeaderTimeoutMs` | `60000`（60 s） | `/v1/*` 代理等待实例返回响应头的上限；慢模型（如 `fish_drama3` 懒加载 + 离线生成）可调到 `600000`，超时返回 `502` |
 | `v1SpeechArchive` | `true` | 是否把成功的 `/v1/audio/speech` 回复归档到操作历史；单个请求可用 JSON 字段 `"archive": false` / `true` 或请求头 `X-Hub-No-Archive: 1` 覆盖（优先级：body 字段 > 请求头 > 本配置；请求头不会转发给实例） |
+| `v1SpeechChunkedStreamModels` | `["ming3_tts"]` | 哪些模型家族的 `/v1/audio/speech` 在请求带 `"stream": true` 或 `"stream_format": "audio"` / `"sse"` 时由 hub 按句分块流式回写（流式头 WAV、`response_format: "pcm"` 的裸 PCM 或 SSE `speech.audio.delta` 事件）；`[]` 关闭 |
 
 > 本仓库开发副本的 `hub.config.json` 把 `httpPort` 设为 `18080`，因此从源码直接运行时会监听 18080。
 
