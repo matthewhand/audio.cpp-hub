@@ -261,6 +261,7 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 	req.ContentLength = bodyLen
 	// 转发非逐跳请求头（Authorization/Accept/OpenAI-* 等）；Content-Length 由 body 重算
 	copyNonHopHeaders(req.Header, r.Header)
+	req.Header.Del(noArchiveHeader) // hub-only control header
 	req.Header.Del("Content-Length")
 	if req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
@@ -301,9 +302,15 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 	if h.history != nil && r.URL.Path == "/v1/audio/speech" && resp.StatusCode == http.StatusOK &&
 		strings.HasPrefix(resp.Header.Get("Content-Type"), "audio/") {
 		// 请求体仍在缓存文件里（defer os.Remove 还没执行），读取归档所需的最小要素。
+		var parsed map[string]any
 		if data, rerr := os.ReadFile(bodyPath); rerr == nil {
-			var parsed map[string]any
-			if jerr := json.Unmarshal(data, &parsed); jerr == nil {
+			if jerr := json.Unmarshal(data, &parsed); jerr != nil {
+				parsed = nil
+			}
+		}
+		archive := v1SpeechShouldArchive(h.cfg.v1SpeechArchiveDefault(), r.Header.Get(noArchiveHeader), parsed)
+		if archive {
+			if parsed != nil {
 				if s := optString(parsed, "input"); s != "" {
 					archiveReq["text"] = s
 				}
@@ -320,15 +327,15 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 					archiveReq["options"] = o
 				}
 			}
-		}
-		archiveTaskID = newID() + newID()
-		if idvalidate.SafeKey(archiveTaskID) && idvalidate.SafeKey(inst.ModelID) {
-			dir := historyDir(inst.ModelID)
-			if err := os.MkdirAll(dir, 0755); err == nil {
-				tf, terr := os.CreateTemp(dir, ".v1-*.wav.tmp")
-				if terr == nil {
-					teeFile = tf
-					teePath = tf.Name()
+			archiveTaskID = newID() + newID()
+			if idvalidate.SafeKey(archiveTaskID) && idvalidate.SafeKey(inst.ModelID) {
+				dir := historyDir(inst.ModelID)
+				if err := os.MkdirAll(dir, 0755); err == nil {
+					tf, terr := os.CreateTemp(dir, ".v1-*.wav.tmp")
+					if terr == nil {
+						teeFile = tf
+						teePath = tf.Name()
+					}
 				}
 			}
 		}
@@ -701,4 +708,20 @@ func extractV1MultipartModel(path, contentType string) (string, error) {
 		}
 		return strings.TrimSpace(string(val)), nil
 	}
+}
+
+// noArchiveHeader lets a /v1/audio/speech caller skip history archiving; it is not forwarded.
+const noArchiveHeader = "X-Hub-No-Archive"
+
+// v1SpeechShouldArchive decides whether a successful /v1/audio/speech reply is archived.
+// Precedence: JSON body "archive" (bool) > X-Hub-No-Archive header (truthy) > config default.
+func v1SpeechShouldArchive(def bool, noArchiveHdr string, body map[string]any) bool {
+	if v, ok := body["archive"].(bool); ok {
+		return v
+	}
+	switch strings.ToLower(strings.TrimSpace(noArchiveHdr)) {
+	case "1", "true", "yes", "on":
+		return false
+	}
+	return def
 }
