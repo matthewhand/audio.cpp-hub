@@ -381,6 +381,8 @@ window.I18N_ZH = {
   "stats.runP95": "执行耗时 P95",
   "stats.rtf": "实时率 RTF（越低越快）",
   "stats.perfNote": "性能基于最近 {n} 个已完成任务样本",
+  "obs.title": "请求与延迟",
+  "obs.pause": "暂停",
   /* ---------- 启动模型 modal ---------- */
   "launch.title": "启动模型",
   "launch.profile": "启动配置",

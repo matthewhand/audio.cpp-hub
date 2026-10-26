@@ -75,6 +75,7 @@ type Hub struct {
 	history   *HistoryManager
 	voices    *VoiceLibrary
 	downloads *DownloadManager
+	metrics   *RequestMetrics // /v1 request log (#198); nil disables recording
 }
 
 // ensureWorkDir 定位工作目录（需要 web/ 等运行时目录）：当前目录没有 web/ 时，
@@ -113,6 +114,7 @@ func main() {
 		voices:    NewVoiceLibrary(),
 		downloads: NewDownloadManager(cfg),
 	}
+	hub.metrics = NewRequestMetrics(time.Now())
 	hub.tasks = NewTaskManager(hub.history)
 	hub.bus = NewEventBus()
 	hub.mem = NewMemorySampler(hub.instances, hub.tasks, hub.bus)

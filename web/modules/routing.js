@@ -1,6 +1,6 @@
 /* web/modules/routing.js — hash 路由（#88）
  *
- * 路由表：#/model/<id> #/instance/<id> #/history #/voices #/downloads #/settings
+ * 路由表：#/model/<id> #/instance/<id> #/history #/voices #/downloads #/stats #/requests #/settings
  * 打开/关闭面板与选择模型统一经 go() 改 hash，applyRoute() 是唯一应用视图的地方，
  * 因此浏览器前进/后退可自然还原，深链接刷新后也能恢复面板与选中项。
  *
@@ -20,11 +20,12 @@ import { closeInstanceDetail, instances, openInstanceDetail } from "./instances.
 import { selectModelById } from "./models.js";
 import { closeSettingsModal, openSettingsModal, wireSettingsButtons } from "./settings-lazy.js";
 import { closeHistoryPanel, openHistoryPanel } from "./sidebar.js";
+import { closeRequestsPanel, openRequestsPanel, wireRequestsButton } from "./requests-lazy.js";
 import { closeStatsPanel, openStatsPanel, wireStatsButton } from "./stats-lazy.js";
 import { selectedModelId } from "./state.js";
 import { closeVoicesPanel, openVoicesPanel, wireVoicesButton } from "./voices-panel-lazy.js";
 
-export const ROUTE_VIEWS = ["history", "voices", "downloads", "stats", "settings"];
+export const ROUTE_VIEWS = ["history", "voices", "downloads", "stats", "requests", "settings"];
 
 let applyingRoute = false; // applyRoute 执行中：关闭函数不得再改 hash（防递归）
 
@@ -70,6 +71,7 @@ export function goPanel(route) {
 
 // 看板、音色库、下载、设置的页头/入口按钮都由懒加载外观接线（面板本身要点击后才拉）
 wireStatsButton(goPanel);
+wireRequestsButton(goPanel);
 wireVoicesButton(goPanel);
 wireDownloadsButton(goPanel);
 wireSettingsButtons(go, goPanel, setPendingSettingsSection);
@@ -95,6 +97,7 @@ export function applyRoute() {
     if (r.view !== "voices" && isOpen("voices-panel")) closeVoicesPanel();
     if (r.view !== "downloads" && isOpen("downloads-modal")) closeDownloadsModal();
     if (r.view !== "stats" && isOpen("stats-panel")) closeStatsPanel();
+    if (r.view !== "requests" && isOpen("requests-panel")) closeRequestsPanel();
     if (r.view !== "settings" && isOpen("settings-modal")) closeSettingsModal();
     if (r.view !== "instance") {
       pendingInstanceId = null;
@@ -105,6 +108,7 @@ export function applyRoute() {
     else if (r.view === "voices") openVoicesPanel();
     else if (r.view === "downloads") openDownloadsModal();
     else if (r.view === "stats") openStatsPanel();
+    else if (r.view === "requests") openRequestsPanel();
     else if (r.view === "settings") {
       openSettingsModal(pendingSettingsSection || "general");
       pendingSettingsSection = null;

@@ -25,7 +25,7 @@ async function expectHeaderFits(page) {
   expect(metrics.scrollWidth, "page must not horizontally overflow").toBeLessThanOrEqual(
     metrics.viewportWidth + 1
   );
-  expect(metrics.buttons).toHaveLength(7);
+  expect(metrics.buttons).toHaveLength(8); // #198 added #requests-btn
   for (const button of metrics.buttons) {
     expect(button.left, button.id).toBeGreaterThanOrEqual(-1);
     expect(button.right, button.id).toBeLessThanOrEqual(metrics.viewportWidth + 1);
@@ -66,6 +66,12 @@ for (const viewport of viewports) {
     await expectPanelButtonsFit(page, "#stats-close", 1);
     await page.locator("#stats-close").click();
     await expect(page.locator("#stats-panel")).toBeHidden();
+
+    await page.locator("#requests-btn").click();
+    await expect(page.locator("#requests-panel")).toBeVisible();
+    await expectPanelButtonsFit(page, "#requests-close", 1);
+    await page.locator("#requests-close").click();
+    await expect(page.locator("#requests-panel")).toBeHidden();
 
     const themeModeBefore = await page.locator("html").getAttribute("data-theme-mode");
     await page.locator("#theme-toggle").click();

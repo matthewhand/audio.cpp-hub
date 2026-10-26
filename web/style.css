@@ -432,6 +432,7 @@ footer { flex: none; }
 .stats-cell-value { font-size: 15px; font-variant-numeric: tabular-nums; }
 .stats-note { margin-top: var(--space-3); }
 
+
 /* 模型列表：紧凑展示（标题 + 家族徽标一行，描述单行省略） */
 #model-list { gap: 6px; }
 #model-list .card { padding: 8px 12px; border-radius: 10px; }
@@ -1382,7 +1383,8 @@ footer { padding: 4px 24px 18px; }
 /* ---------- TTS 操作历史（右侧边栏） ---------- */
 #history-panel .history-panel-card,
 #voices-panel .history-panel-card,
-#stats-panel .history-panel-card {
+#stats-panel .history-panel-card,
+#requests-panel .history-panel-card {
   width: min(1100px, calc(100vw - 48px));
   height: calc(100vh - 96px);
   min-height: 0;
@@ -1399,12 +1401,14 @@ footer { padding: 4px 24px 18px; }
 }
 #history-panel:not(.hidden) .history-panel-card,
 #voices-panel:not(.hidden) .history-panel-card,
-#stats-panel:not(.hidden) .history-panel-card { opacity: 1; transform: none; }
+#stats-panel:not(.hidden) .history-panel-card,
+#requests-panel:not(.hidden) .history-panel-card { opacity: 1; transform: none; }
 @media (max-width: 1100px) {
   /* 窄屏下全屏面板进一步收紧边距 */
   #history-panel .history-panel-card,
   #voices-panel .history-panel-card,
-  #stats-panel .history-panel-card {
+  #stats-panel .history-panel-card,
+#requests-panel .history-panel-card {
     width: calc(100vw - 16px);
     height: calc(100vh - 24px);
     border-radius: 10px;

@@ -57,6 +57,7 @@
 - **TTS 操作历史**：按模型隔离保存合成记录与结果音频（不自动淘汰，仅手动删除），历史面板可回听、分组、行内展开四要素
 - **音色库（参考音频）**：全局资源，`data/voices/` 下集中管理，名称唯一，支持改名 / 改参考文本 / 试听
 - **OpenAI 兼容代理**：`GET /v1/models` 聚合全部就绪实例；`POST|PUT /v1/*`（如 `/v1/audio/speech`）按请求体顶层 `model` 路由到同名实例，大 base64 全程流式落盘转发（兼容边界见下文「OpenAI 接口兼容性」）
+- **请求日志与延迟（#198）**：页头「请求与延迟」面板（`#/requests`）实时显示每实例状态（已加载 / 冷 / 加载中、距上次使用、空闲卸载倒计时、VRAM / RAM、设备、在途与排队）、15 分钟 / 1 小时首段音频与总耗时 P50 / P90、最近 `/v1` 请求（冷加载 / 重启重叠 / >100 ms 分块间隔标记）与流式分块时间线；只存元数据、只在内存。调用方可带 `X-Client` 头标记来源，详见 [`docs/API.md`](docs/API.md)
 - **内置权重下载器**：`POST /api/downloads` 多线程 Range 分段下载 HuggingFace（或 modelscope 镜像）权重，支持断点续传、暂停 / 恢复、进度与速率统计；可下载包以 `model-packages.json` 为准，手动下载来源参考见 [`model_download_urls.md`](model_download_urls.md)
 - **设备探测**：启动弹窗可运行 `audiocpp_server --list-devices`，把可用设备渲染成下拉选单
 - **Windows 友好**：系统托盘、开机自启、无控制台窗口启动子进程

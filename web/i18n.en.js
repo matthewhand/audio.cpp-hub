@@ -382,6 +382,8 @@ window.I18N_EN = {
   "stats.runP95": "Run time P95",
   "stats.rtf": "Real-time factor (lower is faster)",
   "stats.perfNote": "Performance from the most recent {n} completed-task samples",
+  "obs.title": "Requests & latency",
+  "obs.pause": "Pause",
   /* ---------- launch modal ---------- */
   "launch.title": "Launch model",
   "launch.profile": "Launch profile",

@@ -25,6 +25,8 @@
       "web/modules/models.js",
       "web/modules/panels.js",
       "web/modules/readiness.js",
+      "web/modules/requests-lazy.js",
+      "web/modules/requests.js",
       "web/modules/routing.js",
       "web/modules/settings-lazy.js",
       "web/modules/settings.js",
@@ -205,6 +207,12 @@
         "tts.textPlaceholder",
         "tts.title"
       ]
+    },
+    {
+      "id": "requests-panel",
+      "kind": "modal",
+      "label": "obs.title",
+      "i18n": ["history.closeTitle", "history.refresh", "obs.pause", "obs.title"]
     },
     {
       "id": "settings-modal",
@@ -760,6 +768,34 @@
       "handlers": [{ "event": "click", "sources": ["web/modules/launch.js"] }]
     },
     {
+      "id": "requests-btn",
+      "tag": "button",
+      "type": null,
+      "i18n": ["obs.title", "obs.title"],
+      "handlers": []
+    },
+    {
+      "id": "requests-close",
+      "tag": "button",
+      "type": null,
+      "i18n": ["history.closeTitle", "history.closeTitle"],
+      "handlers": [{ "event": "click", "sources": ["web/modules/requests.js"] }]
+    },
+    {
+      "id": "requests-pause",
+      "tag": "button",
+      "type": null,
+      "i18n": ["obs.pause"],
+      "handlers": [{ "event": "click", "sources": ["web/modules/requests.js"] }]
+    },
+    {
+      "id": "requests-refresh",
+      "tag": "button",
+      "type": null,
+      "i18n": ["history.refresh"],
+      "handlers": [{ "event": "click", "sources": ["web/modules/requests.js"] }]
+    },
+    {
       "id": "sep-submit",
       "tag": "button",
       "type": null,
@@ -923,10 +959,10 @@
     }
   ],
   "dataHooks": [
-    { "name": "data-i18n", "count": 134 },
-    { "name": "data-i18n-aria-label", "count": 27 },
+    { "name": "data-i18n", "count": 137 },
+    { "name": "data-i18n-aria-label", "count": 29 },
     { "name": "data-i18n-placeholder", "count": 24 },
-    { "name": "data-i18n-title", "count": 11 },
+    { "name": "data-i18n-title", "count": 13 },
     { "name": "data-mode", "count": 4 },
     { "name": "data-section", "count": 3 },
     { "name": "data-theme", "count": 1 }
@@ -1048,6 +1084,17 @@
       "path": "/api/instances/{param}",
       "sources": ["web/modules/instances.js"]
     },
+    {
+      "method": "GET",
+      "path": "/api/metrics/recent?{param}",
+      "sources": ["web/modules/requests.js"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/metrics/requests/{param}",
+      "sources": ["web/modules/requests.js"]
+    },
+    { "method": "GET", "path": "/api/metrics/summary", "sources": ["web/modules/requests.js"] },
     { "method": "GET", "path": "/api/models", "sources": ["web/modules/models.js"] },
     {
       "method": "GET",
