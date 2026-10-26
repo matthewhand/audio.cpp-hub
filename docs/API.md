@@ -562,19 +562,19 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 - 其余查询参数原样转发给引擎：`sample_rate`（默认 `16000`）、`channels`（默认 `1`）、`sample_format`（`s16le` 默认 / `f32le`）、`language`、`prompt`、`busy_timeout_ms`
 - 请求体边收边转发（chunked），不落盘、不受 `proxyMaxBodyBytes` 限制（上限由实例 `liveIngest` 决定）；响应每行 SSE 立即 Flush，并带 `X-Accel-Buffering: no`
 - 无读写超时：会话持续到客户端结束上传；客户端断开会立即中止到引擎的请求
-- 引擎非 2xx（如参数错误）原样透传状态码和错误体
+- 引擎非 2xx 原样透传状态码和错误体；会话开始后引擎拒绝的请求选项（例如 `parakeet_tdt` 不接受 `language`）以 `200` + SSE `data: {"type":"error",...}` 返回，`/api/metrics/*` 记录在该请求的 `error` 字段
 - 只 `POST`，其它方法 `405`
 
 SSE 事件（引擎定义）：`{"type":"transcript.text.partial","text":...}`、`{"type":"transcript.text.delta","delta":...}`、最终 `{"type":"transcript.text.done","text":...}`，然后 `data: [DONE]`；diar 模型另有说话人事件。
 
 请求日志（`/api/metrics/*`）记录 `streamed: true`、`X-Client` 标签、`X-Hub-Request-Id`、首字节时间（= 第一个转写事件）、上传字节数与音频秒数（按采样率 / 声道 / 格式推算）；**不保存音频或转写文本**。
 
-示例：把任意音频文件按实时速度转成 16 kHz 单声道 s16le 并流式上传（`-N` 关闭输出缓冲，`-T -` 从 stdin 分块上传，`-H 'Expect:'` 跳过 100-continue）：
+示例：把任意音频文件按实时速度转成 16 kHz 单声道 s16le 并流式上传（`-N` 关闭输出缓冲，`-T -` 从 stdin 分块上传——`-T` 默认发 `PUT`，必须加 `-X POST`，否则 `405`；`-H 'Expect:'` 跳过 100-continue）：
 
 ```bash
 ffmpeg -loglevel error -re -i speech.wav -f s16le -ac 1 -ar 16000 - |
-  curl -sN -T - -H 'Expect:' -H 'Content-Type: application/octet-stream' -H 'X-Client: mic-demo/1' \
-    'http://127.0.0.1:8080/v1/audio/transcriptions/live?model=bark3-live&sample_rate=16000&channels=1&sample_format=s16le&language=en'
+  curl -sN -X POST -T - -H 'Expect:' -H 'Content-Type: application/octet-stream' -H 'X-Client: mic-demo/1' \
+    'http://127.0.0.1:8080/v1/audio/transcriptions/live?model=bark3-live&sample_rate=16000&channels=1&sample_format=s16le'
 ```
 
 麦克风（Linux / PulseAudio）：把 `-re -i speech.wav` 换成 `-f pulse -i default`。
