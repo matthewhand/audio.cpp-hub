@@ -295,7 +295,8 @@ func (h *Hub) handleInstanceList(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleInstanceStart 启动实例：{"modelId","weightsPath","backend"?,"device"?,"port"?,
-// "threads"?,"idleUnloadMs"?,"minFreeMemoryMb"?,"executableId"?,"name"?,"sessionOptions"?}
+// "threads"?,"idleUnloadMs"?,"minFreeMemoryMb"?,"executableId"?,"name"?,"sessionOptions"?,
+// "mode"?("offline"|"streaming"),"liveIngest"?{idleTimeoutMs,totalTimeoutMs,maxBodyBytes,maxChunkBytes,sendTimeoutMs}}
 func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 	body := readBodyMap(w, r)
 	if body == nil {
@@ -307,6 +308,11 @@ func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 	if modelEntry == nil {
 		errJSON(w, http.StatusBadRequest, "MODEL_UNKNOWN", map[string]any{"modelId": modelID},
 			"modelId 不在注册表中: "+modelID)
+		return
+	}
+	mode, liveIngest, err := parseInstanceMode(body, modelEntry)
+	if err != nil {
+		errFromErr(w, http.StatusBadRequest, "MODE_INVALID", err)
 		return
 	}
 	if weightsPath == "" {
@@ -393,6 +399,8 @@ func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 		Env:             execEntry.Env,
 		Name:            optString(body, "name"),
 		SessionOptions:  sessionOptions,
+		Mode:            mode,
+		LiveIngest:      liveIngest,
 	})
 	if err != nil {
 		errFromErr(w, http.StatusInternalServerError, "LAUNCH_FAILED", err)

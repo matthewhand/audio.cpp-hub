@@ -75,6 +75,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 | POST | `/api/downloads/{id}/resume` | 续传下载 |
 | GET | `/v1/models` | OpenAI 模型列表 |
 | POST/PUT | `/v1/*` | OpenAI 兼容代理 |
+| POST | `/v1/audio/transcriptions/live?model=` | 实时语音转写直通（分块 PCM 上传 → SSE 增量，#200） |
 
 未匹配的 `/api/*` 返回 `404 UNKNOWN_API`；其余 GET 由 `web/` 静态文件服务。
 
@@ -96,7 +97,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 
 ## 实例
 
-实例对象字段：`id`、`instanceName`、`modelId`、`weightsPath`、`port`、`backend`、`executableName`、`status`、`createdAt`、`taskCount`、`sessionOptions`，可选 `device`、`threads`。`status` 为 `STARTING` / `READY` / `STOPPED` / `FAILED` 等。
+实例对象字段：`id`、`instanceName`、`modelId`、`weightsPath`、`port`、`backend`、`executableName`、`status`、`createdAt`、`taskCount`、`sessionOptions`、`mode`（`offline` / `streaming`），可选 `device`、`threads`、`liveIngest`。`status` 为 `STARTING` / `READY` / `STOPPED` / `FAILED` 等。
 
 ### `GET /api/instances`
 
@@ -116,7 +117,9 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
   "threads": 8,
   "executableId": "507bed27",
   "name": "可选的服务名，默认 modelId",
-  "sessionOptions": { "任意键": "任意标量值" }
+  "sessionOptions": { "任意键": "任意标量值" },
+  "mode": "offline",
+  "liveIngest": { "idleTimeoutMs": 10000, "totalTimeoutMs": 0, "maxBodyBytes": 0, "maxChunkBytes": 65536, "sendTimeoutMs": 5000 }
 }
 ```
 
@@ -124,6 +127,8 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 - `executableId` 缺省取第一个已登记的可执行文件；无可用项返回 `400 NO_EXECUTABLE`
 - 服务名 `name` 全局唯一，重名拒绝启动
 - `sessionOptions` 值统一转字符串，写入 `server.json` 的 `session_options`
+- `mode` 可选，默认 `offline`；`streaming` 让引擎以流式会话加载模型，才能服务 `POST /v1/audio/transcriptions/live`（见下文）。取值非法 `400 MODE_INVALID`；模型卡 `modes` 不含 `streaming` 时 `400 MODE_UNSUPPORTED`。写入 `server.json` 的 `model.mode`
+- `liveIngest` 可选，仅 `mode: "streaming"` 时允许（否则 `400 LIVE_INGEST_REQUIRES_STREAMING`），映射为 `server.json` 的 `model.live_ingest`（`idle_timeout_ms` / `total_timeout_ms` / `max_body_bytes` / `max_chunk_bytes` / `send_timeout_ms`）。值须为非负整数，`0` 表示不限，`maxChunkBytes` 须为正；未知键或非法值 `400 LIVE_INGEST_INVALID`。缺省用引擎默认值
 - 成功返回 `200` 实例对象；启动失败返回 `500 LAUNCH_FAILED`
 
 ### `DELETE /api/instances/{id}`
@@ -547,6 +552,43 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 > **已知限制**：`multipart/form-data` 无法提取 `model`（extractor 只认 JSON），例如 multipart 的 `POST /v1/audio/transcriptions` 会返回 `400 Missing required parameter: model`。请改用 JSON body 或 Web UI 的 ASR 流程。
 
 其它方法（非 GET/POST/PUT）返回 `405`。
+
+### `POST /v1/audio/transcriptions/live?model=<服务名>`（实时转写，#200）
+
+边说边转写：客户端以 `Transfer-Encoding: chunked` 上传原始 PCM，audio.cpp 引擎在音频到达时以 SSE 推回转写增量。Hub 对这条路由**全双工直通**，不走上面的落盘缓冲：
+
+- 路由按查询参数 `model`（服务名）选择实例，不读请求体；缺失 `400`，启动中 `409`，不存在 `404`
+- 实例必须以 `"mode":"streaming"` 创建（`POST /api/instances`），且任务为 `asr` / `diar`；否则 `400`，错误信息说明如何重建实例
+- 其余查询参数原样转发给引擎：`sample_rate`（默认 `16000`）、`channels`（默认 `1`）、`sample_format`（`s16le` 默认 / `f32le`）、`language`、`prompt`、`busy_timeout_ms`
+- 请求体边收边转发（chunked），不落盘、不受 `proxyMaxBodyBytes` 限制（上限由实例 `liveIngest` 决定）；响应每行 SSE 立即 Flush，并带 `X-Accel-Buffering: no`
+- 无读写超时：会话持续到客户端结束上传；客户端断开会立即中止到引擎的请求
+- 引擎非 2xx（如参数错误）原样透传状态码和错误体
+- 只 `POST`，其它方法 `405`
+
+SSE 事件（引擎定义）：`{"type":"transcript.text.partial","text":...}`、`{"type":"transcript.text.delta","delta":...}`、最终 `{"type":"transcript.text.done","text":...}`，然后 `data: [DONE]`；diar 模型另有说话人事件。
+
+请求日志（`/api/metrics/*`）记录 `streamed: true`、`X-Client` 标签、`X-Hub-Request-Id`、首字节时间（= 第一个转写事件）、上传字节数与音频秒数（按采样率 / 声道 / 格式推算）；**不保存音频或转写文本**。
+
+示例：把任意音频文件按实时速度转成 16 kHz 单声道 s16le 并流式上传（`-N` 关闭输出缓冲，`-T -` 从 stdin 分块上传，`-H 'Expect:'` 跳过 100-continue）：
+
+```bash
+ffmpeg -loglevel error -re -i speech.wav -f s16le -ac 1 -ar 16000 - |
+  curl -sN -T - -H 'Expect:' -H 'Content-Type: application/octet-stream' -H 'X-Client: mic-demo/1' \
+    'http://127.0.0.1:8080/v1/audio/transcriptions/live?model=bark3-live&sample_rate=16000&channels=1&sample_format=s16le&language=en'
+```
+
+麦克风（Linux / PulseAudio）：把 `-re -i speech.wav` 换成 `-f pulse -i default`。
+
+先建流式实例，例如：
+
+```bash
+curl -s http://127.0.0.1:8080/api/instances -H 'Content-Type: application/json' -d '{
+  "modelId": "parakeet_tdt", "name": "bark3-live", "mode": "streaming",
+  "weightsPath": "/abs/path/to/underdog-bark-3.0-q8_0.gguf", "backend": "vulkan", "device": 0
+}'
+```
+
+支持 `streaming` 的模型卡（`modes` 含 `streaming`）：`nemotron_asr`、`parakeet_tdt`、`qwen3_asr`、`higgs_audio_stt`、`moss_transcribe_diarize`、`voxtral_realtime`、`kroko_asr` 等，以 `GET /api/models` 为准。
 
 ---
 

@@ -158,6 +158,10 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 		r = withRequestRecorder(r, rec)
 	}
 	r.Header.Del(clientTagHeader)
+	if r.URL.Path == liveRoute {
+		h.handleV1Live(w, r) // live PCM upload: never buffered or spilled (#200)
+		return
+	}
 	rec := requestRecorderFrom(r.Context())
 	maxBody := h.cfg.ProxyMaxBodyBytes
 	if maxBody <= 0 {

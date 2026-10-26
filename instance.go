@@ -38,8 +38,13 @@ type Instance struct {
 	// 都须保留这么多 MiB 才允许加载；nil/0 表示关闭。
 	MinFreeMemoryMb *int
 	SessionOptions  map[string]string
-	Status          string // STARTING / READY
-	CreatedAt       string
+	// Mode 引擎会话模式（server.json model.mode）："offline"（默认，空串同义）或 "streaming"。
+	// streaming 才能服务 /v1/audio/transcriptions/live（#200）。
+	Mode string
+	// LiveIngest 实时上传限额（camelCase 键，写入 server.json model.live_ingest），nil 用引擎默认。
+	LiveIngest map[string]int64
+	Status     string // STARTING / READY
+	CreatedAt  string
 
 	cmd      *exec.Cmd
 	done     chan struct{} // 进程退出后关闭，向所有观察者广播终止
@@ -119,6 +124,8 @@ type StartParams struct {
 	Env             map[string]string
 	Name            string
 	SessionOptions  map[string]string
+	Mode            string           // "" / "offline" / "streaming"
+	LiveIngest      map[string]int64 // camelCase keys, see liveIngestKeys
 }
 
 // List 返回全部实例，顺序确定：先按 CreatedAt，再按 ID。
@@ -260,6 +267,8 @@ func (m *InstanceManager) Start(p StartParams) (*Instance, error) {
 		IdleUnloadMs:    p.IdleUnloadMs,
 		MinFreeMemoryMb: p.MinFreeMemoryMb,
 		SessionOptions:  p.SessionOptions,
+		Mode:            p.Mode,
+		LiveIngest:      p.LiveIngest,
 		Status:          "STARTING",
 		CreatedAt:       time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
 		done:            make(chan struct{}),
@@ -562,7 +571,14 @@ func writeServerJSON(path string, port int, p StartParams, instanceName string) 
 		"family": p.EngineFamily,
 		"path":   p.WeightsPath,
 		"task":   p.ServerTask,
-		"mode":   "offline",
+		"mode":   instanceMode(p.Mode),
+	}
+	if len(p.LiveIngest) > 0 {
+		li := map[string]int64{}
+		for k, v := range p.LiveIngest {
+			li[liveIngestKeys[k]] = v
+		}
+		model["live_ingest"] = li
 	}
 	if len(p.SessionOptions) > 0 {
 		model["session_options"] = p.SessionOptions
@@ -621,6 +637,10 @@ func (m *InstanceManager) ToJSON(inst *Instance, taskCount int) map[string]any {
 		"createdAt":      inst.CreatedAt,
 		"taskCount":      taskCount,
 		"sessionOptions": inst.SessionOptions,
+		"mode":           instanceMode(inst.Mode),
+	}
+	if len(inst.LiveIngest) > 0 {
+		out["liveIngest"] = inst.LiveIngest
 	}
 	if inst.Device != nil {
 		out["device"] = *inst.Device
