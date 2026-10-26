@@ -206,7 +206,7 @@ Hub 去首尾空白，`[A-Za-z0-9._:@/+=-]` 以外的字符替换成 `_`，截�
 | `outputBytes` / `outputAudioSec`* / `rtf`* | 输出大小、音频秒数、实时率（总耗时 ÷ 音频秒，越小越快） |
 | `status` / `error`* | HTTP 状态；失败时错误文本前 300 字符 |
 | `streamed` / `streamMode`* / `chunkedTransfer` | 请求了 `stream`、SSE 回复或 Hub 分句流式（`streamMode: "sentence-chunked"`）；`chunkedTransfer` = 回复无 `Content-Length` |
-| `inFlight` / `clientAborted` | 仍在进行 / 客户端提前断开 |
+| `inFlight` / `clientAborted` | 仍在进行 / 客户端在收完回复前断开（写入失败，或 Content-Length 未送完 / 流式仍在写时断开；收完整个定长回复后挂断不算） |
 | `coldLoad`* / `coldLoadSource`* | 是否冷加载：`engine`（请求前探测引擎 `/v1/models` 的 `loaded`，探测不重置空闲卸载计时）/ `inferred`（按上次使用与 `idleUnloadMs` 推断）/ `queued`（前面有请求，必然已热） |
 | `hubUptimeMsAtStart` / `instanceUptimeMsAtStart`* | 请求开始时 Hub / 实例已运行多久 |
 | `nearRestart` / `restartReason`* | 重启重叠：Hub 或实例启动后 2 分钟内、或同服务名的实例被替换后首个请求；`hub` / `instance-start` / `instance-replaced` |

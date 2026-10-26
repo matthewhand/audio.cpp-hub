@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -457,5 +458,51 @@ func TestMetricsSummaryReportsInstanceStatusAndPercentiles(t *testing.T) {
 	}
 	if sum.HubStartedAt == 0 || sum.HubUptimeMs < 3600000-5000 {
 		t.Errorf("hub start/uptime wrong: %d %d", sum.HubStartedAt, sum.HubUptimeMs)
+	}
+}
+
+type failingWriter struct{ *httptest.ResponseRecorder }
+
+func (failingWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
+
+// A client that hangs up right after reading a complete Content-Length body
+// cancels the request context before Finish runs; that is not an abort.
+func TestClientAbortedOnlyWhenReplyIncomplete(t *testing.T) {
+	m, _ := newTestMetrics(time.Now().Add(-time.Hour))
+	inst := &Instance{ID: "a1", Name: "kokoro", ModelID: "kokoro", ServerTask: "tts", Status: "READY"}
+	run := func(name string, w http.ResponseWriter, contentLength string, body []byte, cancel bool) bool {
+		t.Helper()
+		ctx, stop := context.WithCancel(context.Background())
+		defer stop()
+		r := httptest.NewRequest("POST", "/v1/audio/speech", nil).WithContext(ctx)
+		rec := m.Begin(r, "/v1/audio/speech")
+		rec.SetInstance(inst)
+		rw := rec.Wrap(w)
+		if contentLength != "" {
+			rw.Header().Set("Content-Length", contentLength)
+		}
+		rw.WriteHeader(200)
+		_, _ = rw.Write(body)
+		if cancel {
+			stop()
+		}
+		rec.Finish()
+		return m.Recent("kokoro", 1, false)[0].ClientAborted
+	}
+	body := []byte("0123456789")
+	if run("complete", httptest.NewRecorder(), "10", body, true) {
+		t.Error("complete Content-Length reply then hang-up: want clientAborted=false")
+	}
+	if !run("short", httptest.NewRecorder(), "20", body, true) {
+		t.Error("hang-up before Content-Length was delivered: want clientAborted=true")
+	}
+	if !run("chunked", httptest.NewRecorder(), "", body, true) {
+		t.Error("hang-up while the handler was still streaming: want clientAborted=true")
+	}
+	if !run("write error", failingWriter{httptest.NewRecorder()}, "", body, false) {
+		t.Error("write to client failed: want clientAborted=true")
+	}
+	if run("normal", httptest.NewRecorder(), "", body, false) {
+		t.Error("normal reply: want clientAborted=false")
 	}
 }

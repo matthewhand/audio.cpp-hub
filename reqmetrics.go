@@ -194,6 +194,8 @@ type reqState struct {
 	errBuf          []byte
 	explicitErr     string
 	streamRequested bool
+	contentLength   int64 // declared reply length, -1 when chunked/unknown
+	writeFailed     bool  // a write to the client returned an error
 }
 
 // Begin opens a record for an incoming /v1 request. route is the request path.
@@ -205,7 +207,7 @@ func (m *RequestMetrics) Begin(r *http.Request, route string) *reqState {
 	defer m.mu.Unlock()
 	now := m.now()
 	m.seq++
-	s := &reqState{m: m, r: r, start: now, dataOffset: -1}
+	s := &reqState{m: m, r: r, start: now, dataOffset: -1, contentLength: -1}
 	s.rec = RequestRecord{
 		ID:                 fmt.Sprintf("%x-%d", m.hubStart.Unix()&0xffffff, m.seq),
 		Time:               now.UTC().Format("2006-01-02T15:04:05.000Z"),
@@ -412,6 +414,9 @@ func (mw *meterWriter) Write(b []byte) (int, error) {
 	if n > 0 {
 		mw.s.onWrite(b[:n])
 	}
+	if err != nil {
+		mw.s.onWriteError()
+	}
 	return n, err
 }
 
@@ -431,6 +436,9 @@ func (s *reqState) onHeader(code int, h http.Header) {
 	s.rec.Status = code
 	s.rec.StreamMode = h.Get("X-Hub-Stream")
 	s.rec.ChunkedTransfer = code < 400 && h.Get("Content-Length") == ""
+	if cl, err := strconv.ParseInt(h.Get("Content-Length"), 10, 64); err == nil && cl >= 0 {
+		s.contentLength = cl
+	}
 	ct := strings.ToLower(h.Get("Content-Type"))
 	s.contentType = ct
 	mt, _, _ := mime.ParseMediaType(ct)
@@ -453,6 +461,26 @@ func (s *reqState) onHeader(code int, h http.Header) {
 	case strings.HasPrefix(mt, "audio/"):
 		s.nonPCMAudio = true
 	}
+}
+
+func (s *reqState) onWriteError() {
+	s.m.mu.Lock()
+	s.writeFailed = true
+	s.m.mu.Unlock()
+}
+
+// clientAbortedLocked: the client went away before receiving the whole reply.
+// A cancelled context alone is not enough: net/http cancels it when a client
+// hangs up right after reading a complete Content-Length body.
+func (s *reqState) clientAbortedLocked() bool {
+	if s.writeFailed {
+		return true
+	}
+	if s.r == nil || s.r.Context().Err() == nil {
+		return false
+	}
+	delivered := s.contentLength >= 0 && s.rec.OutputBytes >= s.contentLength
+	return !delivered
 }
 
 func (s *reqState) onWrite(b []byte) {
@@ -552,9 +580,7 @@ func (s *reqState) Finish() {
 	now := m.now()
 	s.end = now
 	s.rec.InFlight = false
-	if s.r != nil && s.r.Context().Err() != nil {
-		s.rec.ClientAborted = true
-	}
+	s.rec.ClientAborted = s.clientAbortedLocked()
 	if s.rec.Status == 0 && s.headerAt.IsZero() {
 		if s.rec.ClientAborted {
 			s.rec.Status = 499 // client closed before the hub answered
