@@ -448,17 +448,20 @@ func TestLiveTranscriptionErrors(t *testing.T) {
 			t.Fatalf("got %d %s", code, body)
 		}
 	})
-	t.Run("GET", func(t *testing.T) {
-		_, url := newLiveHub(t, newLiveEngine(), "streaming", "READY")
-		resp, err := http.Get(url + liveQuery)
-		if err != nil {
-			t.Fatal(err)
-		}
-		resp.Body.Close()
-		if resp.StatusCode != 405 {
-			t.Fatalf("got %d", resp.StatusCode)
-		}
-	})
+	for _, method := range []string{http.MethodGet, http.MethodPut} {
+		t.Run(method, func(t *testing.T) {
+			_, url := newLiveHub(t, newLiveEngine(), "streaming", "READY")
+			req, _ := http.NewRequest(method, url+liveQuery, nil)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+			if resp.StatusCode != 405 || resp.Header.Get("Allow") != "POST" {
+				t.Fatalf("got %d Allow=%q; want 405 Allow=POST", resp.StatusCode, resp.Header.Get("Allow"))
+			}
+		})
+	}
 }
 
 func TestLiveInputAudioSeconds(t *testing.T) {
@@ -482,4 +485,37 @@ func mustQuery(t *testing.T, q string) map[string][]string {
 	t.Helper()
 	r := httptest.NewRequest(http.MethodPost, "/v1/audio/transcriptions/live?"+q, nil)
 	return r.URL.Query()
+}
+
+// writeLog records each Write so tests can see what reached the client, and when.
+type writeLog struct {
+	h      http.Header
+	writes []string
+}
+
+func (l *writeLog) Header() http.Header { return l.h }
+func (l *writeLog) WriteHeader(int)     {}
+func (l *writeLog) Flush()              {}
+func (l *writeLog) Write(b []byte) (int, error) {
+	l.writes = append(l.writes, string(b))
+	return len(b), nil
+}
+
+func TestRelaySSEHoldsPreambleUntilFirstData(t *testing.T) {
+	for name, preamble := range map[string]string{
+		"short comment":     ": hello\nevent: transcript\n",
+		"oversized comment": ": " + strings.Repeat("x", 40<<10) + "\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			stream := preamble + "data: {\"type\":\"transcript.text.delta\",\"delta\":\" " + strings.Repeat("y", 30<<10) + "\"}\n\ndata: [DONE]\n\n"
+			l := &writeLog{h: http.Header{}}
+			relaySSE(l, http.NewResponseController(l), strings.NewReader(stream), nil)
+			if got := strings.Join(l.writes, ""); got != stream {
+				t.Fatalf("stream altered: got %d bytes, want %d", len(got), len(stream))
+			}
+			if !strings.Contains(l.writes[0], "data:") {
+				t.Fatalf("first write to the client carries no data line (TTFB would be wrong): %.40q", l.writes[0])
+			}
+		})
+	}
 }

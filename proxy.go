@@ -145,7 +145,13 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 		h.handleV1Models(w, r)
 		return
 	}
+	if r.URL.Path == liveRoute && r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		v1Error(w, http.StatusMethodNotAllowed, "Method not allowed: "+r.Method+" (live transcription is POST with a chunked PCM body)")
+		return
+	}
 	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		w.Header().Set("Allow", "GET, POST, PUT, OPTIONS")
 		v1Error(w, http.StatusMethodNotAllowed, "Method not allowed: "+r.Method)
 		return
 	}

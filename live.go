@@ -161,11 +161,7 @@ func (c *countingReader) Read(p []byte) (int, error) {
 // line streams back with a flush, and a client disconnect cancels the upstream request.
 // Nothing is buffered to disk and no audio or transcript text is kept.
 func (h *Hub) handleV1Live(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		v1Error(w, http.StatusMethodNotAllowed, "Method not allowed: "+r.Method+" (live transcription is POST with a chunked PCM body)")
-		return
-	}
+	// handleV1Proxy has already answered non-POST methods with 405 + Allow: POST.
 	rec := requestRecorderFrom(r.Context())
 	model := r.URL.Query().Get("model")
 	if model == "" {
@@ -240,45 +236,54 @@ func (h *Hub) handleV1Live(w http.ResponseWriter, r *http.Request) {
 	relaySSE(w, rc, resp.Body, rec)
 }
 
-// relaySSE copies an SSE stream line by line with a flush after each line. Lines before
-// the first data line (comments, event names) are held and sent with it, so the
-// recorded time to first byte is the time to the first transcript event.
+// maxHeldPreamble bounds how much non-data SSE preamble is held back before the first
+// data line; past it the preamble is passed through so memory stays bounded.
+const maxHeldPreamble = 64 << 10
+
+// relaySSE copies an SSE stream with a flush after every write. Lines before the first
+// data line (comments, event names) are held and sent with it, so the recorded time to
+// first byte is the time to the first transcript event. Lines longer than the read
+// buffer pass through in fragments and keep the classification of their first fragment.
 func relaySSE(w http.ResponseWriter, rc *http.ResponseController, src io.Reader, rec *reqState) {
 	br := bufio.NewReaderSize(src, 16<<10)
 	var held []byte
 	sawData := false
+	lineStart, lineIsData := true, false
 	for {
-		line, err := br.ReadSlice('\n')
-		if err == bufio.ErrBufferFull {
-			// Oversized line: pass it through in pieces without waiting for its end.
-			if len(held) > 0 {
-				w.Write(held)
-				held = nil
+		frag, err := br.ReadSlice('\n')
+		complete := err == nil
+		if len(frag) > 0 {
+			if lineStart {
+				lineIsData = bytes.HasPrefix(frag, []byte("data:"))
+				if lineIsData && complete {
+					noteLiveSSEError(frag, rec)
+				}
 			}
-			sawData = true
-			if _, werr := w.Write(line); werr != nil {
-				return
-			}
-			continue
-		}
-		if len(line) > 0 {
-			if bytes.HasPrefix(line, []byte("data:")) {
-				noteLiveSSEError(line, rec)
-				if !sawData {
+			out := frag
+			if !sawData {
+				switch {
+				case lineIsData:
 					sawData = true
-					line = append(held, line...)
+					out = append(held, frag...)
+					held = nil
+				case len(held)+len(frag) <= maxHeldPreamble:
+					held = append(held, frag...)
+					out = nil
+				default:
+					out = append(held, frag...)
 					held = nil
 				}
-			} else if !sawData {
-				held = append(held, line...)
-				line = nil
 			}
-			if len(line) > 0 {
-				if _, werr := w.Write(line); werr != nil {
+			if len(out) > 0 {
+				if _, werr := w.Write(out); werr != nil {
 					return
 				}
 				_ = rc.Flush()
 			}
+			lineStart = complete
+		}
+		if err == bufio.ErrBufferFull {
+			continue
 		}
 		if err != nil {
 			if len(held) > 0 {
