@@ -324,7 +324,10 @@ func TestV1ProxyRecordsMetadataNeverText(t *testing.T) {
 		t.Fatalf("X-Client is hub-only and must not reach the engine: %v", e.headers)
 	}
 
-	resp2, _ := http.Get(url + "/api/metrics/recent?instance=kokoro&limit=5&chunks=1")
+	resp2, err := http.Get(url + "/api/metrics/recent?instance=kokoro&limit=5&chunks=1")
+	if err != nil {
+		t.Fatalf("GET metrics/recent: %v", err)
+	}
 	raw, _ := io.ReadAll(resp2.Body)
 	resp2.Body.Close()
 	if strings.Contains(string(raw), "secret") || strings.Contains(string(raw), "你好") {
@@ -504,5 +507,17 @@ func TestClientAbortedOnlyWhenReplyIncomplete(t *testing.T) {
 	}
 	if run("normal", httptest.NewRecorder(), "", body, false) {
 		t.Error("normal reply: want clientAborted=false")
+	}
+}
+
+// Short first writes keep buffering only while they could still be "RIFF".
+func TestParseWAVPrefixShortInput(t *testing.T) {
+	cases := map[string]bool{"": true, "R": true, "RI": true, "RIF": true, "RIFF": true, "RIFF\x00\x00": true,
+		"X": false, "RX": false, "ID3": false, "RIFX": false, "OggS\x00": false}
+	for in, wantMore := range cases {
+		_, _, _, ok, more := parseWAVPrefix([]byte(in))
+		if ok || more != wantMore {
+			t.Errorf("parseWAVPrefix(%q) ok=%v more=%v; want ok=false more=%v", in, ok, more, wantMore)
+		}
 	}
 }

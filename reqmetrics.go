@@ -764,8 +764,8 @@ func (m *RequestMetrics) instanceSnapshot(name string) instSnap {
 			out.coldInFlight = true
 		}
 	}
-	out.samples = append([]latSample(nil), pruneSamples(t.samples, m.now())...)
 	t.samples = pruneSamples(t.samples, m.now())
+	out.samples = append([]latSample(nil), t.samples...)
 	return out
 }
 
@@ -1092,6 +1092,8 @@ func audioHeaderRate(h http.Header) int {
 // more reports that the prefix is a valid start but too short to decide.
 func parseWAVPrefix(b []byte) (bytesPerSec, dataOffset int, dataSize uint32, ok, more bool) {
 	if len(b) < 12 {
+		// Too short to decide: keep buffering only while the bytes seen so far
+		// could still be the "RIFF" magic (b is a prefix of it, or vice versa).
 		return 0, 0, 0, false, len(b) == 0 || strings.HasPrefix("RIFF", string(b[:min(len(b), 4)]))
 	}
 	if string(b[:4]) != "RIFF" || string(b[8:12]) != "WAVE" {
