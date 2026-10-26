@@ -34,6 +34,10 @@ type HubConfig struct {
 	// ProxyResponseHeaderTimeoutMs bounds how long /v1/* waits for an instance to start
 	// answering (lazy load + offline generation). <= 0 falls back to 60 s.
 	ProxyResponseHeaderTimeoutMs int64 `json:"proxyResponseHeaderTimeoutMs"`
+	// V1SpeechArchive is the default for archiving successful /v1/audio/speech replies
+	// into operation history (nil = true). Requests override it with the JSON body field
+	// "archive": true|false or the header X-Hub-No-Archive: 1.
+	V1SpeechArchive *bool `json:"v1SpeechArchive,omitempty"`
 }
 
 func loadConfig() HubConfig {
@@ -166,4 +170,10 @@ func main() {
 		}
 		return err
 	})
+}
+
+// v1SpeechArchiveDefault reports whether /v1/audio/speech replies are archived when the
+// request does not say otherwise.
+func (c HubConfig) v1SpeechArchiveDefault() bool {
+	return c.V1SpeechArchive == nil || *c.V1SpeechArchive
 }
