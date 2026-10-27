@@ -49,6 +49,8 @@
 
 ## 功能特性
 
+- **实时语音转写（公开 `main`，尚未包含在 v0.2.1 发布包中）**：`POST /v1/audio/transcriptions/live?model=...` 将分块 PCM 音频上传与 SSE 增量转写双向透传给以 `streaming` 模式启动的 ASR/diar 实例。此路径由模拟引擎测试覆盖，不代表真实麦克风或模型性能验证；详见 [`docs/API.md`](docs/API.md#post-v1audiotranscriptionslivemodel服务名实时转写200)。
+
 - **多实例管理**：为每个模型实例生成 `server.json` 并以子进程拉起 `audiocpp_server`，自动分配端口（绑定 127.0.0.1）、轮询健康状态（最多 120s）、查看日志、一键停止
 - **Web UI**：纯原生 HTML/JS 界面（无构建步骤），中英双语，支持模型选择、参数表单、任务提交
 - **界面能力**：hash 路由与深链接（`#/model/<id>`、`#/history` 等，前进 / 后退可还原）、`Ctrl/Cmd-K` 命令面板、深浅色与跟随系统主题、列表骨架 / 空态 / 错误态统一、键盘可达与 WCAG AA 对比度（动效遵循 `prefers-reduced-motion`）
