@@ -51,6 +51,21 @@ type dlPackage struct {
 	Files     []dlPackageFile `json:"files"`
 }
 
+// packageHasExpectedSHA256 gates mirror selection until the mirror's bytes
+// and revision are independently tied to the source-side digest and commit.
+// Legacy packages without expected digests retain their previous options.
+func packageHasExpectedSHA256(pkg *dlPackage) bool {
+	if pkg == nil {
+		return false
+	}
+	for _, file := range pkg.Files {
+		if file.SHA256 != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // resolvePackage 选择下载包：packageID 为空时取 default 标记的包（无标记取第一个），
 // 找不到返回 nil。语义同 Java ModelPackageRegistry.resolvePackage。
 func resolvePackage(family json.RawMessage, packageID string) *dlPackage {
