@@ -144,6 +144,76 @@ so standard OpenAI clients work unchanged.
 > `voice_ref` calls to one hub, or use `instruction` (voice design) instead,
 > which is stateless.
 
+### Preset voices (no cloning)
+
+Some models ship a fixed voice bank instead of cloning. Their card says so:
+`inputs.voiceRef` is `"none"`, and the picker is a `paramSchema` enum:
+`voice_id` (Kokoro 82M's 54 voices, Supertonic, Magpie), `speaker` (qwen3
+CustomVoice), or a mode key such as `task_route` (vevo2). Passing `voice_ref`
+to these models is not a fallback: there is no reference clip for the engine to
+read.
+
+Read the list off the card before you call — `/v1/models` only knows which
+services are up, not what voices they have:
+
+```bash
+curl -s http://10.0.0.36:18080/api/models | python3 -c 'import json,sys
+m=[x for x in json.load(sys.stdin) if x["id"]=="kokoro_tts"][0]
+print(m["paramSchema"]["voice_id"]["values"])'
+```
+
+Kokoro 82M — `/api/models` id `kokoro_tts`, service name `kokoro` on the hub that
+runs it:
+
+```jsonc
+// POST http://<hub-running-kokoro>:18080/v1/audio/speech   (hub: model = service name)
+{
+  "model": "kokoro",
+  "input": "Oh, brilliant. Another meeting that could have been an email.",
+  "response_format": "wav",
+  "language": "en-us",              // top-level; one of language.values
+  "options": {
+    "voice_id": "af_heart",         // default; the 54 values are in the card
+    "speed": 1.0                    // 0.5 … 2.0
+  }
+}
+```
+
+Two things to know before building on Kokoro:
+
+- **Voice ids are language-prefixed and nothing enforces agreement.** `a`/`b`
+  American & British English, `e` Spanish, `f` French, `h` Hindi, `i` Italian,
+  `j` Japanese, `p` Brazilian Portuguese, `z` Mandarin; the second letter is
+  `f`/`m` (female/male). A mismatched pair (`language: "zh"` + `jf_alpha`) is
+  accepted by the hub and then mis-phonemizes or fails inside the engine.
+- **Japanese voices need the UniDic GGUF.** The release package does not embed
+  UniDic resources, so `jf_*` / `jm_*` fail at runtime on it. Every other
+  language is unaffected.
+
+Where each model wants its enum key (the same rule as `docs/API.md`; authority is
+`web/modules/panels.js`):
+
+| Model (`/api/models` id) | Key | Where |
+|---|---|---|
+| `kokoro_tts` | `voice_id`, `speed` | `options` |
+| `magpie_tts` | `voice_id` | `options` |
+| `breeze-tts` | `text_chunk_mode` | `options` |
+| `index_tts2_5` | `lang` | `options` |
+| `supertonic` | `voice_id` | top-level |
+| `qwen3_tts_customvoice` | `speaker` (with `instruct`) | top-level |
+| `vevo2` | `task_route` | top-level |
+
+`language` is always top-level when the card has a `language` field (Kokoro,
+Magpie, Supertonic, …). The hub's `POST /api/tasks` takes the same shapes — only
+`instanceId` replaces `model` — so a preset-voice task reads
+`{"instanceId": "…", "request": {"text": "…", "language": "en-us", "options": {"voice_id": "af_heart"}}}`.
+
+> **Alias ≠ modelId.** The fan-out alias (`kokoro`) is a *service* name;
+> `/api/models`, `paramSchema` and `/api/history/<modelId>` are keyed by the
+> **model id** (`kokoro_tts`). The Kokoro route is not in the shipped
+> `farm.routes.json` yet — routing and the loopback hub are tracked separately
+> (issue #204).
+
 ### Where results are archived
 
 **Every successful TTS generation is archived** under `data/history/<modelId>/` —
