@@ -298,24 +298,20 @@ func relaySSE(w http.ResponseWriter, rc *http.ResponseController, src io.Reader,
 	}
 }
 
-// noteLiveSSEError records an engine "error" event's message (never transcript text).
+// noteLiveSSEError only notes an error-event type. The SSE payload is relayed
+// unchanged to the client, but no upstream message is copied into metrics.
 func noteLiveSSEError(line []byte, rec *reqState) {
 	payload := bytes.TrimSpace(bytes.TrimPrefix(line, []byte("data:")))
 	if !bytes.Contains(payload, []byte(`"error"`)) {
 		return
 	}
 	var ev struct {
-		Type    string `json:"type"`
-		Message string `json:"message"`
+		Type string `json:"type"`
 	}
 	if json.Unmarshal(payload, &ev) != nil || ev.Type != "error" {
 		return
 	}
-	msg := ev.Message
-	if msg == "" {
-		msg = errorTextFromBody(payload)
-	}
-	rec.SetError(msg)
+	rec.SetError("Stream interrupted")
 }
 
 // markLiveStream flags the request as streamed before any reply header is written.

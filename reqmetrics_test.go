@@ -401,7 +401,7 @@ func TestV1ProxyRecordsUnroutedErrors(t *testing.T) {
 		t.Fatalf("got %d", len(out.Requests))
 	}
 	got := out.Requests[0]
-	if got.Status != 404 || got.Instance != "nope" || !strings.Contains(got.Error, "Model not found") {
+	if got.Status != 404 || got.Instance != "nope" || got.Error != "HTTP 404" {
 		t.Errorf("unrouted record %+v", got)
 	}
 }
@@ -518,6 +518,144 @@ func TestParseWAVPrefixShortInput(t *testing.T) {
 		_, _, _, ok, more := parseWAVPrefix([]byte(in))
 		if ok || more != wantMore {
 			t.Errorf("parseWAVPrefix(%q) ok=%v more=%v; want ok=false more=%v", in, ok, more, wantMore)
+		}
+	}
+}
+
+// Every string in these test bodies is fictional. Only status codes and fixed
+// diagnostics may survive into the request-recording API.
+func TestRequestMetricsNeverRetainsUpstreamErrorText(t *testing.T) {
+	marker := "fictional-private-upstream-content-xyz"
+	tests := []struct {
+		name   string
+		status int
+		body   []string
+		want   string
+	}{
+		{"json-message", 400, []string{`{"error":{"message":"` + marker + `"}}`}, "HTTP 400"},
+		{"json-string", 429, []string{`{"error":"` + marker + `"}`}, "HTTP 429"},
+		{"plaintext", 502, []string{marker}, "HTTP 502"},
+		{"malformed", 503, []string{`{"error":"` + marker}, "HTTP 503"},
+		{"split-response", 500, []string{`{"error":{"message":"`, marker, `"}}`}, "HTTP 500"},
+		{"oversized-response", 422, []string{strings.Repeat("a", 10000) + marker}, "HTTP 422"},
+		{"success-unchanged", 200, []string{marker}, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m, clock := newTestMetrics(time.Now().Add(-time.Hour))
+			rec := m.Begin(httptest.NewRequest("POST", "/v1/audio/speech", nil), "/v1/audio/speech")
+			rec.SetInstance(&Instance{ID: "synthetic", Name: "synthetic", ModelID: "synthetic", ServerTask: "tts", Status: "READY"})
+			w := httptest.NewRecorder()
+			metered := rec.Wrap(w)
+			metered.WriteHeader(tc.status)
+			for _, part := range tc.body {
+				_, _ = metered.Write([]byte(part))
+			}
+			clock.advance(10 * time.Millisecond)
+			rec.Finish()
+			if w.Code != tc.status || w.Body.String() != strings.Join(tc.body, "") {
+				t.Fatal("client-facing response bytes/status changed")
+			}
+			got := m.Recent("synthetic", 1, false)
+			if len(got) != 1 || got[0].Error != tc.want || got[0].Status != tc.status || got[0].TotalMs == nil {
+				t.Fatalf("unexpected safe diagnostics: %+v", got)
+			}
+			encoded, err := json.Marshal(got)
+			if err != nil || strings.Contains(string(encoded), marker) {
+				t.Fatalf("untrusted error text retained in recent metrics: %v", err)
+			}
+			detail, ok := m.Lookup(got[0].ID)
+			if !ok || detail.Error != tc.want {
+				t.Fatalf("unsafe or missing detail record: %+v", detail)
+			}
+		})
+	}
+}
+
+func TestRequestMetricsStreamErrorsNeverRetainPayloads(t *testing.T) {
+	const marker = "fictional-private-stream-content-xyz"
+	m, _ := newTestMetrics(time.Now().Add(-time.Hour))
+	rec := m.Begin(httptest.NewRequest("POST", "/v1/audio/speech", nil), "/v1/audio/speech")
+	rec.SetInstance(&Instance{ID: "synthetic", Name: "synthetic", ModelID: "synthetic", ServerTask: "tts", Status: "READY"})
+	w := rec.Wrap(httptest.NewRecorder())
+	w.WriteHeader(200)
+	rec.AddSegment(42, 10*time.Millisecond, 500, "engine failed: "+marker)
+	rec.AddSegment(10, 5*time.Millisecond, 200, "")
+	rec.SetError("live stream interrupted: " + marker)
+	rec.Finish()
+	got := m.Recent("synthetic", 1, true)
+	if len(got) != 1 || got[0].Error != "Stream interrupted" || len(got[0].Segments) != 2 || got[0].Segments[0].Error != "Segment failed" || got[0].Segments[1].Error != "" {
+		t.Fatalf("unexpected safe stream diagnostics: %+v", got)
+	}
+	encoded, _ := json.Marshal(got)
+	if strings.Contains(string(encoded), marker) {
+		t.Fatal("stream error details retained untrusted text")
+	}
+}
+
+func TestLiveSSEErrorMetricsRetainOnlyClassification(t *testing.T) {
+	const marker = "fictional-private-live-event-content-xyz"
+	m, _ := newTestMetrics(time.Now().Add(-time.Hour))
+	rec := m.Begin(httptest.NewRequest("POST", "/v1/audio/transcriptions/live", nil), "/v1/audio/transcriptions/live")
+	rec.SetInstance(&Instance{ID: "synthetic", Name: "synthetic", ModelID: "synthetic", ServerTask: "asr", Status: "READY"})
+	w := rec.Wrap(httptest.NewRecorder())
+	w.WriteHeader(200)
+	noteLiveSSEError([]byte(`data: {"type":"transcript","message":"`+marker+`"}`), rec)
+	noteLiveSSEError([]byte(`data: {"type":"error","message":"`+marker+`"}`), rec)
+	rec.Finish()
+	got := m.Recent("synthetic", 1, true)
+	if len(got) != 1 || got[0].Error != "Stream interrupted" {
+		t.Fatalf("missing safe event classification: %+v", got)
+	}
+	encoded, _ := json.Marshal(got)
+	if strings.Contains(string(encoded), marker) {
+		t.Fatal("SSE error payload leaked into metrics")
+	}
+}
+
+// A loopback fake engine confirms that public proxy errors remain byte-for-byte
+// unchanged for callers, while both request-log HTTP API views stay metadata-only.
+func TestV1ProxyErrorMetricsAPIOnlyRetainsSafeDiagnostics(t *testing.T) {
+	const marker = "fictional-private-engine-error-xyz"
+	body := `{"error":{"message":"` + marker + `"}}`
+	chdirTemp(t)
+	engine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/models" {
+			writeJSON(w, 200, map[string]any{"data": []any{}})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(422)
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(engine.Close)
+	h := &Hub{cfg: HubConfig{ProxyMaxBodyBytes: 1 << 20}, instances: NewInstanceManager(18090, 8080), history: NewHistoryManager()}
+	h.metrics = NewRequestMetrics(time.Now().Add(-time.Hour))
+	h.metrics.probe = func(*Instance) (bool, bool) { return false, false }
+	h.instances.items["m1"] = &Instance{ID: "m1", Name: "synthetic", ModelID: "synthetic", EngineFamily: "synthetic", ServerTask: "tts", Status: "READY", Port: portOf(t, engine.URL)}
+	hub := httptest.NewServer(h.newHandler())
+	t.Cleanup(hub.Close)
+
+	resp := postSpeech(t, hub.URL, `{"model":"synthetic","input":"fictional"}`, nil)
+	original, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil || resp.StatusCode != 422 || string(original) != body {
+		t.Fatalf("client-visible upstream response changed: status=%d err=%v", resp.StatusCode, err)
+	}
+	id := resp.Header.Get("X-Hub-Request-Id")
+	if id == "" {
+		t.Fatal("missing request id")
+	}
+
+	for _, path := range []string{"/api/metrics/recent?instance=synthetic", "/api/metrics/requests/" + id} {
+		r, err := http.Get(hub.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := io.ReadAll(r.Body)
+		r.Body.Close()
+		if err != nil || r.StatusCode != 200 || strings.Contains(string(b), marker) || !strings.Contains(string(b), `"error":"HTTP 422"`) {
+			t.Fatalf("unsafe or incomplete request-log API %q: status=%d err=%v", path, r.StatusCode, err)
 		}
 	}
 }

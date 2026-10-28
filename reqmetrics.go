@@ -39,8 +39,6 @@ const (
 	chunkCoalesceWindow = 10 * time.Millisecond  // writes closer than this form one chunk
 	slowChunkGap        = 100 * time.Millisecond // gaps above this are flagged
 	maxChunksPerRequest = 400                    // later writes merge into the last chunk
-	errorCaptureBytes   = 512                    // error body prefix kept for the error text
-	errorTextMax        = 300                    // runes of error text kept
 	sampleWindow        = time.Hour              // percentile sample retention
 	maxSamplesPerInst   = 5000
 	nearRestartWindow   = 2 * time.Minute // requests this soon after a (re)start are flagged
@@ -191,8 +189,7 @@ type reqState struct {
 	prefix          []byte
 	audioBytes      int64
 	nonPCMAudio     bool // audio/* we cannot measure (mp3, opus...)
-	errBuf          []byte
-	explicitErr     string
+	explicitErr     bool // a stream ended in error; never retain its message
 	streamRequested bool
 	contentLength   int64 // declared reply length, -1 when chunked/unknown
 	writeFailed     bool  // a write to the client returned an error
@@ -369,16 +366,26 @@ func (s *reqState) AddSegment(chars int, engine time.Duration, status int, errMs
 		return
 	}
 	s.rec.Segments = append(s.rec.Segments, SegmentMark{Index: len(s.rec.Segments), Chars: chars,
-		EngineMs: engine.Milliseconds(), Status: status, Error: truncateRunes(errMsg, errorTextMax)})
+		EngineMs: engine.Milliseconds(), Status: status, Error: safeSegmentError(errMsg)})
 }
 
-// SetError records an error that happened after the status line was sent (mid-stream).
+// safeSegmentError retains only a fixed diagnostic; upstream error strings may
+// contain prompts, transcripts or other user data.
+func safeSegmentError(msg string) string {
+	if msg != "" {
+		return "Segment failed"
+	}
+	return ""
+}
+
+// SetError flags a mid-stream error without retaining its untrusted message.
+// The message parameter is retained for source compatibility with callers.
 func (s *reqState) SetError(msg string) {
 	if s == nil {
 		return
 	}
 	s.m.mu.Lock()
-	s.explicitErr = truncateRunes(msg, errorTextMax)
+	s.explicitErr = msg != ""
 	s.m.mu.Unlock()
 }
 
@@ -490,9 +497,6 @@ func (s *reqState) onWrite(b []byte) {
 	now := m.now()
 	n := int64(len(b))
 	before := s.audioBytes
-	if s.rec.Status >= 400 && len(s.errBuf) < errorCaptureBytes {
-		s.errBuf = append(s.errBuf, b[:min(len(b), errorCaptureBytes-len(s.errBuf))]...)
-	}
 	if s.byteAudio {
 		s.countAudioBytes(b)
 	}
@@ -589,13 +593,12 @@ func (s *reqState) Finish() {
 		}
 	}
 	s.fillDerived(now)
-	if s.rec.Status >= 400 && s.rec.Error == "" {
-		s.rec.Error = errorTextFromBody(s.errBuf)
+	// Retain status/stream diagnostics, never arbitrary upstream response text.
+	if s.explicitErr {
+		s.rec.Error = "Stream interrupted"
+	} else if s.rec.Status >= 400 {
+		s.rec.Error = fmt.Sprintf("HTTP %d", s.rec.Status)
 	}
-	if s.explicitErr != "" {
-		s.rec.Error = s.explicitErr
-	}
-	s.errBuf = nil
 
 	if s.inst == nil {
 		if s.rec.Instance == "" {
@@ -1188,23 +1191,6 @@ func multipartWAVSeconds(path, contentType string) *float64 {
 		sec := round3(float64(max(data, 0)) / float64(bps))
 		return &sec
 	}
-}
-
-func errorTextFromBody(b []byte) string {
-	var e struct {
-		Error any `json:"error"`
-	}
-	if json.Unmarshal(b, &e) == nil {
-		switch v := e.Error.(type) {
-		case map[string]any:
-			if msg, ok := v["message"].(string); ok {
-				return truncateRunes(msg, errorTextMax)
-			}
-		case string:
-			return truncateRunes(v, errorTextMax)
-		}
-	}
-	return truncateRunes(strings.TrimSpace(strings.ToValidUTF8(string(b), "")), errorTextMax)
 }
 
 // httpLoadProbe asks the engine's GET /v1/models whether the model is resident. It reads
