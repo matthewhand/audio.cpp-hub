@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -99,8 +100,8 @@ func TestIntegrityPartCompletionAndMismatch(t *testing.T) {
 				if _, err := os.Stat(final); !os.IsNotExist(err) {
 					t.Fatalf("digest mismatch published a final file: %v", err)
 				}
-				if _, err := os.Stat(final + ".part"); err != nil {
-					t.Fatalf("partial should stay for inspection/explicit retry: %v", err)
+				if _, err := os.Stat(final + ".part"); !os.IsNotExist(err) {
+					t.Fatalf("mismatched partial should be discarded before an explicit Resume: %v", err)
 				}
 			}
 		})
@@ -296,6 +297,74 @@ func TestIntegrityTwoSegmentsRequireWholeFileDigest(t *testing.T) {
 				if readErr != nil || string(got) != string(original) {
 					t.Fatalf("joined file changed: %v", readErr)
 				}
+			}
+		})
+	}
+}
+
+func TestIntegrityMismatchResumeRestartsCleanly(t *testing.T) {
+	original := []byte(strings.Repeat("fictional-data-", 40))
+	for _, stream := range []bool{false, true} {
+		kind := "ranged"
+		if stream {
+			kind = "stream"
+		}
+		t.Run(kind, func(t *testing.T) {
+			m := newIntegrityManager(t)
+			var correct atomic.Bool
+			var restartedFromZero atomic.Bool
+			split := len(original) / 2
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				start, end := 0, len(original)-1
+				if !stream {
+					if _, err := fmt.Sscanf(r.Header.Get("Range"), "bytes=%d-%d", &start, &end); err != nil || start < 0 || end >= len(original) || end < start {
+						w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+						return
+					}
+					if correct.Load() && start == 0 {
+						restartedFromZero.Store(true)
+					}
+					w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(original)))
+					w.WriteHeader(http.StatusPartialContent)
+				} else if correct.Load() {
+					restartedFromZero.Store(true)
+				}
+				bytes := append([]byte(nil), original[start:end+1]...)
+				if !correct.Load() && start == 0 {
+					bytes[0] ^= 0x01
+				}
+				_, _ = w.Write(bytes)
+			}))
+			defer server.Close()
+			m.httpClient = server.Client()
+			f := &dlFileEntry{Path: "resumable.gguf", URL: server.URL, SHA256: fictionalDigest(original)}
+			if stream {
+				f.Size = -1
+				f.Segments = []dlSegment{{Start: 0, End: -1}}
+			} else {
+				f.Size = int64(len(original))
+				f.SupportsRange = true
+				f.Segments = []dlSegment{{Start: 0, End: int64(split - 1)}, {Start: int64(split), End: int64(len(original) - 1)}}
+			}
+			task := newIntegrityTask(f)
+			final := m.finalPath(task.TargetDir, f.Path)
+			if err := m.downloadFile(task, f, 0, context.Background()); getUserErrCode(err) != "DOWNLOAD_HASH_MISMATCH" || f.Completed {
+				t.Fatalf("first corrupted task should fail closed: %v", err)
+			}
+			if _, err := os.Stat(final + ".part"); !os.IsNotExist(err) {
+				t.Fatalf("bad partial retained: %v", err)
+			}
+			correct.Store(true)
+			// Simulate explicit Resume: reconcile must reset previously completed range counters.
+			if err := m.runTaskInner(task, 0, context.Background()); err != nil || !f.Completed {
+				t.Fatalf("explicit resume cannot recover: %v", err)
+			}
+			if !restartedFromZero.Load() {
+				t.Fatal("resume did not restart from zero")
+			}
+			got, err := os.ReadFile(final)
+			if err != nil || string(got) != string(original) {
+				t.Fatalf("recovered content is not correct: %v", err)
 			}
 		})
 	}

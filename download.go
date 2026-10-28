@@ -868,7 +868,7 @@ func (m *DownloadManager) downloadFile(t *DownloadTask, f *dlFileEntry, gen int3
 		return fmt.Errorf("分段字节总量与预期不符: %d != %d", total, f.Size)
 	}
 	if err := verifyDownloadedSHA256(part, f.SHA256); err != nil {
-		return err
+		return discardMismatchedPart(part, err)
 	}
 	if err := movePartFile(part, final); err != nil {
 		return err
@@ -993,7 +993,7 @@ func (m *DownloadManager) streamFile(t *DownloadTask, f *dlFileEntry, part, fina
 		return fmt.Errorf("文件大小不符: %d != %d", atomic.LoadInt64(&seg.Done), f.Size)
 	}
 	if err := verifyDownloadedSHA256(part, f.SHA256); err != nil {
-		return err
+		return discardMismatchedPart(part, err)
 	}
 	if err := movePartFile(part, final); err != nil {
 		return err
@@ -1525,6 +1525,20 @@ func verifyDownloadedSHA256(path, expected string) error {
 		return &UserError{Code: "DOWNLOAD_HASH_MISMATCH", Msg: "Downloaded file SHA-256 does not match the trusted expected digest"}
 	}
 	return nil
+}
+
+// discardMismatchedPart removes only this download task's corrupt .part file.
+// Retaining its completed segment counters would otherwise make Resume repeat
+// the same bad prefix indefinitely. Never remove a previously finalised file.
+func discardMismatchedPart(part string, verificationErr error) error {
+	var failure *UserError
+	if !errors.As(verificationErr, &failure) || failure.Code != "DOWNLOAD_HASH_MISMATCH" {
+		return verificationErr
+	}
+	if err := os.Remove(part); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("cannot discard mismatched partial download: %w", err)
+	}
+	return verificationErr
 }
 
 // movePartFile .part 改名落盘（Windows 下目标存在会导致改名失败，先删）。
