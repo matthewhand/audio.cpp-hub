@@ -107,13 +107,14 @@
         "precision": "q8_0",
         "default": true,
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Chatterbox-GGUF",
         "files": [
           {
             "remote": "Chatterbox-GGUF/chatterbox-q8_0.gguf",
-            "local": "chatterbox-q8_0.gguf"
+            "local": "chatterbox-q8_0.gguf",
+            "sha256": "45d71d8d248ba831014813bbbbba74c7d786dd9447c02090fe05c44344f69453"
           }
         ]
       },
@@ -123,13 +124,14 @@
         "format": "gguf",
         "precision": "f16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Chatterbox-GGUF",
         "files": [
           {
             "remote": "Chatterbox-GGUF/chatterbox-f16.gguf",
-            "local": "chatterbox-f16.gguf"
+            "local": "chatterbox-f16.gguf",
+            "sha256": "615371181a0bffe8239cf6f724d57f2b153618c52c31d526c8f20eacc763c6e1"
           }
         ]
       },
@@ -765,13 +767,14 @@
         "precision": "q8_0",
         "default": true,
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Irodori-TTS-v4-Small-GGUF",
         "files": [
           {
             "remote": "Irodori-TTS-v4-Small-GGUF/irodori-tts-v4-small-q8_0.gguf",
-            "local": "irodori-tts-v4-small-q8_0.gguf"
+            "local": "irodori-tts-v4-small-q8_0.gguf",
+            "sha256": "9be716e8ab66c887417acf446d198e5dc53f1669bb90136a410706232f1a0d38"
           }
         ]
       },
@@ -781,13 +784,14 @@
         "format": "gguf",
         "precision": "f16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Irodori-TTS-v4-Small-GGUF",
         "files": [
           {
             "remote": "Irodori-TTS-v4-Small-GGUF/irodori-tts-v4-small-f16.gguf",
-            "local": "irodori-tts-v4-small-f16.gguf"
+            "local": "irodori-tts-v4-small-f16.gguf",
+            "sha256": "9bf7e431597f21d1ee4fd48fd4f0bbdc83c83ba6f47c6e4ea0557cbf69aaeda5"
           }
         ]
       },
@@ -797,13 +801,14 @@
         "format": "gguf",
         "precision": "q8_0",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Irodori-TTS-600M-v3-VoiceDesign-GGUF",
         "files": [
           {
             "remote": "Irodori-TTS-600M-v3-VoiceDesign-GGUF/irodori-tts-600m-v3-voicedesign-q8_0.gguf",
-            "local": "irodori-tts-600m-v3-voicedesign-q8_0.gguf"
+            "local": "irodori-tts-600m-v3-voicedesign-q8_0.gguf",
+            "sha256": "e7bb696b9fa59b59fb51935a3db08c0552c383cc1f2ad8927544864f672e4527"
           }
         ]
       },
@@ -813,13 +818,14 @@
         "format": "gguf",
         "precision": "f16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Irodori-TTS-600M-v3-VoiceDesign-GGUF",
         "files": [
           {
             "remote": "Irodori-TTS-600M-v3-VoiceDesign-GGUF/irodori-tts-600m-v3-voicedesign-f16.gguf",
-            "local": "irodori-tts-600m-v3-voicedesign-f16.gguf"
+            "local": "irodori-tts-600m-v3-voicedesign-f16.gguf",
+            "sha256": "006ec83aff079162a7a3aa038de9a57fa3d81ad47ed845c4a435e39ad206e6f1"
           }
         ]
       },
@@ -829,13 +835,14 @@
         "format": "gguf",
         "precision": "q8_0",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Irodori-TTS-500M-v3-GGUF",
         "files": [
           {
             "remote": "Irodori-TTS-500M-v3-GGUF/irodori-tts-500m-v3-q8_0.gguf",
-            "local": "irodori-tts-500m-v3-q8_0.gguf"
+            "local": "irodori-tts-500m-v3-q8_0.gguf",
+            "sha256": "2442786d5e4c102759bac44b87b8ed987ba66fd6af640f6dc1b98598af1485a3"
           }
         ]
       },
@@ -845,13 +852,14 @@
         "format": "gguf",
         "precision": "f16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Irodori-TTS-500M-v3-GGUF",
         "files": [
           {
             "remote": "Irodori-TTS-500M-v3-GGUF/irodori-tts-500m-v3-f16.gguf",
-            "local": "irodori-tts-500m-v3-f16.gguf"
+            "local": "irodori-tts-500m-v3-f16.gguf",
+            "sha256": "d8cb39d6dd6929eb4de1c3e8f508d4322402d3424b553cf52006d5ef2d37546b"
           }
         ]
       }
@@ -2804,13 +2812,14 @@
         "precision": "q8_0",
         "default": true,
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "VibeVoice-1.5B-GGUF",
         "files": [
           {
             "remote": "VibeVoice-1.5B-GGUF/vibevoice-1.5b-q8_0.gguf",
-            "local": "vibevoice-1.5b-q8_0.gguf"
+            "local": "vibevoice-1.5b-q8_0.gguf",
+            "sha256": "e9ca80a31ffe7e4726fcad9798ba10ba1e514d89174fd48ea548d21022e0e6f8"
           }
         ]
       },
@@ -2820,13 +2829,14 @@
         "format": "gguf",
         "precision": "bf16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "VibeVoice-1.5B-GGUF",
         "files": [
           {
             "remote": "VibeVoice-1.5B-GGUF/vibevoice-1.5b-bf16.gguf",
-            "local": "vibevoice-1.5b-bf16.gguf"
+            "local": "vibevoice-1.5b-bf16.gguf",
+            "sha256": "d851e2e972ff7def0729cc02da7b417bbe68ac6769594507ae78b4d3f414e1ac"
           }
         ]
       }
