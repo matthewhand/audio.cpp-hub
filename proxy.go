@@ -135,7 +135,8 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if r.Method == http.MethodOptions {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, OpenAI-*")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, OpenAI-*, X-Client, X-Hub-No-Archive")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Hub-Request-Id, X-Hub-Stream")
 		w.Header().Set("Access-Control-Max-Age", "86400")
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -144,10 +145,30 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 		h.handleV1Models(w, r)
 		return
 	}
+	if r.URL.Path == liveRoute && r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		v1Error(w, http.StatusMethodNotAllowed, "Method not allowed: "+r.Method+" (live transcription is POST with a chunked PCM body)")
+		return
+	}
 	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		w.Header().Set("Allow", "GET, POST, PUT, OPTIONS")
 		v1Error(w, http.StatusMethodNotAllowed, "Method not allowed: "+r.Method)
 		return
 	}
+	// Request log (#198): meter this request; X-Client is hub-only and never forwarded.
+	if rec := h.metrics.Begin(r, r.URL.Path); rec != nil {
+		defer rec.Finish()
+		w = rec.Wrap(w)
+		w.Header().Set(requestIDHeader, rec.ID())
+		w.Header().Set("Access-Control-Expose-Headers", "X-Hub-Request-Id, X-Hub-Stream")
+		r = withRequestRecorder(r, rec)
+	}
+	r.Header.Del(clientTagHeader)
+	if r.URL.Path == liveRoute {
+		h.handleV1Live(w, r) // live PCM upload: never buffered or spilled (#200)
+		return
+	}
+	rec := requestRecorderFrom(r.Context())
 	maxBody := h.cfg.ProxyMaxBodyBytes
 	if maxBody <= 0 {
 		maxBody = 1 << 30
@@ -181,6 +202,7 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer os.Remove(tmp) // 转发用的文件句柄在此之前已关闭（Windows 需先 close 再删）
+	rec.MeasureInput(tmp, r.Header.Get("Content-Type"), n)
 
 	// 2) 提取 "model"：JSON 逐字节扫描顶层字段；multipart/form-data（/v1/audio/transcriptions
 	//    及 /details）读取表单字段 model，原始 body 与 Content-Type（含 boundary）原样转发
@@ -206,6 +228,7 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 	// 3) 按服务名路由（READY 才转发；非 READY 409；不存在 404）
 	inst := h.instances.FindByName(model)
 	if inst == nil {
+		rec.SetRequestedModel(model)
 		if h.instances.FindAnyByName(model) != nil {
 			v1Error(w, http.StatusConflict, "Model is still starting: "+model)
 		} else {
@@ -214,7 +237,13 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rec.SetInstance(inst)
+
 	// 4) 落盘文件作为 body 转发到实例同名路径，5) 响应流式回写
+	// Opt-in sentence-chunked streaming for offline-only TTS families (#196).
+	if h.maybeChunkedV1Speech(w, r, inst, tmp) {
+		return
+	}
 	h.forwardV1(w, r, inst, tmp, n)
 }
 
@@ -261,6 +290,7 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 	req.ContentLength = bodyLen
 	// 转发非逐跳请求头（Authorization/Accept/OpenAI-* 等）；Content-Length 由 body 重算
 	copyNonHopHeaders(req.Header, r.Header)
+	req.Header.Del(noArchiveHeader) // hub-only control header
 	req.Header.Del("Content-Length")
 	if req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
@@ -275,6 +305,8 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 		return
 	}
 	defer resp.Body.Close()
+	// ming3_audio ASR: strip the leading "<Language>\t" and return it as "language" (#190).
+	rewriteV1ASRResponse(r.URL.Path, inst, resp)
 
 	// 回写非逐跳响应头（X-Request-Id/Retry-After/限流头等），Content-Length 按实际值设置
 	copyNonHopHeaders(w.Header(), resp.Header)
@@ -299,34 +331,24 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 	if h.history != nil && r.URL.Path == "/v1/audio/speech" && resp.StatusCode == http.StatusOK &&
 		strings.HasPrefix(resp.Header.Get("Content-Type"), "audio/") {
 		// 请求体仍在缓存文件里（defer os.Remove 还没执行），读取归档所需的最小要素。
+		var parsed map[string]any
 		if data, rerr := os.ReadFile(bodyPath); rerr == nil {
-			var parsed map[string]any
-			if jerr := json.Unmarshal(data, &parsed); jerr == nil {
-				if s := optString(parsed, "input"); s != "" {
-					archiveReq["text"] = s
-				}
-				if s := optString(parsed, "voice_ref"); s != "" {
-					archiveReq["voice_ref"] = s
-				}
-				if s := optString(parsed, "reference_text"); s != "" {
-					archiveReq["reference_text"] = s
-				}
-				if s := optString(parsed, "seed"); s != "" {
-					archiveReq["seed"] = parsed["seed"]
-				}
-				if o, ok := parsed["options"].(map[string]any); ok {
-					archiveReq["options"] = o
-				}
+			if jerr := json.Unmarshal(data, &parsed); jerr != nil {
+				parsed = nil
 			}
 		}
-		archiveTaskID = newID() + newID()
-		if idvalidate.SafeKey(archiveTaskID) && idvalidate.SafeKey(inst.ModelID) {
-			dir := historyDir(inst.ModelID)
-			if err := os.MkdirAll(dir, 0755); err == nil {
-				tf, terr := os.CreateTemp(dir, ".v1-*.wav.tmp")
-				if terr == nil {
-					teeFile = tf
-					teePath = tf.Name()
+		archive := v1SpeechShouldArchive(h.cfg.v1SpeechArchiveDefault(), r.Header.Get(noArchiveHeader), parsed)
+		if archive {
+			archiveReq = v1SpeechArchiveRequest(parsed)
+			archiveTaskID = newID() + newID()
+			if idvalidate.SafeKey(archiveTaskID) && idvalidate.SafeKey(inst.ModelID) {
+				dir := historyDir(inst.ModelID)
+				if err := os.MkdirAll(dir, 0755); err == nil {
+					tf, terr := os.CreateTemp(dir, ".v1-*.wav.tmp")
+					if terr == nil {
+						teeFile = tf
+						teePath = tf.Name()
+					}
 				}
 			}
 		}
@@ -699,4 +721,20 @@ func extractV1MultipartModel(path, contentType string) (string, error) {
 		}
 		return strings.TrimSpace(string(val)), nil
 	}
+}
+
+// noArchiveHeader lets a /v1/audio/speech caller skip history archiving; it is not forwarded.
+const noArchiveHeader = "X-Hub-No-Archive"
+
+// v1SpeechShouldArchive decides whether a successful /v1/audio/speech reply is archived.
+// Precedence: JSON body "archive" (bool) > X-Hub-No-Archive header (truthy) > config default.
+func v1SpeechShouldArchive(def bool, noArchiveHdr string, body map[string]any) bool {
+	if v, ok := body["archive"].(bool); ok {
+		return v
+	}
+	switch strings.ToLower(strings.TrimSpace(noArchiveHdr)) {
+	case "1", "true", "yes", "on":
+		return false
+	}
+	return def
 }

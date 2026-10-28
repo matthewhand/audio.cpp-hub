@@ -207,6 +207,23 @@ export class MockBackend {
 
     // ---------- 事件 / 证书 ----------
     if (method === "GET" && p === "/api/events") return this.json(route, this.events);
+    // 请求与延迟（#198）：一个已加载 + 一个冷实例，三条请求（流式带时间线 / 冷加载 / 404）
+    if (method === "GET" && p === "/api/metrics/summary") {
+      return this.json(route, mockMetricsSummary());
+    }
+    if (method === "GET" && p === "/api/metrics/recent") {
+      const inst = url.searchParams.get("instance");
+      const reqs = mockMetricsRequests().filter((r) => !inst || r.instance === inst);
+      return this.json(route, {
+        requests: reqs.map(({ chunks: _c, segments: _s, ...r }) => r),
+        ringSize: 100
+      });
+    }
+    m = p.match(/^\/api\/metrics\/requests\/([^/]+)$/);
+    if (m && method === "GET") {
+      const r = mockMetricsRequests().find((x) => x.id === m[1]);
+      return r ? this.json(route, r) : this.json(route, { code: "REQUEST_NOT_FOUND" }, 404);
+    }
     // 用量与性能看板（#74 起懒加载，这里提供两个模型的样本以覆盖多卡片渲染）
     if (method === "GET" && p === "/api/stats") {
       return this.json(route, {
@@ -473,4 +490,153 @@ export class MockBackend {
     }
     return { text: req.text || "mock result" };
   }
+}
+
+/* ---------- #198 request-log fixtures ---------- */
+const OBS_NOW = 1756400000000;
+function mockMetricsSummary() {
+  const win = (n, cold) => ({
+    count: n,
+    errors: 0,
+    coldLoads: cold,
+    underruns: 0,
+    firstAudioP50Ms: 380,
+    firstAudioP90Ms: 2900,
+    totalP50Ms: 1450,
+    totalP90Ms: 4100,
+    rtfP50: 0.42
+  });
+  return {
+    now: OBS_NOW,
+    hubStartedAt: OBS_NOW - 3 * 3600e3,
+    hubUptimeMs: 3 * 3600e3,
+    instances: [
+      {
+        instance: "moss-tts",
+        instanceId: "a1",
+        modelId: "moss-tts-nano",
+        modelFamily: "moss_tts",
+        task: "tts",
+        hubStatus: "READY",
+        state: "loaded",
+        stateSource: "engine",
+        backend: "vulkan",
+        device: "vulkan:1",
+        port: 18190,
+        startedAt: OBS_NOW - 3 * 3600e3,
+        inFlight: 1,
+        queueDepth: 0,
+        tasksActive: 0,
+        lastUseAt: OBS_NOW - 4000,
+        sinceLastUseMs: 4000,
+        idleUnloadMs: 600000,
+        unloadInMs: 596000,
+        lastColdLoadAt: OBS_NOW - 3600e3,
+        memory: { ramBytes: 1610612736, vramBytes: 3221225472 },
+        windows: { "15m": win(6, 0), "1h": win(14, 1) }
+      },
+      {
+        instance: "whisper",
+        instanceId: "b2",
+        modelId: "whisper-large-v3-turbo",
+        modelFamily: "whisper",
+        task: "asr",
+        hubStatus: "READY",
+        state: "cold",
+        stateSource: "engine",
+        backend: "vulkan",
+        device: "vulkan:1",
+        port: 18191,
+        startedAt: OBS_NOW - 3 * 3600e3,
+        inFlight: 0,
+        queueDepth: 0,
+        tasksActive: 0,
+        lastUseAt: OBS_NOW - 1800e3,
+        sinceLastUseMs: 1800e3,
+        idleUnloadMs: 600000,
+        unloadInMs: 0,
+        windows: { "15m": { count: 0 }, "1h": win(2, 1) }
+      }
+    ]
+  };
+}
+function mockMetricsRequests() {
+  return [
+    {
+      id: "r3",
+      time: new Date(OBS_NOW - 4000).toISOString(),
+      startMs: OBS_NOW - 4000,
+      instance: "moss-tts",
+      modelId: "moss-tts-nano",
+      modelFamily: "moss_tts",
+      task: "tts",
+      method: "POST",
+      route: "/v1/audio/speech",
+      callerIp: "127.0.0.1",
+      client: "reachy",
+      inputChars: 142,
+      inFlightAtStart: 0,
+      queueWaitMs: 0,
+      ttfbMs: 360,
+      firstAudioMs: 380,
+      totalMs: 2620,
+      outputAudioSec: 6.2,
+      rtf: 0.42,
+      status: 200,
+      streamed: true,
+      streamMode: "sentence-chunked",
+      chunkCount: 4,
+      gapsOver100ms: 1,
+      maxGapMs: 640,
+      minHeadroomMs: 1100,
+      chunks: [
+        { atMs: 380, bytes: 48000, gapMs: 0, audioMs: 1500, headroomMs: 1500 },
+        { atMs: 820, bytes: 52000, gapMs: 440, audioMs: 1625, headroomMs: 2685, slow: true },
+        { atMs: 1460, bytes: 50000, gapMs: 640, audioMs: 1562, headroomMs: 3607, slow: true },
+        { atMs: 2600, bytes: 48000, gapMs: 1140, audioMs: 1500, headroomMs: 3967, slow: true }
+      ],
+      segments: [
+        { index: 0, chars: 40, engineMs: 360, status: 200 },
+        { index: 1, chars: 36, engineMs: 420, status: 200 },
+        { index: 2, chars: 34, engineMs: 610, status: 200 },
+        { index: 3, chars: 32, engineMs: 1120, status: 200 }
+      ]
+    },
+    {
+      id: "r2",
+      time: new Date(OBS_NOW - 60000).toISOString(),
+      startMs: OBS_NOW - 60000,
+      instance: "moss-tts",
+      modelId: "moss-tts-nano",
+      task: "tts",
+      method: "POST",
+      route: "/v1/audio/speech",
+      callerIp: "127.0.0.1",
+      client: "reachy",
+      inputChars: 61,
+      queueWaitMs: 0,
+      ttfbMs: 2870,
+      firstAudioMs: 2900,
+      totalMs: 4100,
+      outputAudioSec: 3.1,
+      rtf: 1.32,
+      status: 200,
+      coldLoad: true,
+      coldLoadSource: "engine",
+      chunkedTransfer: true
+    },
+    {
+      id: "r1",
+      time: new Date(OBS_NOW - 120000).toISOString(),
+      startMs: OBS_NOW - 120000,
+      instance: "_unrouted",
+      modelId: "nope",
+      method: "POST",
+      route: "/v1/audio/speech",
+      callerIp: "127.0.0.1",
+      status: 404,
+      error: "Model not found: nope",
+      totalMs: 1
+    }
+  ];
 }

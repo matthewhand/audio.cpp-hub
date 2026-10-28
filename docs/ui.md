@@ -3,7 +3,7 @@
 > 由 `npm run ui:inventory` 从 `web/index.html` 与 `web/*.js`、`web/modules/*.js` 自动生成，请勿手改。
 > 漂移检查：`npm run ui:inventory:check`（CI 会跑）。
 
-来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/legacy-globals.js`、`web/modules/activity-queue.js`、`web/modules/async-ui.js`、`web/modules/command-palette-lazy.js`、`web/modules/command-palette.js`、`web/modules/diarization-lazy.js`、`web/modules/dom.js`、`web/modules/downloads-lazy.js`、`web/modules/downloads.js`、`web/modules/file-browser-lazy.js`、`web/modules/file-browser.js`、`web/modules/instances.js`、`web/modules/launch.js`、`web/modules/models.js`、`web/modules/panels.js`、`web/modules/readiness.js`、`web/modules/routing.js`、`web/modules/settings-lazy.js`、`web/modules/settings.js`、`web/modules/shell.js`、`web/modules/sidebar.js`、`web/modules/speaker-segments.js`、`web/modules/state.js`、`web/modules/stats-lazy.js`、`web/modules/stats.js`、`web/modules/tasks.js`、`web/modules/voices-panel-lazy.js`、`web/modules/voices-panel.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/wav.js`
+来源：`web/index.html` + `web/api-client.js`、`web/app.js`、`web/audio-picker.js`、`web/boot.js`、`web/i18n.en.js`、`web/i18n.js`、`web/i18n.zh.js`、`web/legacy-globals.js`、`web/modules/activity-queue.js`、`web/modules/async-ui.js`、`web/modules/command-palette-lazy.js`、`web/modules/command-palette.js`、`web/modules/diarization-lazy.js`、`web/modules/dom.js`、`web/modules/downloads-lazy.js`、`web/modules/downloads.js`、`web/modules/file-browser-lazy.js`、`web/modules/file-browser.js`、`web/modules/instances.js`、`web/modules/launch.js`、`web/modules/models.js`、`web/modules/panels.js`、`web/modules/readiness.js`、`web/modules/requests-lazy.js`、`web/modules/requests.js`、`web/modules/routing.js`、`web/modules/settings-lazy.js`、`web/modules/settings.js`、`web/modules/shell.js`、`web/modules/sidebar.js`、`web/modules/speaker-segments.js`、`web/modules/state.js`、`web/modules/stats-lazy.js`、`web/modules/stats.js`、`web/modules/tasks.js`、`web/modules/voices-panel-lazy.js`、`web/modules/voices-panel.js`、`web/motion.js`、`web/pwa.js`、`web/voice-select.js`、`web/wav.js`
 
 ## 面板地图
 
@@ -21,6 +21,7 @@
 | `panel-other` | panel | `other.title` | 4 |
 | `panel-sep` | panel | `sep.title` | 3 |
 | `panel-tts` | panel | `studio.kicker` | 23 |
+| `requests-panel` | modal | `obs.title` | 4 |
 | `settings-modal` | modal | `settings.title` | 43 |
 | `settings-pane-executables` | settings-pane | `exec.listTitle` | 13 |
 | `settings-pane-general` | settings-pane | `settings.general.language` | 7 |
@@ -97,6 +98,10 @@
 | `other-submit` | button | — | `other.submit` | `click` |
 | `profile-del-btn` | button | — | `launch.profileDelete` | `click` |
 | `profile-save-btn` | button | — | `launch.profileSave` | `click` |
+| `requests-btn` | button | — | `obs.title`<br>`obs.title` | — |
+| `requests-close` | button | — | `history.closeTitle`<br>`history.closeTitle` | `click` |
+| `requests-pause` | button | — | `obs.pause` | `click` |
+| `requests-refresh` | button | — | `history.refresh` | `click` |
 | `sep-submit` | button | — | `sep.submit` | `click` |
 | `settings-btn` | button | — | `header.settingsTitle`<br>`header.settingsTitle` | `click` |
 | `settings-modal-close` | button | — | `history.closeTitle` | `click` |
@@ -196,6 +201,9 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 | GET | `/api/instances` | `web/modules/instances.js` |
 | POST | `/api/instances` | `web/modules/launch.js` |
 | DELETE | `/api/instances/{param}` | `web/modules/instances.js` |
+| GET | `/api/metrics/recent?{param}` | `web/modules/requests.js` |
+| GET | `/api/metrics/requests/{param}` | `web/modules/requests.js` |
+| GET | `/api/metrics/summary` | `web/modules/requests.js` |
 | GET | `/api/models` | `web/modules/models.js` |
 | GET | `/api/models/{param}/packages` | `web/modules/downloads.js` |
 | GET | `/api/profiles` | `web/modules/launch.js` |
@@ -221,10 +229,10 @@ Enter / Space 用于文件浏览与文件选择。快捷键未集中注册，散
 
 | 属性 | 静态出现次数 |
 | --- | --- |
-| `data-i18n` | 134 |
-| `data-i18n-aria-label` | 27 |
+| `data-i18n` | 137 |
+| `data-i18n-aria-label` | 29 |
 | `data-i18n-placeholder` | 24 |
-| `data-i18n-title` | 11 |
+| `data-i18n-title` | 13 |
 | `data-mode` | 4 |
 | `data-section` | 3 |
 | `data-theme` | 1 |

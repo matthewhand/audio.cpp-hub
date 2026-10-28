@@ -14,6 +14,7 @@ unit anymore.
 | `compose.amd.yaml` | AMD GPU Compose service (`docker compose -f compose.amd.yaml up -d --build`). |
 | `docker/start-hub.sh` | Container entrypoint: runs the Go hub, optionally launches + warms one instance. |
 | `docker/start-instance.sh` | Env-driven instance launcher, talks to the hub HTTP API. |
+| `docker/start-json-instance.sh` | Idempotently replays a saved `POST /api/instances` JSON payload (`start-json-instance.sh PAYLOAD.json [HUB_URL]`, default hub `http://127.0.0.1:18080`). It is a no-op if an instance with that `name` already exists, and skips with exit 0 if the payload is unreadable, its `weightsPath` is missing, or the hub is unreachable. Otherwise it POSTs and waits up to `START_JSON_WAIT_SECONDS` (default 90) for READY. Use it from tolerant systemd `ExecStartPost=-/bin/bash .../start-json-instance.sh .../instances/<name>.json` lines so instances (including `idleUnloadMs` / `sessionOptions`) come back after a hub restart. |
 | `docker/executables.json` | Registers `/audio.cpp/bin/audiocpp_server` as the default executable. |
 
 The Go hub serves the UI from `web/` **on disk** (`http.FileServer(http.Dir("web"))`),

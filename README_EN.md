@@ -48,6 +48,8 @@ Architecture, deployment, sequence, data and operations diagrams — editable HT
 
 ## Features
 
+- **Live speech-to-text (public `main`; not yet in the v0.2.1 release package)**: `POST /v1/audio/transcriptions/live?model=...` relays chunked PCM uploads and incremental SSE transcripts to ASR/diar instances started in `streaming` mode. Covered by synthetic-engine tests, not a claim of microphone or model performance validation; see [`docs/API.md`](docs/API.md).
+
 - **Multi-instance management**: writes a `server.json` per instance and launches `audiocpp_server` as a subprocess — automatic port allocation (bound to 127.0.0.1), health polling (up to 120s), log viewing, one-click stop
 - **Web UI**: plain HTML/JS frontend (no build step), bilingual Chinese/English, with model selection, parameter forms and task submission
 - **UI capabilities**: hash routing and deep links (`#/model/<id>`, `#/history`, …, restorable via back/forward), a `Ctrl/Cmd-K` command palette, dark / light / follow-system themes, unified skeleton / empty / error states for lists, keyboard accessibility and WCAG AA contrast (motion respects `prefers-reduced-motion`)
@@ -153,6 +155,8 @@ The hub's `/v1/*` endpoints are a **transparent proxy** to each `audiocpp_server
 | `downloadSegmentsPerFile` | `4` | Segments per file (minimum segment granularity 32MB) |
 | `proxyMaxBodyBytes` | `1073741824` (1 GiB) | On-disk body size limit for `/v1/*` proxy requests |
 | `proxyResponseHeaderTimeoutMs` | `60000` (60 s) | How long `/v1/*` waits for an instance to start answering; raise it (e.g. `600000`) for slow models such as `fish_drama3` (lazy load + offline generation); a timeout returns `502` |
+| `v1SpeechArchive` | `true` | Archive successful `/v1/audio/speech` replies into operation history. Override per request with the JSON field `"archive": false` / `true` or the header `X-Hub-No-Archive: 1` (precedence: body field > header > this setting; the header is not forwarded to the instance) |
+| `v1SpeechChunkedStreamModels` | `["ming3_tts"]` | Model families whose `/v1/audio/speech` gets hub-side sentence-chunked streaming when a request sets `"stream": true` or `"stream_format": "audio"` / `"sse"` (WAV with a streaming header, raw PCM with `response_format: "pcm"`, or SSE `speech.audio.delta` events). `[]` turns it off |
 
 > The development copy of `hub.config.json` in this repo sets `httpPort` to `18080`, so running from source listens on 18080.
 

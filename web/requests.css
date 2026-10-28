@@ -1,0 +1,62 @@
+/* web/requests.css — request log & latency panel (#/requests, #198).
+   Loaded on first open by modules/requests.js, like activity-queue.css. */
+.obs-live { font-size: 12px; color: var(--ok); margin-right: auto; white-space: nowrap; }
+.obs-live.paused { color: var(--text-dim); }
+.obs-hub { margin-bottom: var(--space-3); }
+.obs-hint { margin: var(--space-3) 0; }
+.obs-instances {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: var(--space-3);
+}
+.obs-instance-head { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.obs-instance-title { font-weight: 600; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.obs-state {
+  margin-left: auto; font-size: 11.5px; padding: 1px 8px; border-radius: var(--radius-full);
+  border: 1px solid currentColor; white-space: nowrap;
+}
+.obs-state.ok { color: var(--ok); }
+.obs-state.warn { color: var(--warn); }
+.obs-state.err { color: var(--err); }
+.obs-state.idle { color: var(--text-dim); }
+.obs-grid { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.obs-grid .stats-cell-value { font-size: 13.5px; overflow-wrap: anywhere; }
+.obs-windows { margin-top: var(--space-3); display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.obs-window { display: flex; gap: var(--space-2); }
+.obs-window-key { font-weight: 600; min-width: 28px; }
+.obs-window-val { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.obs-filter { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-4) 0 var(--space-2); }
+.obs-filter select { max-width: 260px; }
+.obs-requests { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.obs-req { border: 1px solid var(--card-border); border-radius: var(--radius-md); background: var(--card); }
+.obs-req.err { border-color: var(--err); }
+.obs-req.live { border-color: var(--warn); }
+.obs-req-head {
+  display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left;
+  background: none; border: 0; color: inherit; font: inherit; padding: 8px 10px; cursor: pointer;
+}
+.obs-req-head:focus-visible { box-shadow: var(--focus-ring); border-radius: var(--radius-md); outline: none; }
+.obs-req-top { display: flex; gap: var(--space-2); font-size: 12.5px; min-width: 0; }
+.obs-req-time { font-variant-numeric: tabular-nums; color: var(--text-dim); white-space: nowrap; }
+.obs-req-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.obs-req-status { margin-left: auto; font-variant-numeric: tabular-nums; }
+.obs-req.err .obs-req-status { color: var(--err); }
+.obs-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.obs-chip {
+  font-size: 11.5px; padding: 1px 7px; border-radius: var(--radius-full);
+  background: var(--input-bg); border: 1px solid var(--card-border); font-variant-numeric: tabular-nums;
+}
+.obs-chip.warn { color: var(--warn); border-color: var(--warn); }
+.obs-chip.err { color: var(--err); border-color: var(--err); }
+.obs-req-error { font-size: 12px; color: var(--err); overflow-wrap: anywhere; }
+.obs-timeline { padding: 4px 10px 10px; }
+.obs-track { position: relative; height: 22px; margin: 6px 0; background: var(--wave-bg); border-radius: var(--radius-sm); }
+.obs-mark { position: absolute; top: 3px; bottom: 3px; width: 3px; margin-left: -1px; background: var(--ok); border-radius: 2px; }
+.obs-mark.slow { background: var(--warn); }
+.obs-mark.under { background: var(--err); }
+.obs-legend { margin-bottom: var(--space-2); }
+.obs-segments { margin: 4px 0 0; padding-left: 20px; font-size: 12px; color: var(--text-dim); }
+@media (max-width: 480px) {
+  #requests-panel .history-header { flex-wrap: wrap; }
+  .obs-live { order: 3; width: 100%; }
+}

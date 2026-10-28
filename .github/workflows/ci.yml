@@ -131,6 +131,18 @@ jobs:
       - name: 单元测试
         run: npm run test:unit
 
+      - name: Diarization fixture builder metadata-only regressions (synthetic)
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -B test/unit/test_diarization_fixture_builder.py -q
+
+      - name: Diarization rights-clear intake regressions (synthetic)
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -B test/unit/test_diarization_intake_v2.py -q
+
+      - name: Diarization human RTTM metadata regressions (synthetic)
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -B test/unit/test_human_rttm_qa.py -q
+
+      - name: Diarization independent adjudication metadata regressions (synthetic)
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -B test/unit/test_diarization_adjudication.py -q
+
       - name: UI 清单漂移检查
         run: npm run ui:inventory:check
 

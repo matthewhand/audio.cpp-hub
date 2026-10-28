@@ -34,6 +34,14 @@ type HubConfig struct {
 	// ProxyResponseHeaderTimeoutMs bounds how long /v1/* waits for an instance to start
 	// answering (lazy load + offline generation). <= 0 falls back to 60 s.
 	ProxyResponseHeaderTimeoutMs int64 `json:"proxyResponseHeaderTimeoutMs"`
+	// V1SpeechArchive is the default for archiving successful /v1/audio/speech replies
+	// into operation history (nil = true). Requests override it with the JSON body field
+	// "archive": true|false or the header X-Hub-No-Archive: 1.
+	V1SpeechArchive *bool `json:"v1SpeechArchive,omitempty"`
+	// V1SpeechChunkedStreamModels lists the model families whose /v1/audio/speech gets
+	// hub-side sentence-chunked streaming when a request sets "stream": true or
+	// "stream_format" (nil = ming3_tts only; [] turns it off). See v1_speech_chunked.go.
+	V1SpeechChunkedStreamModels []string `json:"v1SpeechChunkedStreamModels,omitempty"`
 }
 
 func loadConfig() HubConfig {
@@ -67,6 +75,7 @@ type Hub struct {
 	history   *HistoryManager
 	voices    *VoiceLibrary
 	downloads *DownloadManager
+	metrics   *RequestMetrics // /v1 request log (#198); nil disables recording
 }
 
 // ensureWorkDir 定位工作目录（需要 web/ 等运行时目录）：当前目录没有 web/ 时，
@@ -105,6 +114,7 @@ func main() {
 		voices:    NewVoiceLibrary(),
 		downloads: NewDownloadManager(cfg),
 	}
+	hub.metrics = NewRequestMetrics(time.Now())
 	hub.tasks = NewTaskManager(hub.history)
 	hub.bus = NewEventBus()
 	hub.mem = NewMemorySampler(hub.instances, hub.tasks, hub.bus)
@@ -166,4 +176,10 @@ func main() {
 		}
 		return err
 	})
+}
+
+// v1SpeechArchiveDefault reports whether /v1/audio/speech replies are archived when the
+// request does not say otherwise.
+func (c HubConfig) v1SpeechArchiveDefault() bool {
+	return c.V1SpeechArchive == nil || *c.V1SpeechArchive
 }

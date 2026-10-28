@@ -503,6 +503,9 @@ func (m *TaskManager) execute(t *Task) {
 		out := filepath.Join(taskStateDir, t.ID+resultSuffix)
 		err = m.forwardToFile(ctx, t.inst, t.requestRaw, out)
 		if err == nil {
+			if nerr := normalizeASRResultFile(t.inst.EngineFamily, out); nerr != nil {
+				log.Printf("ASR language prefix normalize failed for task %s: %v", t.ID, nerr)
+			}
 			preview := resultTextPreview(out)
 			// 字段写入须持锁：快照/序列化可能并发读取。
 			m.mu.Lock()

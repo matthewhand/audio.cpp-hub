@@ -3075,6 +3075,198 @@
       }
     ]
   },
+  "ming3_tts": {
+    "displayName": "Ming 3.0 TTS 0.5B",
+    "category": "tts",
+    "status": "community",
+    "packages": [
+      {
+        "id": "ming3_tts_q8_0",
+        "displayName": "Ming 3.0 TTS 0.5B Q8_0 GGUF ~1.7 GB",
+        "format": "gguf",
+        "precision": "q8_0",
+        "default": true,
+        "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-TTS-0.5B-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-tts-0.5b-q8_0.gguf",
+            "local": "ming-3.0-tts-0.5b-q8_0.gguf"
+          }
+        ]
+      },
+      {
+        "id": "ming3_tts_bf16",
+        "displayName": "Ming 3.0 TTS 0.5B BF16 GGUF ~3.0 GB",
+        "format": "gguf",
+        "precision": "bf16",
+        "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-TTS-0.5B-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-tts-0.5b-bf16.gguf",
+            "local": "ming-3.0-tts-0.5b-bf16.gguf"
+          }
+        ]
+      }
+    ]
+  },
+  "ming3_tts_voicedesign": {
+    "displayName": "Ming 3.0 TTS 0.5B Voice Design",
+    "category": "tts",
+    "status": "community",
+    "packages": [
+      {
+        "id": "ming3_tts_voicedesign_q8_0",
+        "displayName": "Ming 3.0 TTS 0.5B Q8_0 GGUF ~1.7 GB",
+        "format": "gguf",
+        "precision": "q8_0",
+        "default": true,
+        "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-TTS-0.5B-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-tts-0.5b-q8_0.gguf",
+            "local": "ming-3.0-tts-0.5b-q8_0.gguf"
+          }
+        ]
+      },
+      {
+        "id": "ming3_tts_voicedesign_bf16",
+        "displayName": "Ming 3.0 TTS 0.5B BF16 GGUF ~3.0 GB",
+        "format": "gguf",
+        "precision": "bf16",
+        "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-TTS-0.5B-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-tts-0.5b-bf16.gguf",
+            "local": "ming-3.0-tts-0.5b-bf16.gguf"
+          }
+        ]
+      }
+    ]
+  },
+  "ming3_audio_asr": {
+    "displayName": "Ming 3.0 Audio Tiny ASR",
+    "category": "asr",
+    "status": "community",
+    "packages": [
+      {
+        "id": "ming3_audio_asr_q4_k",
+        "displayName": "Ming 3.0 Audio Tiny Q4_K GGUF ~10.0 GB",
+        "format": "gguf",
+        "precision": "q4_k",
+        "default": true,
+        "repo": "audio-cpp/Ming-3.0-Audio-Tiny-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-Audio-Tiny-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-audio-tiny-q4_k.gguf",
+            "local": "ming-3.0-audio-tiny-q4_k.gguf"
+          }
+        ]
+      },
+      {
+        "id": "ming3_audio_asr_q8_0",
+        "displayName": "Ming 3.0 Audio Tiny Q8_0 GGUF ~13.7 GB",
+        "format": "gguf",
+        "precision": "q8_0",
+        "repo": "audio-cpp/Ming-3.0-Audio-Tiny-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-Audio-Tiny-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-audio-tiny-q8_0.gguf",
+            "local": "ming-3.0-audio-tiny-q8_0.gguf"
+          }
+        ]
+      },
+      {
+        "id": "ming3_audio_asr_bf16",
+        "displayName": "Ming 3.0 Audio Tiny BF16 GGUF ~20.2 GB",
+        "format": "gguf",
+        "precision": "bf16",
+        "repo": "audio-cpp/Ming-3.0-Audio-Tiny-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-Audio-Tiny-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-audio-tiny-bf16.gguf",
+            "local": "ming-3.0-audio-tiny-bf16.gguf"
+          }
+        ]
+      }
+    ]
+  },
+  "ming3_audio": {
+    "displayName": "Ming 3.0 Audio Tiny",
+    "category": "tts",
+    "status": "community",
+    "packages": [
+      {
+        "id": "ming3_audio_q4_k",
+        "displayName": "Ming 3.0 Audio Tiny Q4_K GGUF ~10.0 GB",
+        "format": "gguf",
+        "precision": "q4_k",
+        "default": true,
+        "repo": "audio-cpp/Ming-3.0-Audio-Tiny-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-Audio-Tiny-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-audio-tiny-q4_k.gguf",
+            "local": "ming-3.0-audio-tiny-q4_k.gguf"
+          }
+        ]
+      },
+      {
+        "id": "ming3_audio_q8_0",
+        "displayName": "Ming 3.0 Audio Tiny Q8_0 GGUF ~13.7 GB",
+        "format": "gguf",
+        "precision": "q8_0",
+        "repo": "audio-cpp/Ming-3.0-Audio-Tiny-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-Audio-Tiny-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-audio-tiny-q8_0.gguf",
+            "local": "ming-3.0-audio-tiny-q8_0.gguf"
+          }
+        ]
+      },
+      {
+        "id": "ming3_audio_bf16",
+        "displayName": "Ming 3.0 Audio Tiny BF16 GGUF ~20.2 GB",
+        "format": "gguf",
+        "precision": "bf16",
+        "repo": "audio-cpp/Ming-3.0-Audio-Tiny-GGUF",
+        "revision": "main",
+        "gated": false,
+        "targetDir": "Ming-3.0-Audio-Tiny-GGUF",
+        "files": [
+          {
+            "remote": "ming-3.0-audio-tiny-bf16.gguf",
+            "local": "ming-3.0-audio-tiny-bf16.gguf"
+          }
+        ]
+      }
+    ]
+  },
   "kokoro_tts": {
     "displayName": "Kokoro 82M",
     "category": "tts",

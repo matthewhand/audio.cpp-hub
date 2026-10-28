@@ -460,7 +460,8 @@
     "category": "asr",
     "serverTask": "asr",
     "modes": [
-      "offline"
+      "offline",
+      "streaming"
     ],
     "inputs": {
       "text": "optional",
@@ -531,9 +532,7 @@
     "category": "asr",
     "serverTask": "diar",
     "diarizationOnly": true,
-    "modes": [
-      "offline"
-    ],
+    "modes": ["offline"],
     "inputs": {
       "text": "none",
       "audio": "required",
@@ -1022,7 +1021,8 @@
     "category": "asr",
     "serverTask": "asr",
     "modes": [
-      "offline"
+      "offline",
+      "streaming"
     ],
     "inputs": {
       "text": "none",
@@ -2092,6 +2092,724 @@
         "step": 1,
         "label": "随机种子",
         "labelEn": "Seed"
+      }
+    }
+  },
+  {
+    "id": "ming3_tts",
+    "family": "ming3_tts",
+    "hfUrl": "https://huggingface.co/inclusionAI/Ming-3.0-tts",
+    "ggufUrl": "https://huggingface.co/audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
+    "category": "tts",
+    "modes": [
+      "offline"
+    ],
+    "outputType": "audio",
+    "language": {
+      "values": [
+        "English",
+        "Chinese",
+        "Japanese",
+        "Korean",
+        "German",
+        "French",
+        "Spanish"
+      ],
+      "default": "English"
+    },
+    "backends": [
+      "cpu",
+      "cuda",
+      "vulkan"
+    ],
+    "displayName": "Ming 3.0 TTS 0.5B",
+    "description": "inclusionAI Ming 3.0 TTS 0.5B（MIT）：Qwen 骨干 + 连续潜变量流匹配头 + 波形 VAE，支持中/英/日/韩/德/法/西七种语言；可选参考音频零样本克隆（加 reference_text 同时提供声学前缀），也可用 voice_id 选官方音色（ip 模板）或 instruct 原始指令。输出 44.1kHz 单声道，仅离线。需要 v0.9.2 之后的 audio.cpp 构建。q8_0 约 1.7 GB。",
+    "descriptionEn": "inclusionAI Ming 3.0 TTS 0.5B (MIT): Qwen backbone with a continuous-latent flow-matching head and waveform VAE; Chinese, English, Japanese, Korean, German, French and Spanish. Optional reference audio for zero-shot cloning (add reference_text for an acoustic prefix), official named voices via voice_id (ip template) or a raw instruct. Outputs 44.1kHz mono, offline only. Needs an audio.cpp build newer than v0.9.2. q8_0 is about 1.7 GB.",
+    "serverTask": "tts",
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "optional"
+    },
+    "paramSchema": {
+      "language": {
+        "type": "enum",
+        "values": [
+          "English",
+          "Chinese",
+          "Japanese",
+          "Korean",
+          "German",
+          "French",
+          "Spanish"
+        ],
+        "default": "English",
+        "label": "语言",
+        "labelEn": "Language"
+      },
+      "seed": {
+        "type": "integer",
+        "default": 1895,
+        "min": 0,
+        "max": 2147483647,
+        "step": 1,
+        "label": "随机种子",
+        "labelEn": "Seed"
+      },
+      "guidance_scale": {
+        "type": "number",
+        "default": 2.0,
+        "min": 0.0,
+        "max": 10.0,
+        "step": 0.1,
+        "label": "引导强度",
+        "labelEn": "Guidance scale",
+        "hint": "条件流预测加上该倍数的（条件−无条件）差",
+        "hintEn": "Conditioned flow prediction plus this scale times its difference from the null prediction"
+      },
+      "sigma": {
+        "type": "number",
+        "default": 0.25,
+        "min": 0.0,
+        "max": 2.0,
+        "step": 0.05,
+        "label": "SDE 噪声",
+        "labelEn": "Flow SDE sigma"
+      },
+      "temperature": {
+        "type": "number",
+        "default": 0.0,
+        "min": 0.0,
+        "max": 2.0,
+        "step": 0.05,
+        "label": "采样温度",
+        "labelEn": "Temperature",
+        "hint": "0 仍使用带种子的初始噪声",
+        "hintEn": "Zero still uses seeded initial noise"
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 1000,
+        "min": 1,
+        "max": 1000,
+        "step": 1,
+        "label": "最大声学块数",
+        "labelEn": "Max acoustic patches",
+        "hint": "每段文本最多生成的声学块（约 80ms/块），另受 512 位置上下文限制",
+        "hintEn": "Per text chunk, about 80 ms each; also bounded by the 512-position context"
+      },
+      "text_chunk_size": {
+        "type": "integer",
+        "default": null,
+        "min": 1,
+        "max": 1000,
+        "step": 1,
+        "label": "分块长度",
+        "labelEn": "Chunk size",
+        "hint": "留空自动：CJK 为主 50，其它 300，音色设计 120（Unicode 码点）",
+        "hintEn": "Empty = auto: 50 for mostly CJK, 300 otherwise, 120 for voice design (codepoints)"
+      },
+      "text_chunk_mode": {
+        "type": "enum",
+        "values": [
+          "tag_aware",
+          "default",
+          "japanese",
+          "endline"
+        ],
+        "default": "tag_aware",
+        "label": "分块模式",
+        "labelEn": "Chunk mode"
+      },
+      "template_name": {
+        "type": "enum",
+        "values": [
+          "tts",
+          "multilingual",
+          "basic",
+          "emotion",
+          "dialect",
+          "ip",
+          "freeform"
+        ],
+        "default": "tts",
+        "label": "模板",
+        "labelEn": "Template",
+        "hint": "basic 用 speed/pitch/volume，emotion 用 emotion，dialect 用 dialect，ip 用 voice_id",
+        "hintEn": "basic uses speed/pitch/volume, emotion uses emotion, dialect uses dialect, ip uses voice_id"
+      },
+      "instruct": {
+        "type": "string",
+        "default": "",
+        "label": "指令",
+        "labelEn": "Instruct",
+        "hint": "tts 模板可选原始指令；freeform 模板必填",
+        "hintEn": "Optional raw instruction for tts; required for freeform"
+      },
+      "voice_id": {
+        "type": "enum",
+        "values": [
+          "",
+          "US_Emma",
+          "US_James",
+          "UK_George",
+          "UK_Charlotte"
+        ],
+        "default": "",
+        "label": "官方音色",
+        "labelEn": "Named voice",
+        "hint": "仅 ip 模板",
+        "hintEn": "ip template only"
+      },
+      "reference_text": {
+        "type": "string",
+        "default": "",
+        "label": "参考文本",
+        "labelEn": "Reference text",
+        "hint": "参考音频的转写；提供后同时作为声学前缀",
+        "hintEn": "Transcript of the reference audio; enables its acoustic prefix"
+      },
+      "emotion": {
+        "type": "string",
+        "default": "",
+        "label": "情感",
+        "labelEn": "Emotion",
+        "hint": "emotion 模板",
+        "hintEn": "emotion template"
+      },
+      "speed": {
+        "type": "enum",
+        "values": [
+          "",
+          "慢速",
+          "中速",
+          "快速"
+        ],
+        "default": "",
+        "label": "语速",
+        "labelEn": "Speed",
+        "hint": "basic 模板",
+        "hintEn": "basic template"
+      },
+      "pitch": {
+        "type": "enum",
+        "values": [
+          "",
+          "低",
+          "中",
+          "高"
+        ],
+        "default": "",
+        "label": "音高",
+        "labelEn": "Pitch",
+        "hint": "basic 模板",
+        "hintEn": "basic template"
+      },
+      "volume": {
+        "type": "enum",
+        "values": [
+          "",
+          "低",
+          "中",
+          "高"
+        ],
+        "default": "",
+        "label": "音量",
+        "labelEn": "Volume",
+        "hint": "basic 模板",
+        "hintEn": "basic template"
+      },
+      "dialect": {
+        "type": "enum",
+        "values": [
+          "",
+          "chuanyu dialect",
+          "cantonese"
+        ],
+        "default": "",
+        "label": "方言",
+        "labelEn": "Dialect",
+        "hint": "dialect 模板",
+        "hintEn": "dialect template"
+      }
+    }
+  },
+  {
+    "id": "ming3_tts_voicedesign",
+    "family": "ming3_tts",
+    "hfUrl": "https://huggingface.co/inclusionAI/Ming-3.0-tts",
+    "ggufUrl": "https://huggingface.co/audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
+    "category": "tts",
+    "modes": [
+      "offline"
+    ],
+    "outputType": "audio",
+    "language": {
+      "values": [
+        "English",
+        "Chinese",
+        "Japanese",
+        "Korean",
+        "German",
+        "French",
+        "Spanish"
+      ],
+      "default": "English"
+    },
+    "backends": [
+      "cpu",
+      "cuda",
+      "vulkan"
+    ],
+    "displayName": "Ming 3.0 TTS 0.5B Voice Design",
+    "description": "Ming 3.0 TTS 0.5B 音色设计：用 instruct 描述想要的声音（如“沉稳温暖的成年男声”），后续分块沿用首块生成的音色。输出 44.1kHz，仅离线。",
+    "descriptionEn": "Ming 3.0 TTS 0.5B voice design: describe the voice in instruct (e.g. \"A calm adult man with a clear, warm voice.\"); later chunks reuse the first generated chunk as their reference. 44.1kHz, offline only.",
+    "serverTask": "vdes",
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "none"
+    },
+    "paramSchema": {
+      "language": {
+        "type": "enum",
+        "values": [
+          "English",
+          "Chinese",
+          "Japanese",
+          "Korean",
+          "German",
+          "French",
+          "Spanish"
+        ],
+        "default": "English",
+        "label": "语言",
+        "labelEn": "Language"
+      },
+      "seed": {
+        "type": "integer",
+        "default": 1895,
+        "min": 0,
+        "max": 2147483647,
+        "step": 1,
+        "label": "随机种子",
+        "labelEn": "Seed"
+      },
+      "guidance_scale": {
+        "type": "number",
+        "default": 2.0,
+        "min": 0.0,
+        "max": 10.0,
+        "step": 0.1,
+        "label": "引导强度",
+        "labelEn": "Guidance scale",
+        "hint": "条件流预测加上该倍数的（条件−无条件）差",
+        "hintEn": "Conditioned flow prediction plus this scale times its difference from the null prediction"
+      },
+      "sigma": {
+        "type": "number",
+        "default": 0.25,
+        "min": 0.0,
+        "max": 2.0,
+        "step": 0.05,
+        "label": "SDE 噪声",
+        "labelEn": "Flow SDE sigma"
+      },
+      "temperature": {
+        "type": "number",
+        "default": 0.0,
+        "min": 0.0,
+        "max": 2.0,
+        "step": 0.05,
+        "label": "采样温度",
+        "labelEn": "Temperature",
+        "hint": "0 仍使用带种子的初始噪声",
+        "hintEn": "Zero still uses seeded initial noise"
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 1000,
+        "min": 1,
+        "max": 1000,
+        "step": 1,
+        "label": "最大声学块数",
+        "labelEn": "Max acoustic patches",
+        "hint": "每段文本最多生成的声学块（约 80ms/块），另受 512 位置上下文限制",
+        "hintEn": "Per text chunk, about 80 ms each; also bounded by the 512-position context"
+      },
+      "text_chunk_size": {
+        "type": "integer",
+        "default": null,
+        "min": 1,
+        "max": 1000,
+        "step": 1,
+        "label": "分块长度",
+        "labelEn": "Chunk size",
+        "hint": "留空自动：CJK 为主 50，其它 300，音色设计 120（Unicode 码点）",
+        "hintEn": "Empty = auto: 50 for mostly CJK, 300 otherwise, 120 for voice design (codepoints)"
+      },
+      "text_chunk_mode": {
+        "type": "enum",
+        "values": [
+          "tag_aware",
+          "default",
+          "japanese",
+          "endline"
+        ],
+        "default": "tag_aware",
+        "label": "分块模式",
+        "labelEn": "Chunk mode"
+      },
+      "instruct": {
+        "type": "string",
+        "default": "A calm adult man with a clear, warm voice.",
+        "label": "音色描述",
+        "labelEn": "Voice description"
+      }
+    }
+  },
+  {
+    "id": "parakeet_tdt",
+    "family": "parakeet_tdt",
+    "hfUrl": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Parakeet-TDT-0.6B-v3-GGUF",
+    "displayName": "Parakeet-TDT 0.6B v3",
+    "description": "NVIDIA Parakeet-TDT 0.6B v3 语音识别（CC-BY-4.0），25 种欧洲语言自动识别，带词级时间戳；支持离线与缓冲流式。长音频可在实例高级选项加会话选项 parakeet_tdt.offline_mode=long_form（有界窗口）。",
+    "descriptionEn": "NVIDIA Parakeet-TDT 0.6B v3 speech recognition (CC-BY-4.0): 25 European languages with automatic detection and word timestamps; offline and buffered streaming. For long recordings add the session option parakeet_tdt.offline_mode=long_form (bounded windows) in the instance's advanced options.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline",
+      "streaming"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "language": {
+      "values": [
+        "auto"
+      ],
+      "default": "auto"
+    },
+    "backends": [
+      "cpu",
+      "cuda",
+      "vulkan"
+    ],
+    "paramSchema": {}
+  },
+  {
+    "id": "underdog_bark3",
+    "family": "parakeet_tdt",
+    "hfUrl": "https://huggingface.co/ConwayResearch/Underdog-Bark-3.0",
+    "displayName": "Underdog Bark 3.0 (English ASR)",
+    "description": "ConwayResearch Underdog Bark 3.0（CC-BY-4.0）：Parakeet-TDT 0.6B v3 的英文微调版。官方只发布 model.bark 格式，没有托管 GGUF：请用仓库内 tools/bark3 转换器生成 parakeet_tdt GGUF（q8_0 约 0.9 GB），放入模型目录后在此卡片选择。仅离线（已验证）。长音频可在实例高级选项加会话选项 parakeet_tdt.offline_mode=long_form（有界窗口）。",
+    "descriptionEn": "ConwayResearch Underdog Bark 3.0 (CC-BY-4.0): an English fine-tune of Parakeet-TDT 0.6B v3. Upstream ships only a model.bark file and no hosted GGUF: build a parakeet_tdt GGUF (q8_0 about 0.9 GB) with the converter in tools/bark3, put it in the models directory and pick it on this card. Offline only (verified). For long recordings add the session option parakeet_tdt.offline_mode=long_form (bounded windows) in the instance's advanced options.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "language": {
+      "values": [
+        "en"
+      ],
+      "default": "en"
+    },
+    "backends": [
+      "cpu",
+      "cuda",
+      "vulkan"
+    ],
+    "paramSchema": {}
+  },
+  {
+    "id": "voxtral_realtime",
+    "family": "voxtral_realtime",
+    "hfUrl": "https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602",
+    "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Voxtral-Mini-4B-Realtime-2602-GGUF",
+    "displayName": "Voxtral Mini 4B Realtime",
+    "description": "Mistral Voxtral Mini 4B Realtime 实时语音识别（13 种语言）。以流式模式创建实例后可通过 /v1/audio/transcriptions/live 边说边转写，也支持离线转写。",
+    "descriptionEn": "Mistral Voxtral Mini 4B Realtime speech recognition (13 languages). Create the instance in streaming mode to transcribe while you speak through /v1/audio/transcriptions/live; offline transcription also works.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline",
+      "streaming"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "language": {
+      "values": [
+        "en",
+        "zh",
+        "hi",
+        "es",
+        "ar",
+        "fr",
+        "pt",
+        "ru",
+        "de",
+        "ja",
+        "ko",
+        "it",
+        "nl"
+      ],
+      "default": "en"
+    },
+    "paramSchema": {}
+  },
+  {
+    "id": "kroko_asr",
+    "family": "kroko_asr",
+    "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Kroko-ASR-GGUF",
+    "displayName": "Kroko Community ASR",
+    "description": "Kroko 社区版流式语音识别（轻量，带词级时间戳）。以流式模式创建实例后可通过 /v1/audio/transcriptions/live 实时转写。",
+    "descriptionEn": "Kroko community streaming speech recognition (lightweight, word timestamps). Create the instance in streaming mode for live transcription through /v1/audio/transcriptions/live.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline",
+      "streaming"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "language": {
+      "values": [
+        "en",
+        "de",
+        "es",
+        "fr",
+        "it",
+        "he",
+        "nl",
+        "pt",
+        "sv",
+        "tr"
+      ],
+      "default": "en"
+    },
+    "paramSchema": {}
+  },
+  {
+    "id": "ming3_audio_asr",
+    "family": "ming3_audio",
+    "hfUrl": "https://huggingface.co/inclusionAI/Ming-3.0-audio-tiny",
+    "ggufUrl": "https://huggingface.co/audio-cpp/Ming-3.0-Audio-Tiny-GGUF",
+    "modes": [
+      "offline"
+    ],
+    "backends": [
+      "cpu",
+      "cuda",
+      "vulkan"
+    ],
+    "displayName": "Ming 3.0 Audio Tiny (ASR / Understanding)",
+    "category": "asr",
+    "serverTask": "asr",
+    "outputType": "text",
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "language": {
+      "values": [
+        "auto"
+      ],
+      "default": "auto"
+    },
+    "description": "inclusionAI Ming 3.0 Audio Tiny（MIT）：Whisper 音频编码器 + 16B 混合专家 Thinker。默认提示词输出“语言标签<Tab>转写”；改 prompt 可做音频理解（如描述声音）。仅离线。q4_k 约 10 GB。在 16 GB 级显存/内存上运行时，启动实例的高级选项里加会话选项 ming3_audio.disk_experts=true（可选 ming3_audio.expert_cache_size=8–128、ming3_audio.disk_expert_read_threads=4），专家权重留在主机内存，按需调入 GPU 缓存。需要 v0.9.2 之后的 audio.cpp 构建。",
+    "descriptionEn": "inclusionAI Ming 3.0 Audio Tiny (MIT): Whisper audio encoder with a 16B mixture-of-experts Thinker. The default prompt returns a language label, a tab and the transcript; change prompt for audio understanding (e.g. describe the sounds). Offline only. q4_k is about 10 GB. On 16 GB-class GPUs or hosts, add the session option ming3_audio.disk_experts=true in the instance's advanced options (optionally ming3_audio.expert_cache_size=8-128 and ming3_audio.disk_expert_read_threads=4) to keep Thinker experts in host memory and stage them into a bounded GPU cache. Needs an audio.cpp build newer than v0.9.2.",
+    "paramSchema": {
+      "prompt": {
+        "type": "string",
+        "default": "",
+        "label": "提示词",
+        "labelEn": "Prompt",
+        "hint": "留空为转写；可改为音频理解指令",
+        "hintEn": "Empty = transcription; set an instruction for audio understanding"
+      },
+      "system_prompt": {
+        "type": "string",
+        "default": "",
+        "label": "系统提示词",
+        "labelEn": "System prompt"
+      },
+      "enable_thinking": {
+        "type": "boolean",
+        "default": false,
+        "label": "深度思考",
+        "labelEn": "Enable thinking"
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": 256,
+        "min": 1,
+        "max": 4096,
+        "step": 1,
+        "label": "最大文本 token",
+        "labelEn": "Max text tokens"
+      }
+    }
+  },
+  {
+    "id": "ming3_audio",
+    "family": "ming3_audio",
+    "hfUrl": "https://huggingface.co/inclusionAI/Ming-3.0-audio-tiny",
+    "ggufUrl": "https://huggingface.co/audio-cpp/Ming-3.0-Audio-Tiny-GGUF",
+    "modes": [
+      "offline"
+    ],
+    "backends": [
+      "cpu",
+      "cuda",
+      "vulkan"
+    ],
+    "displayName": "Ming 3.0 Audio Tiny (TTS / Clone)",
+    "category": "tts",
+    "serverTask": "tts",
+    "outputType": "audio",
+    "inputs": {
+      "text": "required",
+      "audio": "none",
+      "voiceRef": "optional"
+    },
+    "language": {
+      "values": [
+        "Chinese",
+        "English"
+      ],
+      "default": "English"
+    },
+    "description": "Ming 3.0 Audio Tiny 的 Talker 语音合成：无参考音频时用 voice_id 官方音色（默认 灵小柔，英文可用 US_James 等），有参考音频则零样本克隆（加 reference_text 提供声学前缀）。中英为主，输出 44.1kHz，仅离线。在 16 GB 级显存/内存上运行时，启动实例的高级选项里加会话选项 ming3_audio.disk_experts=true（可选 ming3_audio.expert_cache_size=8–128、ming3_audio.disk_expert_read_threads=4），专家权重留在主机内存，按需调入 GPU 缓存。语音对话（s2s）暂无界面面板，可通过 CLI 或 /api/run 使用。",
+    "descriptionEn": "Ming 3.0 Audio Tiny Talker speech synthesis: official named voices via voice_id when no reference is given (default 灵小柔; English e.g. US_James), or zero-shot cloning from reference audio (add reference_text for an acoustic prefix). Chinese and English primarily; 44.1kHz, offline only. On 16 GB-class GPUs or hosts, add the session option ming3_audio.disk_experts=true in the instance's advanced options (optionally ming3_audio.expert_cache_size=8-128 and ming3_audio.disk_expert_read_threads=4) to keep Thinker experts in host memory and stage them into a bounded GPU cache. Spoken response (s2s) has no UI panel yet; use the CLI or /api/run.",
+    "paramSchema": {
+      "voice_id": {
+        "type": "string",
+        "default": "灵小柔",
+        "label": "官方音色",
+        "labelEn": "Named voice",
+        "hint": "仅在无参考音频时使用",
+        "hintEn": "Used only without reference audio"
+      },
+      "language": {
+        "type": "enum",
+        "values": [
+          "",
+          "zh",
+          "en"
+        ],
+        "default": "",
+        "label": "目标语言",
+        "labelEn": "Target language"
+      },
+      "reference_text": {
+        "type": "string",
+        "default": "",
+        "label": "参考文本",
+        "labelEn": "Reference text",
+        "hint": "参考音频的转写；提供后同时作为声学前缀",
+        "hintEn": "Transcript of the reference audio; enables its acoustic prefix"
+      },
+      "seed": {
+        "type": "integer",
+        "default": 42,
+        "min": 0,
+        "max": 2147483647,
+        "step": 1,
+        "label": "随机种子",
+        "labelEn": "Seed"
+      },
+      "guidance_scale": {
+        "type": "number",
+        "default": 2.0,
+        "min": 0.0,
+        "max": 10.0,
+        "step": 0.1,
+        "label": "引导强度",
+        "labelEn": "Guidance scale"
+      },
+      "sigma": {
+        "type": "number",
+        "default": 0.25,
+        "min": 0.0,
+        "max": 2.0,
+        "step": 0.05,
+        "label": "SDE 噪声",
+        "labelEn": "Flow SDE sigma"
+      },
+      "temperature": {
+        "type": "number",
+        "default": 0.0,
+        "min": 0.0,
+        "max": 2.0,
+        "step": 0.05,
+        "label": "采样温度",
+        "labelEn": "Temperature",
+        "hint": "0 仍使用带种子的初始噪声",
+        "hintEn": "Zero still uses seeded initial noise"
+      },
+      "max_audio_tokens": {
+        "type": "integer",
+        "default": 1000,
+        "min": 1,
+        "max": 1000,
+        "step": 1,
+        "label": "最大声学块数",
+        "labelEn": "Max acoustic patches"
+      },
+      "text_chunk_size": {
+        "type": "integer",
+        "default": 100,
+        "min": 1,
+        "max": 1000,
+        "step": 1,
+        "label": "分块长度",
+        "labelEn": "Chunk size",
+        "hint": "Unicode 码点",
+        "hintEn": "Unicode codepoints"
+      },
+      "text_chunk_mode": {
+        "type": "enum",
+        "values": [
+          "tag_aware",
+          "default",
+          "japanese",
+          "endline"
+        ],
+        "default": "tag_aware",
+        "label": "分块模式",
+        "labelEn": "Chunk mode"
+      },
+      "raw_text": {
+        "type": "boolean",
+        "default": false,
+        "label": "不分块",
+        "labelEn": "Raw text (no chunking)"
+      },
+      "trim_silence": {
+        "type": "boolean",
+        "default": true,
+        "label": "裁剪尾部静音",
+        "labelEn": "Trim trailing silence"
       }
     }
   },

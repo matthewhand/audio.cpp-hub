@@ -56,6 +56,9 @@ audio.cpp-hub 是 [audio.cpp](https://github.com/0xShug0/audio.cpp) 的 Web 管�
 ├── stats.go              # GET /api/stats 用量与性能聚合（纯派生读接口）：用量取自历史索引
 │                         # （无淘汰，长期口径），性能取自内存任务时间戳（近期窗口）；
 │                         # 分位数用线性插值 percentile，RTF = 执行秒 ÷ 音频秒
+├── reqmetrics.go        # /v1 请求日志与延迟（#198）：每实例 100 条环形缓冲（只存元数据，不存文本/音频，
+│                         # 只在内存）、分块时间线（>100 ms 间隔 / 播放欠载）、冷加载与重启重叠标记、
+│                         # 15m/1h 最近秩分位；X-Client 标记转发前删除；GET /api/metrics/{summary,recent,requests/{id}}
 ├── download.go           # 模型权重下载器（Range 分段 + WriteAt、断点续传、暂停/恢复/取消、
 │                         # task.json 原子落盘、重启自动续传、速率采样）
 ├── download_disk_windows.go / download_disk_other.go  # 磁盘空间预检（Windows 用 x/sys，其它平台跳过）

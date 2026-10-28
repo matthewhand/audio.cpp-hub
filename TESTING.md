@@ -29,6 +29,7 @@
   打开路径确实经 `import("./file-browser.js")` 并发去重）。
 - `stats-lazy.test.mjs`：看板外观层（先同步显示外壳再加载 chunk、关闭/重画在未加载时空转、
   并发打开共享一次 import、import 失败收回面板、`wireStatsButton` 接线）。
+- `requests-lazy.test.mjs`：请求与延迟面板（#198）外观层，契约同 `stats-lazy.test.mjs`。
 - `lazy-panels.test.mjs`：音色库 / 下载 / 设置 / 命令面板四个外观层的同一组契约——同步关闭与语言切换
   在 chunk 未加载时是 no-op（或只收已显示的外壳并放弃随后那次打开）、并发打开共享一次
   import、失败不缓存、页头与入口按钮接线路由、**首屏必须可见/被依赖的东西没有被懒加载**
@@ -82,6 +83,7 @@
 | 下载暂停 / 续传 + 懒加载契约 | `downloads.spec.mjs` |
 | 文件浏览器懒加载（含经典脚本的动态 import） | `file-browser.spec.mjs` |
 | 看板懒加载 | `stats.spec.mjs` |
+| 请求与延迟面板（懒加载、实例状态、标记、分块时间线、轮询启停） | `requests.spec.mjs` |
 | 命令面板懒加载（和弦首按即开、再按即关、Esc） | `command-palette.spec.mjs` |
 | 模型切换 / 主题 / 语言 | `ui-switch.spec.mjs` |
 
