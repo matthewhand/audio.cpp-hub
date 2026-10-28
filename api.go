@@ -1115,8 +1115,9 @@ func (h *Hub) handleDownloadCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, f := range pkg.Files {
 			files = append(files, dlFileRequest{
-				URL:  buildResolveURL(endpoint, repo, revision, f.Remote),
-				Path: f.Local,
+				URL:    buildResolveURL(endpoint, repo, revision, f.Remote),
+				Path:   f.Local,
+				SHA256: f.SHA256,
 			})
 		}
 	} else {
@@ -1131,7 +1132,16 @@ func (h *Hub) handleDownloadCreate(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				continue
 			}
-			files = append(files, dlFileRequest{URL: optString(obj, "url"), Path: optString(obj, "path")})
+			var sha string
+			if supplied, present := obj["sha256"]; present {
+				var valid bool
+				sha, valid = supplied.(string)
+				if !valid {
+					downloadErr(w, &UserError{Code: "INVALID_SHA256", Msg: "Expected SHA-256 must be a 64-character hexadecimal string"})
+					return
+				}
+			}
+			files = append(files, dlFileRequest{URL: optString(obj, "url"), Path: optString(obj, "path"), SHA256: sha})
 		}
 	}
 	detail, err := h.downloads.Create(targetDir, files, token, overwrite, modelID, packageID, source)

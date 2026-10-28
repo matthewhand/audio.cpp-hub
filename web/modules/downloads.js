@@ -155,11 +155,16 @@ function renderMdlPackages() {
     return;
   }
   pkgs.forEach((p, i) => {
+    // Only a full commit SHA pins the upstream revision. An expected file
+    // hash is not the same as verification of downloaded bytes.
+    const pinned = /^[0-9a-f]{40}$/i.test(p.revision || "");
+    const hashesPresent = (p.files || []).length > 0 && (p.files || []).every(f => /^[0-9a-f]{64}$/i.test(f.sha256 || ""));
+    const integrity = `${pinned ? "pinned" : "mutable"} ref: ${p.revision || "?"} | SHA-256 ${hashesPresent ? "expected" : "unavailable"}`;
     const row = el(`<label class="dl-package-row">
       <input type="radio" name="mdl-package" value="${esc(p.id)}"${p.default || (!pkgs.some(x => x.default) && i === 0) ? " checked" : ""}>
       <span class="dl-package-text">
         <span class="dl-package-name"></span>
-        <span class="dl-package-meta">${esc([p.format, p.precision].filter(Boolean).join(" ｜ "))} → models/${esc(p.targetDir)} ｜ ${esc(I18N.plural("dl.fileCount", (p.files || []).length))}</span>
+        <span class="dl-package-meta">${esc([p.format, p.precision].filter(Boolean).join(" ｜ "))} → models/${esc(p.targetDir)} ｜ ${esc(I18N.plural("dl.fileCount", (p.files || []).length))} | ${esc(integrity)}</span>
       </span>
     </label>`);
     const name = row.querySelector(".dl-package-name");

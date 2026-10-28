@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -64,7 +67,8 @@ type dlSegment struct {
 
 // dlFileEntry 单个待下载文件。
 type dlFileEntry struct {
-	Path          string      `json:"path"` // 相对目标目录的路径（统一用 / 分隔）
+	SHA256        string      `json:"sha256,omitempty"` // trusted expected file digest, absent = unverified
+	Path          string      `json:"path"`             // 相对目标目录的路径（统一用 / 分隔）
 	URL           string      `json:"url"`
 	Size          int64       `json:"size"` // 字节数，-1 表示未知
 	SupportsRange bool        `json:"supportsRange"`
@@ -74,8 +78,9 @@ type dlFileEntry struct {
 
 // dlFileRequest 创建任务的文件请求项。
 type dlFileRequest struct {
-	URL  string
-	Path string
+	URL    string
+	Path   string
+	SHA256 string
 }
 
 // DownloadTask 下载任务数据模型，JSON 直接落盘 task.json。
@@ -458,8 +463,12 @@ func (m *DownloadManager) Create(targetDir string, files []dlFileRequest, token 
 			return nil, &UserError{Code: "DUPLICATE_FILE",
 				Params: map[string]any{"path": p}, Msg: "重复文件: " + p}
 		}
+		hash, err := validateExpectedSHA256(fr.SHA256)
+		if err != nil {
+			return nil, &UserError{Code: "INVALID_SHA256", Msg: "Expected SHA-256 must be exactly 64 hexadecimal characters"}
+		}
 		seen[p] = true
-		entries = append(entries, &dlFileEntry{Path: p, URL: u, Size: -1})
+		entries = append(entries, &dlFileEntry{Path: p, URL: u, Size: -1, SHA256: hash})
 	}
 	if err := m.probe(entries, token); err != nil {
 		return nil, err
@@ -743,6 +752,14 @@ func (m *DownloadManager) runTaskInner(t *DownloadTask, gen int32, ctx context.C
 			return err
 		}
 		if m.fileCompleted(f) {
+			if err := verifyDownloadedSHA256(m.finalPath(t.TargetDir, f.Path), f.SHA256); err != nil {
+				// A persisted completed bit cannot legitimise changed local bytes.
+				m.mu.Lock()
+				f.Completed = false
+				m.persistLocked(t)
+				m.mu.Unlock()
+				return err
+			}
 			continue
 		}
 		if err := m.downloadFile(t, f, gen, ctx); err != nil {
@@ -791,7 +808,10 @@ func (m *DownloadManager) downloadFile(t *DownloadTask, f *dlFileEntry, gen int3
 	part := final + ".part"
 	if f.Size > 0 && !m.fileCompleted(f) {
 		if st, err := os.Stat(final); err == nil && st.Mode().IsRegular() && st.Size() == f.Size {
-			// 上次在改名后、落盘前崩溃：直接判定完成
+			// A renamed-but-unpersisted file cannot bypass verification.
+			if err := verifyDownloadedSHA256(final, f.SHA256); err != nil {
+				return err
+			}
 			os.Remove(part)
 			m.markFileCompleted(t, f)
 			return nil
@@ -846,6 +866,9 @@ func (m *DownloadManager) downloadFile(t *DownloadTask, f *dlFileEntry, gen int3
 	}
 	if f.Size > 0 && total != f.Size {
 		return fmt.Errorf("分段字节总量与预期不符: %d != %d", total, f.Size)
+	}
+	if err := verifyDownloadedSHA256(part, f.SHA256); err != nil {
+		return discardMismatchedPart(part, err)
 	}
 	if err := movePartFile(part, final); err != nil {
 		return err
@@ -968,6 +991,9 @@ func (m *DownloadManager) streamFile(t *DownloadTask, f *dlFileEntry, part, fina
 	}
 	if f.Size > 0 && atomic.LoadInt64(&seg.Done) != f.Size {
 		return fmt.Errorf("文件大小不符: %d != %d", atomic.LoadInt64(&seg.Done), f.Size)
+	}
+	if err := verifyDownloadedSHA256(part, f.SHA256); err != nil {
+		return discardMismatchedPart(part, err)
 	}
 	if err := movePartFile(part, final); err != nil {
 		return err
@@ -1421,6 +1447,10 @@ func (m *DownloadManager) loadAll() {
 				badPath = true
 				break
 			}
+			if hash, err := validateExpectedSHA256(f.SHA256); err != nil || hash != f.SHA256 {
+				badPath = true
+				break
+			}
 		}
 		if badPath {
 			log.Printf("下载任务文件路径非法，忽略 %s", taskFile)
@@ -1451,6 +1481,64 @@ func (m *DownloadManager) deleteWithRetry(path string) {
 	if pathExists(path) {
 		log.Printf("删除失败（已重试）: %s", path)
 	}
+}
+
+// validateExpectedSHA256 requires a full SHA-256 hex digest. Empty means legacy
+// unverified content, not successful integrity validation.
+func validateExpectedSHA256(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+	if len(raw) != sha256.Size*2 {
+		return "", errors.New("invalid SHA-256 length")
+	}
+	decoded, err := hex.DecodeString(raw)
+	if err != nil || len(decoded) != sha256.Size {
+		return "", errors.New("invalid SHA-256 hex")
+	}
+	return hex.EncodeToString(decoded), nil
+}
+
+// verifyDownloadedSHA256 checks the complete bytes, including on resumed files
+// and recovered rename-before-persist files. No final rename/completion is allowed
+// if the expected digest differs. The expected hash must come from a trusted
+// manifest; this function does not authenticate its origin.
+func verifyDownloadedSHA256(path, expected string) error {
+	if expected == "" {
+		return nil
+	}
+	hash, err := validateExpectedSHA256(expected)
+	if err != nil || hash != expected {
+		return &UserError{Code: "INVALID_SHA256", Msg: "Invalid expected SHA-256"}
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	sum := sha256.New()
+	if _, err := io.Copy(sum, f); err != nil {
+		return err
+	}
+	want, _ := hex.DecodeString(hash)
+	if subtle.ConstantTimeCompare(sum.Sum(nil), want) != 1 {
+		return &UserError{Code: "DOWNLOAD_HASH_MISMATCH", Msg: "Downloaded file SHA-256 does not match the trusted expected digest"}
+	}
+	return nil
+}
+
+// discardMismatchedPart removes only this download task's corrupt .part file.
+// Retaining its completed segment counters would otherwise make Resume repeat
+// the same bad prefix indefinitely. Never remove a previously finalised file.
+func discardMismatchedPart(part string, verificationErr error) error {
+	var failure *UserError
+	if !errors.As(verificationErr, &failure) || failure.Code != "DOWNLOAD_HASH_MISMATCH" {
+		return verificationErr
+	}
+	if err := os.Remove(part); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("cannot discard mismatched partial download: %w", err)
+	}
+	return verificationErr
 }
 
 // movePartFile .part 改名落盘（Windows 下目标存在会导致改名失败，先删）。
