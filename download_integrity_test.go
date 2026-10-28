@@ -248,3 +248,55 @@ func TestIntegrityExplicitDownloadRejectsNonstringsOffline(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegrityTwoSegmentsRequireWholeFileDigest(t *testing.T) {
+	// An equal-length corruption in either concurrent HTTP Range segment must
+	// fail the digest for the joined file, not just per-response byte counts.
+	original := []byte(strings.Repeat("fictional-segment-bytes-", 60))
+	for _, corrupt := range []bool{false, true} {
+		name := "exact"
+		if corrupt {
+			name = "corrupted-equal-size"
+		}
+		t.Run(name, func(t *testing.T) {
+			manager := newIntegrityManager(t)
+			half := len(original) / 2
+			source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var start, end int
+				if n, err := fmt.Sscanf(r.Header.Get("Range"), "bytes=%d-%d", &start, &end); err != nil || n != 2 || end < start || start < 0 || end >= len(original) {
+					w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+					return
+				}
+				chunk := append([]byte(nil), original[start:end+1]...)
+				if corrupt && start == half {
+					chunk[0] ^= 0x01
+				}
+				w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(original)))
+				w.WriteHeader(http.StatusPartialContent)
+				_, _ = w.Write(chunk)
+			}))
+			defer source.Close()
+			manager.httpClient = source.Client()
+			file := &dlFileEntry{Path: "joined.gguf", URL: source.URL, Size: int64(len(original)), SupportsRange: true, SHA256: fictionalDigest(original), Segments: []dlSegment{{Start: 0, End: int64(half - 1)}, {Start: int64(half), End: int64(len(original) - 1)}}}
+			task := newIntegrityTask(file)
+			err := manager.downloadFile(task, file, 0, context.Background())
+			final := manager.finalPath(task.TargetDir, file.Path)
+			if corrupt {
+				if getUserErrCode(err) != "DOWNLOAD_HASH_MISMATCH" || file.Completed {
+					t.Fatalf("corrupt segment accepted: %v", err)
+				}
+				if _, statErr := os.Stat(final); !os.IsNotExist(statErr) {
+					t.Fatalf("corrupt assembled file became final: %v", statErr)
+				}
+			} else {
+				if err != nil || !file.Completed {
+					t.Fatalf("joined range download failed: %v", err)
+				}
+				got, readErr := os.ReadFile(final)
+				if readErr != nil || string(got) != string(original) {
+					t.Fatalf("joined file changed: %v", readErr)
+				}
+			}
+		})
+	}
+}
