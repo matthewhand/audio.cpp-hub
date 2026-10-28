@@ -1096,6 +1096,14 @@ func (h *Hub) handleDownloadCreate(w http.ResponseWriter, r *http.Request) {
 		revision := pkg.Revision
 		var endpoint string
 		if optString(body, "source") == "modelscope" {
+			// ModelScope maps a different repo at mutable master, not the
+			// provenance-checked Hugging Face commit. Never claim that the
+			// expected file SHA authenticates this independent mirror.
+			if packageHasExpectedSHA256(pkg) {
+				errJSON(w, http.StatusBadRequest, "PACKAGE_MIRROR_UNVERIFIED", nil,
+					"This package has pinned Hugging Face file hashes; ModelScope mirror equivalence is unverified. Choose Hugging Face.")
+				return
+			}
 			source = "modelscope"
 			repo = modelscopeRepo(repo)
 			revision = modelscopeRevision

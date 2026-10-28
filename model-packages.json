@@ -293,7 +293,8 @@
         "files": [
           {
             "remote": "fun-asr-nano-2512-q8_0.gguf",
-            "local": "fun-asr-nano-2512-q8_0.gguf"
+            "local": "fun-asr-nano-2512-q8_0.gguf",
+            "sha256": "4d727357574b079b7f43336b2930f39da086ca02f5d8d50872090b4c1c3d5e0a"
           }
         ]
       },
@@ -309,7 +310,8 @@
         "files": [
           {
             "remote": "fun-asr-nano-2512-f16.gguf",
-            "local": "fun-asr-nano-2512-f16.gguf"
+            "local": "fun-asr-nano-2512-f16.gguf",
+            "sha256": "3d906c3ccfed07efef88ff53d6cc94b788b9d2edf1492a5679d041b43e98c5be"
           }
         ]
       },
@@ -3087,13 +3089,14 @@
         "precision": "q8_0",
         "default": true,
         "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
-        "revision": "main",
+        "revision": "2eb8d37c7f10672e69c8aa33091baa04c461b66c",
         "gated": false,
         "targetDir": "Ming-3.0-TTS-0.5B-GGUF",
         "files": [
           {
             "remote": "ming-3.0-tts-0.5b-q8_0.gguf",
-            "local": "ming-3.0-tts-0.5b-q8_0.gguf"
+            "local": "ming-3.0-tts-0.5b-q8_0.gguf",
+            "sha256": "fcf2aa25e8e9cf2065a936e506581735c64d6255fb7869f09fbb61a2dde09aa1"
           }
         ]
       },
@@ -3103,13 +3106,14 @@
         "format": "gguf",
         "precision": "bf16",
         "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
-        "revision": "main",
+        "revision": "2eb8d37c7f10672e69c8aa33091baa04c461b66c",
         "gated": false,
         "targetDir": "Ming-3.0-TTS-0.5B-GGUF",
         "files": [
           {
             "remote": "ming-3.0-tts-0.5b-bf16.gguf",
-            "local": "ming-3.0-tts-0.5b-bf16.gguf"
+            "local": "ming-3.0-tts-0.5b-bf16.gguf",
+            "sha256": "43f108a4e6bb54af13071d0cb345a094e0b011b3b8318d8fb2c61753733f5312"
           }
         ]
       }
@@ -3127,13 +3131,14 @@
         "precision": "q8_0",
         "default": true,
         "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
-        "revision": "main",
+        "revision": "2eb8d37c7f10672e69c8aa33091baa04c461b66c",
         "gated": false,
         "targetDir": "Ming-3.0-TTS-0.5B-GGUF",
         "files": [
           {
             "remote": "ming-3.0-tts-0.5b-q8_0.gguf",
-            "local": "ming-3.0-tts-0.5b-q8_0.gguf"
+            "local": "ming-3.0-tts-0.5b-q8_0.gguf",
+            "sha256": "fcf2aa25e8e9cf2065a936e506581735c64d6255fb7869f09fbb61a2dde09aa1"
           }
         ]
       },
@@ -3143,13 +3148,14 @@
         "format": "gguf",
         "precision": "bf16",
         "repo": "audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
-        "revision": "main",
+        "revision": "2eb8d37c7f10672e69c8aa33091baa04c461b66c",
         "gated": false,
         "targetDir": "Ming-3.0-TTS-0.5B-GGUF",
         "files": [
           {
             "remote": "ming-3.0-tts-0.5b-bf16.gguf",
-            "local": "ming-3.0-tts-0.5b-bf16.gguf"
+            "local": "ming-3.0-tts-0.5b-bf16.gguf",
+            "sha256": "43f108a4e6bb54af13071d0cb345a094e0b011b3b8318d8fb2c61753733f5312"
           }
         ]
       }
@@ -3279,13 +3285,14 @@
         "precision": "q8_0",
         "default": true,
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Kokoro-82M-GGUF",
         "files": [
           {
             "remote": "Kokoro-82M-GGUF/kokoro-82m-q8_0.gguf",
-            "local": "kokoro-82m-q8_0.gguf"
+            "local": "kokoro-82m-q8_0.gguf",
+            "sha256": "9a4ca6176460cdc8c7845b804c0bbe85a4791ee3ffff568a3fdadbb708c63f47"
           }
         ]
       },
@@ -3295,13 +3302,14 @@
         "format": "gguf",
         "precision": "bf16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Kokoro-82M-GGUF",
         "files": [
           {
             "remote": "Kokoro-82M-GGUF/kokoro-82m-bf16.gguf",
-            "local": "kokoro-82m-bf16.gguf"
+            "local": "kokoro-82m-bf16.gguf",
+            "sha256": "0d2c2afac39b0ff01fb20b5633a6a5543735e612942b3af571424502b9c2dfaa"
           }
         ]
       }
