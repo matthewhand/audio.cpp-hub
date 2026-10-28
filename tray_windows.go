@@ -4,13 +4,11 @@ package main
 
 import (
 	_ "embed"
-	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/getlantern/systray"
 )
@@ -112,24 +110,12 @@ func enableAutoStart() bool {
 	workDir, _ := os.Getwd()
 	link := autoStartLinkPath()
 	os.MkdirAll(filepath.Dir(link), 0755)
-	script := fmt.Sprintf(
-		"$shell = New-Object -ComObject WScript.Shell; "+
-			"$sc = $shell.CreateShortcut('%s'); "+
-			"$sc.TargetPath = '%s'; "+
-			"$sc.WorkingDirectory = '%s'; "+
-			"$sc.WindowStyle = 7; "+
-			"$sc.Description = 'audio.cpp-hub (Go)'; "+
-			"$sc.Save();",
-		psEscape(link), psEscape(exe), psEscape(workDir))
+	script := makeAutoStartShortcutScript(link, exe, workDir)
 	return runPowerShell(script) && isRegularFile(link)
 }
 
 func disableAutoStart() bool {
 	return os.Remove(autoStartLinkPath()) == nil || !pathExists(autoStartLinkPath())
-}
-
-func psEscape(s string) string {
-	return strings.ReplaceAll(s, "'", "''")
 }
 
 // runPowerShell 执行一段 PS 脚本（隐藏窗口，避免 GUI 进程闪控制台）。

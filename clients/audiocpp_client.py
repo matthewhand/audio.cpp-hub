@@ -245,7 +245,11 @@ def upload_wav(path_or_bytes, hub: str = DEFAULT_DIRECT_HUB) -> dict:
     Hub-only route: the uploaded path is meaningful on that hub alone, so this
     takes a direct hub, never the fan-out.
     """
-    raw = open(path_or_bytes, "rb").read() if isinstance(path_or_bytes, str) else path_or_bytes
+    if isinstance(path_or_bytes, (str, os.PathLike)):
+        with open(path_or_bytes, "rb") as f:
+            raw = f.read()
+    else:
+        raw = path_or_bytes
     return json.loads(_request(hub, "/api/audio/upload", raw=raw, ctype="audio/wav"))
 
 

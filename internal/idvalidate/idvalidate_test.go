@@ -8,6 +8,9 @@ import (
 // errCode 提取 *Error 的错误码，非 *Error 返回空串。
 func errCode(err error) string {
 	if e, ok := err.(*Error); ok {
+		if e.Error() == "" {
+			panic("Error() message should not be empty")
+		}
 		return e.Code
 	}
 	return ""

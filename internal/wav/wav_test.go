@@ -3,6 +3,7 @@ package wav
 import (
 	"bytes"
 	"encoding/binary"
+	"os"
 	"testing"
 )
 
@@ -54,6 +55,9 @@ func wavDataChunk(n int) []byte {
 
 func errCode(err error) string {
 	if e, ok := err.(*Error); ok {
+		if e.Error() == "" {
+			panic("Error() message should not be empty")
+		}
 		return e.Code
 	}
 	return ""
@@ -175,5 +179,27 @@ func TestParseReader(t *testing.T) {
 				t.Fatalf("duration = %v, want %v (±%v)", info.DurationSec, tc.wantDuration, tc.durTol)
 			}
 		})
+	}
+}
+
+func TestParseFile(t *testing.T) {
+	// Non-existent file
+	if _, err := ParseFile("non_existent_file.wav"); err == nil {
+		t.Fatal("expected error for non-existent file, got nil")
+	}
+
+	// Valid WAV file
+	data := wavWrap(append(wavFmtChunk(1, 1, 16000, 16), wavDataChunk(32000)...))
+	tmp := t.TempDir() + "/test.wav"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		t.Fatalf("failed to write temp wav: %v", err)
+	}
+
+	info, err := ParseFile(tmp)
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+	if info.Channels != 1 || info.SampleRate != 16000 || info.BitsPerSample != 16 {
+		t.Fatalf("unexpected info: %+v", info)
 	}
 }
