@@ -50,6 +50,8 @@ Architecture, deployment, sequence, data and operations diagrams — editable HT
 
 - **Live speech-to-text (public `main`; not yet in the v0.2.1 release package)**: `POST /v1/audio/transcriptions/live?model=...` relays chunked PCM uploads and incremental SSE transcripts to ASR/diar instances started in `streaming` mode. Covered by synthetic-engine tests, not a claim of microphone or model performance validation; see [`docs/API.md`](docs/API.md).
 
+- **Kokoro 82M (public `main`; not in v0.2.1)**: the `kokoro_tts` model card and Q8_0/BF16 GGUF download entries are registered ([original model](https://huggingface.co/hexgrad/Kokoro-82M); [audio.cpp conversions](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Kokoro-82M-GGUF)). Requires a Kokoro-capable `audiocpp_server` and eSpeak-ng. [Merged PR #183](https://github.com/matthewhand/audio.cpp-hub/pull/183) reports end-to-end API speech for `af_heart`; other voices/languages, BF16 download and UI rendering remain unverified. Check model and conversion-package licenses separately.
+
 - **Multi-instance management**: writes a `server.json` per instance and launches `audiocpp_server` as a subprocess — automatic port allocation (bound to 127.0.0.1), health polling (up to 120s), log viewing, one-click stop
 - **Web UI**: plain HTML/JS frontend (no build step), bilingual Chinese/English, with model selection, parameter forms and task submission
 - **UI capabilities**: hash routing and deep links (`#/model/<id>`, `#/history`, …, restorable via back/forward), a `Ctrl/Cmd-K` command palette, dark / light / follow-system themes, unified skeleton / empty / error states for lists, keyboard accessibility and WCAG AA contrast (motion respects `prefers-reduced-motion`)
