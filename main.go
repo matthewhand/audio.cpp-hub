@@ -24,7 +24,10 @@ var version = "dev"
 
 // HubConfig 对应 hub.config.json，缺省值与 Java 版一致。
 type HubConfig struct {
-	HttpPort                int    `json:"httpPort"`
+	HttpPort int `json:"httpPort"`
+	// HttpBindHost optionally binds a separate hub to a specific local IP.
+	// Empty maintains the historical all-interface listener.
+	HttpBindHost            string `json:"httpBindHost"`
 	InstancePortBase        int    `json:"instancePortBase"`
 	ModelsDir               string `json:"modelsDir"`
 	HfEndpoint              string `json:"hfEndpoint"`
@@ -162,7 +165,10 @@ func main() {
 	}()
 
 	// 先绑定端口再进托盘：端口占用等启动失败能立即暴露
-	addr := fmt.Sprintf(":%d", cfg.HttpPort)
+	addr, addrErr := hubListenerAddress(cfg)
+	if addrErr != nil {
+		log.Fatalf("invalid hub bind address: %v", addrErr)
+	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("监听 %s 失败: %v", addr, err)
@@ -182,4 +188,19 @@ func main() {
 // request does not say otherwise.
 func (c HubConfig) v1SpeechArchiveDefault() bool {
 	return c.V1SpeechArchive == nil || *c.V1SpeechArchive
+}
+
+// hubListenerAddress preserves the original :port default but allows staging
+// or production-isolated hub instances to bind loopback explicitly.
+func hubListenerAddress(cfg HubConfig) (string, error) {
+	if cfg.HttpPort < 1 || cfg.HttpPort > 65535 {
+		return "", fmt.Errorf("invalid httpPort")
+	}
+	if cfg.HttpBindHost == "" {
+		return fmt.Sprintf(":%d", cfg.HttpPort), nil
+	}
+	if net.ParseIP(cfg.HttpBindHost) == nil {
+		return "", fmt.Errorf("httpBindHost must be an IP literal")
+	}
+	return net.JoinHostPort(cfg.HttpBindHost, fmt.Sprintf("%d", cfg.HttpPort)), nil
 }
