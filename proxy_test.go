@@ -84,3 +84,42 @@ func TestExtractV1Model(t *testing.T) {
 		})
 	}
 }
+
+func TestV1CreatedEpoch(t *testing.T) {
+	if epoch := v1CreatedEpoch("invalid-date"); epoch != 0 {
+		t.Errorf("expected 0 for invalid date, got %d", epoch)
+	}
+
+	valid := "2026-10-28T12:00:00.000Z"
+	epoch := v1CreatedEpoch(valid)
+	if epoch <= 0 {
+		t.Errorf("expected positive epoch for %s, got %d", valid, epoch)
+	}
+}
+
+func TestV1ProxyError(t *testing.T) {
+	err := &v1ProxyError{status: 400, msg: "bad request"}
+	if err.Error() != "bad request" {
+		t.Errorf("expected 'bad request', got %q", err.Error())
+	}
+}
+
+func TestCleanupV1ProxyCache(t *testing.T) {
+	if err := os.MkdirAll(v1CacheDir, 0755); err != nil {
+		t.Fatalf("mkdir v1CacheDir: %v", err)
+	}
+	reqFile := filepath.Join(v1CacheDir, "test-cleanup.req")
+	keepFile := filepath.Join(v1CacheDir, "test-cleanup.keep")
+	os.WriteFile(reqFile, []byte("temp"), 0644)
+	os.WriteFile(keepFile, []byte("keep"), 0644)
+	defer os.Remove(keepFile)
+
+	cleanupV1ProxyCache()
+
+	if _, err := os.Stat(reqFile); !os.IsNotExist(err) {
+		t.Errorf("expected %s to be deleted by cleanupV1ProxyCache", reqFile)
+	}
+	if _, err := os.Stat(keepFile); os.IsNotExist(err) {
+		t.Errorf("expected %s to be preserved by cleanupV1ProxyCache", keepFile)
+	}
+}

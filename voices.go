@@ -22,7 +22,10 @@ type VoiceLibrary struct {
 }
 
 func NewVoiceLibrary() *VoiceLibrary {
-	dir := filepath.Join("data", "voices")
+	return NewVoiceLibraryInDir(filepath.Join("data", "voices"))
+}
+
+func NewVoiceLibraryInDir(dir string) *VoiceLibrary {
 	return &VoiceLibrary{dir: dir, indexFile: filepath.Join(dir, "index.json")}
 }
 
@@ -137,6 +140,7 @@ func (v *VoiceLibrary) Save(name, text, uploadID, sourcePath string) (map[string
 	}
 	index = append(index, entry)
 	if err := v.writeIndex(index); err != nil {
+		os.Remove(target)
 		return nil, err
 	}
 	return entry, nil

@@ -249,7 +249,9 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 
 // handleV1Models GET /v1/models：聚合 READY 实例，OpenAI 格式。
 func (h *Hub) handleV1Models(w http.ResponseWriter, r *http.Request) {
-	io.Copy(io.Discard, r.Body) // drain body 保 keep-alive
+	if r.Body != nil {
+		io.Copy(io.Discard, r.Body) // drain body 保 keep-alive
+	}
 	data := []map[string]any{}
 	for _, inst := range h.instances.List() {
 		if inst.Status != "READY" {

@@ -556,10 +556,11 @@ class TestInstalledUnitContractSynthetic(EnsureReadyTestBase):
     def setUp(self):
         super(TestInstalledUnitContractSynthetic, self).setUp()
         self.saved_constants = {}
+        with open(self.exe, "rb") as f:
+            exe_sha = hashlib.sha256(f.read()).hexdigest()
         for name, value in (
             ("EXPECTED_EXE", self.exe),
-            ("EXPECTED_EXE_SHA256", hashlib.sha256(
-                open(self.exe, "rb").read()).hexdigest()),
+            ("EXPECTED_EXE_SHA256", exe_sha),
             ("WEIGHTS_PATH", self.weights),
             ("MIN_FREE_DISK_BYTES", 0),
             ("MIN_MEM_AVAILABLE_BYTES", 0),
