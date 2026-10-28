@@ -30,6 +30,31 @@ python3 -B test/unit/test_human_rttm_qa.py -q
 node --test test/unit/diarization-adjudication-scoring.test.mjs
 ~~~
 
+## Source-only follow-up to draft #154
+
+The rights-clear v2 identifier and WAV-relative-path schema patterns use strict
+end-of-input checks across Python and JavaScript, rejecting trailing newlines.
+The public-attribution rule rejects blank, whitespace-only, and enumerated
+invisible-only strings (including soft hyphens, combining joiners, variation
+selectors, Hangul fillers, Unicode tag characters, and supplementary-plane
+Egyptian, shorthand, and musical formatting controls) while retaining valid
+international names and supplementary-plane characters. Lone UTF-16 surrogate
+code units are invalid, including when mixed with visible characters; actual
+valid supplementary characters remain accepted in both JavaScript modes.
+The schema also rejects supplementary invisible controls presented as explicit
+UTF-16 surrogate pairs in Python in-memory strings, while the project intake
+validator canonicalizes well-formed surrogate pairs before length and pattern
+validation; malformed pairs are rejected. Canonical JSON-file intake decodes
+escaped pairs to Unicode scalar characters. This is an explicit denylist, not
+proof against every possible invisible
+Unicode string. Python and both default/Unicode-mode JavaScript regexes are
+exercised by the cross-engine synthetic intake tests.
+
+The four Python commands above are wired into the existing CI quality workflow
+for future authorised integration; **no hosted CI was run or authorised for
+this follow-up**. Successful metadata tests do not establish consent, listening,
+verified ground truth, or permission to distribute any original recordings.
+
 ## Explicit outstanding gates
 
 Draft [PR #154](https://github.com/matthewhand/audio.cpp-hub/pull/154) contains separate generated WAV fixtures derived from upstream recorded voices. Their *underlying voices' recording and redistribution rights are not independently verified*. Those files, their source-derived manifest and any unverified accuracy claims must **not** be merged, published or deployed. Keep #154 draft until written rights-clear provenance and independent listener-reviewed reference turns are obtained, or replace its media entirely with independently rights-cleared material.

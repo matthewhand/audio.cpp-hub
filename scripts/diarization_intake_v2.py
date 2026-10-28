@@ -134,6 +134,15 @@ def _schema_check(value, spec, location="$"):
             _schema_check(item, spec["items"], location + "[]")
     elif typ == "string":
         _require(type(value) is str, f"{location}: expected string")
+        # Programmatic callers may supply valid supplementary code points as
+        # explicit UTF-16 surrogate pairs. JSON decoding normally combines
+        # these, so normalize only such noncanonical input before counting
+        # characters or applying regexes. Reject unpaired surrogate units.
+        if any(0xD800 <= ord(ch) <= 0xDFFF for ch in value):
+            try:
+                value = value.encode("utf-16-le", "surrogatepass").decode("utf-16-le")
+            except UnicodeDecodeError as exc:
+                raise IntakeError(f"{location}: invalid format") from exc
         _require(len(value) >= spec.get("minLength", 0), f"{location}: string too short")
         _require(len(value) <= spec.get("maxLength", float("inf")), f"{location}: string too long")
         if "pattern" in spec:
