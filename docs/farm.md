@@ -148,6 +148,12 @@ CPU performance is a non-issue for sanotts: ~30–300 ms per sentence.
   - STT: `.36:18080` model `citrinet` via async `POST /api/tasks` (hub-direct
     shape, `instanceId` instead of an alias).
 
+Preset-voice models do not clone: the voice key is a `paramSchema` enum
+(`voice_id` / `speaker`) that goes in `options` for some models and top-level
+for others, and the fan-out alias is not the model id (`kokoro` vs
+`kokoro_tts`). Per-model table and a Kokoro example:
+[agent-api.md § Preset voices](agent-api.md#preset-voices-no-cloning).
+
 Quick checks against the farm:
 
 ```

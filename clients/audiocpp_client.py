@@ -2,7 +2,8 @@
 """audiocpp_client.py — stdlib-only client for the audio.cpp-hub LAN service.
 
 Zero dependencies (uses urllib). Provides:
-  - speech():        text -> WAV bytes (voice design via `instruction`/`seed`)
+  - speech():        text -> WAV bytes (voice design via `instruction`/`seed`;
+                     preset-voice models via extra_options={"voice_id": ...})
   - speak():         speech() + write to file
   - transcribe():    audio file -> text (upload if needed, async task API)
   - voice_sweep():   generate a variety of voice designs (instruction x seed grid)
@@ -217,6 +218,12 @@ def speech(text: str, model: str = "breeze", *, instruction: str | None = None,
 
     voice_ref/reference_text are TOP-LEVEL body fields (engine contract), not
     options entries — the engine rejects unknown keys inside options.
+
+    Preset-voice models (inputs.voiceRef == "none", e.g. kokoro_tts) clone
+    nothing; the voice is an engine option:
+      speech("...", model="kokoro", extra_options={"voice_id": "af_heart"})
+    Top-level fields this helper does not expose (Kokoro's `language`, for
+    example) need a raw POST — see docs/agent-api.md § Preset voices.
     """
     return speech_with_origin(text, model, instruction=instruction, seed=seed,
                               temperature=temperature, voice_ref=voice_ref,

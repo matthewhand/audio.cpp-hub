@@ -87,7 +87,34 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 
 ### `GET /api/models`
 
-返回内嵌 `models.json` 的原始数组（`writeRawJSON`）。
+返回内嵌 `models.json` 的原始数组（`writeRawJSON`）。它是「这个模型接受哪些参数」的唯一权威来源——`GET /v1/models` 只列 READY 的服务名，不含参数结构。
+
+卡片字段（均为可选，缺失即表示该模型不适用）：
+
+| 字段 | 含义 |
+| --- | --- |
+| `id` | 模型 id，也是 `/api/history/<modelId>` 的键；实例服务名默认取它 |
+| `family` | 引擎家族；同名家族共享面板上的特殊控件 |
+| `displayName` / `displayNameEn` / `description` / `descriptionEn` | 展示文案 |
+| `category` | `tts` / `asr` / `sep` / `music` / `other` |
+| `serverTask` | 引擎任务类型；`tts` 走历史链路，其余结果落 `data/tasks/<id>.result.json` |
+| `inputs` | `{text, audio, voiceRef}`，取值 `required` / `optional` / `none`。`voiceRef: "none"` 表示**不支持参考音频克隆**，音色只能来自 `paramSchema` |
+| `language` | `{values: [...], default}`，语言下拉的取值 |
+| `paramSchema` | 额外参数定义，见下 |
+| `modes` / `backends` / `requiredFiles` / `hfUrl` / `ggufUrl` / `task` | 启动与下载相关元数据 |
+
+`paramSchema` 为 `{参数名: 定义}`，`定义.type` 取 `string` / `number` / `integer` / `boolean` / `enum` / `path`，可带 `default`、`min` / `max` / `step`、`values`（`enum` 的候选项）、`label` / `labelEn`、`hint` / `hintEn`、`placeholder` / `placeholderEn`、`required`。
+
+**参数进入请求体的位置**（`POST /api/tasks` 的 `request`）：
+
+- 通用规则：`paramSchema` 字段放 `request.options`。服务端对 `options` 全量透传，顶层字段只认白名单，写错位置会被静默丢弃。
+- 例外（权威来源是 `web/modules/panels.js` 的 `collectParams` / `collectEnums`，改前端时须同步本节）：
+  - `lang`、BreezeTTS 的 `text_chunk_mode` → `options`；
+  - `supertonic.voice_id`、`magpie_tts.language` 等其余 enum → 顶层；
+  - `qwen3_tts_voicedesign.seed` → 顶层（写历史时并入 `options`）；
+  - `vevo2.task_route` → 顶层（引擎按顶层键读）；
+  - `index_tts2` 情感参考音频 → 顶层 `audio`，其余情感参数 → `options`。
+- 预置音色（`voice_id`）的完整用法与示例见 [agent-api.md § Preset voices](agent-api.md#preset-voices-no-cloning)。
 
 ### `GET /api/models/{modelId}/packages`
 
