@@ -38,6 +38,7 @@ func findPackageFamily(id string) json.RawMessage {
 type dlPackageFile struct {
 	Remote string `json:"remote"`
 	Local  string `json:"local"`
+	SHA256 string `json:"sha256,omitempty"` // optional trusted expected bytes digest
 }
 
 // dlPackage 下载清单中的一个包（repo/revision/targetDir/files）。
