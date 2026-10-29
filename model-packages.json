@@ -1889,13 +1889,14 @@
         "precision": "q8_0",
         "default": true,
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Qwen3-ASR-1.7B-GGUF",
         "files": [
           {
             "remote": "Qwen3-ASR-1.7B-GGUF/qwen3-asr-1.7b-q8_0.gguf",
-            "local": "qwen3-asr-1.7b-q8_0.gguf"
+            "local": "qwen3-asr-1.7b-q8_0.gguf",
+            "sha256": "3bc2462eca3a3a8f56abcd860d0943ffdc0546547dde55a9d08589607d6f3936"
           }
         ]
       },
@@ -1905,13 +1906,14 @@
         "format": "gguf",
         "precision": "f16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Qwen3-ASR-1.7B-GGUF",
         "files": [
           {
             "remote": "Qwen3-ASR-1.7B-GGUF/qwen3-asr-1.7b-f16.gguf",
-            "local": "qwen3-asr-1.7b-f16.gguf"
+            "local": "qwen3-asr-1.7b-f16.gguf",
+            "sha256": "59baf62f2454a1b4d1d9ffed730dbf1d0bce28ed6fec30897de17f9d6d452fc3"
           }
         ]
       },
@@ -1921,13 +1923,14 @@
         "format": "gguf",
         "precision": "q8_0",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Qwen3-ASR-0.6B-GGUF",
         "files": [
           {
             "remote": "Qwen3-ASR-0.6B-GGUF/qwen3-asr-0.6b-q8_0.gguf",
-            "local": "qwen3-asr-0.6b-q8_0.gguf"
+            "local": "qwen3-asr-0.6b-q8_0.gguf",
+            "sha256": "5c53bbb9a6b2ade85c16c290c560658ca18b78a23c323378528f1f945683fcbe"
           }
         ]
       },
@@ -1937,13 +1940,14 @@
         "format": "gguf",
         "precision": "f16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Qwen3-ASR-0.6B-GGUF",
         "files": [
           {
             "remote": "Qwen3-ASR-0.6B-GGUF/qwen3-asr-0.6b-f16.gguf",
-            "local": "qwen3-asr-0.6b-f16.gguf"
+            "local": "qwen3-asr-0.6b-f16.gguf",
+            "sha256": "490fefbe91b33e1a0aeb988b97b983d3b95ecd225195e3ca5025ed00923e94d2"
           }
         ]
       },
@@ -2029,13 +2033,14 @@
         "precision": "q8_0",
         "default": true,
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Qwen3-ForcedAligner-0.6B-GGUF",
         "files": [
           {
             "remote": "Qwen3-ForcedAligner-0.6B-GGUF/qwen3-forced-aligner-0.6b-q8_0.gguf",
-            "local": "qwen3-forced-aligner-0.6b-q8_0.gguf"
+            "local": "qwen3-forced-aligner-0.6b-q8_0.gguf",
+            "sha256": "bf4fec616f77a20d89a649cd1c97bda269644eeb3cf906d1f7488a52d71f7cb2"
           }
         ]
       },
@@ -2045,13 +2050,14 @@
         "format": "gguf",
         "precision": "f16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Qwen3-ForcedAligner-0.6B-GGUF",
         "files": [
           {
             "remote": "Qwen3-ForcedAligner-0.6B-GGUF/qwen3-forced-aligner-0.6b-f16.gguf",
-            "local": "qwen3-forced-aligner-0.6b-f16.gguf"
+            "local": "qwen3-forced-aligner-0.6b-f16.gguf",
+            "sha256": "38c413223c5e20d20bf43e0aee488fbd7df54a153b2f40d9dea5be5be73bbb8f"
           }
         ]
       },
