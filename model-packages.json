@@ -10,13 +10,14 @@
         "format": "gguf",
         "precision": "q8_0",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "ACE-Step1.5-GGUF",
         "files": [
           {
             "remote": "ACE-Step1.5-GGUF/turbo/ace-step-1.5-turbo-q8_0.gguf",
-            "local": "turbo/ace-step-1.5-turbo-q8_0.gguf"
+            "local": "turbo/ace-step-1.5-turbo-q8_0.gguf",
+            "sha256": "1f0015f81c10a1182531e6207c7aeaa060b8cad3470a2f88daa3cb74ed636e63"
           }
         ]
       },
@@ -27,13 +28,14 @@
         "precision": "bf16",
         "default": true,
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "ACE-Step1.5-GGUF",
         "files": [
           {
             "remote": "ACE-Step1.5-GGUF/turbo/ace-step-1.5-turbo-bf16.gguf",
-            "local": "turbo/ace-step-1.5-turbo-bf16.gguf"
+            "local": "turbo/ace-step-1.5-turbo-bf16.gguf",
+            "sha256": "7aa8cc911bb7e47647bba619cf25afc22a42e35c568a102cd9a3b28a54b94013"
           }
         ]
       },
@@ -43,13 +45,14 @@
         "format": "gguf",
         "precision": "q8_0",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "ACE-Step1.5-GGUF",
         "files": [
           {
             "remote": "ACE-Step1.5-GGUF/base/ace-step-1.5-base-q8_0.gguf",
-            "local": "base/ace-step-1.5-base-q8_0.gguf"
+            "local": "base/ace-step-1.5-base-q8_0.gguf",
+            "sha256": "2fb7bc3627c79bc99486510619d4264da22d40814edff0415dd3337164336e4a"
           }
         ]
       },
@@ -59,13 +62,14 @@
         "format": "gguf",
         "precision": "bf16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "ACE-Step1.5-GGUF",
         "files": [
           {
             "remote": "ACE-Step1.5-GGUF/base/ace-step-1.5-base-bf16.gguf",
-            "local": "base/ace-step-1.5-base-bf16.gguf"
+            "local": "base/ace-step-1.5-base-bf16.gguf",
+            "sha256": "d5bb61554bd8669ba5498054422e7a771414257d77acc47b3953e5da8c98836f"
           }
         ]
       }
@@ -961,13 +965,14 @@
         "precision": "q8_0",
         "default": true,
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "MioCodec-25Hz-44.1kHz-v2-GGUF",
         "files": [
           {
             "remote": "MioCodec-25Hz-44.1kHz-v2-GGUF/miocodec-25hz-44khz-v2-q8_0.gguf",
-            "local": "miocodec-25hz-44khz-v2-q8_0.gguf"
+            "local": "miocodec-25hz-44khz-v2-q8_0.gguf",
+            "sha256": "f785604da457327caf26e4f0fc14bd4b8aac20116d6612e9076a386071f3a05b"
           }
         ]
       },
@@ -977,13 +982,14 @@
         "format": "gguf",
         "precision": "f16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "MioCodec-25Hz-44.1kHz-v2-GGUF",
         "files": [
           {
             "remote": "MioCodec-25Hz-44.1kHz-v2-GGUF/miocodec-25hz-44khz-v2-f16.gguf",
-            "local": "miocodec-25hz-44khz-v2-f16.gguf"
+            "local": "miocodec-25hz-44khz-v2-f16.gguf",
+            "sha256": "6b921c62f66839ca6849e53252987a76b44950f1f3e2e0c03bcd34526a4558f4"
           }
         ]
       },
@@ -993,13 +999,14 @@
         "format": "gguf",
         "precision": "orig",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "MioCodec-25Hz-44.1kHz-v2-GGUF",
         "files": [
           {
             "remote": "MioCodec-25Hz-44.1kHz-v2-GGUF/miocodec-25hz-44khz-v2-orig.gguf",
-            "local": "miocodec-25hz-44khz-v2-orig.gguf"
+            "local": "miocodec-25hz-44khz-v2-orig.gguf",
+            "sha256": "997190af1b7a302bf037942a5aa78434d261d8c4fe54bf03f52a380aa8656868"
           }
         ]
       }
@@ -2854,13 +2861,14 @@
         "precision": "q8_0",
         "default": true,
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "VibeVoice-ASR-GGUF",
         "files": [
           {
             "remote": "VibeVoice-ASR-GGUF/vibevoice-asr-q8_0.gguf",
-            "local": "vibevoice-asr-q8_0.gguf"
+            "local": "vibevoice-asr-q8_0.gguf",
+            "sha256": "6cefa920277f13d102c0014397044c52b63aa02e1a54f519e1732e04217859f8"
           }
         ]
       },
@@ -2870,13 +2878,14 @@
         "format": "gguf",
         "precision": "f16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "VibeVoice-ASR-GGUF",
         "files": [
           {
             "remote": "VibeVoice-ASR-GGUF/vibevoice-asr-f16.gguf",
-            "local": "vibevoice-asr-f16.gguf"
+            "local": "vibevoice-asr-f16.gguf",
+            "sha256": "7858c8551dd623158e6e03b84ebc9fbf7021f67069c4d26e95c0dca6a713e67c"
           }
         ]
       }
