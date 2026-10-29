@@ -67,7 +67,7 @@ func TestPilotMirrorFailsClosedWithoutDownloader(t *testing.T) {
 }
 
 func TestLegacyUnhashedPackagesKeepMirrorEligibility(t *testing.T) {
-	pkg := resolvePackage(findPackageFamily("ace_step"), "")
+	pkg := resolvePackage(findPackageFamily("rvc"), "rvc_f16")
 	if pkg == nil || packageHasExpectedSHA256(pkg) {
 		t.Fatalf("legacy package changed: %+v", pkg)
 	}

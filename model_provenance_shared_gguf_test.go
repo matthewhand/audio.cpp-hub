@@ -72,7 +72,7 @@ func TestSharedGGUFHashedMirrorsRejectedWithoutNetwork(t *testing.T) {
 }
 
 func TestSharedGGUFLegacyAndPriorPilotRemainIntact(t *testing.T) {
-	legacy := resolvePackage(findPackageFamily("ace_step"), "ace_step_turbo_q8_0")
+	legacy := resolvePackage(findPackageFamily("rvc"), "rvc_f16")
 	if legacy == nil || legacy.Revision != "main" || packageHasExpectedSHA256(legacy) {
 		t.Fatal("unreviewed legacy package changed")
 	}
