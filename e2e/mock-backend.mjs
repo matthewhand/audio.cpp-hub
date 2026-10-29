@@ -368,6 +368,7 @@ export class MockBackend {
         text: req.text || "",
         instanceId: body.instanceId,
         instanceName: inst ? inst.instanceName || inst.modelId : null,
+        request: req,
         result: this.defaultResult(category, req)
       };
       this.tasks.push(task);

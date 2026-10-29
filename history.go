@@ -123,6 +123,10 @@ func (m *HistoryManager) RecordTTS(inst *Instance, request map[string]any, taskI
 	if seed, ok := request["seed"]; ok {
 		options["seed"] = seed
 	}
+	// supertonic 等模型的 voice_id 可能在请求顶层，并入 options 供前端「载入」还原
+	if vid, ok := request["voice_id"]; ok {
+		options["voice_id"] = vid
+	}
 	if len(options) > 0 {
 		rec["options"] = options
 	}
