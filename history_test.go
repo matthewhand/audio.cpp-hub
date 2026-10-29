@@ -139,3 +139,27 @@ func TestHistoryGetListDoNotEscapeLock(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestRecordTTSTopLevelVoiceIdPreservedInOptions(t *testing.T) {
+	t.Chdir(t.TempDir())
+	m := NewHistoryManager()
+	inst := &Instance{ID: "i1", Name: "supertonic", ModelID: "supertonic"}
+	req := map[string]any{
+		"text":     "test",
+		"voice_id": "M1",
+	}
+	if err := m.RecordTTS(inst, req, "t-1", map[string]any{"durationSec": 1.0}, ""); err != nil {
+		t.Fatal(err)
+	}
+	rec := m.Get("supertonic", "t-1")
+	if rec == nil {
+		t.Fatal("record not found")
+	}
+	opts, ok := rec["options"].(map[string]any)
+	if !ok {
+		t.Fatalf("options missing or invalid: %v", rec["options"])
+	}
+	if opts["voice_id"] != "M1" {
+		t.Errorf("options[voice_id] = %v; want M1", opts["voice_id"])
+	}
+}

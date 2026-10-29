@@ -109,7 +109,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 
 - 通用规则：`paramSchema` 字段放 `request.options`。服务端对 `options` 全量透传，顶层字段只认白名单，写错位置会被静默丢弃。
 - 例外（权威来源是 `web/modules/panels.js` 的 `collectParams` / `collectEnums`，改前端时须同步本节）：
-  - `lang`、BreezeTTS 的 `text_chunk_mode` → `options`；
+  - `lang`、`text_chunk_mode`（BreezeTTS / MagpieTTS 等）、`kokoro_tts.voice_id`、`magpie_tts.voice_id` → `options`；
   - `supertonic.voice_id`、`magpie_tts.language` 等其余 enum → 顶层；
   - `qwen3_tts_voicedesign.seed` → 顶层（写历史时并入 `options`）；
   - `vevo2.task_route` → 顶层（引擎按顶层键读）；

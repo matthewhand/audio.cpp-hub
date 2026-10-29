@@ -8,7 +8,6 @@ import { activeInstanceId, selectedModel } from "./state.js";
 import { clearResult, reattachTasks, submitTask, trackTask } from "./tasks.js";
 
 /* ---------- 表单选择器实例（模块求值时创建一次，仅本模块使用） ---------- */
-/* ---------- 表单选择器实例（模块求值时创建一次，仅本模块使用） ---------- */
 const voicePicker = new VoiceSelect($("voice-picker"), "picker.speakerRef", {
   onChange: (v) => { const rt = $("tts-reference-text"); if (v && v.text && rt) rt.value = v.text; }
 });
@@ -20,7 +19,7 @@ const otherVoicePicker = new VoiceSelect($("other-voice-picker"), "picker.voiceR
 
 export const RESERVED_KEYS = new Set([
   "emotionModes", "emotionLabels", "emotion_alpha",
-  "text", "voice_ref", "language", "speaker", "instruct", "instruction", "reference_text", "task_route", "lang", "text_chunk_mode"
+  "text", "voice_ref", "language", "speaker", "instruct", "instruction", "reference_text", "task_route", "lang", "text_chunk_mode", "voice_id"
 ]);
 
 export let breezeMode = "voice_design";
@@ -75,8 +74,14 @@ export function buildLanguageRow(container, m, prefix) {
 
 export function schemaParams(m) {
   const s = m.paramSchema || {};
-  return Object.entries(s).filter(([k, v]) =>
-    v && typeof v === "object" && !Array.isArray(v) && v.type && !RESERVED_KEYS.has(k));
+  return Object.entries(s).filter(
+    ([k, v]) =>
+      v &&
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      v.type &&
+      (k === "voice_id" ? v.type !== "enum" : !RESERVED_KEYS.has(k))
+  );
 }
 
 export function paramInput(key, p, prefix) {
@@ -139,9 +144,11 @@ export function collectEnums(m, prefix, req, exclude) {
     if (!p || Array.isArray(p) || p.type !== "enum" || exclude.includes(key)) continue;
     const sel = $(`${prefix}-${key}`);
     if (!sel) continue;
-    // lang 与 BreezeTTS 的 text_chunk_mode 是引擎 request option（服务端顶层白名单无这些字段），放进 options 透传；
-    // 其余 enum（如 supertonic 的 voice_id）维持顶层路径不变
-    const toOptions = key === "lang" || (m.family === "breeze_tts" && key === "text_chunk_mode");
+    // supertonic voice_id / vevo2 task_route 维持顶层，其余 enum 进 options
+    const toOptions = !(
+      (key === "voice_id" && (m.id === "supertonic" || m.family === "supertonic")) ||
+      key === "task_route"
+    );
     const target = toOptions ? (req.options || (req.options = {})) : req;
     target[key] = sel.value;
   }
@@ -584,7 +591,7 @@ export function fillTtsForm(m, rec) {
     breezeInstruction.value = saved !== undefined ? String(saved) : String(schema && schema.default || "");
   }
 
-  applyHistoryOptions(m, rec.options || {});
+  applyHistoryOptions(m, Object.assign({ voice_id: rec.voice_id }, rec.options));
 
   // VibeVoice：voice_samples 按顺序填回各行音色（本地路径页签 + 探测，与手动粘贴等价），
   // 脚本里的 Speaker N: 行按编号分发回各行台词框（0 起编号上移 1；无 Speaker 行的旧记录整段归入 Speaker 1）
