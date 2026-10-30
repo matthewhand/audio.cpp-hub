@@ -2241,13 +2241,14 @@
         "format": "gguf",
         "precision": "q8_0",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF",
         "files": [
           {
             "remote": "Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF/qwen3-tts-12hz-1.7b-customvoice-q8_0.gguf",
-            "local": "qwen3-tts-12hz-1.7b-customvoice-q8_0.gguf"
+            "local": "qwen3-tts-12hz-1.7b-customvoice-q8_0.gguf",
+            "sha256": "c8ac3f94b6e73f137c0e7ecc9270bc8faec7a476ff799b87e48844d1d0987ac3"
           }
         ]
       },
@@ -2257,13 +2258,14 @@
         "format": "gguf",
         "precision": "bf16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF",
         "files": [
           {
             "remote": "Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF/qwen3-tts-12hz-1.7b-customvoice-bf16.gguf",
-            "local": "qwen3-tts-12hz-1.7b-customvoice-bf16.gguf"
+            "local": "qwen3-tts-12hz-1.7b-customvoice-bf16.gguf",
+            "sha256": "5be0742e196ea9cd9ce0d7d8b69b0fc4fa8181b06cb0bd0591fb1dcdfce6c5a5"
           }
         ]
       }
