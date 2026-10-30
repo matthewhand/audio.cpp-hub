@@ -84,8 +84,8 @@ func TestQwenTTS207PriorPinsAndUnhashedLegacyRemain(t *testing.T) {
 	if legacy == nil || legacy.Revision != "main" || packageHasExpectedSHA256(legacy) {
 		t.Fatalf("unhashed legacy changed: %+v", legacy)
 	}
-	excluded := resolvePackage(findPackageFamily("qwen3_tts_voicedesign"), "qwen3_tts_1_7b_voicedesign_q8_0")
+	excluded := resolvePackage(findPackageFamily("qwen3_tts_base"), "qwen3_tts_1_7b_base_q8_0")
 	if excluded == nil || excluded.Revision != "main" || packageHasExpectedSHA256(excluded) {
-		t.Fatalf("excluded Qwen family unexpectedly changed: %+v", excluded)
+		t.Fatalf("unhashed Qwen Base family unexpectedly changed: %+v", excluded)
 	}
 }
