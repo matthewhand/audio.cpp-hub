@@ -67,7 +67,8 @@ whose hub is up **and** whose instance is `READY` wins.
 |---|---|
 | `breeze`, `expressive` | `.36:18080 breeze` → `.30:18080 breeze` |
 | `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` |
-| `sanotts`, `instant` | `.36:18080 sanotts` → `.32:18080 sanotts` |
+| `sanotts`, `instant` | `.36:18080 sanotts` (single active target; Windows2 standby offline, [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)) |
+| `kokoro` | `127.0.0.1:18280 kokoro` (GTX loopback) |
 | `citrinet`, `stt` | `.36:18080 citrinet` |
 
 An alias names a *service*; the endpoint names the *request shape*. TTS is

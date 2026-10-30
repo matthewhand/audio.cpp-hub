@@ -21,7 +21,15 @@ Live entrypoint: **`http://10.0.0.36:18082`**.
 | `10.0.0.36:18080` | systemd hub | `breeze`, `sanotts`, `citrinet` | Vulkan GTX 1080 | Primary expressive + fast TTS + STT |
 | `10.0.0.30:18080` | Docker `audio-cpp-hub-amd` | `breeze` | Vulkan iGPU DEVICE=1 | Standby breeze |
 | `10.0.0.30:18081` | Docker `audio-cpp-hub-amd-qwen3` | `qwen3-vd` | Vulkan iGPU DEVICE=1 | Fast voice-design (`instruct`) |
-| `10.0.0.32:18080` | Docker CPU | `sanotts` | CPU | Instant TTS overflow |
+| `127.0.0.1:18280` (GTX only) | native Kokoro hub | `kokoro` / `kokoro_tts` | CPU | Loopback-only Kokoro TTS |
+
+Windows2 `10.0.0.32:18080` was an intended CPU SanoTTS overflow target,
+but was offline at the 31 October 2026 read-only check (Docker Desktop stopped,
+no listener). It is **not** in the active four-hub configuration until
+[issue #127](https://github.com/matthewhand/audio.cpp-hub/issues/127) passes
+separate storage, container, synthesis and history recovery gates. SanoTTS
+`instant` and `sanotts` aliases now share the single GTX primary target; this
+reduces redundancy but preserves both client model names.
 
 RX 6600 XT (`AUDIOCPP_DEVICE=0` on `.30`) remains **unusable** for inference
 (see verdict below). Keep live hubs on device 1, and keep the 6600 XT out of
@@ -162,7 +170,7 @@ request.
 {
   "ok": true,
   "updatedAt": "2026-09-30T07:10:19Z",
-  "hubsUp": 4, "hubsTotal": 4, "readyAliases": 8, "inFlightCap": 2,
+  "hubsUp": 4, "hubsTotal": 4, "readyAliases": 5, "inFlightCap": 2,
   "hubs": [
     { "baseUrl": "http://10.0.0.36:18080", "label": "gtx1080-primary", "ok": true,
       "latencyMs": 0, "failures": 0, "lastError": "", "checkedAt": "…",
@@ -173,7 +181,7 @@ request.
       "targets": [{ "hub": "http://10.0.0.36:18080", "instanceName": "breeze", "skipped": "", "inFlight": 1 },
                   { "hub": "http://10.0.0.30:18080", "instanceName": "breeze", "skipped": "", "inFlight": 0 }] }
   ],
-  "knownAliases": ["breeze", "citrinet", "expressive", "instant", "qwen3-vd", "sanotts", "stt", "voice-design-fast"]
+  "knownAliases": ["breeze", "citrinet", "expressive", "instant", "kokoro", "qwen3-vd", "sanotts", "stt", "voice-design-fast"]
 }
 ```
 
