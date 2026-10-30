@@ -263,16 +263,17 @@ STT, upload, voices and history still go through that client's second base URL
 (`--direct-hub`, default `http://10.0.0.36:18080`) — the fan-out serves STT, but
 the shipped client has not been switched over to it.
 
-In-flight cap, ~30 s, no config change needed: two concurrent calls on a
-two-target route must split across hosts, and a single-target route past the cap
-must answer `429` with `Retry-After`.
+In-flight cap, ~30 s, no config change needed: `instant` now has one
+active target (`.36`), so both concurrent calls may resolve there (cap 2).
+A third in-flight request past the cap gets `429` with `Retry-After`;
+these commands do not prove that limit unless the first two remain active.
 
 ```bash
 curl -s localhost:18082/farm/health | grep -E '"inFlightCap"|"inFlight"'   # cap + live counts
 for i in 1 2; do
   curl -s -o /dev/null -D - --max-time 30 -X POST localhost:18082/v1/audio/speech \
     -H 'Content-Type: application/json' -d '{"model":"instant","input":"cap check"}' \
-    | grep -i x-fanout-hub &                                    # .36 and .32, both 200
+    | grep -i x-fanout-hub &                                    # both may use .36; Windows2 .32 is offline
 done; wait
 curl -s -D - -o /dev/null -X POST localhost:18082/v1/audio/speech \
   -H 'Content-Type: application/json' \

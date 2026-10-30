@@ -153,7 +153,7 @@ CPU performance is a non-issue for sanotts: ~30–300 ms per sentence.
   - Expressive / sarcastic voice design: `.36:18080` model `breeze`
     (`options.instruction`) or `.30:18081` model `qwen3-vd` (top-level
     `instruct`, ~2.5x faster than breeze).
-  - Instant TTS: `.36:18080` or `.32:18080`, model `sanotts`.
+  - Instant TTS: `.36:18080`, model `sanotts` (`.32:18080` is offline pending [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)).
   - Standby breeze (if .36 is down): `.30:18080` model `breeze`.
   - STT: `.36:18080` model `citrinet` via async `POST /api/tasks` (hub-direct
     shape, `instanceId` instead of an alias).

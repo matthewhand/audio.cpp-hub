@@ -75,8 +75,9 @@ and both spellings in a pair resolve to the same target list.
 |---|---|---|
 | `breeze` / `expressive` | `.36` `breeze` | `.30:18080` `breeze` |
 | `qwen3-vd` / `voice-design-fast` | `.30:18081` `qwen3-vd` | none |
-| `sanotts` / `instant` | `.36` `sanotts` | `.32:18080` `sanotts` |
+| `sanotts` / `instant` | `.36` `sanotts` | none (Windows2 offline, [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)) |
 | `citrinet` / `stt` | `.36` `citrinet` | none (only host that has it) |
+| `kokoro` | GTX `127.0.0.1:18280` `kokoro` | none (loopback-only native hub) |
 
 Rules baked into the implementation:
 
