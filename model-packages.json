@@ -1564,13 +1564,14 @@
         "precision": "q8_0",
         "default": true,
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Parakeet-TDT-0.6B-v3-GGUF",
         "files": [
           {
             "remote": "Parakeet-TDT-0.6B-v3-GGUF/parakeet-tdt-0.6b-v3-q8_0.gguf",
-            "local": "parakeet-tdt-0.6b-v3-q8_0.gguf"
+            "local": "parakeet-tdt-0.6b-v3-q8_0.gguf",
+            "sha256": "6fa498f10f8cb606f041aa9512733cfee842a932359b00b0c45b9b723c4f4f4b"
           }
         ]
       },
@@ -1580,13 +1581,14 @@
         "format": "gguf",
         "precision": "f16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "Parakeet-TDT-0.6B-v3-GGUF",
         "files": [
           {
             "remote": "Parakeet-TDT-0.6B-v3-GGUF/parakeet-tdt-0.6b-v3-f16.gguf",
-            "local": "parakeet-tdt-0.6b-v3-f16.gguf"
+            "local": "parakeet-tdt-0.6b-v3-f16.gguf",
+            "sha256": "1720770887bbb6ae633b3375c6ce4b76b3eaff9cd4efd7b890db734cc0adfe80"
           }
         ]
       }
