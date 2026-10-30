@@ -1080,13 +1080,14 @@
         "precision": "q8_0",
         "default": true,
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "MOSS-TTS-Local-v1.5-GGUF",
         "files": [
           {
             "remote": "MOSS-TTS-Local-v1.5-GGUF/moss-tts-local-v1.5-q8_0.gguf",
-            "local": "moss-tts-local-v1.5-q8_0.gguf"
+            "local": "moss-tts-local-v1.5-q8_0.gguf",
+            "sha256": "d465210814e60cc09224b33bf272bde519c871dda76997a8c17aed4878d1ba9a"
           }
         ]
       },
@@ -1096,13 +1097,14 @@
         "format": "gguf",
         "precision": "bf16",
         "repo": "audio-cpp/audio.cpp-gguf",
-        "revision": "main",
+        "revision": "874fcb41ececda20bcbc0782d6b4ea7f7d069ea8",
         "gated": false,
         "targetDir": "MOSS-TTS-Local-v1.5-GGUF",
         "files": [
           {
             "remote": "MOSS-TTS-Local-v1.5-GGUF/moss-tts-local-v1.5-bf16.gguf",
-            "local": "moss-tts-local-v1.5-bf16.gguf"
+            "local": "moss-tts-local-v1.5-bf16.gguf",
+            "sha256": "293d590dcf8c01686762af605cdc11b7aade5e328ea2b091150e09839794d57f"
           }
         ]
       }

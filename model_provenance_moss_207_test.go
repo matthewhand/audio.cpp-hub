@@ -69,8 +69,8 @@ func TestMoss207PriorPinsAndUnhashedLegacyRemain(t *testing.T) {
 	if legacy == nil || legacy.Revision != "main" || packageHasExpectedSHA256(legacy) {
 		t.Fatalf("legacy unhashed routing changed: %+v", legacy)
 	}
-	notInBatch := resolvePackage(findPackageFamily("moss_tts_local"), "moss_tts_local_v1_5_q8_0")
+	notInBatch := resolvePackage(findPackageFamily("higgs_audio_stt"), "higgs_audio_stt_q8_0")
 	if notInBatch == nil || notInBatch.Revision != "main" || packageHasExpectedSHA256(notInBatch) {
-		t.Fatalf("excluded MOSS family changed: %+v", notInBatch)
+		t.Fatalf("unhashed unrelated Higgs family changed: %+v", notInBatch)
 	}
 }
