@@ -152,10 +152,11 @@ func TestCommittedRoutesConfig(t *testing.T) {
 		"expressive":        {"http://10.0.0.36:18080/breeze", "http://10.0.0.30:18080/breeze"},
 		"qwen3-vd":          {"http://10.0.0.30:18081/qwen3-vd"},
 		"voice-design-fast": {"http://10.0.0.30:18081/qwen3-vd"},
-		"sanotts":           {"http://10.0.0.36:18080/sanotts", "http://10.0.0.32:18080/sanotts"},
-		"instant":           {"http://10.0.0.36:18080/sanotts", "http://10.0.0.32:18080/sanotts"},
+		"sanotts":           {"http://10.0.0.36:18080/sanotts"},
+		"instant":           {"http://10.0.0.36:18080/sanotts"},
 		"citrinet":          {"http://10.0.0.36:18080/citrinet"},
 		"stt":               {"http://10.0.0.36:18080/citrinet"},
+		"kokoro":            {"http://127.0.0.1:18280/kokoro"},
 	}
 	for alias, targets := range want {
 		rt, ok := cfg.routeFor(alias)
@@ -169,6 +170,36 @@ func TestCommittedRoutesConfig(t *testing.T) {
 		}
 		if strings.Join(got, ",") != strings.Join(targets, ",") {
 			t.Errorf("alias %q targets = %v, want %v", alias, got, targets)
+		}
+	}
+	// The committed topology has four active hubs; Windows2 SanoTTS is
+	// deliberately excluded until issue #127 passes its recovery gates.
+	// This must not ban that host from future independently approved configs.
+	if len(cfg.Hubs) != 4 {
+		t.Errorf("hubs = %d, want 4 active hubs", len(cfg.Hubs))
+	}
+	if len(cfg.Routes) != 5 {
+		t.Errorf("routes = %d, want 5 route groups", len(cfg.Routes))
+	}
+	if len(cfg.aliases()) != 9 {
+		t.Errorf("aliases = %d, want 9", len(cfg.aliases()))
+	}
+	wantHubs := map[string]bool{
+		"http://10.0.0.36:18080": true,
+		"http://10.0.0.30:18080": true,
+		"http://10.0.0.30:18081": true,
+		"http://127.0.0.1:18280": true,
+	}
+	for _, hub := range cfg.Hubs {
+		if !wantHubs[hub.BaseURL] {
+			t.Errorf("unexpected active hub %q", hub.BaseURL)
+		}
+	}
+	for _, route := range cfg.Routes {
+		for _, target := range route.Targets {
+			if !wantHubs[target.Hub] {
+				t.Errorf("unexpected active route target %q", target.Hub)
+			}
 		}
 	}
 	// The RX 6600 XT route must never appear in the shipped table.

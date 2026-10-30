@@ -1,6 +1,7 @@
 # Multi-host voice farm
 
-Three hosts serve TTS/ASR over the LAN. All endpoints are OpenAI-flavored
+Two active hosts currently serve TTS/ASR through four hub endpoints. A historical
+Windows2 SanoTTS deployment is offline pending [issue #127](https://github.com/matthewhand/audio.cpp-hub/issues/127). All active endpoints are OpenAI-flavored
 (`POST /v1/audio/speech`, `GET /v1/models`) and LAN-only, no auth — do not
 expose any of them to the public internet.
 
@@ -12,11 +13,11 @@ discovery; the `:18080` table below is the per-host detail behind it.
 | `10.0.0.36` (ubuntu-gtx) | GTX 1080 8 GB, Vulkan | `:18080` | `breeze` (always warm), `sanotts` (always warm), `citrinet` ASR (5-min idle unload) | Host-native systemd service (`audio-cpp-hub.service`), see [deployment-10.0.0.36.md](deployment-10.0.0.36.md) |
 | `10.0.0.30` (ubuntu-max) | Strix Halo iGPU (Radeon 8060S, 128 GB GTT), RX 6600 XT idle | `:18080` | `breeze` (warm via `ExecStartPost`) | Docker `audio-cpp-hub-amd`, image `audio-cpp-hub:amd` (Mesa RADV) |
 | `10.0.0.30` (second hub) | same iGPU | `:18081` | `qwen3-vd` (voice-design, `instruct` top-level) | Docker `audio-cpp-hub-amd-qwen3`, image `audio-cpp-hub:amd-a3bfac4`, state dirs `data-qwen3/ logs-qwen3/ run-qwen3/` |
-| `10.0.0.32` (WINDOWS2) | Ryzen 9 5950X, CPU only (in Docker) | `:18080` | `sanotts` (fast tiny TTS) | Docker Desktop (WSL2), container `audio-cpp-hub-cpu`, image `audio-cpp-hub:cpu-espeak` |
+| `127.0.0.1` (ubuntu-gtx only) | GTX host CPU, native Kokoro 82M | `:18280` | `kokoro` (`kokoro_tts` model) | Loopback-only `audio-cpp-hub-kokoro-bluegreen.service`; not reachable directly by remote clients |
 
 ## Unified fan-out entrypoint — `http://10.0.0.36:18082`
 
-`cmd/fanout-proxy` (tiny Go router, stdlib only) sits in front of the four hubs
+`cmd/fanout-proxy` (tiny Go router, stdlib only) sits in front of the four active hubs
 above and gives agents one OpenAI-shaped base URL with automatic failover, so
 they no longer hard-code `host:port:model` triples:
 
@@ -24,7 +25,8 @@ they no longer hard-code `host:port:model` triples:
 |---|---|
 | `breeze`, `expressive` | `.36:18080 breeze` → `.30:18080 breeze` |
 | `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` |
-| `sanotts`, `instant` | `.36:18080 sanotts` → `.32:18080 sanotts` |
+| `sanotts`, `instant` | `.36:18080 sanotts` (no active standby) |
+| `kokoro` | GTX loopback `127.0.0.1:18280 kokoro` |
 | `citrinet`, `stt` | `.36:18080 citrinet` |
 
 - `POST /v1/audio/speech` routes on `model`, rewrites it to the upstream service
@@ -97,9 +99,17 @@ workaround. Retry `DEVICE=0` after a host GPU driver/kernel update.
 `bin-vulkan-0.8.0/` (engine + ggml libs) and `breeze/breeze-tts-2-q8_0.gguf`
 from it. Do not delete it here.
 
-## 10.0.0.32 — Windows CPU node
+## 10.0.0.32 — historical Windows CPU node (inactive)
 
-Layout on `E:\` (C: and E: are nearly full; this deployment adds ~200 MB):
+**31 October 2026 read-only verification:** `10.0.0.32:18080` refused
+connections; Docker Desktop was stopped. Its earlier E: volume is absent,
+while the corresponding SanoTTS directories exist on D:. The container's
+prior E:-backed mount and synthesis failure remains unresolved under
+[issue #127](https://github.com/matthewhand/audio.cpp-hub/issues/127).
+Do not automatically restart Windows Docker or substitute a different route.
+The following E: layout and recovery notes are historical, not live instructions.
+
+Layout formerly on `E:` (historical):
 
 ```
 E:\audiocpp\bin\        audiocpp_server + libs (Linux ELF from .36, Zen3 build)
@@ -143,7 +153,7 @@ CPU performance is a non-issue for sanotts: ~30–300 ms per sentence.
   - Expressive / sarcastic voice design: `.36:18080` model `breeze`
     (`options.instruction`) or `.30:18081` model `qwen3-vd` (top-level
     `instruct`, ~2.5x faster than breeze).
-  - Instant TTS: `.36:18080` or `.32:18080`, model `sanotts`.
+  - Instant TTS: `.36:18080`, model `sanotts` (`.32:18080` is offline pending [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)).
   - Standby breeze (if .36 is down): `.30:18080` model `breeze`.
   - STT: `.36:18080` model `citrinet` via async `POST /api/tasks` (hub-direct
     shape, `instanceId` instead of an alias).
