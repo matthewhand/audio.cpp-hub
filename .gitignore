@@ -54,3 +54,8 @@ docs/media/tts.poster.png
 
 # Python client bytecode
 __pycache__/
+
+# Locally generated SanoTTS CPU package/build output; never commit model weights.
+/.sanotts-cpu-package/
+/.sanotts-cpu-work/
+/.sanotts-cpu-models/

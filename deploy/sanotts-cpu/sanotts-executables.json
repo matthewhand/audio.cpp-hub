@@ -1,0 +1,9 @@
+[
+  {
+    "id": "cpu",
+    "name": "cpu",
+    "path": "/audio.cpp/bin/audiocpp_server",
+    "note": "Pinned audio.cpp v0.9.3 CPU-only server; backend is selected by AUDIOCPP_BACKEND.",
+    "createdAt": "2026-10-31T00:00:00Z"
+  }
+]
