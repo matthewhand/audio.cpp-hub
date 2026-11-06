@@ -27,7 +27,7 @@
   <link rel="modulepreload" href="/modules/routing.js">
   <link rel="modulepreload" href="/modules/command-palette-lazy.js">
   <link rel="modulepreload" href="/modules/shell.js">
-  <link rel="modulepreload" href="/modules/models.js">
+    <link rel="modulepreload" href="/modules/models.js">
   <link rel="modulepreload" href="/modules/settings-lazy.js">
   <link rel="modulepreload" href="/modules/file-browser-lazy.js">
   <link rel="modulepreload" href="/modules/launch.js">
@@ -85,7 +85,68 @@
 
     <!-- 右栏：常驻工作区 -->
     <section id="right">
-      <div id="workspace">
+      <div id="workspace" data-interface-mode="classic">
+        <nav id="studio-mode-switch" class="studio-mode-switch" aria-label="Interface mode" data-i18n-aria-label="operator.mode.label">
+          <span class="studio-mode-label" data-i18n="operator.mode.label">Interface mode</span>
+          <div class="studio-mode-choices" role="group" aria-label="Interface mode" data-i18n-aria-label="operator.mode.label">
+            <button id="studio-create" type="button" class="studio-mode-button" aria-pressed="true" data-i18n="operator.mode.creator">Classic</button>
+            <button id="studio-flow" type="button" class="studio-mode-button" aria-pressed="false" data-i18n="operator.mode.flow">Flow</button>
+            <button id="studio-operate" type="button" class="studio-mode-button" aria-pressed="false" data-i18n="operator.mode.operator">Cockpit</button>
+          </div>
+        </nav>
+
+        <section id="flow-workspace" class="card flow-workspace hidden" aria-labelledby="flow-heading">
+          <span class="studio-overline" data-flow-i18n="flow.kicker">FLOW STUDIO</span>
+          <h2 id="flow-heading" data-flow-i18n="flow.heading">What would you like to do?</h2>
+          <p data-flow-i18n="flow.intro">Choose a local audio task. The same model, editor and results stay in this workspace.</p>
+          <div class="flow-actions" role="group" aria-label="Audio tasks" data-flow-i18n-aria-label="flow.actionsLabel">
+            <button id="flow-tts" type="button" class="flow-action" data-category="tts"><strong data-flow-i18n="flow.tts">Synthesize speech</strong><span data-flow-i18n="flow.ttsHelp">Open a local TTS model</span></button>
+            <button id="flow-asr" type="button" class="flow-action" data-category="asr"><strong data-flow-i18n="flow.asr">Transcribe audio</strong><span data-flow-i18n="flow.asrHelp">Open a local ASR model</span></button>
+            <button id="flow-voices" type="button" class="flow-action"><strong data-flow-i18n="flow.voices">Voice library</strong><span data-flow-i18n="flow.voicesHelp">Browse saved voices</span></button>
+            <button id="flow-models" type="button" class="flow-action"><strong data-flow-i18n="flow.models">Browse models</strong><span data-flow-i18n="flow.modelsHelp">Find and prepare a model</span></button>
+          </div>
+          <p id="flow-feedback" class="flow-feedback" role="status" aria-live="polite"></p>
+        </section>
+
+        <section id="operator-workspace" class="card operator-workspace hidden" aria-labelledby="operator-heading">
+          <div class="operator-heading">
+            <div>
+              <span class="studio-overline" data-op-i18n="operator.kicker">OPERATOR STUDIO</span>
+              <h2 id="operator-heading" data-op-i18n="operator.heading">Instances and activity</h2>
+              <p data-op-i18n="operator.intro">Observe model readiness and task activity without changing the creative workspace.</p>
+            </div>
+            <button id="operator-activity-open" type="button" class="btn-ghost" aria-controls="activity-queue-panel" data-op-i18n="operator.activity.open">Open activity / queue</button>
+          </div>
+          <dl class="operator-metrics">
+            <div class="operator-metric"><dt data-op-i18n="operator.feed.label">Instance feed</dt><dd id="operator-feed-value" data-state="unknown">—</dd></div>
+            <div class="operator-metric"><dt data-op-i18n="operator.ready.label">Ready instances (all models)</dt><dd id="operator-ready-value">—</dd></div>
+            <div class="operator-metric"><dt data-op-i18n="operator.model.label">Ready for selected model</dt><dd id="operator-model-value">—</dd><span id="operator-model-caption"></span></div>
+            <div class="operator-metric"><dt data-op-i18n="operator.tasks.label">Reported active tasks</dt><dd id="operator-tasks-value">—</dd></div>
+          </dl>
+          <div class="operator-content">
+            <section class="operator-section" aria-labelledby="operator-timeline-heading">
+              <h3 id="operator-timeline-heading" data-op-i18n="operator.tasks.heading">Recent session tasks</h3>
+              <p id="operator-task-summary" class="operator-status-summary"></p>
+              <p class="operator-description" data-op-i18n="operator.tasks.note">Local task metadata only; use Activity / Queue for authoritative server state.</p>
+              <ul id="operator-task-list" class="operator-list operator-timeline-list"></ul>
+            </section>
+            <section class="operator-section operator-instance-section" aria-labelledby="operator-instances-heading">
+              <h3 id="operator-instances-heading" data-op-i18n="operator.instances.heading">Instances by model</h3>
+              <p id="operator-instance-overview" class="operator-status-summary"></p>
+              <details id="operator-instance-details" class="operator-instance-disclosure">
+                <summary data-op-i18n="operator.instances.toggle">Show individual instances</summary>
+                <ul id="operator-instance-list" class="operator-list"></ul>
+              </details>
+            </section>
+          </div>
+          <aside class="operator-routing" aria-labelledby="operator-routing-heading">
+            <div>
+              <h3 id="operator-routing-heading" data-op-i18n="operator.routing.heading">Farm routing and failover</h3>
+              <p data-op-i18n="operator.routing.note">Not monitored: the existing instance feed cannot establish routing health or failover readiness.</p>
+            </div>
+            <span class="operator-unverified" data-op-i18n="operator.routing.unknown">Not monitored</span>
+          </aside>
+        </section>
 
         <!-- 实例状态条 -->
         <div id="instance-bar">

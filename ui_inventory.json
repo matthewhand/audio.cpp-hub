@@ -21,8 +21,10 @@
       "web/modules/file-browser-lazy.js",
       "web/modules/file-browser.js",
       "web/modules/instances.js",
+      "web/modules/interface-modes.js",
       "web/modules/launch.js",
       "web/modules/models.js",
+      "web/modules/operator-studio.js",
       "web/modules/panels.js",
       "web/modules/readiness.js",
       "web/modules/requests-lazy.js",
@@ -458,6 +460,34 @@
       "handlers": []
     },
     {
+      "id": "flow-asr",
+      "tag": "button",
+      "type": null,
+      "i18n": [],
+      "handlers": [{ "event": "click", "sources": ["web/modules/interface-modes.js"] }]
+    },
+    {
+      "id": "flow-models",
+      "tag": "button",
+      "type": null,
+      "i18n": [],
+      "handlers": [{ "event": "click", "sources": ["web/modules/interface-modes.js"] }]
+    },
+    {
+      "id": "flow-tts",
+      "tag": "button",
+      "type": null,
+      "i18n": [],
+      "handlers": [{ "event": "click", "sources": ["web/modules/interface-modes.js"] }]
+    },
+    {
+      "id": "flow-voices",
+      "tag": "button",
+      "type": null,
+      "i18n": [],
+      "handlers": [{ "event": "click", "sources": ["web/modules/interface-modes.js"] }]
+    },
+    {
       "id": "history-btn",
       "tag": "button",
       "type": null,
@@ -740,6 +770,13 @@
       "handlers": [{ "event": "click", "sources": ["web/modules/panels.js"] }]
     },
     {
+      "id": "operator-activity-open",
+      "tag": "button",
+      "type": null,
+      "i18n": [],
+      "handlers": [{ "event": "click", "sources": ["web/modules/operator-studio.js"] }]
+    },
+    {
       "id": "other-extra",
       "tag": "textarea",
       "type": null,
@@ -843,6 +880,27 @@
       "type": null,
       "i18n": ["history.refresh"],
       "handlers": [{ "event": "click", "sources": ["web/modules/stats.js"] }]
+    },
+    {
+      "id": "studio-create",
+      "tag": "button",
+      "type": null,
+      "i18n": ["operator.mode.creator"],
+      "handlers": []
+    },
+    {
+      "id": "studio-flow",
+      "tag": "button",
+      "type": null,
+      "i18n": ["operator.mode.flow"],
+      "handlers": []
+    },
+    {
+      "id": "studio-operate",
+      "tag": "button",
+      "type": null,
+      "i18n": ["operator.mode.operator"],
+      "handlers": []
     },
     {
       "id": "theme-toggle",
@@ -959,12 +1017,18 @@
     }
   ],
   "dataHooks": [
-    { "name": "data-i18n", "count": 137 },
-    { "name": "data-i18n-aria-label", "count": 29 },
+    { "name": "data-category", "count": 2 },
+    { "name": "data-flow-i18n", "count": 11 },
+    { "name": "data-flow-i18n-aria-label", "count": 1 },
+    { "name": "data-i18n", "count": 141 },
+    { "name": "data-i18n-aria-label", "count": 31 },
     { "name": "data-i18n-placeholder", "count": 24 },
     { "name": "data-i18n-title", "count": 13 },
+    { "name": "data-interface-mode", "count": 1 },
     { "name": "data-mode", "count": 4 },
+    { "name": "data-op-i18n", "count": 15 },
     { "name": "data-section", "count": 3 },
+    { "name": "data-state", "count": 1 },
     { "name": "data-theme", "count": 1 }
   ],
   "shortcuts": [
@@ -998,7 +1062,8 @@
     { "key": "hub-privacy", "negated": false, "source": "web/modules/sidebar.js" },
     { "key": "k", "negated": false, "source": "web/modules/command-palette-lazy.js" },
     { "key": "K", "negated": false, "source": "web/modules/command-palette-lazy.js" },
-    { "key": "Tab", "negated": true, "source": "web/app.js" }
+    { "key": "Tab", "negated": true, "source": "web/app.js" },
+    { "key": "Tab", "negated": true, "source": "web/modules/interface-modes.js" }
   ],
   "endpoints": [
     { "method": "POST", "path": "/api/audio/info", "sources": ["web/audio-picker.js"] },

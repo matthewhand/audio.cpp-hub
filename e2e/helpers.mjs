@@ -16,7 +16,8 @@ export async function openApp(page, backend, prefs = {}) {
     }
   }, prefs);
   await page.goto("/" + (prefs.hash || ""));
-  await expect(page.locator("#model-list .card-title").first()).toBeVisible();
+  // Closed mobile drawers intentionally hide the catalog until opened.
+  await expect(page.locator("#model-list .card-title").first()).toBeAttached();
 }
 
 /** 等待指定实例就绪、且工作区提交按钮可用（updateInstanceBar 异步完成）。 */

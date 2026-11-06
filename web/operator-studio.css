@@ -1,0 +1,84 @@
+/* Direction C: Operator Studio. Reuses existing typography and theme tokens. */
+.operator-workspace { padding: var(--space-6); }
+.operator-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+.operator-heading h2 { margin: 8px 0; font-size: var(--text-xl); }
+.operator-heading p { margin: 0; color: var(--text-dim); max-width: 58ch; }
+.operator-heading button { min-height: 44px; }
+.operator-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: 0 0 var(--space-5); }
+.operator-metric { min-width: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-elevated); }
+.operator-metric dt { color: var(--text-dim); font-size: var(--text-sm); }
+.operator-metric dd { margin: var(--space-2) 0 0; font-size: 25px; font-weight: var(--weight-bold); overflow-wrap: anywhere; }
+#operator-feed-value { font-size: var(--text-md); }
+.operator-metric > span { display: block; color: var(--text-dim); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.operator-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.operator-section { min-width: 0; }
+.operator-section h3 { margin-bottom: var(--space-2); }
+.operator-description { margin: 0 0 var(--space-3); color: var(--text-dim); font-size: var(--text-sm); }
+.operator-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.operator-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.operator-row-title { font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
+.operator-row-detail { grid-column: 1; grid-row: 2; color: var(--text-dim); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.operator-row-state { grid-column: 2; grid-row: 1 / 3; font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.operator-row-state[data-state="READY"], .operator-row-state[data-state="DONE"] { color: var(--ok); }
+.operator-row-state[data-state="ERROR"], .operator-row-state[data-state="FAILED"] { color: var(--err); }
+.operator-row-state[data-state="STARTING"], .operator-row-state[data-state="RUNNING"] { color: var(--warn); }
+.operator-empty { padding: var(--space-4); color: var(--text-dim); border: 1px dashed var(--border); border-radius: var(--radius-md); }
+.operator-routing { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-5); padding: var(--space-4); border: 1px dashed var(--border); border-radius: var(--radius-lg); }
+.operator-routing h3 { margin: 0 0 var(--space-2); }
+.operator-routing p { margin: 0; color: var(--text-dim); }
+.operator-unverified { align-self: flex-start; color: var(--warn); font-weight: var(--weight-semibold); }
+@media (max-width: 850px) {
+  .operator-content { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  .operator-workspace { padding: var(--space-4); }
+  .operator-heading button { width: 100%; }
+}
+
+
+@media (max-width: 359px) {
+  .operator-metrics { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Desktop Operator refinement: expose more context per visible screen without new requests. */
+.operator-status-summary {
+  margin: 0 0 var(--space-3); color: var(--text-dim);
+  font-size: var(--text-sm); overflow-wrap: anywhere;
+}
+.operator-instance-disclosure summary {
+  min-height: 44px; display: flex; align-items: center; cursor: pointer;
+  color: var(--text); font-size: var(--text-sm);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 8px 12px;
+}
+.operator-instance-disclosure[open] summary { margin-bottom: var(--space-2); }
+.operator-instance-disclosure summary:hover { background: var(--bg-elevated); }
+.operator-timeline-list { gap: 0; }
+.operator-timeline-row {
+  position: relative; margin: 0 0 var(--space-2) 10px;
+  padding-left: 20px; border-left: 2px solid var(--border);
+}
+.operator-timeline-row::before {
+  content: ""; position: absolute; width: 10px; height: 10px;
+  border-radius: 50%; left: -6px; top: 15px;
+  background: var(--text-dim); border: 2px solid var(--bg-elevated);
+}
+.operator-timeline-row[data-state="RUNNING"]::before,
+.operator-timeline-row[data-state="QUEUED"]::before { background: var(--warn); }
+.operator-timeline-row[data-state="DONE"]::before { background: var(--ok); }
+.operator-timeline-row[data-state="FAILED"]::before { background: var(--err); }
+@media (min-width: 1101px) {
+  .operator-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .operator-metric { padding: 12px; }
+  .operator-metric dt { font-size: 12px; line-height: 1.35; }
+  .operator-metric dd { font-size: 22px; }
+  .operator-content { grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.8fr); }
+  .operator-instance-section { border-left: 1px solid var(--border); padding-left: var(--space-4); }
+}

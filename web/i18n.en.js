@@ -8,6 +8,10 @@ window.I18N_EN = {
   "studio.intro": "Write your script, shape the voice, and generate audio.",
   "studio.script": "Script",
   "studio.controls": "Voice & delivery",
+  "operator.mode.label": "Interface mode",
+  "operator.mode.creator": "Classic",
+  "operator.mode.operator": "Cockpit",
+  "operator.mode.flow": "Flow",
   /* ---------- header / nav ---------- */
   "header.subtitle": "audiocpp_server process manager & audio workbench",
   "header.settingsTitle": "Settings",
@@ -17,6 +21,7 @@ window.I18N_EN = {
   "nav.models": "Models",
   "nav.instances": "Instances",
   "nav.sidebarLabel": "Models & instances",
+  "model.select": "Select model",
   "model.empty": "No models",
   "model.unconfigured": "No profile",
   "model.unconfiguredTip": "This model has no valid weights directory or audiocpp_server yet: open \"Launch model\", set them up and launch once",

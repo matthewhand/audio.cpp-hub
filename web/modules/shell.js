@@ -26,16 +26,44 @@ export function applyLangBtn() {
 }
 langBtn.onclick = () => I18N.setLang(I18N.lang() === "zh" ? "en" : "zh");
 
-export function openDrawer() {
-  $("left").classList.add("open");
-  $("drawer-overlay").classList.remove("hidden");
-  $("menu-toggle").setAttribute("aria-expanded", "true");
+const mobile = matchMedia("(max-width:1100px)");
+let sidebarHadFocus = false, menuHadFocus = false;
+document.addEventListener("focusin", e => {
+  sidebarHadFocus = $("left").contains(e.target);
+  menuHadFocus = e.target === $("menu-toggle");
+});
+function drawer(open) {
+  const l = $("left"), m = $("menu-toggle");
+  open = mobile.matches && open;
+  if (!open && mobile.matches && (l.contains(document.activeElement) || sidebarHadFocus)) m.focus();
+  l.classList.toggle("open", open);
+  l.inert = mobile.matches && !open;
+  if (l.inert) l.setAttribute("aria-hidden", "true");
+  else l.removeAttribute("aria-hidden");
+  $("drawer-overlay").classList.toggle("hidden", !open);
+  m.setAttribute("aria-expanded", String(open));
+  if (open) { const list = $("model-list"); list.tabIndex = -1; list.focus(); }
+  if (!mobile.matches && (document.activeElement === m || menuHadFocus)) {
+    (l.querySelector(".model-select-target[aria-current]") || l.querySelector("button") || $("main-content")).focus();
+  }
 }
-export function closeDrawer() {
-  $("left").classList.remove("open");
-  $("drawer-overlay").classList.add("hidden");
-  $("menu-toggle").setAttribute("aria-expanded", "false");
+export function openDrawer() { drawer(true); }
+export function closeDrawer() { drawer(false); }
+mobile.addEventListener("change", () => drawer(false));
+drawer(false);
+// Classic is the zero-additional-module default; load alternate views only on use.
+async function openInterfaceMode(mode) {
+  const { initInterfaceModes, setInterfaceMode } = await import("./interface-modes.js");
+  initInterfaceModes();
+  setInterfaceMode(mode);
 }
+for (const [id, mode] of [["studio-create", "classic"], ["studio-flow", "flow"], ["studio-operate", "cockpit"]]) {
+  $(id).onclick = () => void openInterfaceMode(mode);
+}
+try {
+  const saved = localStorage.getItem("hub-interface-mode");
+  if (saved === "flow" || saved === "cockpit") void openInterfaceMode(saved);
+} catch { /* storage is optional */ }
 $("activity-queue-open").onclick = async () => (await import("./activity-queue.js")).toggleActivityQueue();
 $("menu-toggle").onclick = openDrawer;
 $("drawer-overlay").onclick = closeDrawer;

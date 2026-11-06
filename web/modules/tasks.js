@@ -11,6 +11,7 @@ import { activeInstanceId, selectedModel } from "./state.js";
 export const activePolls = new Map(); // taskId → Api.poll 句柄（stop() 即无定时器/无在途请求）
 export const taskViews = new Map(); // taskId → 已知任务（进行中 + 已完成保留展示），供侧栏渲染
 export const taskDetails = new Map(); // taskId → 已展开的完整结果文本（侧栏「详情」缓存，随任务记录清除）
+const notifyTaskViews = () => window.dispatchEvent(new Event("hub:task-views"));
 export const TASK_VERB = { tts: "tts.verb", asr: "asr.verb", sep: "sep.verb", music: "music.verb", other: "other.verb" };
 
 export async function submitTask(req) {
@@ -38,6 +39,7 @@ export async function cancelTask(taskId) {
 export function trackTask(task) {
   taskViews.set(task.id, task);
   renderSidebarList();
+  notifyTaskViews();
   if (activePolls.has(task.id)) return;
   if (task.status !== "QUEUED" && task.status !== "RUNNING") return;
   const isRunning = (cur) => cur.status === "QUEUED" || cur.status === "RUNNING";
@@ -45,6 +47,7 @@ export function trackTask(task) {
   handle = Api.poll("/api/tasks/{id}", (cur) => {
     taskViews.set(cur.id, cur);
     renderSidebarList();
+    notifyTaskViews();
     if (!isRunning(cur)) {
       activePolls.delete(task.id);
       handle.stop();
@@ -60,6 +63,7 @@ export function trackTask(task) {
         taskViews.delete(task.id);
         taskDetails.delete(task.id);
         renderSidebarList();
+        notifyTaskViews();
       }
       // 其余错误（网络抖动 / 5xx / 超时）视为瞬时，下轮再试
     }
