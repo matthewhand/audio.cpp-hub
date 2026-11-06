@@ -1,6 +1,7 @@
 
 
 import { $, t } from "./dom.js";
+import { showToast } from "./async-ui.js";
 
 export const themeBtn = $("theme-toggle");
 
@@ -52,10 +53,19 @@ export function closeDrawer() { drawer(false); }
 mobile.addEventListener("change", () => drawer(false));
 drawer(false);
 // Classic is the zero-additional-module default; load alternate views only on use.
+let interfaceLoadFailures = 0;
 async function openInterfaceMode(mode) {
-  const { initInterfaceModes, setInterfaceMode } = await import("./interface-modes.js");
-  initInterfaceModes();
-  setInterfaceMode(mode);
+  try {
+    const loading = interfaceLoadFailures ?
+      import(`./interface-modes.js?retry=${interfaceLoadFailures}`) : import("./interface-modes.js");
+    const { initInterfaceModes, setInterfaceMode } = await loading;
+    initInterfaceModes();
+    setInterfaceMode(mode);
+  } catch {
+    // Keep Classic usable and let the next click retry a failed module fetch.
+    interfaceLoadFailures++;
+    showToast("error", t("common.loadFailed"));
+  }
 }
 for (const [id, mode] of [["studio-create", "classic"], ["studio-flow", "flow"], ["studio-operate", "cockpit"]]) {
   $(id).onclick = () => void openInterfaceMode(mode);

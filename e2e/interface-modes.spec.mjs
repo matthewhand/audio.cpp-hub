@@ -575,3 +575,35 @@ test("active mode labels retain immediate and next-frame contrast in both themes
     }
   }
 });
+
+for (const saved of [false, true]) {
+  test(
+    "interface chunk failure retains Classic and can retry (saved=" + saved + ")",
+    async ({ page }) => {
+      const errors = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      const backend = new MockBackend({ instances: [ready] });
+      backend.install(page);
+      await page.addInitScript((restore) => {
+        localStorage.clear();
+        localStorage.setItem("hub-model", "supertonic");
+        localStorage.setItem("hub-lang", "en");
+        if (restore) localStorage.setItem("hub-interface-mode", "cockpit");
+      }, saved);
+      await page.route("**/modules/interface-modes.js", (route) => route.abort());
+      await page.goto("/");
+      await expect(page.locator("#model-list .card-title").first()).toBeAttached();
+      await page.locator("#tts-text").fill("Retain the unsent draft");
+      if (!saved) await page.locator("#studio-operate").click();
+      await expect(page.locator("#toast-root [role=alert]")).toContainText("Failed to load");
+      await expect(page.locator("#workspace")).toHaveAttribute("data-interface-mode", "classic");
+      await page.unroute("**/modules/interface-modes.js");
+      await page.locator("#studio-operate").click();
+      await expect(page.locator("#workspace")).toHaveAttribute("data-interface-mode", "cockpit");
+      await expect(page.locator("#operator-feed-value")).toHaveText("Current");
+      await page.locator("#studio-create").click();
+      await expect(page.locator("#tts-text")).toHaveValue("Retain the unsent draft");
+      expect(errors).toEqual([]);
+    }
+  );
+}
