@@ -52,7 +52,7 @@ Compose file. Its defaults are deliberately non-inferential:
 - profile `sanotts-cpu` must be selected explicitly;
 - host port binds to `127.0.0.1:18081`;
 - model and state paths use four new Docker-managed named volumes, not Windows host binds;
-- the model volume is read-only and remains empty until a separately approved import;
+- the model volume is read-only and remains empty until an operator imports the verified files;
 - startup defaults to `hub-only`, with no model weights path configured;
 - the executable registry selects the CPU server entry explicitly;
 - warm-up defaults to `skip`;
@@ -73,10 +73,17 @@ or access an engine. The regression executes the real fresh/reuse build-script
 phase with mock CMake outputs and a corrupted-archive negative case; it does
 not replace a full clean build or production mount/synthesis acceptance.
 
-A future operator would need a separate explicit approval before changing
-`AUDIOCPP_STARTUP_MODE` to `normal`, setting `AUDIOCPP_WEIGHTS`, or changing
-`AUDIOCPP_WARMUP_POLICY` to `required`. Those changes start model work and can
-cause synthesis; they are not part of this recovery build or PR.
+Before synthesis can work in the container, an operator must copy the verified
+model files from `.sanotts-cpu-models/` into the named model volume, preserving
+their filenames, and set `AUDIOCPP_WEIGHTS` to the corresponding path under
+`/audio.cpp/models`. The recipe does not import those files automatically.
+Changing `AUDIOCPP_STARTUP_MODE` to `normal` or `AUDIOCPP_WARMUP_POLICY` to
+`required` can start model work. Model import and container inference have not
+been exercised by this PR; they remain container acceptance steps.
+
+Failed builds preserve their outputs for inspection and refuse to overwrite
+them on retry. Use fresh output, model and work directories for a new build;
+partial downloads are not accepted as verified inputs.
 
 ## Licensing boundary
 
@@ -97,8 +104,8 @@ cause synthesis; they are not part of this recovery build or PR.
 ## Acceptance boundary
 
 Verified build/test evidence is not a Windows mount repair or live operational
-acceptance. Issue #127 must remain open until a separately approved Windows
-maintenance action proves the new storage path is writable and a separately
-approved synthesis test proves a non-silent WAV and matching persisted history.
+acceptance. Issue #127 must remain open until Windows
+maintenance proves the new storage path is writable and a synthesis test proves
+a non-silent WAV and matching persisted history.
 No existing container, WSL distribution, mount, file, history, volume, or
 service is restarted, migrated, deleted, or modified by this work.
