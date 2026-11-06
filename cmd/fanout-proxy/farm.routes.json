@@ -23,9 +23,7 @@
     },
     {
       "aliases": ["sanotts", "instant"],
-      "targets": [
-        { "hub": "http://10.0.0.36:18080", "instanceName": "sanotts" }
-      ]
+      "targets": [{ "hub": "http://10.0.0.36:18080", "instanceName": "sanotts" }]
     },
     {
       "aliases": ["citrinet", "stt"],
