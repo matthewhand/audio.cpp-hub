@@ -1,0 +1,54 @@
+name: audio-cpp-hub-sanotts
+
+services:
+  sanotts-cpu:
+    profiles: ["sanotts-cpu"]
+    build:
+      context: ${SANOTTS_PACKAGE_DIR:-./.sanotts-cpu-package}
+      dockerfile: Dockerfile
+    image: audio-cpp-hub:sanotts-cpu-issue127
+    container_name: audio-cpp-hub-sanotts-cpu
+    restart: "no"
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    ports:
+      - "${SANOTTS_BIND_ADDRESS:-127.0.0.1}:${SANOTTS_PORT:-18081}:18080"
+    environment:
+      AUDIOCPP_BACKEND: cpu
+      AUDIOCPP_DEVICE: "0"
+      AUDIOCPP_THREADS: "${AUDIOCPP_THREADS:-4}"
+      AUDIOCPP_MODEL_ID: sanotts
+      AUDIOCPP_SERVICE_NAME: sanotts
+      AUDIOCPP_EXECUTABLE_ID: cpu
+      AUDIOCPP_WEIGHTS: "${AUDIOCPP_WEIGHTS:-}"
+      AUDIOCPP_STARTUP_MODE: "${AUDIOCPP_STARTUP_MODE:-hub-only}"
+      AUDIOCPP_WARMUP_POLICY: "${AUDIOCPP_WARMUP_POLICY:-skip}"
+      AUDIOCPP_SERVER_BIN: /audio.cpp/bin/audiocpp_server
+      LD_LIBRARY_PATH: /audio.cpp/bin:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu
+    volumes:
+      - sanotts_models:/audio.cpp/models:ro
+      - sanotts_data:/app/data
+      - sanotts_logs:/app/logs
+      - sanotts_run:/app/run
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:18080/api/models"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    stop_grace_period: 30s
+
+volumes:
+  sanotts_models:
+    name: audio-cpp-hub-sanotts-models
+  sanotts_data:
+    name: audio-cpp-hub-sanotts-data
+  sanotts_logs:
+    name: audio-cpp-hub-sanotts-logs
+  sanotts_run:
+    name: audio-cpp-hub-sanotts-run

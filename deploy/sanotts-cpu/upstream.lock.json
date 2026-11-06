@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "target": {
+    "os": "linux",
+    "architecture": "amd64",
+    "backend": "cpu"
+  },
+  "hub_toolchain": {
+    "go_version": "1.27.3",
+    "go_archive_url": "https://go.dev/dl/go1.27.3.linux-amd64.tar.gz",
+    "go_archive_sha256": "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40"
+  },
+  "audio_cpp": {
+    "repository": "https://github.com/0xShug0/audio.cpp.git",
+    "tag": "v0.9.3",
+    "commit": "41c1f8ffa0d13a1b7e366e30ea5fe5ab8d169d48",
+    "server_frontends_submodule": "external/audio.cpp-server-frontends",
+    "server_frontends_commit": "070e69508a17b9b165f6d3ab625f497bf8995461",
+    "cmake_options": {
+      "AUDIOCPP_MODEL_SET": "custom",
+      "AUDIOCPP_MODELS": "sanotts",
+      "AUDIOCPP_STATIC_ESPEAK": true,
+      "ENGINE_ENABLE_CUDA": false,
+      "ENGINE_ENABLE_HIP": false,
+      "ENGINE_ENABLE_VULKAN": false,
+      "ENGINE_ENABLE_METAL": false,
+      "ENGINE_ENABLE_LLAMAFILE": false,
+      "ENGINE_ENABLE_NATIVE_CPU": false,
+      "ENGINE_ENABLE_CPU_ALL_VARIANTS": true,
+      "ENGINE_ENABLE_OPENMP": true,
+      "ENGINE_BUILD_TESTS": true,
+      "ENGINE_BUILD_EXTENDED_TESTS": false,
+      "ENGINE_BUILD_MODEL_TESTS": true,
+      "ENGINE_BUILD_EXAMPLES": false,
+      "AUDIOCPP_BUILD_NATIVE_MODEL_MANAGER": false,
+      "AUDIOCPP_BUILD_C_API": false
+    }
+  },
+  "espeak_ng": {
+    "version": "1.52.0",
+    "source_url": "https://codeload.github.com/espeak-ng/espeak-ng/tar.gz/refs/tags/1.52.0",
+    "source_sha256": "bb4338102ff3b49a81423da8a1a158b420124b055b60fa76cfb4b18677130a23"
+  },
+  "sanotts": {
+    "repository": "https://huggingface.co/ampixa/sanoTTS",
+    "revision": "c532a5d21c078a16cb633718e9182bfd71a5b760",
+    "weights": {
+      "path": "gguf/heart-nano-f32.gguf",
+      "size_bytes": 1197376,
+      "sha256": "9e9fddfc10c26e89f080c548be4778f191a3fb0ba877f35e05baf67da42f7476"
+    },
+    "config": {
+      "path": "gguf/config.json",
+      "sha256": "58eabea7a1156d436bf30731a47c86c3f1ec02623ee2a545a7cf042a8517b4dd"
+    },
+    "readme": {
+      "path": "gguf/README.md",
+      "sha256": "14002b9b0249282e723670ea0f6086ee0d9d331b46df6427f51e3f6d9440bf12"
+    },
+    "license_source_commit": "f73b8382bc98a1c8de3488ba30d727ab82587828",
+    "gpl_license": {
+      "path": "LICENSE",
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+    },
+    "mit_license": {
+      "path": "LICENSE.MIT",
+      "sha256": "2f544ceb6a679cf706652c9df3bf8a6753197ee36456ba61665d97fbed43210e"
+    },
+    "weights_license_status": "UNRESOLVED: the GGUF README describes teacher provenance but does not assign an explicit separate licence to these weights; do not redistribute or publish the weights until the publisher clarifies their terms."
+  },
+  "runtime_image": {
+    "reference": "ubuntu:24.04",
+    "platform": "linux/amd64",
+    "digest": "sha256:78d4744ead1f5b19b04d0df558ab182a5300903900755e515b2ca4d10eb2044d",
+    "apt_snapshot": "20261030T000000Z"
+  }
+}
