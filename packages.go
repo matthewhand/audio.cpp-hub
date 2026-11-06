@@ -43,12 +43,13 @@ type dlPackageFile struct {
 
 // dlPackage 下载清单中的一个包（repo/revision/targetDir/files）。
 type dlPackage struct {
-	ID        string          `json:"id"`
-	Repo      string          `json:"repo"`
-	Revision  string          `json:"revision"`
-	TargetDir string          `json:"targetDir"`
-	Default   bool            `json:"default"`
-	Files     []dlPackageFile `json:"files"`
+	ID          string          `json:"id"`
+	Repo        string          `json:"repo"`
+	Revision    string          `json:"revision"`
+	TargetDir   string          `json:"targetDir"`
+	PrimaryFile string          `json:"primaryFile,omitempty"`
+	Default     bool            `json:"default"`
+	Files       []dlPackageFile `json:"files"`
 }
 
 // packageHasExpectedSHA256 gates mirror selection until the mirror's bytes

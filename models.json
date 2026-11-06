@@ -2915,5 +2915,65 @@
         "step": 0.05
       }
     }
+  },
+  {
+    "id": "nemotron_transcribe",
+    "family": "nemotron_transcribe",
+    "hfUrl": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B",
+    "ggufUrl": "https://huggingface.co/Jmica/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-GGUF",
+    "displayName": "Nemotron 3.5 Transcribe 30B-A4B (experimental)",
+    "description": "实验性离线语音模型，支持转写、翻译和说话人标注。模型文件很大，需要兼容的新版 audio.cpp 运行时与足够内存；不支持实时流式识别。",
+    "descriptionEn": "Experimental offline speech model for transcription, translation, audio questions, word timestamps and speaker tags. Large weights require a compatible newer audio.cpp runtime and sufficient memory; not a real-time streaming model.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "optional",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "paramSchema": {
+      "template_name": {
+        "type": "enum",
+        "values": [
+          "default",
+          "translation",
+          "audio_qa",
+          "language_id"
+        ],
+        "default": "default",
+        "label": "任务模式",
+        "labelEn": "Task template"
+      },
+      "target_language": {
+        "type": "string",
+        "default": "English",
+        "label": "翻译目标语言",
+        "labelEn": "Translation target language"
+      },
+      "return_timestamps": {
+        "type": "boolean",
+        "default": false,
+        "label": "词级时间戳",
+        "labelEn": "Word timestamps"
+      },
+      "diarization": {
+        "type": "boolean",
+        "default": false,
+        "label": "说话人标注",
+        "labelEn": "Speaker diarization"
+      },
+      "max_tokens": {
+        "type": "integer",
+        "default": null,
+        "min": 1,
+        "step": 1,
+        "label": "最多输出 token",
+        "labelEn": "Maximum output tokens"
+      }
+    }
   }
 ]

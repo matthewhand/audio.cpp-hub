@@ -3356,5 +3356,105 @@
         ]
       }
     ]
+  },
+  "nemotron_transcribe": {
+    "displayName": "Nemotron 3.5 Transcribe 30B-A4B (experimental)",
+    "category": "asr",
+    "status": "experimental",
+    "packages": [
+      {
+        "id": "nemotron_transcribe_iq4_nl",
+        "displayName": "Nemotron 3.5 Transcribe 30B IQ4_NL experts + F16 encoder",
+        "format": "gguf",
+        "precision": "iq4_nl",
+        "repo": "Jmica/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-GGUF",
+        "revision": "304032f14e1e9e4042f5491d2d0194c044710bb7",
+        "gated": false,
+        "targetDir": "NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-GGUF",
+        "primaryFile": "nemotron-transcribe-30b-a4b-experts-IQ4_NL.gguf",
+        "files": [
+          {
+            "remote": "nemotron-transcribe-30b-a4b-experts-IQ4_NL.gguf",
+            "local": "nemotron-transcribe-30b-a4b-experts-IQ4_NL.gguf",
+            "sha256": "81af0d93cd98e778fef906bb350220215396c3bfdf99d6240c0607eba51933ef"
+          },
+          {
+            "remote": "mmproj-NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-Encoder-F16.gguf",
+            "local": "mmproj-NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-Encoder-F16.gguf",
+            "sha256": "4221029c8a565c4a80c507ffa760c716e595acf663f9f4273ce69910050e7ba2"
+          }
+        ],
+        "default": true
+      },
+      {
+        "id": "nemotron_transcribe_q4_k",
+        "displayName": "Nemotron 3.5 Transcribe 30B Q4_K experts + F16 encoder",
+        "format": "gguf",
+        "precision": "q4_k",
+        "repo": "Jmica/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-GGUF",
+        "revision": "304032f14e1e9e4042f5491d2d0194c044710bb7",
+        "gated": false,
+        "targetDir": "NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-GGUF",
+        "primaryFile": "nemotron-transcribe-30b-a4b-experts-Q4_K_S.gguf",
+        "files": [
+          {
+            "remote": "nemotron-transcribe-30b-a4b-experts-Q4_K_S.gguf",
+            "local": "nemotron-transcribe-30b-a4b-experts-Q4_K_S.gguf",
+            "sha256": "c920a61f2760a443b6eb33cc4d09414833d3ff94ac0f7d66eee972e53c7878e7"
+          },
+          {
+            "remote": "mmproj-NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-Encoder-F16.gguf",
+            "local": "mmproj-NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-Encoder-F16.gguf",
+            "sha256": "4221029c8a565c4a80c507ffa760c716e595acf663f9f4273ce69910050e7ba2"
+          }
+        ]
+      },
+      {
+        "id": "nemotron_transcribe_q3_k",
+        "displayName": "Nemotron 3.5 Transcribe 30B Q3_K experts + F16 encoder",
+        "format": "gguf",
+        "precision": "q3_k",
+        "repo": "Jmica/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-GGUF",
+        "revision": "304032f14e1e9e4042f5491d2d0194c044710bb7",
+        "gated": false,
+        "targetDir": "NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-GGUF",
+        "primaryFile": "nemotron-transcribe-30b-a4b-experts-Q3_K_S.gguf",
+        "files": [
+          {
+            "remote": "nemotron-transcribe-30b-a4b-experts-Q3_K_S.gguf",
+            "local": "nemotron-transcribe-30b-a4b-experts-Q3_K_S.gguf",
+            "sha256": "7f89a1a18477f968bafa3f4f93a96fe820c2e6e6bd247e540c9475d1bdc79733"
+          },
+          {
+            "remote": "mmproj-NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-Encoder-F16.gguf",
+            "local": "mmproj-NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-Encoder-F16.gguf",
+            "sha256": "4221029c8a565c4a80c507ffa760c716e595acf663f9f4273ce69910050e7ba2"
+          }
+        ]
+      },
+      {
+        "id": "nemotron_transcribe_q2_k",
+        "displayName": "Nemotron 3.5 Transcribe 30B Q2_K experts + F16 encoder",
+        "format": "gguf",
+        "precision": "q2_k",
+        "repo": "Jmica/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-GGUF",
+        "revision": "304032f14e1e9e4042f5491d2d0194c044710bb7",
+        "gated": false,
+        "targetDir": "NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-GGUF",
+        "primaryFile": "nemotron-transcribe-30b-a4b-experts-Q2_K.gguf",
+        "files": [
+          {
+            "remote": "nemotron-transcribe-30b-a4b-experts-Q2_K.gguf",
+            "local": "nemotron-transcribe-30b-a4b-experts-Q2_K.gguf",
+            "sha256": "c8a631a85cf1f91943259976a6aab560f56de2fe50667836a92c217b2af04567"
+          },
+          {
+            "remote": "mmproj-NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-Encoder-F16.gguf",
+            "local": "mmproj-NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-Encoder-F16.gguf",
+            "sha256": "4221029c8a565c4a80c507ffa760c716e595acf663f9f4273ce69910050e7ba2"
+          }
+        ]
+      }
+    ]
   }
 }

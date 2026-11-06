@@ -23,7 +23,7 @@
  * 类型由 web/globals.d.ts 的 HubServiceWorkerScope 提供（见该文件说明）。 */
 const sw = /** @type {HubServiceWorkerScope} */ (/** @type {unknown} */ (self));
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const STATIC_CACHE = `acpp-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `acpp-runtime-${CACHE_VERSION}`;
 const OFFLINE_URL = "/offline.html";
