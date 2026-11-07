@@ -269,6 +269,7 @@ STATUS
 (cd "$MODEL_OUTPUT_DIR" && sha256sum config.json README.md heart-nano-f32.gguf LICENSE LICENSE.MIT WEIGHTS-LICENSE-STATUS.txt > SHA256SUMS)
 cp -a "$ROOT/web/." "$OUT_DIR/web/"
 cp -a "$ROOT/docker/." "$OUT_DIR/docker/"
+jq '.modelsDir = "/audio.cpp/models"' "$ROOT/docker/hub.config.json" > "$OUT_DIR/docker/hub.config.json"
 cp "$ROOT/deploy/sanotts-cpu/sanotts-executables.json" "$OUT_DIR/docker/executables.json"
 cp "$ROOT/deploy/sanotts-cpu/Dockerfile" "$OUT_DIR/Dockerfile"
 cp "$LOCK" "$OUT_DIR/upstream.lock.json"
