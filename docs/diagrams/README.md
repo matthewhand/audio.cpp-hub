@@ -34,6 +34,12 @@ a browser, no build step. PNG previews (light + dark) are in [`assets/`](assets)
 | [ui-information-architecture](ui-information-architecture.html) · [png](assets/ui-information-architecture.png) | Tree | user / contributor | Web UI structure and i18n coverage |
 | [ci-release-pipeline](ci-release-pipeline.html) · [png](assets/ci-release-pipeline.png) | Process | maintainer | CI gates and the tag release pipeline |
 
+## In-progress source-only UI design
+
+- [Three interface modes](interface-modes.md) — Mermaid data-flow and degraded-state workflows for Classic, Flow and Cockpit, with explicit local-hub scope and integration gates.
+
+- [Operator Studio Hybrid](operator-studio-hybrid.md) — Mermaid component/data-flow diagram for the additive Create / Operate interface. Its feed-freshness and routing limitations are explicit; it is not a deployment or farm-health verification.
+
 ## Conventions
 
 - **Skin:** monochrome, derived from `web/style.css`. Colors are CSS custom properties; the accent is ink

@@ -8,6 +8,10 @@ window.I18N_ZH = {
   "studio.intro": "撰写文稿、调整音色并生成音频。",
   "studio.script": "文稿",
   "studio.controls": "音色与演绎",
+  "operator.mode.label": "界面模式",
+  "operator.mode.creator": "经典",
+  "operator.mode.operator": "驾驶舱",
+  "operator.mode.flow": "流程",
   /* ---------- 页头 / 导航 ---------- */
   "header.subtitle": "audiocpp_server 进程管理 & 音频工作台",
   "header.settingsTitle": "设置",
@@ -17,6 +21,7 @@ window.I18N_ZH = {
   "nav.models": "模型",
   "nav.instances": "实例",
   "nav.sidebarLabel": "模型与实例",
+  "model.select": "选择模型",
   "model.empty": "暂无模型",
   "model.unconfigured": "未配置",
   "model.hfRepo": "模型仓库",

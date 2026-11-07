@@ -70,6 +70,10 @@ const PRECACHE_URLS = [
   "/modules/voices-panel-lazy.js",
   // 下面是懒加载 chunk（不在首屏，也不进 index.html 的 modulepreload）：各自只被对应
   // 外观层的 import("./x.js") 拉取，但离线冷启动点开时仍要能用，因此只进预缓存。
+  "/interface-modes.css", // alternate layouts load only when selected
+  "/modules/interface-modes.js", // shared mode switch
+  "/modules/operator-studio.js", // on-demand Operator Studio
+  "/operator-studio.css", // on-demand Operator Studio stylesheet
   "/modules/activity-queue.js", // on-demand Activity/Queue
   "/activity-queue.css", // loaded only while Activity opens
   "/modules/stats.js",          // 看板（#/stats）

@@ -1,21 +1,6 @@
-/* web/app.js — 应用引导（ES 模块入口）
- *
- * 以前这里是 3300+ 行的单体脚本：模型分组 / 实例管理 / 任务面板 / 历史 / 下载 / 设置全在里面。
- * 现在按职责拆成 web/modules/*.js，本文件只做四件事：
- *   1) 导入各模块（依赖关系写在各模块顶部的 import 里，这里不重复）；
- *   2) 承担「外壳装配」——跨模块的重画（rerenderAll）与最上层弹窗的 Esc / Tab 焦点锁定；
- *   3) 启动：把经典脚本侧的 window 转发器接到真实实现，然后按原顺序建立轮询与首屏加载；
- *   4) 首屏末尾应用一次初始 hash（深链接还原面板 / 选中项）。
- *
- * 加载顺序：index.html 里本文件是 `<script type="module">`，模块脚本默认 defer，
- * 在整份文档解析完成后才执行——因此所有 DOM 取值（$("theme-toggle") 等）都安全，
- * 也因此它必然晚于 boot.js / i18n.zh.js / i18n.en.js / i18n.js / api-client.js /
- * wav.js / legacy-globals.js / motion.js / pwa.js / audio-picker.js /
- * voice-select.js 这些普通脚本。「点开才打开」的面板（看板 / 文件浏览器 / 音色库 /
- * 下载 / 设置）不在本文件的 import 图里——它们由各自的首屏外观层 import() 按需拉取。
- * 主题与界面语言的首屏恢复由 <head> 里的 web/boot.js 在样式表之前完成，不受本文件影响。
- *
- * 模块地图与每层的边界见 web/README.md。 */
+/* audio.cpp-hub application bootstrap: native module assembly, rerendering, dialog focus,
+   visibility-aware polling and initial route restoration. See web/README.md for the
+   ordering constraints and the preload/service-worker module graph invariants. */
 
 import { FOCUSABLE_SEL, focusDialog, parseApiError, renderEmptyState, renderStateError, restoreDialogFocus, showToast, startEventsPolling, topmostOverlay } from "./modules/async-ui.js";
 import { closeCommandPalette } from "./modules/command-palette-lazy.js";

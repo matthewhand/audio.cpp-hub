@@ -237,6 +237,7 @@ export function submitLabel(id) {
 }
 
 export let instances = [];
+export function instanceFeedState() { return { loaded: instancesLoaded, stale: instanceFeedStale }; }
 
 export let instancePoller = null;
 let instancesLoaded = false;

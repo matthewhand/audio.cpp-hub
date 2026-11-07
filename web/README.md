@@ -473,3 +473,13 @@ npm run format         # 仅当 format:check 失败时（注意范围不含 web/
       `PRECACHE_URLS`、本文件的模块地图；`npm run perf:budget` 通过即证明前三者一致。
 - [ ] 改动 Service Worker 时确认 `/api/*` 与 `/v1/*` 仍未被缓存。
 - [ ] 运行 `npm run check` 与 `npm run test:unit`，`go vet ./...` / `go build ./...`，并手动过一遍受影响页面（含中英切换与深浅主题）。
+
+## Classic / Flow / Cockpit interface modes
+
+The top-of-workspace interface selector is independent of language and appearance.
+Classic is the backward-compatible default; Flow is a task-first entry to the
+existing model routes and editor; Cockpit reuses the read-only Operator Studio.
+The preference is `hub-interface-mode` (`classic`, `flow`, `cockpit`). Unknown
+values fall back to Classic. The optional modules use dynamic `import()` and
+are precached by `sw.js`, without new APIs, synthesized tasks or frontend build.
+See [three-mode diagrams](../docs/diagrams/interface-modes.md).

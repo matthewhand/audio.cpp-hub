@@ -1,28 +1,13 @@
-/* web/modules/async-ui.js — 跨功能复用的 UI 原语（#88）
- *
- * 原先这些散落在单体 app.js 的各处调用点上（骨架屏只有历史面板有、错误提示各自拼文案、
- * 弹窗焦点栈只有 voices-panel 用），这里收成两组可复用原语：
- *
- *   A. 通知与异步状态
- *      - notify / showToast：toast 堆叠，堆在 #toast-root（ARIA live region），hover 暂停自动关闭
- *      - showSkeleton / renderEmptyState / renderStateError / renderListError：列表三态占位
- *      - setButtonBusy：按钮内联 loading，替代不必要的全局遮罩
- *      - parseApiError / stateErrorMessage：后端 {"code","params"} 错误体 → 本地化文案
- *      - applyEvents / startEventsPolling：/api/events 轮询 → toast（见 B 的说明）
- *      - isOpen：弹窗可见性判定
- *
- *   B. 弹窗机制
- *      - OVERLAY_IDS / visibleOverlays / topmostOverlay：可见弹窗栈（按 DOM 顺序 ≈ 堆叠顺序）
- *      - focusDialog / restoreDialogFocus：焦点栈 + 背景 inert，嵌套弹窗逐层还原
- *        （focusDialog 会等焦点目标真的可聚焦，见下方 focusWhenRendered）
- *      - bindMenuKeys：弹出菜单键盘导航（HF 仓库菜单 / 历史分组菜单共用）
- *      - dismissToast：先播滑出动画再移除节点
- *      - showBusy / hideBusy：全局等待遮罩 + 实时耗时，只给「不知道要等多久、
- *        期间不允许再操作」的批量操作用（当前是清空操作历史）
- *
- * 依赖刻意单向：本模块 → dom.js（$ / el / esc / t / Api）。dom.js 是零 import 的叶子，
- * ui.js 的焦点栈与这里的 toast/三态之间不再需要来回引用，因此也不会形成环。
- * 「Esc 只关最上层弹窗」等全局键盘绑定在 web/app.js 里。 */
+/* Shared UI primitives (#88): notifications, async states and dialog handling.
+ * - Toasts use #toast-root (ARIA live region) and hover-paused dismissal.
+ * - showSkeleton / renderEmptyState / renderStateError / renderListError
+ *   supply loading, empty and error states; setButtonBusy handles inline work.
+ * - parseApiError/stateErrorMessage localize backend error codes and params.
+ * - applyEvents/startEventsPolling translate server events into notifications.
+ * - Dialog overlays use a focus stack, background inert, and safe focus restore.
+ * - bindMenuKeys provides shared HF/history menu keyboard navigation.
+ * - app.js owns topmost Escape; the focus stack must remain consistent.
+ * - This module imports only dom.js to avoid cyclic module initialization. */
 
 import { $, Api, el, esc, t } from "./dom.js";
 

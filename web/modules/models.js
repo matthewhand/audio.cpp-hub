@@ -1,10 +1,4 @@
-/* web/modules/models.js — 模型列表
- *
- * 左栏按 category 分组渲染模型卡片、「已配置」黯淡态、HF 仓库 / 镜像下拉菜单，
- * 以及快速启动按钮上的当前模型名。数据来自 GET /api/models。
- *
- * 选中模型的两条入口（点击卡片 / 路由 #/model/<id>）都落到 selectModelById，
- * URL 由 routing.js 统一改写，这里只落状态并重画。 */
+/* Model routes and independent card actions. */
 
 import { bindMenuKeys, renderEmptyState, renderStateError, showSkeleton } from "./async-ui.js";
 import { $, Api, esc, safeHttpUrl, t } from "./dom.js";
@@ -49,8 +43,10 @@ export async function loadModels() {
   renderWorkspace();
 }
 
+let pendingModelFocus = null;
 export let hfMenuEl = null;
 export let hfMenuAnchor = null;
+let hfMenuAnchorRect = null;
 
 export function hfMirrorOf(url) {
   return url ? url.replace("https://huggingface.co/", "https://hf-mirror.com/") : null;
@@ -60,6 +56,7 @@ export function closeHfMenu() {
   if (hfMenuEl) hfMenuEl.classList.remove("open");
   if (hfMenuAnchor) hfMenuAnchor.classList.remove("open");
   hfMenuAnchor = null;
+  hfMenuAnchorRect = null;
 }
 
 export function openHfMenu(anchor, m) {
@@ -83,6 +80,7 @@ export function openHfMenu(anchor, m) {
   anchor.classList.add("open");
   hfMenuEl.classList.add("open");
   const r = anchor.getBoundingClientRect();
+  hfMenuAnchorRect = { top: r.top, left: r.left };
   const mw = hfMenuEl.offsetWidth, mh = hfMenuEl.offsetHeight;
   let top = r.bottom + 6;
   if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
@@ -91,7 +89,7 @@ export function openHfMenu(anchor, m) {
   hfMenuEl.style.top = top + "px";
   hfMenuEl.style.right = right + "px";
   const first = hfMenuEl.querySelector("a");
-  if (first) first.focus();
+  if (first) first.focus({ preventScroll: true });
 }
 
 export function toggleHfMenu(anchor, m) {
@@ -103,7 +101,14 @@ document.addEventListener("mousedown", (e) => {
   if (hfMenuAnchor && !e.target.closest("#hf-menu") && !e.target.closest(".hf-link")) closeHfMenu();
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHfMenu(); });
-document.addEventListener("scroll", closeHfMenu, true);
+document.addEventListener("scroll", () => {
+  if (!hfMenuAnchor || !hfMenuAnchorRect) return;
+  // Queued scroll events or scrolling inside the menu must not dismiss a
+  // newly opened popover whose anchor has not actually moved.
+  const rect = hfMenuAnchor.getBoundingClientRect();
+  if (Math.abs(rect.top - hfMenuAnchorRect.top) > 1 ||
+      Math.abs(rect.left - hfMenuAnchorRect.left) > 1) closeHfMenu();
+}, true);
 window.addEventListener("resize", closeHfMenu);
 
 export function renderModelList() {
@@ -126,24 +131,38 @@ export function renderModelList() {
       const usable = modelConfigured(m);
       const card = document.createElement("div");
       card.className = "card" + (m.id === selectedModelId ? " selected" : "") + (usable ? "" : " unconfigured");
-      card.innerHTML = `<div class="card-title">${esc(I18N.pick(m, "displayName"))}${usable ? "" : ` <span class="badge unconfigured">${esc(t("model.unconfigured"))}</span>`}<button class="dl-link" title="${esc(t("dl.cardBtn"))}">⬇</button>${m.hfUrl ? `<button class="hf-link" title="${esc(t("model.hfRepo"))}">HF ▾</button>` : ""}</div>
+      card.innerHTML = `<div class="card-title">${esc(I18N.pick(m, "displayName"))}${usable ? "" : ` <span class="badge unconfigured">${esc(t("model.unconfigured"))}</span>`}<button class="dl-link" title="${esc(t("dl.cardBtn"))}" aria-label="${esc(t("dl.cardBtn"))}">⬇</button>${m.hfUrl ? `<button class="hf-link" title="${esc(t("model.hfRepo"))}" aria-label="${esc(t("model.hfRepo"))}">HF ▾</button>` : ""}</div>
         <div class="card-family">${esc(m.family)} <span class="cat-badge cat-${cat}">${esc(categoryName(cat))}</span></div>
         <div class="card-desc">${esc(I18N.pick(m, "description"))}</div>`;
       if (!usable) card.title = t("model.unconfiguredTip");
+      const pick = document.createElement("button");
+      pick.type = "button";
+      pick.className = "model-select-target";
+      pick.dataset.modelId = m.id;
+      pick.setAttribute("aria-label", `${t("model.select")}: ${I18N.pick(m, "displayName")} · ${categoryName(cat)}${usable ? "" : " · " + t("model.unconfigured")}`);
+      if (m.id === selectedModelId) pick.setAttribute("aria-current", "true");
+      card.prepend(pick);
+      pick.onclick = () => {
+        if ($("left").classList.contains("open")) {
+          closeDrawer();
+          $("menu-toggle").focus({ preventScroll: true });
+        } else if (m.id !== selectedModelId) pendingModelFocus = m.id;
+        go(modelRoute(m.id));
+      };
       card.querySelector(".dl-link").onclick = (e) => { e.stopPropagation(); openModelDlModal(m); };
       const hfBtn = card.querySelector(".hf-link");
       if (hfBtn) hfBtn.onclick = (e) => { e.stopPropagation(); toggleHfMenu(hfBtn, m); };
-      card.onclick = () => {
-        // 经路由选择模型：URL 同步为 #/model/<id>，前进/后退可还原
-        go(modelRoute(m.id));
-      };
       list.appendChild(card);
     }
   }
+  if (pendingModelFocus) {
+    [...list.querySelectorAll(".model-select-target")]
+      .find(button => button.dataset.modelId === pendingModelFocus)?.focus({ preventScroll: true });
+    pendingModelFocus = null;
+  }
 }
 
-/* 经路由选择模型（#/model/<id>）。模型清单尚未到达时先把 id 记进路由意图，
-   等 loadModels 拿到清单后由它兑现（见 loadModels 里的 getPendingModelId）。 */
+/* Apply model routes; defer selection until catalog loads. */
 export function selectModelById(id) {
   if (!models.length) { setPendingModelId(id); return; }
   const m = models.find(x => x.id === id);

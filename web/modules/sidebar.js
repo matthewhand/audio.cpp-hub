@@ -1,12 +1,5 @@
-/* web/modules/sidebar.js — 操作历史侧栏
- *
- * 页头 🕘 打开的全屏面板，也是任务与历史的统一列表：历史记录加载与渲染、
- * 分组（重命名 / 删除 / 移动）与折叠、分组菜单、四要素详情、隐私模式遮罩，
- * 以及把任务行与历史行组装成同一份列表（renderSidebarList，含行节点复用）。
- * 历史记录回填 TTS 表单走 panels 模块的 fillTtsForm。
- *
- * 同 tasks.js：任务行需要本模块的队列接口，本模块的任务行又需要队列，
- * 两模块之间是一处刻意的循环依赖（只在运行期回调里互相调用）。 */
+/* History sidebar: combined task/history view and grouped privacy-aware rows.
+ * Runtime-only imports from tasks.js avoid eager cyclic evaluation. */
 
 import { bindMenuKeys, focusDialog, hideBusy, renderEmptyState, renderStateError, restoreDialogFocus, showBusy, showSkeleton, showToast } from "./async-ui.js";
 import { $, Api, el, markRowEnter, t } from "./dom.js";
@@ -598,6 +591,7 @@ export async function deleteHistoryItem(taskId) {
       if (!e || e.status !== 404) throw e;
     }
     taskViews.delete(taskId);
+    window.dispatchEvent(new Event("hub:task-views"));
     taskDetails.delete(taskId);
     historyDetails.delete(taskId);
     loadHistory();
@@ -620,6 +614,7 @@ export async function deleteFinishedTasks(modelId) {
     }
     taskViews.delete(task.id);
     taskDetails.delete(task.id);
+    window.dispatchEvent(new Event("hub:task-views"));
   }
 }
 
