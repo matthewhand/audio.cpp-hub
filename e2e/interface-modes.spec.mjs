@@ -222,8 +222,9 @@ test("Flow model drawer transfers and restores keyboard focus", async ({ page })
 test("Cockpit import failure is bilingual, recoverable and retains the draft", async ({ page }) => {
   const moduleRequests = [];
   page.on("request", (request) => {
-    if (new URL(request.url()).pathname.endsWith("/operator-studio.js"))
+    if (new URL(request.url()).pathname.endsWith("/operator-studio.js")) {
       moduleRequests.push(request.url());
+    }
   });
   await setup(page);
   await page.locator("#tts-text").fill("Keep this unsent draft");
@@ -244,7 +245,10 @@ test("Cockpit import failure is bilingual, recoverable and retains the draft", a
   await page.locator("#studio-operate").click();
   await expect(page.locator("#operator-feed-value")).toHaveText("已更新");
   await page.evaluate(
-    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    () =>
+      new Promise((resolve) =>
+        globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(resolve))
+      )
   );
   await expect(page.locator("#operator-load-error")).toHaveCount(0);
   expect(moduleRequests).toEqual(recoveredRequests);
