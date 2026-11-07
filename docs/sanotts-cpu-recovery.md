@@ -87,8 +87,8 @@ model files from `.sanotts-cpu-models/` into the named model volume, preserving
 their filenames, and set `AUDIOCPP_WEIGHTS` to the corresponding path under
 `/audio.cpp/models`. The recipe does not import those files automatically.
 Changing `AUDIOCPP_STARTUP_MODE` to `normal` or `AUDIOCPP_WARMUP_POLICY` to
-`required` can start model work. Model import and container inference have not
-been exercised by this PR; they remain container acceptance steps.
+`required` can start model work. Model import and container inference passed the isolated Linux acceptance run
+below.
 
 Failed builds preserve their outputs for inspection and refuse to overwrite
 them on retry. Use fresh output, model and work directories for a new build;
@@ -109,6 +109,33 @@ partial downloads are not accepted as verified inputs.
   into the ignored local package; do not publish them or an image containing
   them until the publisher clarifies the applicable terms.
 - audio.cpp-hub remains MIT-licensed.
+
+## Linux container acceptance (2026-11-07)
+
+Tested implementation: `f5d5bbbaebf539c258ccc7eb1257b1135a0a8ea5`. The test image stayed local:
+`sha256:bb48c786cd75ede12702cea92036ae9c6128ac25e20ce732500fec97ed57a3b8`.
+
+- Docker 29.1.3 / Compose 2.40.3, Linux AMD64 CPU, two CPUs and a 4 GiB memory
+  limit; no GPU or existing application data was attached.
+- A clean pinned native build completed 524 steps and both SanoTTS upstream
+  tests. The package passed Go tests, race tests, vet and checksum verification.
+- Default hub-only startup was healthy with zero instances and an empty,
+  read-only model volume.
+- Verified model files were imported into a new named volume. Normal startup
+  and required warm-up then produced non-silent 24 kHz mono PCM16 audio.
+- Real API and browser submissions completed; the browser decoded and played
+  its exact task's history audio. The API sample was 3.0293 seconds.
+- Recreating the container preserved both earlier WAVs byte-for-byte and their
+  completed task records. New synthesis worked after recreation.
+- After disconnecting networking, stopping the engine and clearing its temporary
+  cache, a fresh engine loaded and synthesized with only loopback available.
+- Runtime hub/engine hashes matched the generated package; root and model
+  filesystems rejected writes. The container stopped normally without OOM.
+
+The run exposed and fixed the pinned eSpeak build-path limit and aligned the
+packaged hub's model directory with `/audio.cpp/models`. The API/offline sample
+SHA-256 was `2f91be6265b4967b670f82a4a345da96425c5d3e9668ebbbeb5a96db116828dc`.
+Full evidence and the exact image identity are recorded in the PR description.
 
 ## Acceptance boundary
 
