@@ -84,3 +84,87 @@ test("下载面板懒加载：首屏不取 downloads.js chunk，角标先动，�
   await expect(page.locator("#downloads-modal")).toBeVisible();
   expect(chunkRequests.length).toBe(before);
 });
+
+const NEMOTRON_PRIMARY_FILES = [
+  "nemotron-transcribe-30b-a4b-experts-IQ4_NL.gguf",
+  "nemotron-transcribe-30b-a4b-experts-Q4_K_S.gguf",
+  "nemotron-transcribe-30b-a4b-experts-Q3_K_S.gguf",
+  "nemotron-transcribe-30b-a4b-experts-Q2_K.gguf"
+];
+for (const filename of NEMOTRON_PRIMARY_FILES) {
+  test("completed Nemotron download fills decoder file: " + filename, async ({ page }) => {
+    const targetDir = "NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-GGUF";
+    const weightsPath = "models/" + targetDir + "/" + filename;
+    const backend = new MockBackend({
+      downloads: [
+        {
+          id: "nemotron-download",
+          modelId: "nemotron_transcribe",
+          targetDir,
+          weightsPath,
+          status: "DONE",
+          percent: 100,
+          downloadedBytes: 1000,
+          totalBytes: 1000,
+          completedFiles: 2,
+          fileCount: 2
+        }
+      ]
+    });
+    await openApp(page, backend, { modelId: "nemotron_transcribe", lang: "en" });
+    await page.locator("#downloads-btn").click();
+    await page.locator("#dl-list .dl-fill").click();
+    await expect(page.locator("#launch-weights")).toHaveValue(weightsPath);
+    expect(await page.evaluate(() => localStorage.getItem("hub-weights-nemotron_transcribe"))).toBe(
+      weightsPath
+    );
+  });
+}
+test("completed legacy download retains its directory launch path", async ({ page }) => {
+  const backend = new MockBackend({
+    downloads: [
+      {
+        id: "legacy-download",
+        modelId: "supertonic",
+        targetDir: "supertonic",
+        status: "DONE",
+        percent: 100,
+        downloadedBytes: 1000,
+        totalBytes: 1000,
+        completedFiles: 2,
+        fileCount: 2
+      }
+    ]
+  });
+  await openApp(page, backend, { modelId: "supertonic", lang: "en" });
+  await page.locator("#downloads-btn").click();
+  await page.locator("#dl-list .dl-fill").click();
+  await expect(page.locator("#launch-weights")).toHaveValue("models/supertonic");
+});
+
+test("completed legacy package uses its configured directory from the server", async ({ page }) => {
+  const weightsPath = "/private/weights/Supertonic-3-GGUF";
+  const backend = new MockBackend({
+    downloads: [
+      {
+        id: "legacy-configured",
+        modelId: "supertonic",
+        targetDir: "Supertonic-3-GGUF",
+        weightsPath,
+        status: "DONE",
+        percent: 100,
+        downloadedBytes: 1000,
+        totalBytes: 1000,
+        completedFiles: 1,
+        fileCount: 1
+      }
+    ]
+  });
+  await openApp(page, backend, { modelId: "supertonic", lang: "en" });
+  await page.locator("#downloads-btn").click();
+  await page.locator("#dl-list .dl-fill").click();
+  await expect(page.locator("#launch-weights")).toHaveValue(weightsPath);
+  expect(await page.evaluate(() => localStorage.getItem("hub-weights-supertonic"))).toBe(
+    weightsPath
+  );
+});

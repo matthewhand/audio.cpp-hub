@@ -95,7 +95,7 @@ export function renderDownloadList() {
     const fillBtn = row.querySelector(".dl-fill");
     if (fillBtn) {
       fillBtn.onclick = () => {
-        const path = "models/" + d.targetDir;
+        const path = d.weightsPath || "models/" + d.targetDir;
         localStorage.setItem("hub-weights-" + d.modelId, path);
         if (selectedModelId === d.modelId) $("launch-weights").value = path;
         showToast("info", t("dl.weightsFilled", { path }));

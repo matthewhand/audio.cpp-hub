@@ -614,6 +614,68 @@ func (m *DownloadManager) Delete(id string, purge bool) error {
 	return nil
 }
 
+// completedDownloadWeightsPath returns an explicit package entry point only
+// when the completed task contains that file. Legacy packages keep directory launch
+// under the configured model root after every declared file is complete.
+func (m *DownloadManager) completedDownloadWeightsPath(t *DownloadTask) string {
+	if t.Status != dlStatusDone || t.PackageID == "" {
+		return ""
+	}
+	pkg := resolvePackage(findPackageFamily(t.ModelID), t.PackageID)
+	if pkg == nil || pkg.TargetDir != t.TargetDir {
+		return ""
+	}
+	if _, err := idvalidate.TargetDir(t.TargetDir); err != nil {
+		return ""
+	}
+	if pkg.PrimaryFile == "" {
+		if len(pkg.Files) == 0 {
+			return ""
+		}
+		for _, declared := range pkg.Files {
+			local := declared.Local
+			if local == "" {
+				local = declared.Remote
+			}
+			clean, err := idvalidate.FilePath(local)
+			if err != nil || clean != local {
+				return ""
+			}
+			found := false
+			for _, file := range t.Files {
+				if file != nil && file.Completed && file.Path == local {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return ""
+			}
+		}
+		return filepath.ToSlash(filepath.Join(m.modelsDir, t.TargetDir))
+	}
+	primary, err := idvalidate.FilePath(pkg.PrimaryFile)
+	if err != nil || primary != pkg.PrimaryFile {
+		return ""
+	}
+	declared := false
+	for _, f := range pkg.Files {
+		if f.Local == primary {
+			declared = true
+			break
+		}
+	}
+	if !declared {
+		return ""
+	}
+	for _, f := range t.Files {
+		if f != nil && f.Completed && f.Path == primary {
+			return filepath.ToSlash(m.finalPath(t.TargetDir, primary))
+		}
+	}
+	return ""
+}
+
 // List 全部任务简要列表（新→旧），附带进度与速率。
 func (m *DownloadManager) List() []map[string]any {
 	m.mu.Lock()
@@ -637,6 +699,9 @@ func (m *DownloadManager) List() []map[string]any {
 		}
 		if t.ModelID != "" {
 			o["modelId"] = t.ModelID
+		}
+		if weights := m.completedDownloadWeightsPath(t); weights != "" {
+			o["weightsPath"] = weights
 		}
 		if t.Source != "" {
 			o["source"] = t.Source
@@ -1376,6 +1441,9 @@ func (m *DownloadManager) detailLocked(t *DownloadTask) map[string]any {
 	}
 	if t.PackageID != "" {
 		o["packageId"] = t.PackageID
+	}
+	if weights := m.completedDownloadWeightsPath(t); weights != "" {
+		o["weightsPath"] = weights
 	}
 	if t.Source != "" {
 		o["source"] = t.Source
