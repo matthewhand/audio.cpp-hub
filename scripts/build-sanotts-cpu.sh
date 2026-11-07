@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCK="$ROOT/deploy/sanotts-cpu/upstream.lock.json"
 OUT_DIR="${SANOTTS_OUTPUT_DIR:-$ROOT/.sanotts-cpu-package}"
 MODEL_OUTPUT_DIR="${SANOTTS_MODEL_OUTPUT_DIR:-$ROOT/.sanotts-cpu-models}"
-WORK_DIR="${SANOTTS_WORK_DIR:-$ROOT/.sanotts-cpu-work}"
+WORK_DIR="${SANOTTS_WORK_DIR:-}"
 REUSE="${SANOTTS_REUSE_EXISTING:-0}"
 JOBS="${SANOTTS_BUILD_JOBS:-4}"
 
@@ -21,6 +21,15 @@ fetch() {
   local url="$1" file="$2"
   mkdir -p "$(dirname "$file")"
   curl -fL --retry 2 --connect-timeout 15 --max-time 240 -o "$file" "$url"
+}
+verify_espeak_build_path() {
+  python3 - "$1/_deps/espeak-static/build/espeak-ng-data" <<'PY'
+import os
+import sys
+# The pinned eSpeak implementation stores this path in a 160-byte buffer.
+if len(os.fsencode(sys.argv[1])) >= 160:
+    sys.exit(1)
+PY
 }
 copy_license_tree() {
   local source="$1" destination="$2" path relative
@@ -48,9 +57,17 @@ command -v realpath >/dev/null || fail "realpath is required"
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] \
   || fail "this build recipe targets Linux x86_64 only"
 [[ "$JOBS" =~ ^[1-8]$ ]] || fail "SANOTTS_BUILD_JOBS must be 1..8"
+if [[ -z "$WORK_DIR" ]]; then
+  WORK_DIR="$(mktemp -d /tmp/sanotts-cpu.XXXXXXXX)"
+fi
+printf 'WORK_DIR=%s\n' "$WORK_DIR"
 OUT_CANON="$(realpath -m "$OUT_DIR")"
 MODEL_CANON="$(realpath -m "$MODEL_OUTPUT_DIR")"
 WORK_CANON="$(realpath -m "$WORK_DIR")"
+if [[ "$REUSE" != 1 ]]; then
+  verify_espeak_build_path "$WORK_CANON/audio-build" \
+    || fail "eSpeak build path is too long; set SANOTTS_WORK_DIR to a short path under /tmp"
+fi
 [[ "$OUT_CANON" != "$MODEL_CANON" ]] || fail "package and model output directories must differ"
 case "$MODEL_CANON/" in "$OUT_CANON/"*) fail "model output must be outside the Docker build context" ;; esac
 case "$OUT_CANON/" in "$MODEL_CANON/"*) fail "package output must be outside the model output directory" ;; esac
@@ -129,6 +146,8 @@ fi
   || fail "unexpected Go version: $("$GO_BIN" version)"
 AUDIO_SRC="$(realpath -e "$AUDIO_SRC")"
 AUDIO_BUILD="$(realpath -m "$AUDIO_BUILD")"
+verify_espeak_build_path "$AUDIO_BUILD" \
+  || fail "eSpeak build path is too long; use a shorter SANOTTS_BUILD_DIR"
 [[ "$(git -C "$AUDIO_SRC" rev-parse HEAD)" == "$AUDIO_COMMIT" ]] \
   || fail "audio.cpp source commit mismatch"
 [[ "$(git -C "$AUDIO_SRC/$SUBMODULE_PATH" rev-parse HEAD)" == "$SUBMODULE_COMMIT" ]] \

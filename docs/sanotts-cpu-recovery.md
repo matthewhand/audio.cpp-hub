@@ -32,6 +32,10 @@ The build recipe:
 scripts/build-sanotts-cpu.sh
 ```
 
+Native compilation uses a generated short `/tmp/sanotts-cpu.*` work directory,
+printed as `WORK_DIR`. A custom `SANOTTS_WORK_DIR` or reused build directory must
+keep the pinned eSpeak data path below its 160-byte limit.
+
 The default runtime package is `.sanotts-cpu-package/`; verified model files
 and their licence notices are written separately to `.sanotts-cpu-models/`.
 Both are ignored by Git and must remain local. The script builds audio.cpp

@@ -159,3 +159,20 @@ for fault in dirty-main dirty-submodule untracked; do
   grep -q 'source tree is dirty' "$sandbox/$fault-output"
   echo "PASS negative: $fault source rejected"
 done
+
+# An overly long native build path must fail before downloads or output creation.
+mkdir -p "$sandbox/no-network"
+printf '#!/bin/sh\nexit 97\n' > "$sandbox/no-network/curl"
+chmod +x "$sandbox/no-network/curl"
+long_work="$sandbox/$(printf 'long%.0s' {1..60})"
+if PATH="$sandbox/no-network:$PATH" \
+   SANOTTS_REUSE_EXISTING=0 \
+   SANOTTS_WORK_DIR="$long_work" \
+   SANOTTS_OUTPUT_DIR="$sandbox/path-package" \
+   SANOTTS_MODEL_OUTPUT_DIR="$sandbox/path-models" \
+   bash "$BUILD_SCRIPT" > "$sandbox/path-output" 2>&1; then
+  echo "FAIL oversized build path was accepted" >&2; exit 1
+fi
+grep -q 'eSpeak build path is too long' "$sandbox/path-output"
+[[ ! -e "$sandbox/path-package" && ! -e "$sandbox/path-models" ]]
+echo "PASS negative: oversized native build path rejected before downloads"
