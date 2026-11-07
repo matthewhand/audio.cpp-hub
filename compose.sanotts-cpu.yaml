@@ -19,6 +19,7 @@ services:
     ports:
       - "${SANOTTS_BIND_ADDRESS:-127.0.0.1}:${SANOTTS_PORT:-18081}:18080"
     environment:
+      XDG_CACHE_HOME: /tmp/audio.cpp-cache
       AUDIOCPP_BACKEND: cpu
       AUDIOCPP_DEVICE: "0"
       AUDIOCPP_THREADS: "${AUDIOCPP_THREADS:-4}"

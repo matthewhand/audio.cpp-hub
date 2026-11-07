@@ -38,7 +38,7 @@ run_case() (
   }
   write_cmake_cache() {
     mkdir -p "$AUDIO_BUILD"
-    : > "$AUDIO_BUILD/CMakeCache.txt"
+    printf 'CMAKE_HOME_DIRECTORY:INTERNAL=%s\n' "$AUDIO_SRC" > "$AUDIO_BUILD/CMakeCache.txt"
     local opt setting key value kind
     for opt in "$@"; do
       [[ "$opt" == -D*=* ]] || continue
@@ -63,13 +63,9 @@ run_case() (
     fi
   }
   cmake() {
-    if [[ "$REUSE" == 1 ]]; then
-      echo "unexpected configure/build in reuse mode" >&2
-      return 1
-    fi
     case "$1" in
-      -S) write_cmake_cache "$@" ;;
-      --build) write_build_artifacts ;;
+      -S) write_cmake_cache "$@"; touch "$AUDIO_BUILD/configured" ;;
+      --build) write_build_artifacts; printf 'current fixture\n' > "$AUDIO_BUILD/runtime-binary"; touch "$AUDIO_BUILD/built" ;;
       *) echo "unexpected mocked CMake invocation: $*" >&2; return 1 ;;
     esac
   }
@@ -81,16 +77,22 @@ run_case() (
     done < <(jq -r '.audio_cpp.cmake_options | to_entries[] | "\(.key)\t\(.value)"' "$LOCK")
     write_cmake_cache "${opts[@]}"
     write_build_artifacts
+    printf 'stale fixture\n' > "$AUDIO_BUILD/runtime-binary"
+    if [[ "$BAD_ESPEAK" == wrong-source ]]; then
+      sed -i 's|CMAKE_HOME_DIRECTORY:INTERNAL=.*|CMAKE_HOME_DIRECTORY:INTERNAL=/other/source|' "$AUDIO_BUILD/CMakeCache.txt"
+    fi
     if [[ "$BAD_ESPEAK" == wrong-cache ]]; then
       printf 'AUDIOCPP_MODEL_SET:STRING=wrong\n' > "$AUDIO_BUILD/CMakeCache.txt"
     fi
   fi
   source "$phase"
+  [[ -f "$AUDIO_BUILD/configured" && -f "$AUDIO_BUILD/built" ]] || fail "reused output was not rebuilt"
+  grep -qx 'current fixture' "$AUDIO_BUILD/runtime-binary" || fail "stale runtime binary was packaged"
 )
 run_case fresh 0 0
 echo "PASS fresh build: verification executes after generated artifacts exist"
 run_case reuse 1 0
-echo "PASS reuse: pre-existing verified artifacts accepted"
+echo "PASS reuse: stale artifact rebuilt from the verified source"
 if run_case invalid 0 1 > "$sandbox/invalid-output" 2>&1; then
   echo "FAIL corrupted eSpeak archive was accepted" >&2
   exit 1
@@ -102,7 +104,7 @@ grep -q 'SHA mismatch:' "$sandbox/invalid-output" || {
 }
 echo "PASS negative: corrupted generated eSpeak archive rejected"
 
-for spec in "missing-copying:0:eSpeak-ng COPYING file missing" "wrong-cache:1:CMake cache does not match locked option"; do
+for spec in "missing-copying:0:eSpeak-ng COPYING file missing" "wrong-cache:1:CMake cache does not match locked option" "wrong-source:1:CMake source directory mismatch"; do
   IFS=: read -r fault reuse expected <<< "$spec"
   if run_case "$fault" "$reuse" "$fault" > "$sandbox/$fault-output" 2>&1; then
     echo "FAIL $fault was accepted" >&2
@@ -113,4 +115,47 @@ for spec in "missing-copying:0:eSpeak-ng COPYING file missing" "wrong-cache:1:CM
     exit 1
   }
   echo "PASS negative: $fault rejected"
+done
+
+# Exercise the production source verification with real, isolated Git trees.
+source_phase="$sandbox/source-phase.sh"
+python3 - "$BUILD_SCRIPT" "$source_phase" <<'PY'
+from pathlib import Path
+import sys
+source = Path(sys.argv[1]).read_text()
+start = source.index('[[ "$(git -C "$AUDIO_SRC" rev-parse HEAD)"')
+end = source.index("\nMODEL_SRC_CANON=", start)
+Path(sys.argv[2]).write_text(source[start:end] + "\n")
+PY
+source_case() (
+  set -Eeuo pipefail
+  local fault="$1"
+  AUDIO_SRC="$sandbox/git-$fault"
+  SUBMODULE_PATH=frontend
+  mkdir -p "$AUDIO_SRC/$SUBMODULE_PATH"
+  git init -q "$AUDIO_SRC"
+  git init -q "$AUDIO_SRC/$SUBMODULE_PATH"
+  printf 'source fixture\n' > "$AUDIO_SRC/$SUBMODULE_PATH/native.cpp"
+  git -C "$AUDIO_SRC/$SUBMODULE_PATH" add native.cpp
+  git -C "$AUDIO_SRC/$SUBMODULE_PATH" -c user.name=Fixture -c user.email=fixture@example.invalid commit -qm fixture
+  SUBMODULE_COMMIT="$(git -C "$AUDIO_SRC/$SUBMODULE_PATH" rev-parse HEAD)"
+  printf 'source fixture\n' > "$AUDIO_SRC/native.cpp"
+  git -C "$AUDIO_SRC" add native.cpp frontend 2>/dev/null
+  git -C "$AUDIO_SRC" -c user.name=Fixture -c user.email=fixture@example.invalid commit -qm fixture
+  AUDIO_COMMIT="$(git -C "$AUDIO_SRC" rev-parse HEAD)"
+  case "$fault" in
+    dirty-main) printf 'modified\n' >> "$AUDIO_SRC/native.cpp" ;;
+    dirty-submodule) printf 'modified\n' >> "$AUDIO_SRC/$SUBMODULE_PATH/native.cpp" ;;
+    untracked) printf 'untracked\n' > "$AUDIO_SRC/extra.cpp" ;;
+  esac
+  fail() { echo "$*" >&2; exit 1; }
+  source "$source_phase"
+)
+source_case clean
+for fault in dirty-main dirty-submodule untracked; do
+  if source_case "$fault" > "$sandbox/$fault-output" 2>&1; then
+    echo "FAIL $fault source was accepted" >&2; exit 1
+  fi
+  grep -q 'source tree is dirty' "$sandbox/$fault-output"
+  echo "PASS negative: $fault source rejected"
 done

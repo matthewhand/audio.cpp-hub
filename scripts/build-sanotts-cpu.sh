@@ -127,10 +127,17 @@ fi
 [[ -x "$GO_BIN" ]] || fail "Go toolchain is not executable: $GO_BIN"
 [[ "$("$GO_BIN" version)" == "go version go$GO_VERSION linux/amd64" ]] \
   || fail "unexpected Go version: $("$GO_BIN" version)"
+AUDIO_SRC="$(realpath -e "$AUDIO_SRC")"
+AUDIO_BUILD="$(realpath -m "$AUDIO_BUILD")"
 [[ "$(git -C "$AUDIO_SRC" rev-parse HEAD)" == "$AUDIO_COMMIT" ]] \
   || fail "audio.cpp source commit mismatch"
 [[ "$(git -C "$AUDIO_SRC/$SUBMODULE_PATH" rev-parse HEAD)" == "$SUBMODULE_COMMIT" ]] \
   || fail "audio.cpp server-frontends submodule mismatch"
+for source_tree in "$AUDIO_SRC" "$AUDIO_SRC/$SUBMODULE_PATH"; do
+  source_status="$(git -C "$source_tree" status --porcelain --untracked-files=all --ignore-submodules=none)" \
+    || fail "cannot inspect source tree: $source_tree"
+  [[ -z "$source_status" ]] || fail "source tree is dirty: $source_tree"
+done
 MODEL_SRC_CANON="$(realpath -m "$MODEL_DIR")"
 case "$MODEL_SRC_CANON/" in "$OUT_CANON/"*) fail "model source directory must be outside the Docker build context" ;; esac
 
@@ -151,13 +158,7 @@ while IFS=$'\t' read -r key value; do
   cmake_options+=("-D$key=$value")
 done < <(jq -r '.audio_cpp.cmake_options | to_entries[] | "\(.key)\t\(.value)"' "$LOCK")
 
-if [[ "$REUSE" != 1 ]]; then
-  cmake -S "$AUDIO_SRC" -B "$AUDIO_BUILD" -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-    "${cmake_options[@]}"
-  CMAKE_BUILD_PARALLEL_LEVEL="$JOBS" cmake --build "$AUDIO_BUILD" \
-    --target audiocpp_server sanotts_frontend_test sanotts_neon_decoder_test --parallel "$JOBS"
-else
+if [[ "$REUSE" == 1 ]]; then
   [[ -f "$AUDIO_BUILD/CMakeCache.txt" ]] || fail "CMake cache missing: $AUDIO_BUILD"
   for option in "${cmake_options[@]}"; do
     setting="${option#-D}"
@@ -167,7 +168,17 @@ else
     grep -Fqx "$key:$kind=$value" "$AUDIO_BUILD/CMakeCache.txt" \
       || fail "CMake cache does not match locked option $key=$value"
   done
+  grep -Fqx "CMAKE_HOME_DIRECTORY:INTERNAL=$AUDIO_SRC" "$AUDIO_BUILD/CMakeCache.txt" \
+    || fail "CMake source directory mismatch"
 fi
+
+# Reconfigure and incrementally build reused trees too: a pinned checkout alone
+# does not establish which revision produced pre-existing binaries.
+cmake -S "$AUDIO_SRC" -B "$AUDIO_BUILD" -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+  "${cmake_options[@]}"
+CMAKE_BUILD_PARALLEL_LEVEL="$JOBS" cmake --build "$AUDIO_BUILD" \
+  --target audiocpp_server sanotts_frontend_test sanotts_neon_decoder_test --parallel "$JOBS"
 
 # CMake generates these files during configure/build on a fresh checkout.
 # Verify after both fresh and reuse paths, before any tests or packaging.

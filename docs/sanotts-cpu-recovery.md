@@ -21,7 +21,10 @@ existing installation data.
 `deploy/sanotts-cpu/upstream.lock.json` records the Go toolchain, audio.cpp
 source commit and submodule commit, eSpeak-ng source hash, SanoTTS Hugging Face
 revision, and independently checked SHA-256 hashes for the GGUF, config, model
-card, and upstream licence files.
+card, and upstream licence files. A pinned Alpine stage supplies only the CA
+bundle needed for the minimal Ubuntu image's first HTTPS package fetch; its
+bundle hash is checked before APT runs. All runtime packages still come from the
+pinned Ubuntu snapshot, with TLS and archive-signature verification enabled.
 
 The build recipe:
 
@@ -38,11 +41,12 @@ resolution; runs the hub's Go tests, race tests and vet; and packages the
 runtime, source archives and licence notices. The model files are not part of
 the Docker build context. It never builds or starts a container.
 
-A previously verified local build can be reused without recompiling the
-upstream engine by setting `SANOTTS_REUSE_EXISTING=1` and supplying
+A local build directory can be reused with incremental compilation by setting `SANOTTS_REUSE_EXISTING=1` and supplying
 `SANOTTS_SOURCE_DIR`, `SANOTTS_BUILD_DIR`, `SANOTTS_MODEL_DIR`, `SANOTTS_GO_BIN`,
-and optionally `SANOTTS_LICENSE_DIR`. This mode still verifies the pinned
-commits, hashes, CMake cache, upstream tests, hub tests and package checksums.
+and optionally `SANOTTS_LICENSE_DIR`. This mode requires clean source trees at the pinned commits and a CMake cache tied
+to that source directory with the locked options. It reconfigures and incrementally
+rebuilds the engine before verifying hashes, upstream tests, hub tests and package
+checksums; unchanged objects can be reused.
 
 ## Isolated Compose candidate
 
@@ -56,6 +60,7 @@ Compose file. Its defaults are deliberately non-inferential:
 - startup defaults to `hub-only`, with no model weights path configured;
 - the executable registry selects the CPU server entry explicitly;
 - warm-up defaults to `skip`;
+- the eSpeak cache uses writable temporary storage under `/tmp`;
 - restart policy is `no`;
 - health checks only the hub API and do not claim model readiness;
 - no GPU device or privileged mode is requested.

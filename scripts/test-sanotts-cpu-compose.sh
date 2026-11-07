@@ -56,6 +56,11 @@ assert all(m["type"] == "volume" for m in mounts), mounts
 assert all("source" in m for m in mounts)
 model_mount = next(m for m in mounts if m["target"] == "/audio.cpp/models")
 assert model_mount["read_only"] is True
+from pathlib import PurePosixPath
+cache = PurePosixPath(service["environment"].get("XDG_CACHE_HOME", ""))
+writable = [PurePosixPath(m["target"]) for m in mounts if not m.get("read_only", False)]
+writable += [PurePosixPath(m.split(":")[0]) for m in service["tmpfs"]]
+assert cache.is_absolute() and any(root == cache or root in cache.parents for root in writable), "eSpeak cache needs writable storage"
 
 assert lock["target"] == {"os": "linux", "architecture": "amd64", "backend": "cpu"}
 assert re.fullmatch(r"[0-9a-f]{40}", lock["audio_cpp"]["commit"])
@@ -76,6 +81,14 @@ assert lock["runtime_image"]["digest"].startswith("sha256:")
 assert lock["runtime_image"]["platform"] == "linux/amd64"
 assert f"FROM {lock['runtime_image']['reference']}@{lock['runtime_image']['digest']}" in dockerfile
 assert lock["runtime_image"]["apt_snapshot"] in dockerfile
+ca = lock["bootstrap_ca_image"]
+assert ca["platform"] == "linux/amd64"
+assert f"FROM {ca['reference']}@{ca['digest']} AS certificates" in dockerfile
+assert f"COPY --from=certificates {ca['bundle_path']} /etc/ssl/certs/ca-certificates.crt" in dockerfile
+assert re.fullmatch(r"[0-9a-f]{64}", ca["bundle_sha256"])
+assert dockerfile.index(ca["bundle_sha256"]) < dockerfile.index("apt-get ")
+assert "sha256sum --check --status" in dockerfile
+assert "Verify-Peer=false" not in dockerfile and "trusted=yes" not in dockerfile
 assert "COPY models/" not in dockerfile
 assert "SANOTTS_MODEL_OUTPUT_DIR" in build_script
 assert "$OUT_DIR/models" not in build_script

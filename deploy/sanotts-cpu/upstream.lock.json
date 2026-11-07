@@ -73,5 +73,12 @@
     "platform": "linux/amd64",
     "digest": "sha256:78d4744ead1f5b19b04d0df558ab182a5300903900755e515b2ca4d10eb2044d",
     "apt_snapshot": "20261030T000000Z"
+  },
+  "bootstrap_ca_image": {
+    "reference": "alpine:3.22.2",
+    "digest": "sha256:85f2b723e106c34644cd5851d7e81ee87da98ac54672b29947c052a45d31dc2f",
+    "platform": "linux/amd64",
+    "bundle_path": "/etc/ssl/certs/ca-certificates.crt",
+    "bundle_sha256": "657ca6ba4bc43138f89de75fb63794cbfaa897e0e110b069fd1367bd66a5bb6c"
   }
 }
