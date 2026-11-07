@@ -2306,3 +2306,8 @@ html.theme-switching header {
 .studio-mode-choices { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
 .studio-mode-button { min-width:0; padding:8px 4px; }
 }
+
+/* Inactive controls stay hidden even if optional mode styles fail to load. */
+#workspace[data-interface-mode="cockpit"] > :not(#studio-mode-switch):not(#operator-workspace):not(#activity-queue-panel) {
+  display: none !important;
+}

@@ -220,6 +220,11 @@ test("Flow model drawer transfers and restores keyboard focus", async ({ page })
 });
 
 test("Cockpit import failure is bilingual, recoverable and retains the draft", async ({ page }) => {
+  const moduleRequests = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/operator-studio.js"))
+      moduleRequests.push(request.url());
+  });
   await setup(page);
   await page.locator("#tts-text").fill("Keep this unsent draft");
   await page.route("**/modules/operator-studio.js", (route) => route.abort());
@@ -233,8 +238,19 @@ test("Cockpit import failure is bilingual, recoverable and retains the draft", a
   await page.locator("#operator-retry").click();
   await expect(page.locator("#operator-load-error")).toHaveCount(0);
   await expect(page.locator("#operator-feed-value")).toHaveText("已更新");
+  const recoveredRequests = [...moduleRequests];
   await page.locator("#studio-create").click();
   await expect(page.locator("#tts-text")).toHaveValue("Keep this unsent draft");
+  await page.locator("#studio-operate").click();
+  await expect(page.locator("#operator-feed-value")).toHaveText("已更新");
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  );
+  await expect(page.locator("#operator-load-error")).toHaveCount(0);
+  expect(moduleRequests).toEqual(recoveredRequests);
+  await page.locator("#studio-create").click();
+  await page.locator("#studio-operate").click();
+  await expect(page.locator("#operator-feed-value")).toHaveText("已更新");
 });
 
 test("Cockpit timeline updates on local task changes without exposing prompt text", async ({
@@ -607,3 +623,23 @@ for (const saved of [false, true]) {
     }
   );
 }
+
+test("failed interface styles preserve visibility and retry on next mode change", async ({
+  page
+}) => {
+  await setup(page);
+  await page.locator("#tts-text").fill("Retain the styled draft");
+  await page.route("**/interface-modes.css", (route) => route.abort());
+  await page.locator("#studio-operate").click();
+  await expect(page.locator("#operator-feed-value")).toHaveText("Current");
+  await expect(page.locator("#panel-tts")).toBeHidden();
+  await expect(page.locator("#toast-root [role=alert]")).toContainText("Failed to load");
+  await expect(page.locator("#interface-mode-styles")).toHaveCount(0);
+  await page.unroute("**/interface-modes.css");
+  await page.locator("#studio-create").click();
+  await page.locator("#studio-flow").click();
+  await expect
+    .poll(() => page.locator("#interface-mode-styles").evaluate((link) => Boolean(link.sheet)))
+    .toBe(true);
+  await expect(page.locator("#tts-text")).toHaveValue("Retain the styled draft");
+});

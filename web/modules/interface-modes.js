@@ -1,5 +1,6 @@
 /* Three interface modes; same DOM, state, routes and API. No mode-specific polling. */
-import { $ } from "./dom.js";
+import { $, t } from "./dom.js";
+import { showToast } from "./async-ui.js";
 import { instanceFeedState, instances } from "./instances.js";
 import { modelConfigured, models, selectedModel } from "./state.js";
 
@@ -64,6 +65,7 @@ let current = "classic";
 let initialized = false;
 let operatorRequest = 0;
 let operatorRetryIndex = 0;
+let operatorStudioPromise;
 let flowDrawerReturnFocus = null;
 
 function showOperatorLoadFailure() {
@@ -95,9 +97,11 @@ function loadOperatorStudio(retry = false) {
   const request = ++operatorRequest;
   if ($("operator-retry")) $("operator-retry").disabled = true;
   // A distinct URL retries a browser-cached failed dynamic import.
-  const loading = retry ? import(`./operator-studio.js?retry=${++operatorRetryIndex}`) :
-    import("./operator-studio.js");
-  void loading.then(({ activateOperatorStudio }) => {
+  if (!operatorStudioPromise || retry) {
+    operatorStudioPromise = retry ? import(`./operator-studio.js?retry=${++operatorRetryIndex}`) :
+      import("./operator-studio.js");
+  }
+  void operatorStudioPromise.then(({ activateOperatorStudio }) => {
     if (request !== operatorRequest || current !== "cockpit") return;
     $("operator-load-error")?.remove();
     $("operator-workspace").querySelectorAll(".operator-metrics, .operator-content, .operator-routing")
@@ -117,6 +121,10 @@ export function setInterfaceMode(mode, { persist = true } = {}) {
     stylesheet.id = "interface-mode-styles";
     stylesheet.rel = "stylesheet";
     stylesheet.href = "/interface-modes.css";
+    stylesheet.addEventListener("error", () => {
+      stylesheet.remove();
+      showToast("error", t("common.loadFailed"));
+    }, { once: true });
     document.head.append(stylesheet);
   }
   current = mode;
