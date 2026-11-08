@@ -2469,6 +2469,52 @@
     }
   },
   {
+    "id": "superwhisper_lite",
+    "family": "superwhisper_lite",
+    "hfUrl": "https://huggingface.co/handy-computer/parakeet-tdt-0.6b-v3-gguf",
+    "displayName": "Superwhisper Offline Lite",
+    "description": "使用 AMD Vulkan 的 Parakeet TDT v3 Q4 语音识别。",
+    "descriptionEn": "Parakeet TDT v3 Q4 speech recognition on AMD Vulkan.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "backends": [
+      "vulkan"
+    ],
+    "paramSchema": {}
+  },
+  {
+    "id": "superwhisper_cohere",
+    "family": "superwhisper_cohere",
+    "hfUrl": "https://superwhisper.com/linux",
+    "displayName": "Superwhisper Offline · Cohere Transcribe",
+    "description": "使用 AMD Vulkan 的 Cohere Q4 语音识别，仅转写。",
+    "descriptionEn": "Cohere Q4 speech recognition on AMD Vulkan. Speech recognition only.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "backends": [
+      "vulkan"
+    ],
+    "paramSchema": {}
+  },
+  {
     "id": "parakeet_tdt",
     "family": "parakeet_tdt",
     "hfUrl": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",

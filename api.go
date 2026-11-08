@@ -365,6 +365,16 @@ func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if modelID == "superwhisper_lite" || modelID == "superwhisper_cohere" {
+		if backend != "vulkan" {
+			errJSON(w, http.StatusBadRequest, "OPTIONS_INVALID", nil, "Superwhisper 需要 AMD Vulkan 后端")
+			return
+		}
+		if execEntry.Env["AUDIOCPP_WORKER_SCRIPT"] == "" {
+			errJSON(w, http.StatusBadRequest, "OPTIONS_INVALID", nil, "请选择 Superwhisper 转写工作进程")
+			return
+		}
+	}
 	execPath, err := resolveExecPath(execEntry.Path)
 	if err != nil {
 		errFromErr(w, http.StatusBadRequest, "EXEC_NOT_FOUND", err)

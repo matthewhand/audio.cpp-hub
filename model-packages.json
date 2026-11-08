@@ -1552,6 +1552,31 @@
       }
     ]
   },
+  "superwhisper_lite": {
+    "displayName": "Superwhisper Offline Lite",
+    "category": "asr",
+    "status": "community",
+    "packages": [
+      {
+        "id": "superwhisper_lite_q4_k_m",
+        "displayName": "Superwhisper Offline Lite Q4_K_M",
+        "format": "gguf",
+        "precision": "q4_k_m",
+        "default": true,
+        "repo": "handy-computer/parakeet-tdt-0.6b-v3-gguf",
+        "revision": "90f082450fcbacdb54e5900c44ef697c9ea59622",
+        "gated": false,
+        "targetDir": "Superwhisper-Offline-Lite",
+        "files": [
+          {
+            "remote": "parakeet-tdt-0.6b-v3-Q4_K_M.gguf",
+            "local": "parakeet-tdt-0.6b-v3-Q4_K_M.gguf",
+            "sha256": "b68557be1e3c40207fd7c4bd9d63f1d3316b963f15325bfb0cc16a8bb0ffd181"
+          }
+        ]
+      }
+    ]
+  },
   "parakeet_tdt": {
     "displayName": "Parakeet-TDT 0.6B v3",
     "category": "asr",

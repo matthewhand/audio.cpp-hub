@@ -301,7 +301,7 @@ func (m *InstanceManager) Start(p StartParams) (*Instance, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(p.ExecPath, "--config", absServerJSON)
+	cmd := exec.Command(p.ExecPath, workerArgs(p.Env, "--config", absServerJSON)...)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	hideChildWindow(cmd)
@@ -657,13 +657,21 @@ func (m *InstanceManager) ToJSON(inst *Instance, taskCount int) map[string]any {
 	return out
 }
 
+// workerArgs supports a registered interpreter with an explicit worker script.
+func workerArgs(env map[string]string, args ...string) []string {
+	if script := env["AUDIOCPP_WORKER_SCRIPT"]; script != "" {
+		return append([]string{script}, args...)
+	}
+	return args
+}
+
 var deviceLinePattern = regexp.MustCompile(`^([A-Za-z0-9_]+):(\d+)(?:\s+"([^"]*)")?\s+\[([^\]]+)\]\s*$`)
 
 // ListDevices 运行 <可执行文件> --list-devices 并解析输出（对应 Java 版 DeviceLister）。
 func ListDevices(execPath string, env map[string]string) (map[string]any, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, execPath, "--list-devices")
+	cmd := exec.CommandContext(ctx, execPath, workerArgs(env, "--list-devices")...)
 	hideChildWindow(cmd)
 	if len(env) > 0 {
 		cmd.Env = buildChildEnv(env)
