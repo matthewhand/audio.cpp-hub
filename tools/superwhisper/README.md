@@ -36,7 +36,7 @@ up to 120 seconds and 50 MiB. Models stay loaded until the instance stops.
 Use offline mode. Keep the worker on the hub's loopback interface.
 
 On Ubuntu-Max both models passed both hub paths on the discrete RX 6600 XT
-and the Strix Halo APU with the upstream Vulkan runtime. On Windows, test
-Cohere before exposing it to clients: the proprietary RX 6600 XT driver
-and runtime combination reproduced decode repetition even with
-GGML_VK_DISABLE_F16=1.
+and the Strix Halo APU with the upstream Vulkan runtime. On Windows the Cohere worker disables flash attention for its own process.
+The standard Vulkan attention path transcribed two human speech clips on the
+RX 6600 XT where flash attention caused decoder repetition. This setting does
+not change the selected device.
