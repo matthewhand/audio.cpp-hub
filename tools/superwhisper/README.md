@@ -40,3 +40,11 @@ and the Strix Halo APU with the upstream Vulkan runtime. On Windows the Cohere w
 The standard Vulkan attention path transcribed two human speech clips on the
 RX 6600 XT where flash attention caused decoder repetition. This setting does
 not change the selected device.
+
+On Windows1 (WIN2019 with RX 6600 XT and GTX 1080), configure the
+Superwhisper executable entry with `GGML_VK_VISIBLE_DEVICES=0` and
+`GGML_VK_PREFER_HOST_MEMORY=1`. Confirm that device 0 is the RX 6600 XT
+using the hub's device probe before starting Lite. The host-visible
+Vulkan allocation resolved a startup stall on this machine. The worker
+still selects AMD Vulkan, and Parakeet's TDT decoder uses its normal
+host implementation.
