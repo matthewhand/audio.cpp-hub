@@ -154,6 +154,10 @@ def main():
     model_config, = config["models"]
     if config.get("backend") != "vulkan" or model_config["family"] not in FAMILIES:
         parser.error("Superwhisper requires AMD Vulkan")
+    # The Windows AMD flash path can repeat unknown tokens in Cohere.
+    # Use the regular Vulkan attention kernels for this worker process.
+    if os.name == "nt" and model_config["family"] == "superwhisper_cohere":
+        os.environ["TRANSCRIBE_NO_FLASH"] = "1"
     index = config.get("device")
     if index is None and len(devices) == 1:
         index = next(iter(devices))
