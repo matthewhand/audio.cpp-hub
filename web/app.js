@@ -35,7 +35,7 @@ function rerenderAll() {
   applyThemeIcon();
   if (models.length) { renderModelList(); updateQuickLaunchTitle(); }
   updateLaunchExec(); renderLaunchProfiles();
-  renderInstanceList(); updateInstanceBar();
+  updateInstanceBar(); renderInstanceList();
   buildEmotionSliders();
   if (selectedModel()) renderWorkspace();
   relocalizeSettings();
