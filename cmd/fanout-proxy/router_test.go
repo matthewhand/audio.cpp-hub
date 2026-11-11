@@ -985,3 +985,81 @@ func TestSpeechReleasesInFlightSlot(t *testing.T) {
 		})
 	}
 }
+
+func TestCommittedKokoroRouteTracksReadiness(t *testing.T) {
+	cfg, err := LoadConfig("farm.routes.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &proxy{cfg: cfg, hub: newHealthStore(cfg), lim: newLimiter(cfg.MaxInFlightPerTarget)}
+	const loopback = "http://127.0.0.1:18280"
+	handler := p.handler()
+
+	for _, tc := range []struct {
+		status, resolved string
+	}{
+		{"STARTING", ""},
+		{"READY", loopback + "/kokoro"},
+	} {
+		t.Run(tc.status, func(t *testing.T) {
+			p.hub.apply(loopback, []map[string]any{{
+				"instanceName": "kokoro", "id": "fixture", "modelId": "kokoro_tts", "status": tc.status,
+			}}, time.Millisecond, nil)
+
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/farm/health", nil))
+			var health struct {
+				HubsTotal int
+				Routes    []struct {
+					Aliases  []string
+					Resolved string
+				}
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &health); err != nil || rec.Code != http.StatusOK {
+				t.Fatalf("farm health: %d %s (%v)", rec.Code, rec.Body, err)
+			}
+			if health.HubsTotal != len(cfg.Hubs) {
+				t.Fatalf("hubsTotal = %d, want %d", health.HubsTotal, len(cfg.Hubs))
+			}
+			found := false
+			for _, route := range health.Routes {
+				if len(route.Aliases) == 1 && route.Aliases[0] == "kokoro" {
+					found = true
+					if route.Resolved != tc.resolved {
+						t.Fatalf("Kokoro resolved = %q, want %q", route.Resolved, tc.resolved)
+					}
+				}
+			}
+			if !found {
+				t.Fatal("farm health omitted the Kokoro route")
+			}
+
+			rec = httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+			var models struct{ Data []struct{ ID string } }
+			if err := json.Unmarshal(rec.Body.Bytes(), &models); err != nil || rec.Code != http.StatusOK {
+				t.Fatalf("model discovery: %d %s (%v)", rec.Code, rec.Body, err)
+			}
+			found = false
+			for _, model := range models.Data {
+				if model.ID == "kokoro_tts" {
+					t.Fatal("model card ID leaked into alias discovery")
+				}
+				found = found || model.ID == "kokoro"
+			}
+			if found != (tc.status == "READY") {
+				t.Fatalf("Kokoro alias present=%t for status %s", found, tc.status)
+			}
+
+			if tc.status == "STARTING" {
+				req := httptest.NewRequest(http.MethodPost, "/v1/audio/speech", strings.NewReader(`{"model":"kokoro","input":"test"}`))
+				req.Header.Set("Content-Type", "application/json")
+				rec = httptest.NewRecorder()
+				handler.ServeHTTP(rec, req)
+				if rec.Code != http.StatusServiceUnavailable {
+					t.Fatalf("unready Kokoro: want 503, got %d %s", rec.Code, rec.Body)
+				}
+			}
+		})
+	}
+}
