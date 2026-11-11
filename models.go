@@ -11,11 +11,40 @@ import (
 var modelsRaw []byte
 
 var models []map[string]any
+var modelCatalogJSON []byte
 
 func init() {
 	if err := json.Unmarshal(modelsRaw, &models); err != nil {
 		panic("models.json 解析失败: " + err.Error())
 	}
+	// The picker enum is the single source of truth for selectable preset IDs.
+	for _, model := range models {
+		caps, _ := model["capabilities"].(map[string]any)
+		param := optString(caps, "presetVoiceParam")
+		if param == "" {
+			continue
+		}
+		schema, _ := model["paramSchema"].(map[string]any)
+		preset, _ := schema[param].(map[string]any)
+		if optString(preset, "type") != "enum" {
+			continue
+		}
+		values, _ := preset["values"].([]any)
+		voices := make([]string, 0, len(values))
+		for _, value := range values {
+			if id, ok := value.(string); ok && id != "" {
+				voices = append(voices, id)
+			}
+		}
+		if len(voices) > 0 {
+			caps["presetVoices"] = voices
+		}
+	}
+	encoded, err := json.Marshal(models)
+	if err != nil {
+		panic("模型清单序列化失败: " + err.Error())
+	}
+	modelCatalogJSON = encoded
 }
 
 // findModel 按 id 查找模型条目，不存在返回 nil。

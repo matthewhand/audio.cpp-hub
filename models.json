@@ -1251,6 +1251,9 @@
   },
   {
     "id": "qwen3_tts_customvoice",
+    "capabilities": {
+      "presetVoiceParam": "speaker"
+    },
     "family": "qwen3_tts",
     "hfUrl": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
     "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF",
@@ -1619,6 +1622,9 @@
   },
   {
     "id": "supertonic",
+    "capabilities": {
+      "presetVoiceParam": "voice_id"
+    },
     "family": "supertonic",
     "hfUrl": "https://huggingface.co/mlx-community/supertonic-3-mlx",
     "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Supertonic-3-GGUF",
@@ -1954,6 +1960,9 @@
   },
   {
     "id": "magpie_tts",
+    "capabilities": {
+      "presetVoiceParam": "voice_id"
+    },
     "family": "magpie_tts",
     "hfUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/MagpieTTS-Multilingual-357M-GGUF",
     "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/MagpieTTS-Multilingual-357M-GGUF",
@@ -2097,6 +2106,12 @@
   },
   {
     "id": "ming3_tts",
+    "capabilities": {
+      "presetVoiceParam": "voice_id",
+      "presetVoiceRequires": {
+        "template_name": "ip"
+      }
+    },
     "family": "ming3_tts",
     "hfUrl": "https://huggingface.co/inclusionAI/Ming-3.0-tts",
     "ggufUrl": "https://huggingface.co/audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
@@ -2815,6 +2830,9 @@
   },
   {
     "id": "kokoro_tts",
+    "capabilities": {
+      "presetVoiceParam": "voice_id"
+    },
     "family": "kokoro_tts",
     "hfUrl": "https://huggingface.co/hexgrad/Kokoro-82M",
     "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Kokoro-82M-GGUF",
