@@ -220,6 +220,9 @@ func TestV1SpeechChunkedStreamWAV(t *testing.T) {
 		t.Fatalf("joined result must be archived once, got %d records", n)
 	}
 	rec := h.history.List("ming3_tts")[0]
+	if via := rec["result"].(map[string]any)["via"]; via != "v1/audio/speech" {
+		t.Errorf("streamed archive origin = %v; want v1/audio/speech", via)
+	}
 	raw, _ := json.Marshal(rec)
 	if !strings.Contains(string(raw), "lovely, with clear skies all afternoon. You might") || !strings.Contains(string(raw), `"durationSec":0.2`) {
 		t.Errorf("archive must hold the full text and the joined 0.2 s audio: %s", raw)

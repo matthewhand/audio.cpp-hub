@@ -77,3 +77,27 @@ test("Kokoro history downloads phoneme groups and sample rate", async ({ page })
   await page.locator("#history-privacy").click();
   await expect(button).toHaveCount(0);
 });
+
+for (const { lang, theme, width, label } of [
+  { lang: "en", theme: "dark", width: 1366, label: "Speech API" },
+  { lang: "zh", theme: "light", width: 390, label: "语音 API" }
+]) {
+  test(`History shows the speech API origin in ${lang}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const api = historyItem("api-take", "API_TAKE");
+    api.result.via = "v1/audio/speech";
+    const task = historyItem("task-take", "TASK_TAKE");
+    const backend = new MockBackend({ history: { supertonic: [api, task] } });
+    await openApp(page, backend, { modelId: "supertonic", lang, theme });
+    await page.locator("#history-btn").click();
+    const badge = page.locator(".history-row", { hasText: "API_TAKE" }).locator(".history-via");
+    await expect(badge).toBeVisible();
+    await expect(badge).toBeInViewport({ ratio: 1 });
+    await expect(badge).toHaveText(label);
+    await expect(badge).toHaveAttribute("title", /\/v1\/audio\/speech/);
+    await expect(
+      page.locator(".history-row", { hasText: "TASK_TAKE" }).locator(".history-via")
+    ).toHaveCount(0);
+    await expect(page.locator("#history-list .history-via")).toHaveCount(1);
+  });
+}

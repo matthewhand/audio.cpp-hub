@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -128,5 +129,55 @@ func TestV1SpeechArchiveConfigDefault(t *testing.T) {
 	chdirTemp(t)
 	if cfg := loadConfig(); !cfg.v1SpeechArchiveDefault() {
 		t.Error("archiving must default to on when hub.config.json omits v1SpeechArchive")
+	}
+}
+
+func TestAPIHistorySpeechOrigin(t *testing.T) {
+	h, handler := newTestHubForAPI(t)
+	wav := testWAV()
+	engine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/audio/speech" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "audio/wav")
+		w.Write(wav)
+	}))
+	defer engine.Close()
+
+	inst := &Instance{
+		ID: "s1", Name: "sanotts", ModelID: "sanotts", ServerTask: "tts",
+		Status: "READY", Port: portOf(t, engine.URL),
+	}
+	h.instances.items[inst.ID] = inst
+	result := map[string]any{"durationSec": 0.1, "size": len(wav), "file": "older.wav"}
+	if err := h.history.RecordTTS(inst, map[string]any{"text": "Older task"}, "older", result, ""); err != nil {
+		t.Fatal(err)
+	}
+	speech := doRequest(t, handler, "POST", "/v1/audio/speech", `{"model":"sanotts","input":"API take"}`)
+	if speech.Code != http.StatusOK || !bytes.Equal(speech.Body.Bytes(), wav) {
+		t.Fatalf("speech returned HTTP %d, %d bytes", speech.Code, speech.Body.Len())
+	}
+	for _, replay := range []bool{false, true} {
+		if replay {
+			h.history = NewHistoryManager()
+		}
+		resp := doRequest(t, handler, "GET", "/api/history/sanotts", nil)
+		var rows []struct {
+			TaskID string
+			Result map[string]any
+		}
+		if resp.Code != http.StatusOK || json.Unmarshal(resp.Body.Bytes(), &rows) != nil || len(rows) != 2 {
+			t.Fatalf("history list (replay=%v): HTTP %d, %s", replay, resp.Code, resp.Body)
+		}
+		if got := rows[0].Result["via"]; got != "v1/audio/speech" {
+			t.Errorf("API take origin (replay=%v) = %v; want v1/audio/speech", replay, got)
+		}
+		if _, exists := rows[1].Result["via"]; rows[1].TaskID != "older" || exists {
+			t.Errorf("legacy row gained an origin (replay=%v): %+v", replay, rows[1])
+		}
+		if _, exists := rows[0].Result["file"]; exists {
+			t.Error("history summary exposed full result metadata")
+		}
 	}
 }
