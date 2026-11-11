@@ -109,3 +109,46 @@ test("renderInstanceList 使用 sortInstances、memBlockHtml 与 applyMemBars", 
   assert.match(body, /applyMemBars\(list\)/);
   assert.doesNotMatch(body, /instance\.memoryLegend/);
 });
+
+const { readyInstancesForModel, preferredReadyInstance } = (() => {
+  const src = readWeb("modules/instances.js");
+  const helpers = ["sortInstances", "readyInstancesForModel", "preferredReadyInstance"]
+    .map((name) => extractFunction(src, name))
+    .join("\n");
+  return new Function(
+    `"use strict"; ${helpers}; return { readyInstancesForModel, preferredReadyInstance };`
+  )();
+})();
+
+test("selects the most recently used READY instance for the current model", () => {
+  const list = [
+    inst({ id: "old" }),
+    inst({ id: "new", createdAt: "2026-01-02T00:00:00.000Z" }),
+    inst({ id: "starting", status: "STARTING" }),
+    inst({ id: "stopped", status: "STOPPED" }),
+    inst({ id: "wrong-model", modelId: "other" })
+  ];
+  const recent = ["wrong-model", "stopped", "starting", "old", "new"];
+  assert.equal(preferredReadyInstance(readyInstancesForModel(list, "model"), recent), "old");
+  assert.equal(preferredReadyInstance(readyInstancesForModel(list.slice(1), "model"), recent), "new");
+  assert.equal(preferredReadyInstance(readyInstancesForModel(list, "other"), recent), "wrong-model");
+  assert.equal(preferredReadyInstance(readyInstancesForModel(list, "missing"), recent), null);
+});
+
+test("defaults to the newest READY instance regardless of response order", () => {
+  const list = [
+    inst({ id: "old" }),
+    inst({ id: "new", createdAt: "2026-01-02T00:00:00.000Z" }),
+    inst({ id: "starting", status: "STARTING", createdAt: "2026-01-03T00:00:00.000Z" })
+  ];
+  for (const feed of [list, list.slice().reverse()]) {
+    assert.equal(preferredReadyInstance(readyInstancesForModel(feed, "model"), ["missing"]), "new");
+  }
+});
+
+test("uses a stable default when READY instances share a timestamp", () => {
+  const list = [inst({ id: "a" }), inst({ id: "b" }), inst({ id: "c", status: "STOPPED" })];
+  for (const feed of [list, list.slice().reverse()]) {
+    assert.equal(preferredReadyInstance(readyInstancesForModel(feed, "model"), []), "b");
+  }
+});
