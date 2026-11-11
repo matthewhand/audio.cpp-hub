@@ -168,17 +168,10 @@ func (h *Hub) handleV1Live(w http.ResponseWriter, r *http.Request) {
 		v1Error(w, http.StatusBadRequest, "Missing required query parameter: model")
 		return
 	}
-	inst := h.instances.FindByName(model)
+	inst := h.routeV1Instance(w, rec, model)
 	if inst == nil {
-		rec.SetRequestedModel(model)
-		if h.instances.FindAnyByName(model) != nil {
-			v1Error(w, http.StatusConflict, "Model is still starting: "+model)
-		} else {
-			v1Error(w, http.StatusNotFound, "Model not found: "+model)
-		}
 		return
 	}
-	rec.SetInstance(inst)
 	if inst.ServerTask != "asr" && inst.ServerTask != "diar" {
 		v1Error(w, http.StatusBadRequest, fmt.Sprintf("Instance %q serves task %q; live transcription needs an asr or diar instance", inst.Name, inst.ServerTask))
 		return

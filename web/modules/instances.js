@@ -223,7 +223,7 @@ export function applyMemBars(rootEl) {
   }
 }
 
-export const STATUS_CLASS = { STARTING: "starting", READY: "ready", ERROR: "error", STOPPED: "stopped" };
+export const STATUS_CLASS = { STARTING: "starting", READY: "ready", ERROR: "error", EXITED: "error", STOPPED: "stopped" };
 export function statusText(s) {
   const v = t("instance.status." + s);
   return v === "instance.status." + s ? s : v;
@@ -311,7 +311,7 @@ export function renderInstanceList() {
       html += `<div class="error-text">${esc(inst.errorMessage)}</div>`;
     }
     if (inst.status !== "STOPPED") {
-      html += `<div class="card-actions"><button class="btn-ghost detail-btn">${t("instance.detail")}</button><button class="stop-btn">${t("instance.stop")}</button></div>`;
+      html += `<div class="card-actions"><button class="btn-ghost detail-btn">${t("instance.detail")}</button><button class="stop-btn">${t(inst.status === "EXITED" ? "instance.removeExited" : "instance.stop")}</button></div>`;
     }
     card.innerHTML = html;
     const detailBtn = card.querySelector(".detail-btn");
