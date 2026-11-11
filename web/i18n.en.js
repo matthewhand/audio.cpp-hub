@@ -683,6 +683,8 @@ window.I18N_EN = {
   "err.INSTANCE_STOPPED": "Instance was stopped before startup completed",
   "err.INSTANCE_PORT_INVALID": "Invalid port (must be within 1..65535)",
   "err.INSTANCE_PORT_RESERVED": "Port is reserved by the hub",
+  "err.INSTANCE_MEMORY_LOW": "Instance start blocked by the host memory or swap limit",
+  "err.INSTANCE_MEMORY_UNAVAILABLE": "Unable to check the host memory guard. Check the hub configuration and /proc/meminfo.",
   "err.INSTANCE_PORT_IN_USE": "Port is already in use",
   "err.INSTANCE_PORT_EXHAUSTED": "No free port available for auto-assignment"
 };

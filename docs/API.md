@@ -153,6 +153,8 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 - `modelId` 必填且须在清单中（否则 `400 MODEL_UNKNOWN`）；`weightsPath` 必填且须存在（`400 WEIGHTS_REQUIRED` / `WEIGHTS_NOT_FOUND`）；`threads` 必须为正（`THREADS_POSITIVE`）
 - `executableId` 缺省取第一个已登记的可执行文件；无可用项返回 `400 NO_EXECUTABLE`
 - 服务名 `name` 全局唯一，重名拒绝启动
+- `hub.config.json` 中的可选 `minAvailableMemoryMb`（MiB）和 `maxSwapUsedPercent`（0–100）启用 Linux 主机启动前检查。启用内存下限后，实例的 `minFreeMemoryMb` 可覆盖该下限，`0` 跳过该请求的内存检查。交换空间上限仍生效。
+- 超过主机限制返回 `503 INSTANCE_MEMORY_LOW`，无法验证已配置的限制返回 `503 INSTANCE_MEMORY_UNAVAILABLE`。
 - `sessionOptions` 值统一转字符串，写入 `server.json` 的 `session_options`
 - `mode` 可选，默认 `offline`；`streaming` 让引擎以流式会话加载模型，才能服务 `POST /v1/audio/transcriptions/live`（见下文）。取值非法 `400 MODE_INVALID`；模型卡 `modes` 不含 `streaming` 时 `400 MODE_UNSUPPORTED`。写入 `server.json` 的 `model.mode`
 - `liveIngest` 可选，仅 `mode: "streaming"` 时允许（否则 `400 LIVE_INGEST_REQUIRES_STREAMING`），映射为 `server.json` 的 `model.live_ingest`（`idle_timeout_ms` / `total_timeout_ms` / `max_body_bytes` / `max_chunk_bytes` / `send_timeout_ms`）。值须为非负整数，`0` 表示不限，`maxChunkBytes` 须为正；未知键或非法值 `400 LIVE_INGEST_INVALID`。缺省用引擎默认值

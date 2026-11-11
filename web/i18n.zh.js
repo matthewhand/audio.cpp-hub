@@ -682,6 +682,8 @@ window.I18N_ZH = {
   "err.INSTANCE_STOPPED": "实例在启动完成前已被停止",
   "err.INSTANCE_PORT_INVALID": "端口不合法（必须在 1..65535 之间）",
   "err.INSTANCE_PORT_RESERVED": "端口已被 hub 占用",
+  "err.INSTANCE_MEMORY_LOW": "主机可用内存或交换空间使用率不满足启动要求",
+  "err.INSTANCE_MEMORY_UNAVAILABLE": "无法检查主机内存守卫。请检查 hub 配置和 /proc/meminfo。",
   "err.INSTANCE_PORT_IN_USE": "端口已被其它实例或进程占用",
   "err.INSTANCE_PORT_EXHAUSTED": "自动分配端口已耗尽，没有可用端口"
 };
