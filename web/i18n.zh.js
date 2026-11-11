@@ -109,6 +109,8 @@ window.I18N_ZH = {
   "instance.stopFailed": "停止实例失败",
   "instance.status.STARTING": "启动中",
   "instance.status.READY": "就绪",
+  "instance.status.EXITED": "已退出",
+  "instance.removeExited": "移除",
   "instance.status.ERROR": "错误",
   "instance.status.STOPPED": "已停止",
   "instance.detail": "详情",

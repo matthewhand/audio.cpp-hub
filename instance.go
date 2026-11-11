@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-// Instance 一个 audiocpp_server 进程实例。只有 STARTING/READY 的实例存在于管理器中。
+// Instance tracks an audiocpp_server process, including an exited entry until removal.
 type Instance struct {
 	ID           string
 	Name         string // 服务名（instanceName）：/v1/* 路由键，写进 server.json 的 model id
@@ -43,7 +43,7 @@ type Instance struct {
 	Mode string
 	// LiveIngest 实时上传限额（camelCase 键，写入 server.json model.live_ingest），nil 用引擎默认。
 	LiveIngest map[string]int64
-	Status     string // STARTING / READY
+	Status     string // STARTING / READY / EXITED
 	CreatedAt  string
 
 	cmd      *exec.Cmd
@@ -182,19 +182,7 @@ func (m *InstanceManager) Get(id string) *Instance {
 	return m.items[id]
 }
 
-// FindByName 按服务名查找 READY 实例（/v1/* 路由键）。
-func (m *InstanceManager) FindByName(name string) *Instance {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, inst := range m.items {
-		if inst.Name == name && inst.Status == "READY" {
-			return inst
-		}
-	}
-	return nil
-}
-
-// FindAnyByName 按服务名查找任意状态实例（区分 404 不存在与 409 启动中）。
+// FindAnyByName returns the named instance in any state.
 func (m *InstanceManager) FindAnyByName(name string) *Instance {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -217,6 +205,10 @@ func (m *InstanceManager) Events() []Event {
 func (m *InstanceManager) addEvent(level, message string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.addEventLocked(level, message)
+}
+
+func (m *InstanceManager) addEventLocked(level, message string) {
 	m.events = append([]Event{{
 		Time:    time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
 		Level:   level,
@@ -336,7 +328,7 @@ func (m *InstanceManager) Start(p StartParams) (*Instance, error) {
 	go func() {
 		code := waitExitCode(cmd)
 		logFile.Close()
-		inst.signalExit(code)
+		m.childExited(inst, code)
 	}()
 
 	log.Printf("[%s] 实例已启动: executable=%s, name=%s, modelId=%s, backend=%s, port=%d, pid=%d",
@@ -344,6 +336,18 @@ func (m *InstanceManager) Start(p StartParams) (*Instance, error) {
 	m.addEvent("info", fmt.Sprintf("实例 #%s 启动中（%s，端口 %d）", id, p.ExecName, port))
 	go m.awaitReady(inst)
 	return inst, nil
+}
+
+// childExited publishes the terminal state before broadcasting the exit.
+func (m *InstanceManager) childExited(inst *Instance, code int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.items[inst.ID] == inst && inst.Status == "READY" {
+		inst.Status = "EXITED"
+		m.addEventLocked("error", fmt.Sprintf("实例 #%s 进程已退出 (exit=%d)，日志尾部: %s",
+			inst.ID, code, readLogTail(inst.ID)))
+	}
+	inst.signalExit(code)
 }
 
 // reserve 在单个临界区内校验服务名唯一并登记占位实例（原子预占 name+port）。
@@ -378,7 +382,9 @@ func (m *InstanceManager) Stop(id string) bool {
 	var cmd *exec.Cmd
 	if ok {
 		delete(m.items, id)
-		cmd = inst.cmd // 与 Start 在锁内写入 cmd 同步，避免数据竞争
+		if inst.Status != "EXITED" {
+			cmd = inst.cmd // 与 Start 在锁内写入 cmd 同步，避免数据竞争
+		}
 	}
 	m.mu.Unlock()
 	if !ok {
@@ -442,7 +448,7 @@ func (m *InstanceManager) portRegistered(port int) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, inst := range m.items {
-		if inst.Port == port {
+		if inst.Port == port && inst.Status != "EXITED" {
 			return true
 		}
 	}
@@ -487,10 +493,20 @@ func (m *InstanceManager) awaitReady(inst *Instance) {
 			resp.Body.Close()
 			if resp.StatusCode == 200 {
 				m.mu.Lock()
+				if m.items[inst.ID] != inst {
+					m.mu.Unlock()
+					return
+				}
+				select {
+				case <-inst.done:
+					m.mu.Unlock()
+					continue
+				default:
+				}
 				inst.Status = "READY"
+				m.addEventLocked("info", fmt.Sprintf("实例 #%s 已就绪（端口 %d）", inst.ID, inst.Port))
 				m.mu.Unlock()
 				log.Printf("[%s] 实例就绪: port=%d", inst.ID, inst.Port)
-				m.addEvent("info", fmt.Sprintf("实例 #%s 已就绪（端口 %d）", inst.ID, inst.Port))
 				return
 			}
 		}

@@ -129,6 +129,9 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 ### `GET /api/instances`
 
 返回实例数组（含每实例活跃任务数 `taskCount`）。
+已就绪的子进程退出后，实例的 `status` 变为 `EXITED`，退出码和日志尾部记录在 `GET /api/events`。
+该实例从 `GET /v1/models` 中消失，按其服务名发起的 `/v1` 请求返回 `503` 和 `error.code: "INSTANCE_EXITED"`。
+通过 `DELETE /api/instances/{id}` 或界面的移除按钮清理记录后，可以用原服务名重新启动。
 
 ### `POST /api/instances`
 
@@ -588,7 +591,7 @@ body `{"name"?: "...", "text"?: "..."}`，缺省字段不修改；`text` 传空�
 
 边说边转写：客户端以 `Transfer-Encoding: chunked` 上传原始 PCM，audio.cpp 引擎在音频到达时以 SSE 推回转写增量。Hub 对这条路由**全双工直通**，不走上面的落盘缓冲：
 
-- 路由按查询参数 `model`（服务名）选择实例，不读请求体；缺失 `400`，启动中 `409`，不存在 `404`
+- 路由按查询参数 `model`（服务名）选择实例，不读请求体；缺失 `400`，启动中 `409`，不存在 `404`，已退出 `503 INSTANCE_EXITED`
 - 实例必须以 `"mode":"streaming"` 创建（`POST /api/instances`），且任务为 `asr` / `diar`；否则 `400`，错误信息说明如何重建实例
 - 其余查询参数原样转发给引擎：`sample_rate`（默认 `16000`）、`channels`（默认 `1`）、`sample_format`（`s16le` 默认 / `f32le`）、`language`、`prompt`、`busy_timeout_ms`
 - 请求体边收边转发（chunked），不落盘、不受 `proxyMaxBodyBytes` 限制（上限由实例 `liveIngest` 决定）；响应每行 SSE 立即 Flush，并带 `X-Accel-Buffering: no`

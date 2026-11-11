@@ -568,9 +568,9 @@ func (h *Hub) handleRun(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, http.StatusNotFound, "INSTANCE_NOT_FOUND", nil, "实例不存在: "+r.PathValue("id"))
 		return
 	}
-	if inst.Status != "READY" {
-		errJSON(w, http.StatusConflict, "INSTANCE_NOT_READY", map[string]any{"status": inst.Status},
-			"实例未就绪，当前状态: "+inst.Status)
+	if status := h.instances.StatusOf(inst); status != "READY" {
+		errJSON(w, http.StatusConflict, "INSTANCE_NOT_READY", map[string]any{"status": status},
+			"实例未就绪，当前状态: "+status)
 		return
 	}
 	body := readBodyMap(w, r)
@@ -661,9 +661,9 @@ func (h *Hub) handleTaskCreate(w http.ResponseWriter, r *http.Request) {
 			"实例不存在: "+instanceID)
 		return
 	}
-	if inst.Status != "READY" {
-		errJSON(w, http.StatusConflict, "INSTANCE_NOT_READY", map[string]any{"status": inst.Status},
-			"实例未就绪，当前状态: "+inst.Status)
+	if status := h.instances.StatusOf(inst); status != "READY" {
+		errJSON(w, http.StatusConflict, "INSTANCE_NOT_READY", map[string]any{"status": status},
+			"实例未就绪，当前状态: "+status)
 		return
 	}
 	request := requestMap(body)
