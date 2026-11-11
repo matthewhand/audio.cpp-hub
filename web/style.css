@@ -1474,7 +1474,7 @@ footer { padding: 4px 24px 18px; }
 }
 .history-btns { flex: none; display: flex; gap: 6px; margin-left: auto; }
 .history-btns button { padding: 3px 10px; font-size: 12px; }
-/* 同步 API 归档标记：小圆角徽标，紧跟 meta 文本 */
+/* Speech API archive badge alongside history metadata. */
 .history-via {
   display: inline-block;
   margin-left: 6px;

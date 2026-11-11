@@ -402,7 +402,7 @@ body 同上，更新后返回条目；不存在 `404 EXEC_NOT_FOUND`。
 
 ### `GET /api/history/{modelId}`
 
-简要列表（新 → 旧），元素含 `taskId`、`time`、`instanceName`、`ok`、`text`（超 100 字截断并带 `textTruncated: true`）、可选 `groupId`、`error`、`result`。
+简要列表（新 → 旧），元素含 `taskId`、`time`、`instanceName`、`ok`、`text`（超 100 字截断并带 `textTruncated: true`）、可选 `groupId`、`error`、`result`。`result` 摘要包含 `durationSec` 和 `size`。通过 `/v1/audio/speech` 归档的记录还包含 `result.via: "v1/audio/speech"`，流式与非流式归档均适用。
 
 ### `DELETE /api/history/{modelId}`
 

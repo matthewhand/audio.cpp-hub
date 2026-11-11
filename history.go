@@ -355,7 +355,7 @@ func deleteHistoryTaskFiles(modelID, taskID string) {
 	}
 }
 
-// List 简要列表（新→旧）：taskId/time/instanceName/ok/text(截断)/error/result{durationSec,size}/groupId。
+// List 简要列表（新→旧）：taskId/time/instanceName/ok/text(截断)/error/result{durationSec,size,via?}/groupId。
 func (m *HistoryManager) List(modelID string) []map[string]any {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -384,7 +384,11 @@ func (m *HistoryManager) List(modelID string) []map[string]any {
 			item["error"] = e
 		}
 		if r, ok := rec["result"].(map[string]any); ok {
-			item["result"] = map[string]any{"durationSec": r["durationSec"], "size": r["size"]}
+			summary := map[string]any{"durationSec": r["durationSec"], "size": r["size"]}
+			if via, ok := r["via"].(string); ok && via != "" {
+				summary["via"] = via
+			}
+			item["result"] = summary
 		}
 		out = append(out, item)
 	}
