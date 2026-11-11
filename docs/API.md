@@ -134,6 +134,12 @@ Kokoro 支持可选的 `options.phonemes`（如 `["həlˈO", "wˈɜɹld"]`）。
 
 异步 `POST /api/tasks` 使用 `request.options.phonemes`，同步 `POST /v1/audio/speech` 使用 `options.phonemes`。两条路径都要求引擎的 HTTP 请求解析器将该数组保留为列表。原版 audio.cpp v0.9.3 会把数组转成普通字符串，可能读出原文。请使用支持此数组的引擎构建。
 
+带说话人标签的对话模型通过 `capabilities.multiSpeaker: true` 声明此功能。
+`maxSpeakers` 是已声明支持的说话人数，`speakerIndexBase` 是第一个编号。
+将 `speakerTagFormat` 中的 `{n}` 替换为无前导零的编号，范围为
+`speakerIndexBase` 至 `speakerIndexBase + maxSpeakers - 1`，然后把标签放在每段台词开头。
+VibeVoice 每段台词单独占一行。缺少这些字段表示卡片未声明此功能。
+
 ### `GET /api/models/{modelId}/packages`
 
 返回 `model-packages.json` 中该模型对应的下载包原始 JSON（`displayName` / `category` / `status` / `packages`）。未知模型返回 `400 MODEL_UNKNOWN`。

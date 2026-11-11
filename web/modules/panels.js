@@ -234,7 +234,7 @@ export function renumberSpeakerRows() {
     const n = i + 1;
     sp.label.textContent = "Speaker " + n;
     sp.picker.titleKey = "Speaker " + n;
-    sp.picker.$(".picker-title").textContent = "Speaker " + n;
+    sp.picker.refreshLabels();
   });
   $("tts-speaker-add").disabled = speakerPickers.length >= VIBEVOICE_MAX_SPEAKERS;
 }

@@ -230,3 +230,42 @@ test("Kokoro timestamps are opt-in and restored from history", async ({ page }) 
   await restore({});
   await expect(timestamps).not.toBeChecked();
 });
+
+test("VibeVoice submits the catalog's dialogue tags and renumbers voice pickers", async ({
+  page
+}) => {
+  const modelId = "vibevoice";
+  const backend = new MockBackend({
+    instances: [{ ...READY, modelId, instanceName: "vibevoice" }]
+  });
+  const { speakerTagFormat, speakerIndexBase, maxSpeakers } = backend.models.find(
+    (card) => card.id === modelId
+  ).capabilities;
+  await openApp(page, backend, { modelId, lang: "en" });
+  const add = page.locator("#tts-speaker-add");
+  const speakers = page.locator("#tts-speakers-list .speaker-row");
+  await expect(speakers).toHaveCount(1);
+  const turns = [];
+  for (let i = 0; i < maxSpeakers; i++) {
+    if (i > 0) {
+      await add.click();
+      await expect(speakers).toHaveCount(i + 1);
+      await speakers.nth(i).locator("summary").click();
+    }
+    const line = `Turn ${i + 1}.`;
+    await speakers.nth(i).locator(".speaker-lines").fill(line);
+    const tag = speakerTagFormat.replace("{n}", String(speakerIndexBase + i));
+    turns.push(`${tag} ${line}`);
+  }
+  await expect(add).toBeDisabled();
+  await page.locator("#tts-submit").click();
+  await expect.poll(() => backend.tasks.length).toBe(1);
+  expect(backend.tasks[0].request.text).toBe(turns.join("\n"));
+
+  await speakers.nth(1).locator(".speaker-remove").click();
+  await expect(speakers).toHaveCount(maxSpeakers - 1);
+  await expect(speakers.nth(1).locator(".speaker-label")).toHaveText("Speaker 2");
+  await expect(speakers.nth(1).locator(".vs-select")).toHaveAttribute("aria-label", "Speaker 2");
+  await expect(speakers.nth(1).locator(".speaker-lines")).toHaveValue("Turn 3.");
+  await expect(add).toBeEnabled();
+});

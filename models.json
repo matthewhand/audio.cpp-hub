@@ -837,6 +837,12 @@
   },
   {
     "id": "moss_ttsd",
+    "capabilities": {
+      "multiSpeaker": true,
+      "maxSpeakers": 2,
+      "speakerIndexBase": 1,
+      "speakerTagFormat": "[S{n}]"
+    },
     "family": "moss_ttsd",
     "hfUrl": "https://huggingface.co/OpenMOSS-Team/MOSS-TTSD-v1.0",
     "ggufUrl": "https://huggingface.co/christopherthompson81/MOSS-TTSD-GGUF",
@@ -928,6 +934,12 @@
   },
   {
     "id": "fish_drama3",
+    "capabilities": {
+      "multiSpeaker": true,
+      "maxSpeakers": 16,
+      "speakerIndexBase": 0,
+      "speakerTagFormat": "<|speaker:{n}|>"
+    },
     "family": "fish_drama3",
     "hfUrl": "https://huggingface.co/fishaudio",
     "ggufUrl": "https://huggingface.co/Jmica/Drama-3-GGUF",
@@ -1097,6 +1109,12 @@
   },
   {
     "id": "vibevoice",
+    "capabilities": {
+      "multiSpeaker": true,
+      "maxSpeakers": 4,
+      "speakerIndexBase": 1,
+      "speakerTagFormat": "Speaker {n}:"
+    },
     "family": "vibevoice",
     "hfUrl": "https://huggingface.co/microsoft/VibeVoice-1.5B",
     "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/VibeVoice-1.5B-GGUF",
