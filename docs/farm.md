@@ -17,7 +17,7 @@ discovery; the `:18080` table below is the per-host detail behind it.
 
 ## Unified fan-out entrypoint — `http://10.0.0.36:18082`
 
-`cmd/fanout-proxy` (tiny Go router, stdlib only) sits in front of the four active hubs
+`cmd/fanout-proxy` (tiny Go router, stdlib only) sits in front of the four hubs in the checked-in configuration
 above and gives agents one OpenAI-shaped base URL with automatic failover, so
 they no longer hard-code `host:port:model` triples:
 
@@ -52,12 +52,12 @@ they no longer hard-code `host:port:model` triples:
   automatically. For `POST /api/tasks` the cap covers the submission only; the
   hub's serial queue bounds what actually runs. Knob details:
   `cmd/fanout-proxy/README.md` → "Knobs".
-- History is **not** unified: responses carry `X-Fanout-Hub` /
-  `X-Fanout-Instance` so a take can be fetched from the origin hub's
-  `/api/history/...`. Same for voice libraries: `/api/voices` and
-  `/api/history/*` go to `.36:18080` directly, since each hub owns that state.
-  A speech call against `citrinet` still 503s (the engine wants an audio
-  contract, not text) — ASR uses `POST /api/tasks` instead.
+- Each hub owns its history and voice library. The origin headers identify
+  the hub that owns a take. For Kokoro, the origin is GTX-local
+  `http://127.0.0.1:18280`. Remote clients use it as a pin in task URLs on the
+  fan-out and save the speech response directly. Kokoro history lives on the
+  loopback hub. See the [Kokoro deployment notes](deployment-10.0.0.36.md#kokoro-loopback-hub).
+  Citrinet clients submit audio through `POST /api/tasks`.
 - The 6600 XT (`.30` DEVICE=0) is deliberately absent from the route table, and
   no hub is reconfigured by the proxy. LAN-only, no auth — same warning as
   above. Design and rationale: `docs/fanout-design.md`; ops:
