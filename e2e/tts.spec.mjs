@@ -132,8 +132,11 @@ test("Kokoro voice blends round-trip through the form and task options", async (
   const preset = page.locator("#tts-enum-voice_id");
   const expression = "af_heart(2)+af_bella(1)";
   await expect(blend).toHaveValue("");
-  await preset.selectOption("af_nova");
+  const presetHint = page.locator("#tts-preset-voice-hint");
+  await preset.selectOption("jf_alpha");
+  await expect(presetHint).toBeVisible();
   await blend.fill("  " + expression + "  ");
+  await expect(presetHint).toBeHidden();
   await page.locator("#tts-text").fill("Hello Kokoro");
   await page.locator("#tts-submit").click();
   await expect.poll(() => backend.tasks.length).toBe(1);
@@ -142,6 +145,7 @@ test("Kokoro voice blends round-trip through the form and task options", async (
   expect(backend.tasks[0].request?.voice_id).toBeUndefined();
 
   await blend.fill("");
+  await expect(presetHint).toBeVisible();
   const restore = (voiceId) =>
     page.evaluate(async (saved) => {
       const { fillTtsForm } = await import("/modules/panels.js");

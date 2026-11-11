@@ -132,7 +132,7 @@ Kokoro 的高级参数支持可选的音色混合表达式。客户端通过 `op
 
 Kokoro 支持可选的 `options.phonemes`（如 `["həlˈO", "wˈɜɹld"]`）。每个字符串为一个音素块，最多 510 个 Kokoro 词表符号；引擎按顺序合成并合并音频。仍需提供文本，且语言须匹配音色。WebUI 在高级参数中每行接收一个块，留空时省略该选项，使用引擎内置的文本转音素。
 
-异步 `POST /api/tasks` 使用 `request.options.phonemes`，同步 `POST /v1/audio/speech` 使用 `options.phonemes`。两条路径都要求引擎的 HTTP 请求解析器将该数组保留为列表。原版 audio.cpp v0.9.3 会把数组转成普通字符串，可能读出原文。请使用支持此数组的引擎构建。
+异步 `POST /api/tasks` 使用 `request.options.phonemes`，同步 `POST /v1/audio/speech` 使用 `options.phonemes`。两条路径都要求引擎的 HTTP 请求解析器将该数组保留为列表。原版 audio.cpp v0.9.3 会把数组转成普通字符串，可能读出原文。请使用支持此数组的引擎构建。v0.9.3 可应用 [HTTP 解析器补丁](https://gist.github.com/matthewhand/0a3c71255b755c5191741058aa2ed222)。
 
 带说话人标签的对话模型通过 `capabilities.multiSpeaker: true` 声明此功能。
 `maxSpeakers` 是已声明支持的说话人数，`speakerIndexBase` 是第一个编号。

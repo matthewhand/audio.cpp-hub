@@ -339,7 +339,8 @@ function syncPresetVoice(m, chooseMatching = false) {
   }
 
   const voiceLanguage = schema.valueMeta[select.value]?.group;
-  hint.textContent = voiceLanguage && voiceLanguage !== language
+  const blendActive = m.family === "kokoro_tts" && $("adv-voice_blend")?.value.trim();
+  hint.textContent = !blendActive && voiceLanguage && voiceLanguage !== language
     ? t("tts.presetMismatch", { voiceLanguage: presetLanguageLabel(voiceLanguage), language: presetLanguageLabel(language) })
     : "";
   hint.classList.toggle("hidden", !hint.textContent);
@@ -397,7 +398,6 @@ export function renderTtsPanel(m) {
     preset.setAttribute("aria-describedby", hint.id);
     ttsLanguageSel.addEventListener("change", () => syncPresetVoice(m, true));
     preset.addEventListener("change", () => syncPresetVoice(m));
-    syncPresetVoice(m);
   }
 
   $("tts-emotion-block").classList.toggle("hidden", !(m.paramSchema && m.paramSchema.emotionModes));
@@ -415,10 +415,13 @@ export function renderTtsPanel(m) {
     }, "adv");
     const hint = el('<span id="kokoro-voice-blend-hint" class="hint"></span>');
     hint.textContent = t("tts.kokoroVoiceBlendHint");
-    blend.querySelector("input").setAttribute("aria-describedby", hint.id);
+    const input = blend.querySelector("input");
+    input.setAttribute("aria-describedby", hint.id);
+    input.addEventListener("input", () => syncPresetVoice(m));
     blend.appendChild(hint);
     advancedGrid.appendChild(blend);
   }
+  syncPresetVoice(m);
   $("tts-advanced").classList.toggle("hidden", !hasAdvanced && !hasVoiceBlend);
 
   updateTtsBlocks(m);
