@@ -122,6 +122,11 @@ Kokoro 82M 的 `text_chunk_size` 可作为 `options.text_chunk_size` 传给异�
 音素输入需要引擎支持的字符串数组，时间戳是音素组对齐数据。Hub 的异步 TTS 结果仅保存音频及其元数据。
 这两个选项和音色混合目前没有对应的面板控件。
 
+Kokoro 的高级参数支持可选的音色混合表达式。客户端通过 `options.voice_id` 传入
+`af_heart+af_bella`（等权）或 `af_heart(2)+af_bella(1)`（加权），适用于异步 TTS 请求
+及同步 `POST /v1/audio/speech`。权重由引擎归一化，语言须与表达式中的第一个音色一致。
+留空时，WebUI 使用预置音色下拉框的选择。
+
 ### `GET /api/models/{modelId}/packages`
 
 返回 `model-packages.json` 中该模型对应的下载包原始 JSON（`displayName` / `category` / `status` / `packages`）。未知模型返回 `400 MODEL_UNKNOWN`。

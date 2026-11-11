@@ -167,6 +167,8 @@ window.I18N_EN = {
   "tts.presetLanguage.ja": "Japanese",
   "tts.presetLanguage.pt-br": "Brazilian Portuguese",
   "tts.presetLanguage.zh": "Mandarin Chinese",
+  "tts.kokoroVoiceBlend": "Voice blend",
+  "tts.kokoroVoiceBlendHint": "A blend overrides the preset. Choose the language of the first voice. Leave blank to use the preset.",
   "tts.title": "Text to Speech",
   "tts.textLabel": "Text to synthesize",
   "tts.textPlaceholder": "Text to synthesize",
