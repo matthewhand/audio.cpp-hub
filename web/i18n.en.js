@@ -150,6 +150,8 @@ window.I18N_EN = {
   "common.dismiss": "Dismiss",
   "state.loading": "Loading…",
   /* ---------- TTS panel ---------- */
+  "tts.kokoroVoiceBlend": "Voice blend",
+  "tts.kokoroVoiceBlendHint": "A blend overrides the preset. Choose the language of the first voice. Leave blank to use the preset.",
   "tts.title": "Text to Speech",
   "tts.textLabel": "Text to synthesize",
   "tts.textPlaceholder": "Text to synthesize",

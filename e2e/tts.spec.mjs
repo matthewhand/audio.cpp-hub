@@ -70,3 +70,45 @@ test("Kokoro TTS：单控件无重复渲染，所选 voice_id 正确写入 optio
   expect(task.request?.options?.voice_id).toBe("jf_alpha");
   expect(task.request?.voice_id).toBeUndefined();
 });
+
+test("Kokoro voice blends round-trip through the form and task options", async ({ page }) => {
+  const backend = new MockBackend({
+    instances: [{ ...READY, id: "kokoro-ready", modelId: "kokoro_tts", instanceName: "kokoro" }]
+  });
+  await openApp(page, backend, { modelId: "kokoro_tts", lang: "en" });
+  await expect(page.locator("#tts-submit")).toBeEnabled();
+  await page.locator("#tts-advanced summary").click();
+  const blend = page.getByRole("textbox", { name: /^Voice blend/ });
+  const preset = page.locator("#tts-enum-voice_id");
+  const expression = "af_heart(2)+af_bella(1)";
+  await expect(blend).toHaveValue("");
+  await preset.selectOption("af_nova");
+  await blend.fill("  " + expression + "  ");
+  await page.locator("#tts-text").fill("Hello Kokoro");
+  await page.locator("#tts-submit").click();
+  await expect.poll(() => backend.tasks.length).toBe(1);
+  expect(backend.tasks[0].request?.options?.voice_id).toBe(expression);
+  expect(backend.tasks[0].request?.options?.voice_blend).toBeUndefined();
+  expect(backend.tasks[0].request?.voice_id).toBeUndefined();
+
+  await blend.fill("");
+  const restore = (voiceId) =>
+    page.evaluate(async (saved) => {
+      const { fillTtsForm } = await import("/modules/panels.js");
+      const { selectedModel } = await import("/modules/state.js");
+      fillTtsForm(selectedModel(), {
+        text: "Saved take",
+        language: "en-us",
+        options: { voice_id: saved }
+      });
+    }, voiceId);
+  await restore(expression);
+  await expect(blend).toHaveValue(expression);
+  await expect(preset).toHaveValue("af_heart");
+  await restore("af_nova");
+  await expect(blend).toHaveValue("");
+  await expect(preset).toHaveValue("af_nova");
+  await page.locator("#tts-submit").click();
+  await expect.poll(() => backend.tasks.length).toBe(2);
+  expect(backend.tasks[1].request?.options?.voice_id).toBe("af_nova");
+});
