@@ -150,6 +150,8 @@ window.I18N_ZH = {
   "common.dismiss": "关闭",
   "state.loading": "加载中…",
   /* ---------- TTS 面板 ---------- */
+  "tts.kokoroVoiceBlend": "音色混合",
+  "tts.kokoroVoiceBlendHint": "填写混合表达式后将覆盖预置音色。语言须与首个音色一致。留空则使用预置音色。",
   "tts.title": "语音合成",
   "tts.textLabel": "合成文本",
   "tts.textPlaceholder": "要合成的文本",
