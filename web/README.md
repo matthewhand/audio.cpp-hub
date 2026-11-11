@@ -115,7 +115,7 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 | `modules/instances.js`（232） | 实例列表、实例状态条、实例详情（`I18N.date`）、2s 轮询句柄 + 首屏骨架 | `startInstancePolling` `web/modules/instances.js:55`，`renderInstanceList` `:61`，`openInstanceDetail` `:165` |
 | `modules/downloads-lazy.js`（160） | **下载数据 + 页头 ⬇️ 角标与其 2s 轮询**（首屏可见，不能懒加载）+ 两个下载弹窗的懒加载外观 | `getDownloads` `web/modules/downloads-lazy.js:33`，`refreshDownloads` `:58`，`startDownloadsPolling` `:64`，`updateDlBadge` `:70`，`openDownloadsModal` `:100`，`relocalizeDownloads` `:142`，`wireDownloadsButton` `:148` |
 | `modules/tasks.js`（331） | 任务队列**与结果落版**：提交、跟踪、取消、完成、`reattachTasks` 重挂、侧栏任务行；`renderTaskResult` 按类别分派 + ASR / 分离 / 音乐 / 其它结果 + `clearResult` / `makeTrackRow` | `activePolls` `web/modules/tasks.js:21`，`submitTask` `:26`，`trackTask` `:48`，`reattachTasks` `:101`，`renderTaskResult` `:194`，`clearResult` `:242` |
-| `modules/sidebar.js`（671） | 操作历史侧栏：历史加载与渲染（含骨架屏 / 三态）、分组、分组菜单（键盘导航）、四要素详情、隐私模式、任务行与历史行的列表组装、「清空」批量删除（走全局等待遮罩） | `openHistoryPanel` `web/modules/sidebar.js:19`，`loadHistory` `:79`，`renderSidebarList` `:125`，`deleteFinishedTasks` `:578`，清空处理 `:593` |
+| `modules/history-lazy.js` | 历史弹窗外壳、打开与关闭、隐私状态和历史请求转发 | `openHistoryPanel` / `closeHistoryPanel` |
 | `modules/panels.js`（866） | 工作区分发 + TTS / ASR / SEP / Music / Other 五类面板：`paramSchema` 渲染与收集、情感滑块、各面板提交；面板表单的 `VoiceSelect` / `AudioPicker` 实例在模块求值时一次性创建 | `voicePicker` `web/modules/panels.js:24`，`renderWorkspace` `:51`，`renderTtsPanel` `:294`，`buildEmotionSliders` `:536`，`renderAsrPanel` `:646` |
 
 ##### 懒加载 chunk（点击才打开的视图）
@@ -128,6 +128,7 @@ Node / npm 等工具链**只用于开发与 CI**，不参与运行，也不需�
 | 外观层（首屏） | 懒加载 chunk | 打开方式 |
 | --- | --- | --- |
 | `modules/stats-lazy.js`（79） | `modules/stats.js`（198）：用量与性能看板（`#/stats`，页头 📊）——`GET /api/stats`，总量卡片 + 每模型卡片（任务数 / 成功率 / 音频时长 / 输出体积 / 排队与执行 P50-P95 / 实时率 RTF）。`openStatsPanel` `web/modules/stats.js:26` | `routing.js` 静态 import 外观层，点 📊 路由到 `#/stats` 时 `import("./stats.js")` |
+| `modules/history-lazy.js` | `modules/sidebar.js`：历史、分组和详情 | 首次打开 `#/history` 时加载 |
 | `modules/requests-lazy.js` | `modules/requests.js` + `requests.css`：请求与延迟面板（`#/requests`，#198）——`GET /api/metrics/summary` + `/recent`（可见时 2s 轮询，可暂停），展开行拉 `/api/metrics/requests/{id}` 画分块时间线。面板文案与样式随 chunk 懒加载 | `routing.js` 静态 import 外观层，点页头按钮路由到 `#/requests` 时 `import("./requests.js")` |
 | `modules/file-browser-lazy.js`（48） | `modules/file-browser.js`（470）：服务器端文件 / 目录选择弹窗，overlay 在首次 `open()` 时动态创建。`open` `web/modules/file-browser.js:100`，`cancel` `:387`，`relocalize` `:421` | `launch.js`（权重目录 / GGUF / 可执行文件三个「浏览…」按钮）与经典脚本 `audio-picker.js`（本地路径页签）都经外观层的 `browseServerFile` 打开 |
 | `modules/voices-panel-lazy.js`（68） | `modules/voices-panel.js`（257）：音色库管理面板（页头 🎙）——列表 / 试听 / 行内编辑 / 删除 / 「用于 TTS」/ 添加。`openVoicesPanel` `web/modules/voices-panel.js:25`，`closeVoicesPanel` `:37` | `routing.js` 静态 import 外观层（页头 🎙 由 `wireVoicesButton` 接线、`#/voices` 路由与 Esc 走 `openVoicesPanel` / `closeVoicesPanel`）；经典脚本 `voice-select.js` 的「管理音色库」按钮经外观层挂上的 `window.openVoicesPanel` |
@@ -201,12 +202,12 @@ ES 模块的 `import` 是**活绑定**（读永远看到最新值），但**不�
 
 | 依赖 | 为什么无法单向 |
 | --- | --- |
-| `tasks.js` ⇄ `sidebar.js` | 任务完成要刷新侧栏；侧栏的任务行又需要取消 / 耗时等队列接口 |
-| `sidebar.js` ⇄ `panels.js` | 工作区重画要刷新侧栏历史；侧栏的「载入」要回填 TTS 表单 |
+| `tasks.js` ⇄ `history-lazy.js` → `sidebar.js` | 任务完成要刷新侧栏；侧栏的任务行又需要取消 / 耗时等队列接口 |
+| `sidebar.js` ⇄ `panels.js`（经 `history-lazy.js`） | 工作区重画要刷新侧栏历史；侧栏的「载入」要回填 TTS 表单 |
 | `models.js` ⇄ `launch.js` | 切模型要恢复启动表单的权重路径；配置变化要刷新模型卡片的已配置态 |
 | `models.js` ⇄ `instances.js` | 选模型要刷新实例列表；实例就绪态影响模型「已配置」判定 |
 | `models.js` ⇄ `panels.js` | 选模型要重画工作区；工作区分发读模型清单 |
-| `routing.js` ⇄ `sidebar.js` / `downloads-lazy.js` / `settings-lazy.js` / `stats-lazy.js` / `voices-panel-lazy.js` / `instances.js` / `models.js` | `applyRoute` 要开关各面板；各 `closeX()` 又要通过 `window.hubPanelClosed` 回写 hash。按钮接线走**反向注入**（`wireXxxButton(go, goPanel, …)`，由 routing 把导航函数传进外观层）以避开这一层环 |
+| `routing.js` ⇄ `history-lazy.js` / `downloads-lazy.js` / `settings-lazy.js` / `stats-lazy.js` / `voices-panel-lazy.js` / `instances.js` / `models.js` | `applyRoute` 要开关各面板；各 `closeX()` 又要通过 `window.hubPanelClosed` 回写 hash。按钮接线走**反向注入**（`wireXxxButton(go, goPanel, …)`，由 routing 把导航函数传进外观层）以避开这一层环 |
 
 这些都**只在运行期回调里互相调用**，模块求值期互不读取对方的绑定（已逐条核对：
 循环双方顶层语句的跨模块读取全部是 `$`，而 `dom.js` 是无 import 的叶子模块）。

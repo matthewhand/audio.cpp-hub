@@ -1,37 +1,13 @@
 /* History sidebar: combined task/history view and grouped privacy-aware rows.
  * Runtime-only imports from tasks.js avoid eager cyclic evaluation. */
 
-import { bindMenuKeys, focusDialog, hideBusy, renderEmptyState, renderStateError, restoreDialogFocus, showBusy, showSkeleton, showToast } from "./async-ui.js";
+import { bindMenuKeys, hideBusy, renderEmptyState, renderStateError, showBusy, showSkeleton, showToast } from "./async-ui.js";
 import { $, Api, el, markRowEnter, t } from "./dom.js";
 import { fillTtsForm } from "./panels.js";
-import { goPanel } from "./routing.js";
+import { privacyOn } from "./history-lazy.js";
 import { modelSelectionRevision, selectedModel, selectedModelId } from "./state.js";
 import { makeTaskRow, taskDetails, taskViews } from "./tasks.js";
 
-/* ---------- 历史全屏面板：页头 🕘 打开；遮罩点击 / × / Esc 关闭 ---------- */
-export function openHistoryPanel() {
-  const wasHidden = $("history-panel").classList.contains("hidden");
-  $("history-panel").classList.remove("hidden");
-  if (wasHidden) {
-    focusDialog($("history-panel"));
-    loadHistory();
-  }
-}
-$("history-btn").onclick = () => goPanel("history");
-export function closeHistoryPanel() {
-  $("history-panel").classList.add("hidden");
-  restoreDialogFocus();
-  window.hubPanelClosed("history");
-}
-$("history-close").onclick = closeHistoryPanel;
-$("history-panel").addEventListener("mousedown", (e) => {
-  if (e.target === e.currentTarget) closeHistoryPanel();
-});
-
-/* ---------- 隐私模式：隐藏历史记录中的提示词，用无关占位文字替代（localStorage hub-privacy 持久化） ---------- */
-export function privacyOn() {
-  return localStorage.getItem("hub-privacy") === "1";
-}
 /* Keep raw previews outside the DOM. */
 const privateRowText = new WeakMap();
 export function rememberHistoryRowText(node, text) {
@@ -368,11 +344,6 @@ export async function toggleHistoryDetail(item) {
   } catch (e) {
     showToast("error", t("history.detailFailed") + t("common.colon") + e.message);
   }
-}
-
-/* 历史记录的快照路径（相对工作目录，可被 /api/audio/info 探测）；无快照返回 null */
-export function historyRefPath(m, rec, name) {
-  return rec.refs && rec.refs[name] ? "data/history/" + m.id + "/" + rec.taskId + "." + name + ".wav" : null;
 }
 
 export function buildHistoryDetail(item, rec) {

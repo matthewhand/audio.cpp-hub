@@ -14,7 +14,7 @@ import { buildEmotionSliders, renderWorkspace } from "./modules/panels.js";
 import { applyRoute } from "./modules/routing.js";
 import { closeSettingsModal, loadExecutables, relocalizeSettings, updateLaunchExec } from "./modules/settings-lazy.js";
 import { applyLangBtn, applyThemeIcon, closeDrawer } from "./modules/shell.js";
-import { closeHistoryPanel } from "./modules/sidebar.js";
+import { closeHistoryPanel } from "./modules/history-lazy.js";
 import { closeRequestsPanel, reloadRequests } from "./modules/requests-lazy.js";
 import { closeStatsPanel, reloadStats } from "./modules/stats-lazy.js";
 import { models, selectedModel } from "./modules/state.js";

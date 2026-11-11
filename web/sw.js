@@ -23,7 +23,7 @@
  * 类型由 web/globals.d.ts 的 HubServiceWorkerScope 提供（见该文件说明）。 */
 const sw = /** @type {HubServiceWorkerScope} */ (/** @type {unknown} */ (self));
 
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const STATIC_CACHE = `acpp-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `acpp-runtime-${CACHE_VERSION}`;
 const OFFLINE_URL = "/offline.html";
@@ -64,7 +64,7 @@ const PRECACHE_URLS = [
   "/modules/tasks.js",
   "/modules/diarization-lazy.js",
   "/modules/speaker-segments.js",
-  "/modules/sidebar.js",
+  "/modules/history-lazy.js",
   "/modules/stats-lazy.js",
   "/modules/requests-lazy.js",
   "/modules/voices-panel-lazy.js",
@@ -76,6 +76,7 @@ const PRECACHE_URLS = [
   "/operator-studio.css", // on-demand Operator Studio stylesheet
   "/modules/activity-queue.js", // on-demand Activity/Queue
   "/activity-queue.css", // loaded only while Activity opens
+  "/modules/sidebar.js",        // History panel
   "/modules/stats.js",          // 看板（#/stats）
   "/modules/requests.js",       // 请求与延迟（#/requests，#198）
   "/requests.css",              // 仅在打开 #/requests 时加载

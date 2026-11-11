@@ -3,7 +3,7 @@
  * history restore can reuse them; sidebar callbacks form a runtime-only cycle. */
 
 import { $, el, esc, t } from "./dom.js";
-import { historyRefPath, loadHistory } from "./sidebar.js";
+import { historyRefPath, loadHistory } from "./history-lazy.js";
 import { activeInstanceId, selectedModel } from "./state.js";
 import { clearResult, reattachTasks, submitTask, trackTask } from "./tasks.js";
 

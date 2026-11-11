@@ -20,6 +20,7 @@
       "web/modules/downloads.js",
       "web/modules/file-browser-lazy.js",
       "web/modules/file-browser.js",
+      "web/modules/history-lazy.js",
       "web/modules/instances.js",
       "web/modules/interface-modes.js",
       "web/modules/launch.js",
@@ -492,7 +493,7 @@
       "tag": "button",
       "type": null,
       "i18n": ["history.title", "history.title"],
-      "handlers": [{ "event": "click", "sources": ["web/modules/sidebar.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/history-lazy.js"] }]
     },
     {
       "id": "history-clear",
@@ -506,7 +507,7 @@
       "tag": "button",
       "type": null,
       "i18n": ["history.closeTitle", "history.closeTitle"],
-      "handlers": [{ "event": "click", "sources": ["web/modules/sidebar.js"] }]
+      "handlers": [{ "event": "click", "sources": ["web/modules/history-lazy.js"] }]
     },
     {
       "id": "history-group-new",

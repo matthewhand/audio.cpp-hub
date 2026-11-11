@@ -101,3 +101,47 @@ for (const { lang, theme, width, label } of [
     await expect(page.locator("#history-list .history-via")).toHaveCount(1);
   });
 }
+
+test.describe("History module loading", () => {
+  test.use({ serviceWorkers: "block" });
+  test("History loads on demand and can close before its module arrives", async ({ page }) => {
+    let release;
+    let markRequested;
+    const waiting = new Promise((resolve) => {
+      release = resolve;
+    });
+    const requested = new Promise((resolve) => {
+      markRequested = resolve;
+    });
+    let moduleRequests = 0;
+    await page.route("**/modules/sidebar.js", async (route) => {
+      moduleRequests++;
+      markRequested();
+      await waiting;
+      await route.continue();
+    });
+
+    const backend = new MockBackend({
+      history: { supertonic: [historyItem("saved", "A saved take")] }
+    });
+    try {
+      await openApp(page, backend, { modelId: "supertonic", lang: "en" });
+      expect(moduleRequests).toBe(0);
+      await page.locator("#history-btn").click();
+      await requested;
+      await expect(page.locator("#history-panel")).toBeVisible();
+      await expect(page.locator("#history-list")).toHaveAttribute("aria-busy", "true");
+      await page.keyboard.press("Escape");
+      await expect(page.locator("#history-panel")).toBeHidden();
+      const response = page.waitForResponse("**/modules/sidebar.js");
+      release();
+      await response;
+      await expect(page.locator("#history-panel")).toBeHidden();
+      await page.locator("#history-btn").click();
+      await expect(page.locator("#history-list")).toContainText("A saved take");
+      expect(moduleRequests).toBe(1);
+    } finally {
+      release();
+    }
+  });
+});
