@@ -12,6 +12,7 @@ export let models = [];
 export let executables = [];
 export let profiles = [];
 export let selectedModelId = null;
+export let modelSelectionRevision = 0;
 export let activeInstanceId = null;
 
 export const selectedModel = () => models.find(m => m.id === selectedModelId);
@@ -21,7 +22,10 @@ export const selectedModel = () => models.find(m => m.id === selectedModelId);
 export function setModels(next) { models = next; }
 export function setExecutables(next) { executables = next; }
 export function setProfiles(next) { profiles = next; }
-export function setSelectedModelId(next) { selectedModelId = next; }
+export function setSelectedModelId(next) {
+  if (next !== selectedModelId) modelSelectionRevision++;
+  selectedModelId = next;
+}
 export function setActiveInstanceId(next) { activeInstanceId = next; }
 
 export function modelConfigured(m) {
