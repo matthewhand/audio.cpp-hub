@@ -31,6 +31,7 @@ prove that Breeze caused the slab allocation.
 | `AUDIOCPP_WARMUP_POLICY=skip` | Breeze instance creation/READY waits still happen; skips only Breeze warm-up. **SanoTTS still starts/warms** |
 | `AUDIOCPP_WARMUP_POLICY=best-effort` | Breeze starts normally, but warm-up HTTP failure, empty WAV, or invalid WAV logs a warning and exits success; SanoTTS still starts/warms |
 | `AUDIOCPP_WARMUP_MAX_SECONDS=1..30` | Bounded HTTP warm-up duration in best-effort policy; default 15. Strict legacy timeout remains 300 |
+| `MIN_FREE_MEMORY_MB` (nonempty `AUDIOCPP_MIN_FREE_MEMORY_MB` takes precedence) | Optional non-negative decimal integer in MiB with no leading zeros. The launcher sends it as `minFreeMemoryMb` when creating an instance. Unset or empty omits the field. Set `0` to disable the guard. |
 
 **Best option during a resource incident:** `hub-only`. The main Go hub
 can serve management functionality but no instance is automatically ready.
