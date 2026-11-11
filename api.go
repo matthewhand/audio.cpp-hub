@@ -345,6 +345,11 @@ func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	minFreeMemoryMb := optIntPtr(body, "minFreeMemoryMb")
+	if raw := body["minFreeMemoryMb"]; h.cfg.MinAvailableMemoryMb > 0 && raw != nil &&
+		(minFreeMemoryMb == nil || raw != float64(*minFreeMemoryMb)) {
+		errJSON(w, http.StatusBadRequest, "MIN_FREE_MEMORY_INVALID", nil, "minFreeMemoryMb 必须为整数")
+		return
+	}
 	if minFreeMemoryMb != nil && *minFreeMemoryMb < 0 {
 		errJSON(w, http.StatusBadRequest, "MIN_FREE_MEMORY_INVALID", nil, "minFreeMemoryMb 不能为负数")
 		return
@@ -381,6 +386,10 @@ func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 	sessionOptions, err := optStringMap(body, "sessionOptions")
 	if err != nil {
 		errFromErr(w, http.StatusBadRequest, "OPTIONS_INVALID", err)
+		return
+	}
+	if err := h.checkStartMemory(minFreeMemoryMb); err != nil {
+		errFromErr(w, http.StatusServiceUnavailable, "INSTANCE_MEMORY_UNAVAILABLE", err)
 		return
 	}
 	inst, err := h.instances.Start(StartParams{

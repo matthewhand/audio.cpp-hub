@@ -37,6 +37,9 @@ type HubConfig struct {
 	// ProxyResponseHeaderTimeoutMs bounds how long /v1/* waits for an instance to start
 	// answering (lazy load + offline generation). <= 0 falls back to 60 s.
 	ProxyResponseHeaderTimeoutMs int64 `json:"proxyResponseHeaderTimeoutMs"`
+	// Optional Linux host limits checked before starting a model instance.
+	MinAvailableMemoryMb int  `json:"minAvailableMemoryMb,omitempty"`
+	MaxSwapUsedPercent   *int `json:"maxSwapUsedPercent,omitempty"`
 	// V1SpeechArchive is the default for archiving successful /v1/audio/speech replies
 	// into operation history (nil = true). Requests override it with the JSON body field
 	// "archive": true|false or the header X-Hub-No-Archive: 1.
@@ -68,17 +71,18 @@ func loadConfig() HubConfig {
 
 // Hub 聚合各管理器，供 API 层使用。
 type Hub struct {
-	cfg       HubConfig
-	instances *InstanceManager
-	execs     *ExecutableRegistry
-	profiles  *ProfileRegistry
-	tasks     *TaskManager
-	bus       *EventBus
-	mem       *MemorySampler
-	history   *HistoryManager
-	voices    *VoiceLibrary
-	downloads *DownloadManager
-	metrics   *RequestMetrics // /v1 request log (#198); nil disables recording
+	cfg             HubConfig
+	readHostMemInfo func() ([]byte, error) // nil reads /proc/meminfo
+	instances       *InstanceManager
+	execs           *ExecutableRegistry
+	profiles        *ProfileRegistry
+	tasks           *TaskManager
+	bus             *EventBus
+	mem             *MemorySampler
+	history         *HistoryManager
+	voices          *VoiceLibrary
+	downloads       *DownloadManager
+	metrics         *RequestMetrics // /v1 request log (#198); nil disables recording
 }
 
 // ensureWorkDir 定位工作目录（需要 web/ 等运行时目录）：当前目录没有 web/ 时，
