@@ -87,6 +87,8 @@ window.I18N_EN = {
   "instance.empty": "No instances",
   "instance.port": "Port",
   "instance.memKeyRam": "RAM",
+  "memory.deviceGtt": "{device} · GPU-wide GTT (shared memory) {used} / {total}",
+  "memory.deviceVram": "VRAM {used} / {total}",
   "instance.memKeyVram": "VRAM",
   "instance.memNow": "now",
   "instance.memStatPeak": "Peak",
