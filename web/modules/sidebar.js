@@ -5,7 +5,7 @@ import { bindMenuKeys, focusDialog, hideBusy, renderEmptyState, renderStateError
 import { $, Api, el, markRowEnter, t } from "./dom.js";
 import { fillTtsForm } from "./panels.js";
 import { goPanel } from "./routing.js";
-import { selectedModel, selectedModelId } from "./state.js";
+import { modelSelectionRevision, selectedModel, selectedModelId } from "./state.js";
 import { makeTaskRow, taskDetails, taskViews } from "./tasks.js";
 
 /* ---------- 历史全屏面板：页头 🕘 打开；遮罩点击 / × / Esc 关闭 ---------- */
@@ -643,42 +643,33 @@ $("history-clear").onclick = async () => {
   }
 };
 
-/* "载入"：拉取单条完整记录回填 TTS 表单（提交组装 / collectParams 的逆操作） */
-export async function loadHistoryRecord(taskId) {
-  const modelId = historyModelId();
+let historyRestoreRevision = 0;
+
+/* "载入"与 Remix 共用请求；Remix 清空文本并把 seed 顺移一位。 */
+export async function loadHistoryRecord(taskId, remix = false) {
   const m = selectedModel();
-  if (!modelId || !m) return;
+  if (!m || (remix && m.family !== "breeze_tts")) return;
+  const requestRevision = ++historyRestoreRevision;
+  const selectionRevision = modelSelectionRevision;
+  // A model ID check alone misses switches away and back while the request is pending.
+  const isCurrent = () => requestRevision === historyRestoreRevision && selectionRevision === modelSelectionRevision;
   let rec;
   try {
-    rec = await Api.get("/api/history/{modelId}/{taskId}", { params: { modelId, taskId } });
+    rec = await Api.get("/api/history/{modelId}/{taskId}", { params: { modelId: m.id, taskId } });
   } catch (e) {
-    showToast("error", t("history.loadFailed") + t("common.colon") + e.message);
+    if (isCurrent()) showToast("error", t("history.loadFailed") + t("common.colon") + e.message);
     return;
+  }
+  if (!isCurrent()) return;
+  if (remix) {
+    rec.text = "";
+    if (rec.options?.seed != null) rec.options.seed = Number(rec.options.seed) + 1;
   }
   fillTtsForm(m, rec);
-  showToast("info", t("history.loaded"));
+  if (remix) $("tts-text")?.focus();
+  showToast("info", t(remix ? "history.remixed" : "history.loaded"));
 }
 
-/* 「Remix」：载入同款音色/指令/seed，但文本留空——同一声音设计下写新台词。
-   seed 顺移一位，避免逐字重播同一段音频。 */
-export async function remixHistoryRecord(taskId) {
-  const modelId = historyModelId();
-  const m = selectedModel();
-  if (!modelId || !m || m.family !== "breeze_tts") return;
-  let rec;
-  try {
-    rec = await Api.get("/api/history/{modelId}/{taskId}", { params: { modelId, taskId } });
-  } catch (e) {
-    showToast("error", t("history.loadFailed") + t("common.colon") + e.message);
-    return;
-  }
-  const remix = JSON.parse(JSON.stringify(rec));
-  remix.text = "";
-  if (remix.options && remix.options.seed != null) {
-    remix.options.seed = Number(remix.options.seed) + 1;
-  }
-  fillTtsForm(m, remix);
-  const text = $("tts-text");
-  if (text) { text.value = ""; text.focus(); }
-  showToast("info", t("history.remixed"));
+export function remixHistoryRecord(taskId) {
+  return loadHistoryRecord(taskId, true);
 }
