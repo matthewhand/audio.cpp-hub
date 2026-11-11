@@ -54,9 +54,31 @@ export async function loadStats() {
 function renderStats(data) {
   const body = $("stats-body");
   body.innerHTML = "";
+  if (Array.isArray(data?.amdDevices) && data.amdDevices.length) {
+    const devices = el(`<div class="card"></div>`);
+    for (const gpu of data.amdDevices) {
+      const row = document.createElement("p");
+      const device = gpu.card + " · " + gpu.pci;
+      row.textContent = t("memory.deviceGtt", {
+        device,
+        used: I18N.bytes(gpu.usedBytes),
+        total: I18N.bytes(gpu.totalBytes)
+      });
+      if (Number.isFinite(gpu.vramUsedBytes) && Number.isFinite(gpu.vramTotalBytes)) {
+        row.textContent += " · " + t("memory.deviceVram", {
+          used: I18N.bytes(gpu.vramUsedBytes),
+          total: I18N.bytes(gpu.vramTotalBytes)
+        });
+      }
+      devices.appendChild(row);
+    }
+    body.appendChild(devices);
+  }
   const models = Array.isArray(data && data.models) ? data.models : [];
   if (!models.length) {
-    renderEmptyState(body, t("stats.empty"));
+    const empty = el(`<div></div>`);
+    renderEmptyState(empty, t("stats.empty"));
+    body.appendChild(empty);
     return;
   }
 

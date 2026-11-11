@@ -65,9 +65,9 @@ func TestQA121UnavailableVRAMNeverPresentedAsCurrent(t *testing.T) {
 	sampler := NewMemorySampler(nil, NewTaskManager(NewHistoryManager()), bus)
 	id := "synthetic-instance"
 	now := time.Unix(1700000000, 0)
-	sampler.record(id, now, 100, 2048, true, vramSourceDrm)
+	sampler.record(id, now, 100, 2048, true, vramSourceDrm, nil)
 	sampler.setBusy(id, true)
-	sampler.record(id, now.Add(time.Second), 120, 0, false, "")
+	sampler.record(id, now.Add(time.Second), 120, 0, false, "", nil)
 	memory := sampler.MemoryJSON(id)
 	if _, ok := memory["vramBytes"]; ok {
 		t.Fatalf("stale VRAM presented as current: %#v", memory)

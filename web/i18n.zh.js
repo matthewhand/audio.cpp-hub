@@ -87,6 +87,8 @@ window.I18N_ZH = {
   "instance.empty": "暂无实例",
   "instance.port": "端口",
   "instance.memKeyRam": "内存",
+  "memory.deviceGtt": "{device} · 整卡 GTT（共享内存）{used} / {total}",
+  "memory.deviceVram": "显存 {used} / {total}",
   "instance.memKeyVram": "显存",
   "instance.memNow": "当前",
   "instance.memStatPeak": "峰值",

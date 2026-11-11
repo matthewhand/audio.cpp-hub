@@ -29,13 +29,12 @@ func procStatusRSSBytes(pid int) (int64, bool) {
 	return parseVmRSSBytes(string(data))
 }
 
-// procDrmVRAMBytes sums drm-memory-vram across /proc/<pid>/fdinfo/* entries
-// (de-duplicated by drm-client-id; see sumDrmVRAMBytes).
-func procDrmVRAMBytes(pid int) (int64, bool) {
+// procDrmMemory reads per-process VRAM and an unambiguous PCI identity from DRM fdinfo.
+func procDrmMemory(pid int) (int64, bool, string) {
 	dir := filepath.Join("/proc", strconv.Itoa(pid), "fdinfo")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return 0, false
+		return 0, false, ""
 	}
 	contents := make(map[string]string, len(entries))
 	for _, e := range entries {
@@ -45,7 +44,8 @@ func procDrmVRAMBytes(pid int) (int64, bool) {
 		}
 		contents[e.Name()] = string(data)
 	}
-	return sumDrmVRAMBytes(contents)
+	used, known := sumDrmVRAMBytes(contents)
+	return used, known, uniqueDrmPCI(contents)
 }
 
 // drmCardIndex parses a /sys/class/drm entry name ("card0", "renderD128") into
@@ -88,3 +88,5 @@ func procDrmVramTotals() map[int]int64 {
 	}
 	return out
 }
+
+func procAmdGTT() []amdGTTDevice { return readAmdGTT(drmCardDir) }
