@@ -3193,6 +3193,13 @@
         "hint": "可选，每行一个 Kokoro 音素块（最多 510 个符号）。留空则从文本生成音素。需使用支持音素数组的引擎。",
         "hintEn": "Optional. Enter one Kokoro phoneme chunk per line (up to 510 symbols). Leave blank to pronounce the text. Requires an engine that supports phoneme arrays."
       },
+      "return_timestamps": {
+        "type": "boolean",
+        "default": false,
+        "omitFalse": true,
+        "label": "保留音素组时间戳",
+        "labelEn": "Save phoneme-group timestamps"
+      },
       "speed": {
         "type": "number",
         "default": 1.0,

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -63,5 +64,65 @@ func TestFinalizeTTS(t *testing.T) {
 	}
 	if result, errMsg = finalizeTTS(hist, inst, nil, "num", numTmp); errMsg != "响应中未找到音频数据" || result != nil {
 		t.Fatalf("非字符串 audio 应按未找到处理: result=%v errMsg=%q", result, errMsg)
+	}
+}
+
+func TestFinalizeKokoroTimestamps(t *testing.T) {
+	chdirTemp(t)
+	history := NewHistoryManager()
+	const words = `[{"word":"həlˈO","start_sample":0,"end_sample":300,"confidence":0},{"word":"wˈɜɹld","start_sample":300,"end_sample":600,"confidence":0}]`
+	audio := `"audio":"` + base64.StdEncoding.EncodeToString(minimalWAV()) + `"`
+	for _, tc := range []struct {
+		name, model, response string
+		wantWords             bool
+	}{
+		{"after-audio", "kokoro_tts", "{" + audio + `,"words":` + words + "}", true},
+		{"before-audio", "kokoro_tts", `{"words":` + words + "," + audio + "}", true},
+		{"absent", "kokoro_tts", "{" + audio + "}", false},
+		{"empty", "kokoro_tts", "{" + audio + `,"words":[]}`, false},
+		{"malformed", "kokoro_tts", "{" + audio + `,"words":[{"word":"test","end_sample":20}]}`, false},
+		{"wrong-shape-first", "kokoro_tts", `{"words":{} ,` + audio + "}", false},
+		{"truncated", "kokoro_tts", "{" + audio + `,"words":[`, false},
+		{"unrelated-model", "index_tts2", "{" + audio + `,"words":` + words + "}", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := historyDir(tc.model)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			tmp := filepath.Join(dir, tc.name+".json")
+			if err := os.WriteFile(tmp, []byte(tc.response), 0644); err != nil {
+				t.Fatal(err)
+			}
+			inst := &Instance{Name: "tts", ModelID: tc.model}
+			taskResult, errMsg := finalizeTTS(history, inst, nil, tc.name, tmp)
+			if errMsg != "" || taskResult["words"] != nil || history.AudioPath(tc.model, tc.name) == "" {
+				t.Fatalf("task result = %v, error = %q", taskResult, errMsg)
+			}
+			for _, manager := range []*HistoryManager{history, NewHistoryManager()} {
+				rec := manager.Get(tc.model, tc.name)
+				result, ok := rec["result"].(map[string]any)
+				if !ok || result["sampleRate"] != float64(8000) {
+					t.Fatalf("history result = %v", result)
+				}
+				got, exists := result["words"]
+				if exists != tc.wantWords {
+					t.Fatalf("words = %v, want presence %v", got, tc.wantWords)
+				}
+				if exists {
+					var expected any
+					if err := json.Unmarshal([]byte(words), &expected); err != nil {
+						t.Fatal(err)
+					}
+					if !reflect.DeepEqual(got, expected) {
+						t.Fatalf("words = %v, want %v", got, expected)
+					}
+				}
+				list := manager.List(tc.model)
+				if list[0]["result"].(map[string]any)["words"] != nil {
+					t.Fatalf("history summary contains words: %v", list[0])
+				}
+			}
+		})
 	}
 }

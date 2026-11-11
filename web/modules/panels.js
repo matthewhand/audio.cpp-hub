@@ -150,7 +150,10 @@ export function collectParams(m, prefix, req) {
     const opts = req.options || (req.options = {});
     // qwen3_tts_voicedesign 的 seed 引擎要求放请求顶层（其余模型 seed 走 options 透传）
     const target = (m.id === "qwen3_tts_voicedesign" && key === "seed") ? req : opts;
-    if (p.type === "boolean") { target[key] = input.checked; continue; }
+    if (p.type === "boolean") {
+      if (input.checked || !p.omitFalse) target[key] = input.checked;
+      continue;
+    }
     if (p.type === "string_array") {
       const chunks = input.value.split(/\r?\n/).filter(chunk => chunk.trim());
       if (chunks.length > 0) target[key] = chunks;
@@ -719,6 +722,10 @@ export function applyHistoryOptions(m, options) {
     if (!input) continue;
     if (p.type === "string_array") {
       input.value = Array.isArray(options[key]) ? options[key].join("\n") : "";
+      continue;
+    }
+    if (p.type === "boolean" && p.omitFalse) {
+      input.checked = ["true", "1", "yes", "on"].includes(String(options[key]));
       continue;
     }
     if (options[key] === undefined) continue;

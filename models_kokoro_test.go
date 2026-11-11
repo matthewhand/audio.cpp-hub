@@ -91,6 +91,10 @@ func TestKokoroRegistry(t *testing.T) {
 	if !ok || phonemes["type"] != "string_array" || phonemes["default"] != nil {
 		t.Errorf("phonemes = %v; want optional string_array with no default", phonemes)
 	}
+	timestamps, ok := schema["return_timestamps"].(map[string]any)
+	if !ok || timestamps["type"] != "boolean" || timestamps["default"] != false || timestamps["omitFalse"] != true {
+		t.Errorf("return_timestamps = %v; want opt-in boolean", timestamps)
+	}
 }
 
 func TestKokoroPackages(t *testing.T) {
