@@ -234,6 +234,7 @@ window.I18N_EN = {
   "history.detailRefText": "Reference text",
   "history.detailVoice": "Voice / prompt",
   "history.detailParams": "Parameters",
+  "history.downloadPhonemeTimestamps": "Download phoneme timestamps",
   "history.detailNoSnapshot": "(source path, not archived)",
   "history.detailFailed": "Failed to load details",
   "history.detailSpeaker": "Speaker: {name}",

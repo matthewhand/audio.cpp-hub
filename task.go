@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -580,8 +582,8 @@ func (m *TaskManager) runTTS(ctx context.Context, t *Task) error {
 // wavPath 与 tmp 同目录，result["file"] 用 taskID 命名，保证历史音频 URL 可寻址。
 func finalizeTTS(history *HistoryManager, inst *Instance, request map[string]any, taskID, tmp string) (result map[string]any, errMsg string) {
 	wavPath := filepath.Join(filepath.Dir(tmp), taskID+".wav")
-	found, err := extractAudio(tmp, wavPath)
-	if err != nil {
+	found, words, err := extractTTSResponse(tmp, wavPath, inst.ModelID == "kokoro_tts")
+	if err != nil && !found {
 		errMsg = "结果音频提取失败: " + summarize(err.Error())
 		os.Remove(wavPath)
 	} else if !found {
@@ -602,7 +604,12 @@ func finalizeTTS(history *HistoryManager, inst *Instance, request map[string]any
 			"channels":    info.Channels,
 		}
 	}
-	if historyErr := history.RecordTTS(inst, request, taskID, result, errMsg); historyErr != nil {
+	historyResult := result
+	if result != nil && len(words) > 0 {
+		historyResult = maps.Clone(result)
+		historyResult["words"] = words
+	}
+	if historyErr := history.RecordTTS(inst, request, taskID, historyResult, errMsg); historyErr != nil {
 		log.Printf("failed to persist TTS history: %v", historyErr)
 		if errMsg == "" {
 			errMsg = "历史记录落盘失败: " + summarize(historyErr.Error())
@@ -650,44 +657,72 @@ func (m *TaskManager) forwardToFile(ctx context.Context, inst *Instance, request
 	return err
 }
 
-// extractAudio 从响应 JSON 中流式提取顶层 "audio"（base64）解码写 wav。
-func extractAudio(src, dst string) (bool, error) {
+// extractTTSResponse reads the WAV and, for Kokoro, any phoneme groups.
+// found means a WAV was written, so later optional metadata errors cannot discard it.
+func extractTTSResponse(src, dst string, retainWords bool) (found bool, words []map[string]any, err error) {
 	f, err := os.Open(src)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	defer f.Close()
 	dec := json.NewDecoder(f)
-	if _, err := dec.Token(); err != nil { // 顶层 '{'
-		return false, err
+	if _, err := dec.Token(); err != nil {
+		return false, nil, err
 	}
-	for dec.More() {
+	for dec.More() && (!found || retainWords) {
 		kt, err := dec.Token()
 		if err != nil {
-			return false, err
+			return found, words, err
 		}
-		key, _ := kt.(string)
-		if key == "audio" {
+		var raw json.RawMessage
+		switch {
+		case kt == "audio" && !found:
 			vt, err := dec.Token()
 			if err != nil {
-				return false, err
+				return false, nil, err
 			}
-			s, ok := vt.(string)
+			encoded, ok := vt.(string)
 			if !ok {
-				return false, nil
+				return false, nil, nil
 			}
-			data, err := base64.StdEncoding.DecodeString(s)
+			data, err := base64.StdEncoding.DecodeString(encoded)
 			if err != nil {
-				return false, err
+				return false, nil, err
 			}
-			return true, os.WriteFile(dst, data, 0644)
-		}
-		var skip json.RawMessage
-		if err := dec.Decode(&skip); err != nil {
-			return false, err
+			if err := os.WriteFile(dst, data, 0644); err != nil {
+				return false, nil, err
+			}
+			found = true
+		case kt == "words" && retainWords:
+			if err := dec.Decode(&raw); err != nil {
+				return found, nil, err
+			}
+			words = kokoroWords(raw)
+			retainWords = false
+		default:
+			if err := dec.Decode(&raw); err != nil {
+				return found, words, err
+			}
 		}
 	}
-	return false, nil
+	return found, words, nil
+}
+
+func kokoroWords(raw json.RawMessage) []map[string]any {
+	var words []map[string]any
+	if err := json.Unmarshal(raw, &words); err != nil {
+		return nil
+	}
+	for _, word := range words {
+		label, _ := word["word"].(string)
+		start, startOK := word["start_sample"].(float64)
+		end, endOK := word["end_sample"].(float64)
+		if label == "" || !startOK || !endOK || start < 0 || end < start ||
+			math.Trunc(start) != start || math.Trunc(end) != end {
+			return nil
+		}
+	}
+	return words
 }
 
 // resultTextPreview 非 TTS 结果 JSON 顶层 "text" 截断 100 字（如 ASR 转写文本）。

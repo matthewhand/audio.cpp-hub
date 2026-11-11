@@ -103,7 +103,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 | `paramSchema` | 额外参数定义，见下 |
 | `modes` / `backends` / `requiredFiles` / `hfUrl` / `ggufUrl` / `task` | 启动与下载相关元数据 |
 
-`paramSchema` 为 `{参数名: 定义}`，`定义.type` 取 `string` / `number` / `integer` / `boolean` / `enum` / `path`，可带 `default`、`min` / `max` / `step`、`values`（`enum` 的候选项）、`label` / `labelEn`、`hint` / `hintEn`、`placeholder` / `placeholderEn`、`required`。
+`paramSchema` 为 `{参数名: 定义}`，`定义.type` 取 `string` / `number` / `integer` / `boolean` / `enum` / `path`，可带 `default`、`min` / `max` / `step`、`values`（`enum` 的候选项）、`label` / `labelEn`、`hint` / `hintEn`、`placeholder` / `placeholderEn`、`required`、`omitFalse`（未选中的布尔参数不发送）。
 
 **参数进入请求体的位置**（`POST /api/tasks` 的 `request`）：
 
@@ -411,6 +411,14 @@ body 同上，更新后返回条目；不存在 `404 EXEC_NOT_FOUND`。
 ### `GET /api/history/{modelId}/{taskId}`
 
 返回完整记录（含 `voice`、`options`、`refs`、`refBytes`、`result` 等）。
+
+Kokoro 的高级参数「保留音素组时间戳」默认关闭。API 调用方可在 `POST /api/tasks` 或
+`POST /api/run/{id}` 中传入 `request.options.return_timestamps: true`。若引擎随有效 WAV
+返回音素组，完整历史记录的 `result.words` 保留引擎数组，元素含 `word`（Kokoro 音素组）、
+`start_sample`、`end_sample`、`confidence`。用同一记录的 `result.sampleRate` 将样本位置换算为秒。
+音素组与原文单词没有一一对应关系。WebUI 可在历史详情下载包含 `sample_rate` 和 `words` 的 JSON。
+引擎未返回有效时间戳时，历史仍保留 WAV，且省略 `result.words`。列表和任务状态响应省略此数组。
+OpenAI 兼容的 `/v1/audio/speech` 按原有音频响应契约返回。
 
 ### `DELETE /api/history/{modelId}/{taskId}`
 

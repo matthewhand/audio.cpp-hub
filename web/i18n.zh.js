@@ -234,6 +234,7 @@ window.I18N_ZH = {
   "history.detailRefText": "参考文本",
   "history.detailVoice": "音色 / 提示词",
   "history.detailParams": "参数",
+  "history.downloadPhonemeTimestamps": "下载音素时间戳",
   "history.detailNoSnapshot": "（源路径，未快照）",
   "history.detailFailed": "详情加载失败",
   "history.detailSpeaker": "说话人：{name}",
