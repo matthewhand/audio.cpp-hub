@@ -23,6 +23,37 @@ export function sortInstances(list) {
   });
 }
 
+// Keep dropdown ordering and default selection independent of API response order.
+export function readyInstancesForModel(list, modelId) {
+  return sortInstances(list.filter(i => i.modelId === modelId && i.status === "READY")).reverse();
+}
+
+export function preferredReadyInstance(ready, recentIds) {
+  for (const id of recentIds) {
+    if (ready.some(inst => inst.id === id)) return id;
+  }
+  return ready[0]?.id ?? null;
+}
+
+function recentInstanceIds(modelId) {
+  try {
+    const value = JSON.parse(localStorage.getItem("hub-instance-recent:" + modelId) || "[]");
+    return Array.isArray(value) ? value.filter(id => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberInstance(modelId, id, recentIds) {
+  if (!modelId || !id || recentIds[0] === id) return;
+  try {
+    const next = [id, ...recentIds.filter(other => other !== id)].slice(0, 20);
+    localStorage.setItem("hub-instance-recent:" + modelId, JSON.stringify(next));
+  } catch {
+    // Selecting an instance still works if storage is disabled.
+  }
+}
+
 const MEM_MIB = 1024 * 1024;
 const SPARK_W = 74;
 const SPARK_H = 16;
@@ -254,8 +285,8 @@ export function applyInstances(data) {
     if (inst) { setPendingInstanceId(null); openInstanceDetail(inst); }
   }
   pruneSparkStore();
-  renderInstanceList();
   updateInstanceBar();
+  renderInstanceList();
 }
 
 export function onInstancesError(e) {
@@ -331,7 +362,7 @@ export function renderInstanceList() {
 }
 
 export function updateInstanceBar() {
-  const ready = instances.filter(i => i.modelId === selectedModelId && i.status === "READY");
+  const ready = readyInstancesForModel(instances, selectedModelId);
   const select = $("instance-select");
   select.innerHTML = "";
   for (const inst of ready) {
@@ -341,13 +372,13 @@ export function updateInstanceBar() {
     select.appendChild(opt);
   }
   const has = ready.length > 0 && !instanceFeedStale;
-  if (has) {
-    if (!ready.some(i => i.id === activeInstanceId)) {
-      setActiveInstanceId(ready[0].id);
-    }
-    select.value = activeInstanceId;
-  } else {
-    setActiveInstanceId(null);
+  const recentIds = recentInstanceIds(selectedModelId);
+  const currentReady = ready.some(inst => inst.id === activeInstanceId);
+  const next = has ? (currentReady ? activeInstanceId : preferredReadyInstance(ready, recentIds)) : null;
+  setActiveInstanceId(next);
+  if (next) {
+    select.value = next;
+    rememberInstance(selectedModelId, next, recentIds);
   }
 
 
@@ -395,7 +426,10 @@ export async function stopInstance(id) {
 }
 
 $("instance-select").onchange = (e) => {
-  setActiveInstanceId(e.target.value);
+  const id = e.target.value;
+  if (instanceFeedStale || !readyInstancesForModel(instances, selectedModelId).some(inst => inst.id === id)) return;
+  setActiveInstanceId(id);
+  rememberInstance(selectedModelId, id, recentInstanceIds(selectedModelId));
   renderInstanceList();
 };
 
