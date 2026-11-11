@@ -226,18 +226,10 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3) 按服务名路由（READY 才转发；非 READY 409；不存在 404）
-	inst := h.instances.FindByName(model)
+	inst := h.routeV1Instance(w, rec, model)
 	if inst == nil {
-		rec.SetRequestedModel(model)
-		if h.instances.FindAnyByName(model) != nil {
-			v1Error(w, http.StatusConflict, "Model is still starting: "+model)
-		} else {
-			v1Error(w, http.StatusNotFound, "Model not found: "+model)
-		}
 		return
 	}
-
-	rec.SetInstance(inst)
 
 	// 4) 落盘文件作为 body 转发到实例同名路径，5) 响应流式回写
 	// Opt-in sentence-chunked streaming for offline-only TTS families (#196).
@@ -247,6 +239,31 @@ func (h *Hub) handleV1Proxy(w http.ResponseWriter, r *http.Request) {
 	h.forwardV1(w, r, inst, tmp, n)
 }
 
+func (h *Hub) routeV1Instance(w http.ResponseWriter, rec *reqState, model string) *Instance {
+	inst := h.instances.FindAnyByName(model)
+	rec.SetRequestedModel(model)
+	if inst == nil {
+		v1Error(w, http.StatusNotFound, "Model not found: "+model)
+		return nil
+	}
+	switch h.instances.StatusOf(inst) {
+	case "READY":
+		rec.SetInstance(inst)
+		return inst
+	case "EXITED":
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"error": map[string]any{
+				"message": "Model instance exited: " + model,
+				"type":    "server_error",
+				"code":    "INSTANCE_EXITED",
+			},
+		})
+	default:
+		v1Error(w, http.StatusConflict, "Model is still starting: "+model)
+	}
+	return nil
+}
+
 // handleV1Models GET /v1/models：聚合 READY 实例，OpenAI 格式。
 func (h *Hub) handleV1Models(w http.ResponseWriter, r *http.Request) {
 	if r.Body != nil {
@@ -254,7 +271,7 @@ func (h *Hub) handleV1Models(w http.ResponseWriter, r *http.Request) {
 	}
 	data := []map[string]any{}
 	for _, inst := range h.instances.List() {
-		if inst.Status != "READY" {
+		if h.instances.StatusOf(inst) != "READY" {
 			continue
 		}
 		data = append(data, map[string]any{
