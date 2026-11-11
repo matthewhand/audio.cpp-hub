@@ -146,37 +146,50 @@ so standard OpenAI clients work unchanged.
 
 ### Preset voices (no cloning)
 
-Some models ship a fixed voice bank instead of cloning. Their card says so:
-`inputs.voiceRef` is `"none"`, and the picker is a `paramSchema` enum:
-`voice_id` (Kokoro 82M's 54 voices, Supertonic, Magpie), `speaker` (qwen3
-CustomVoice), or a mode key such as `task_route` (vevo2). Passing `voice_ref`
-to these models is not a fallback: there is no reference clip for the engine to
-read.
+Kokoro and Supertonic have fixed voice banks. Their cards declare
+`inputs.voiceRef: "none"` and list the presets under
+`paramSchema.voice_id.values`. Omit `voice_ref` for these models.
 
-Read the list off the card before you call — `/v1/models` only knows which
-services are up, not what voices they have:
+`GET /api/models` returns model cards with an `id` field (`kokoro_tts`,
+`supertonic`).
+`GET /v1/models` lists READY service names only and has no voice list. On
+`POST /v1/audio/speech`, `model` is that READY service name. Set `HUB` to a hub
+you can reach that is serving the name you send, for example
+`HUB=http://127.0.0.1:18080` for a local hub. The hub forwards the WAV requests
+below to the selected engine with their JSON fields intact.
+
+Read the voice list off the card before you call:
 
 ```bash
-curl -s http://10.0.0.36:18080/api/models | python3 -c 'import json,sys
+curl --fail-with-body -sS "$HUB/api/models" | python3 -c 'import json,sys
 m=[x for x in json.load(sys.stdin) if x["id"]=="kokoro_tts"][0]
 print(m["paramSchema"]["voice_id"]["values"])'
 ```
 
-Kokoro 82M — `/api/models` id `kokoro_tts`, service name `kokoro` on the hub that
-runs it:
+Python's `extra_options` supplies nested `options` such as `voice_id` in
+the examples below. Use a raw POST to set `language`.
 
-```jsonc
-// POST http://<hub-running-kokoro>:18080/v1/audio/speech   (hub: model = service name)
-{
-  "model": "kokoro",
-  "input": "Oh, brilliant. Another meeting that could have been an email.",
-  "response_format": "wav",
-  "language": "en-us",              // top-level; one of language.values
-  "options": {
-    "voice_id": "af_heart",         // default; the 54 values are in the card
-    "speed": 1.0                    // 0.5 … 2.0
-  }
-}
+Kokoro 82M — card id `kokoro_tts`, service name `kokoro` (`voice_id` and
+`speed` under `options`; `language` top-level, one of the card's
+`language.values`):
+
+```bash
+curl --fail-with-body -sS -H "Content-Type: application/json" \
+  --data-binary '{"model":"kokoro","input":"Hello from Kokoro.","response_format":"wav","language":"en-us","options":{"voice_id":"af_heart","speed":1.0}}' \
+  -o kokoro.wav \
+  "$HUB/v1/audio/speech"
+```
+
+Supertonic — card id `supertonic`, service name `supertonic`. For
+`/v1/audio/speech`, put `language` at the top level and `voice_id` in
+`options`. The audio.cpp v0.9.3 speech parser reads the nested preset value.
+The WebUI's async request builder uses a different shape, shown below.
+
+```bash
+curl --fail-with-body -sS -H "Content-Type: application/json" \
+  --data-binary '{"model":"supertonic","input":"Hello from Supertonic.","response_format":"wav","language":"en","options":{"voice_id":"M2"}}' \
+  -o supertonic.wav \
+  "$HUB/v1/audio/speech"
 ```
 
 Two things to know before building on Kokoro:
@@ -190,29 +203,37 @@ Two things to know before building on Kokoro:
   UniDic resources, so `jf_*` / `jm_*` fail at runtime on it. Every other
   language is unaffected.
 
-Where each model wants its enum key (the same rule as `docs/API.md`; authority is
-`web/modules/panels.js`):
+Where the WebUI places each enum in its `/api/tasks` request (`web/modules/panels.js` `collectEnums`; same
+rule as `docs/API.md`). Standalone `language` (the card `language` field,
+including `index_tts2` and `moss_ttsd`) and CustomVoice `speaker` are written
+top-level, outside `collectEnums`. Inside `collectEnums`, Supertonic `voice_id`
+and vevo2 `task_route` stay top-level; every other enumeration goes in
+`options`, including Magpie `text_chunk_mode`. History later folds a top-level
+`voice_id` into the archived `options` object. That fold is archive shape, not
+the request to send.
 
 | Model (`/api/models` id) | Key | Where |
 |---|---|---|
 | `kokoro_tts` | `voice_id`, `speed` | `options` |
-| `magpie_tts` | `voice_id` | `options` |
+| `magpie_tts` | `voice_id`, `text_chunk_mode` | `options` |
 | `breeze-tts` | `text_chunk_mode` | `options` |
 | `index_tts2_5` | `lang` | `options` |
-| `supertonic` | `voice_id` | top-level |
+| `index_tts2`, `moss_ttsd` | `language` | top-level |
+| `supertonic` | `voice_id`, `language` | top-level |
 | `qwen3_tts_customvoice` | `speaker` (with `instruct`) | top-level |
 | `vevo2` | `task_route` | top-level |
+| any card with `language` | `language` | top-level |
 
-`language` is always top-level when the card has a `language` field (Kokoro,
-Magpie, Supertonic, …). The hub's `POST /api/tasks` takes the same shapes — only
-`instanceId` replaces `model` — so a preset-voice task reads
+For `POST /api/tasks`, put the instance ID in `instanceId` and the
+engine fields under `request`. Use `request.text` for the text to speak.
+
+For example, a Kokoro task uses
 `{"instanceId": "…", "request": {"text": "…", "language": "en-us", "options": {"voice_id": "af_heart"}}}`.
 
-> **Alias ≠ modelId.** The fan-out alias (`kokoro`) is a *service* name;
-> `/api/models`, `paramSchema` and `/api/history/<modelId>` are keyed by the
-> **model id** (`kokoro_tts`). The Kokoro route is not in the shipped
-> `farm.routes.json` yet — routing and the loopback hub are tracked separately
-> (issue #204).
+The checked-in [farm route](../cmd/fanout-proxy/farm.routes.json) maps the
+alias `kokoro` to the `kokoro` service on the GTX host's loopback hub.
+Use the card ID `kokoro_tts` for model metadata and history. See the
+[loopback routing ticket](https://github.com/matthewhand/audio.cpp-hub/issues/204).
 
 ### Where results are archived
 
