@@ -130,8 +130,14 @@ test("selects the most recently used READY instance for the current model", () =
   ];
   const recent = ["wrong-model", "stopped", "starting", "old", "new"];
   assert.equal(preferredReadyInstance(readyInstancesForModel(list, "model"), recent), "old");
-  assert.equal(preferredReadyInstance(readyInstancesForModel(list.slice(1), "model"), recent), "new");
-  assert.equal(preferredReadyInstance(readyInstancesForModel(list, "other"), recent), "wrong-model");
+  assert.equal(
+    preferredReadyInstance(readyInstancesForModel(list.slice(1), "model"), recent),
+    "new"
+  );
+  assert.equal(
+    preferredReadyInstance(readyInstancesForModel(list, "other"), recent),
+    "wrong-model"
+  );
   assert.equal(preferredReadyInstance(readyInstancesForModel(list, "missing"), recent), null);
 });
 
