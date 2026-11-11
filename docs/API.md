@@ -105,16 +105,14 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 
 `paramSchema` 为 `{参数名: 定义}`，`定义.type` 取 `string` / `number` / `integer` / `boolean` / `enum` / `path`，可带 `default`、`min` / `max` / `step`、`values`（`enum` 的候选项）、`label` / `labelEn`、`hint` / `hintEn`、`placeholder` / `placeholderEn`、`required`。
 
-**参数进入请求体的位置**（`POST /api/tasks` 的 `request`）：
+**参数进入请求体的位置**（面板如何组 `POST /api/tasks` 的 `request`。下文链接中的 WAV 请求由 hub 按原 JSON 字段转发给引擎）：
 
-- 通用规则：`paramSchema` 字段放 `request.options`。服务端对 `options` 全量透传，顶层字段只认白名单，写错位置会被静默丢弃。
-- 例外（权威来源是 `web/modules/panels.js` 的 `collectParams` / `collectEnums`，改前端时须同步本节）：
-  - `lang`、`text_chunk_mode`（BreezeTTS / MagpieTTS 等）、`kokoro_tts.voice_id`、`magpie_tts.voice_id` → `options`；
-  - `supertonic.voice_id`、`magpie_tts.language` 等其余 enum → 顶层；
-  - `qwen3_tts_voicedesign.seed` → 顶层（写历史时并入 `options`）；
-  - `vevo2.task_route` → 顶层（引擎按顶层键读）；
-  - `index_tts2` 情感参考音频 → 顶层 `audio`，其余情感参数 → `options`。
-- 预置音色（`voice_id`）的完整用法与示例见 [agent-api.md § Preset voices](agent-api.md#preset-voices-no-cloning)。
+- 权威来源是 `web/modules/panels.js` 的 `collectParams` / `collectEnums`，改前端时须同步本节。`GET /api/models` 的卡片 `id` 与 `GET /v1/models` 的 READY 服务名不是同一个键。
+- 卡片上的独立 `language`（含 `index_tts2`、`moss_ttsd`）与 CustomVoice 的 `speaker` 写在顶层，不经过 `collectEnums`。
+- `collectEnums`：`supertonic.voice_id`、`vevo2.task_route` 留在顶层；其余枚举进 `options`，包括 Magpie 的 `text_chunk_mode`、`kokoro_tts.voice_id`、`magpie_tts.voice_id`、`lang`。
+- `collectParams`：`paramSchema` 一般进 `request.options`。例外是 `qwen3_tts_voicedesign.seed` → 顶层（写入历史时并入 `options`）。历史也会把顶层 `voice_id` 折进归档的 `options`；那是归档形态，不是请求写法。
+- `index_tts2` 情感参考音频 → 顶层 `audio`，其余情感参数 → `options`。预置音色不传 `voice_ref`。Python 客户端的 `extra_options` 只并进嵌套 `options`，盖不到顶层键。
+- 同步 `POST /v1/audio/speech` 的 Supertonic 示例使用 `options.voice_id`，与上面的 WebUI 异步请求格式不同。预置音色的可运行 curl 见 [agent-api.md § Preset voices](agent-api.md#preset-voices-no-cloning)。
 
 ### `GET /api/models/{modelId}/packages`
 
