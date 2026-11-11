@@ -274,7 +274,7 @@ func isSameSiteRequest(r *http.Request) bool {
 // ---------- 模型清单 ----------
 
 func (h *Hub) handleModels(w http.ResponseWriter, r *http.Request) {
-	writeRawJSON(w, http.StatusOK, modelsRaw)
+	writeRawJSON(w, http.StatusOK, modelCatalogJSON)
 }
 
 // ---------- 实例 ----------
