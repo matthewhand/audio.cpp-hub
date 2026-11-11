@@ -70,3 +70,37 @@ test("Kokoro TTS：单控件无重复渲染，所选 voice_id 正确写入 optio
   expect(task.request?.options?.voice_id).toBe("jf_alpha");
   expect(task.request?.voice_id).toBeUndefined();
 });
+
+test("Kokoro phoneme chunks survive submission and history restore", async ({ page }) => {
+  const backend = new MockBackend({
+    instances: [{ ...READY, modelId: "kokoro_tts", instanceName: "kokoro" }]
+  });
+  await openApp(page, backend, { modelId: "kokoro_tts", lang: "en" });
+  await page.locator("#tts-advanced summary").click();
+  const phonemes = page.getByRole("textbox", { name: /^Phonemes/ });
+  await expect(phonemes).toBeVisible();
+  await page.locator("#tts-text").fill("Text for Kokoro");
+  const submit = page.locator("#tts-submit");
+
+  const chunks = ["həlˈO", "wˈɜɹld"];
+  await phonemes.fill(chunks.join("\n\n"));
+  await submit.click();
+  await expect.poll(() => backend.tasks.length).toBe(1);
+  expect(backend.tasks[0].request?.options?.phonemes).toEqual(chunks);
+  expect(backend.tasks[0].request?.phonemes).toBeUndefined();
+
+  const restore = (options) =>
+    page.evaluate(async (savedOptions) => {
+      const { fillTtsForm } = await import("/modules/panels.js");
+      const { selectedModel } = await import("/modules/state.js");
+      fillTtsForm(selectedModel(), { text: "Restored", options: savedOptions });
+    }, options);
+  await phonemes.fill("stale");
+  await restore({ phonemes: chunks });
+  await expect(phonemes).toHaveValue(chunks.join("\n"));
+  await restore({});
+  await expect(phonemes).toHaveValue("");
+  await submit.click();
+  await expect.poll(() => backend.tasks.length).toBe(2);
+  expect(backend.tasks[1].request?.options?.phonemes).toBeUndefined();
+});

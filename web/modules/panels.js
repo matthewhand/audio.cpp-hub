@@ -90,6 +90,11 @@ export function paramInput(key, p, prefix) {
   if (p.type === "boolean") {
     return el(`<label class="checkbox-label"><input type="checkbox" id="${esc(prefix)}-${esc(key)}" ${p.default ? "checked" : ""}> ${esc(labelText)}</label>`);
   }
+  if (p.type === "string_array") {
+    const id = esc(prefix) + "-" + esc(key);
+    const hint = I18N.pick(p, "hint");
+    return el(`<label>${esc(labelText)}<textarea id="${id}" rows="3"${hint ? ` aria-describedby="${id}-hint"` : ""}></textarea>${hint ? `<span class="hint" id="${id}-hint">${esc(hint)}</span>` : ""}</label>`);
+  }
   if (p.type === "string") {
     const ph = I18N.pick(p, "placeholder");
     return el(`<label>${esc(labelText)}<input type="text" id="${esc(prefix)}-${esc(key)}" value="${esc(p.default ?? "")}"${ph ? ` placeholder="${esc(ph)}"` : ""}></label>`);
@@ -131,6 +136,11 @@ export function collectParams(m, prefix, req) {
     // qwen3_tts_voicedesign 的 seed 引擎要求放请求顶层（其余模型 seed 走 options 透传）
     const target = (m.id === "qwen3_tts_voicedesign" && key === "seed") ? req : opts;
     if (p.type === "boolean") { target[key] = input.checked; continue; }
+    if (p.type === "string_array") {
+      const chunks = input.value.split(/\r?\n/).filter(chunk => chunk.trim());
+      if (chunks.length > 0) target[key] = chunks;
+      continue;
+    }
     const v = String(input.value).trim();
     if (v === "") continue;
     // enum 与 string 一样按字符串透传（如 index_tts2_5 的 lang），数值类型才做转换
@@ -625,7 +635,12 @@ export function fillTtsForm(m, rec) {
 export function applyHistoryOptions(m, options) {
   for (const [key, p] of schemaParams(m)) {
     const input = $("adv-" + key);
-    if (!input || options[key] === undefined) continue;
+    if (!input) continue;
+    if (p.type === "string_array") {
+      input.value = Array.isArray(options[key]) ? options[key].join("\n") : "";
+      continue;
+    }
+    if (options[key] === undefined) continue;
     if (p.type === "boolean") { input.checked = !!options[key]; continue; }
     input.value = String(options[key]);
   }

@@ -103,7 +103,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 | `paramSchema` | 额外参数定义，见下 |
 | `modes` / `backends` / `requiredFiles` / `hfUrl` / `ggufUrl` / `task` | 启动与下载相关元数据 |
 
-`paramSchema` 为 `{参数名: 定义}`，`定义.type` 取 `string` / `number` / `integer` / `boolean` / `enum` / `path`，可带 `default`、`min` / `max` / `step`、`values`（`enum` 的候选项）、`label` / `labelEn`、`hint` / `hintEn`、`placeholder` / `placeholderEn`、`required`。
+`paramSchema` 为 `{参数名: 定义}`，`定义.type` 取 `string` / `number` / `integer` / `boolean` / `enum` / `path` / `string_array`，可带 `default`、`min` / `max` / `step`、`values`（`enum` 的候选项）、`label` / `labelEn`、`hint` / `hintEn`、`placeholder` / `placeholderEn`、`required`。
 
 **参数进入请求体的位置**（`POST /api/tasks` 的 `request`）：
 
@@ -115,6 +115,10 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
   - `vevo2.task_route` → 顶层（引擎按顶层键读）；
   - `index_tts2` 情感参考音频 → 顶层 `audio`，其余情感参数 → `options`。
 - 预置音色（`voice_id`）的完整用法与示例见 [agent-api.md § Preset voices](agent-api.md#preset-voices-no-cloning)。
+
+Kokoro 支持可选的 `options.phonemes`（如 `["həlˈO", "wˈɜɹld"]`）。每个字符串为一个音素块，最多 510 个 Kokoro 词表符号；引擎按顺序合成并合并音频。仍需提供文本，且语言须匹配音色。WebUI 在高级参数中每行接收一个块，留空时省略该选项，使用引擎内置的文本转音素。
+
+异步 `POST /api/tasks` 使用 `request.options.phonemes`，同步 `POST /v1/audio/speech` 使用 `options.phonemes`。两条路径都要求引擎的 HTTP 请求解析器将该数组保留为列表。原版 audio.cpp v0.9.3 会把数组转成普通字符串，可能读出原文。请使用支持此数组的引擎构建。
 
 ### `GET /api/models/{modelId}/packages`
 
