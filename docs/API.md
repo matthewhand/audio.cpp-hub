@@ -87,7 +87,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 
 ### `GET /api/models`
 
-返回内嵌 `models.json` 的原始数组（`writeRawJSON`）。它是「这个模型接受哪些参数」的唯一权威来源——`GET /v1/models` 只列 READY 的服务名，不含参数结构。
+返回基于内嵌 `models.json` 的模型卡数组。它是「这个模型接受哪些参数」的唯一权威来源——`GET /v1/models` 只列 READY 的服务名，不含参数结构。
 
 卡片字段（均为可选，缺失即表示该模型不适用）：
 
@@ -101,9 +101,12 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 | `inputs` | `{text, audio, voiceRef}`，取值 `required` / `optional` / `none`。`voiceRef: "none"` 表示**不支持参考音频克隆**，音色只能来自 `paramSchema` |
 | `language` | `{values: [...], default}`，语言下拉的取值 |
 | `paramSchema` | 额外参数定义，见下 |
+| `capabilities` | 可选的功能发现元数据，见下 |
 | `modes` / `backends` / `requiredFiles` / `hfUrl` / `ggufUrl` / `task` | 启动与下载相关元数据 |
 
 `paramSchema` 为 `{参数名: 定义}`，`定义.type` 取 `string` / `number` / `integer` / `boolean` / `enum` / `path`，可带 `default`、`min` / `max` / `step`、`values`（`enum` 的候选项）、`label` / `labelEn`、`hint` / `hintEn`、`placeholder` / `placeholderEn`、`required`。
+
+对声明预置音色枚举的 TTS 卡片，`capabilities.presetVoiceParam` 指向 `paramSchema` 中的选择参数（`voice_id` 或 `speaker`）。`capabilities.presetVoices` 按该枚举的顺序列出非空音色 ID。可选的 `capabilities.presetVoiceRequires` 列出选择音色时需要的参数和值，例如 Ming 3.0 TTS 的 `{"template_name":"ip"}`。缺少此元数据表示此卡片未声明可枚举的音色列表。请求字段的位置仍按各接口和模型的参数规则确定。
 
 **参数进入请求体的位置**（`POST /api/tasks` 的 `request`）：
 
