@@ -2907,6 +2907,13 @@
         ],
         "default": "af_heart"
       },
+      "return_timestamps": {
+        "type": "boolean",
+        "default": false,
+        "omitFalse": true,
+        "label": "保留音素组时间戳",
+        "labelEn": "Save phoneme-group timestamps"
+      },
       "speed": {
         "type": "number",
         "default": 1.0,
