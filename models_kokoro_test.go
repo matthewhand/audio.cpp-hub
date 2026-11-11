@@ -44,6 +44,13 @@ func TestKokoroRegistry(t *testing.T) {
 	if _, ok := schema["speed"]; !ok {
 		t.Error("paramSchema missing speed")
 	}
+	chunkSize, ok := schema["text_chunk_size"].(map[string]any)
+	if !ok || chunkSize["type"] != "integer" || chunkSize["min"] != float64(1) {
+		t.Fatalf("text_chunk_size schema = %v; want integer with minimum 1", chunkSize)
+	}
+	if _, hasDefault := chunkSize["default"]; hasDefault {
+		t.Error("text_chunk_size must leave the language-specific default to the engine")
+	}
 }
 
 func TestKokoroPackages(t *testing.T) {

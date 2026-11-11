@@ -482,6 +482,12 @@ $("tts-submit").onclick = async () => {
     }
   }
 
+  const chunkSize = $("adv-text_chunk_size");
+  if (m.family === "kokoro_tts" && chunkSize && !chunkSize.checkValidity()) {
+    $("tts-advanced").open = true;
+    chunkSize.reportValidity();
+    return;
+  }
   collectParams(m, "adv", req);
 
   // 异步任务：提交即返回，排队/执行进度由 trackTask 轮询展示，按钮不再阻塞（允许连续提交排队）
