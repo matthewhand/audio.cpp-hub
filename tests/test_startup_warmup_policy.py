@@ -1,5 +1,6 @@
 """Offline synthetic tests for GTX startup policy; fake curl prevents model/network work."""
 from __future__ import annotations
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -16,6 +17,22 @@ printf '%s\n' "$*" >> "$FAKE_CURL_LOG"
 case " $* " in
   *"/api/models"*) printf '[]\n'; exit 0 ;;
   *"/api/instances"*)
+    if [[ " $* " == *" -X POST "* ]]; then
+      previous=""
+      for arg in "$@"; do
+        if [[ "$previous" == "--data-raw" ]]; then
+          printf '%s\n' "$arg" > "$FAKE_START_PAYLOAD"
+          printf '{"id":"test"}\n'
+          exit 0
+        fi
+        previous="$arg"
+      done
+      exit 79
+    fi
+    if [[ "${FAKE_CREATE_INSTANCE:-0}" == 1 && ! -f "$FAKE_START_PAYLOAD" ]]; then
+      printf '[]\n'
+      exit 0
+    fi
     printf '[{"id":"test","instanceName":"breeze-tts","status":"%s","port":18090}]\n' "${FAKE_INSTANCE_STATUS:-READY}"
     exit 0 ;;
   *"/v1/audio/speech"*)
@@ -62,18 +79,23 @@ class StartupWarmupPolicyTests(unittest.TestCase):
         marker = 'WARMUP_WAV="/tmp/audio-cpp-hub-warmup.wav"'
         self.assertEqual(source.count(marker), 1)
         self.breeze_script = self.dir / "start-instance.sh"
+        response_marker = '>/tmp/audio-cpp-hub-start.json'
+        self.assertEqual(source.count(response_marker), 1)
         self.breeze_script.write_text(
-            source.replace(marker, f'WARMUP_WAV="{self.dir / "warmup.wav"}"')
+            source.replace(marker, f'WARMUP_WAV="{self.dir / "warmup.wav"}"').replace(
+                response_marker, f'>"{self.dir / "start-response.json"}"'
+            )
         )
+        self.start_payload = self.dir / "start-payload.json"
         self.calls = self.dir / "curl.log"
         # Do not inherit model/service aliases from a developer's terminal or
         # CI runner: synthetic instance IDs/status must be deterministic.
         aliases = {
             "MODEL_ID", "SERVICE_NAME", "WEIGHTS", "BACKEND", "DEVICE",
-            "THREADS", "IDLE_UNLOAD_MS", "VOICE_REF", "EXECUTABLE_ID",
+            "THREADS", "IDLE_UNLOAD_MS", "MIN_FREE_MEMORY_MB", "VOICE_REF", "EXECUTABLE_ID",
             "SERVER_BIN", "HUB_URL", "WARMUP_TEXT",
             "START_INSTANCE_WAIT_SECONDS", "FAKE_WARMUP_RESULT",
-            "FAKE_INSTANCE_STATUS", "FAKE_CURL_LOG",
+            "FAKE_INSTANCE_STATUS", "FAKE_CURL_LOG", "FAKE_CREATE_INSTANCE", "FAKE_START_PAYLOAD",
         }
         clean_env = {
             name: value for name, value in os.environ.items()
@@ -86,6 +108,7 @@ class StartupWarmupPolicyTests(unittest.TestCase):
             "AUDIOCPP_SERVER_BIN": str(fake_engine),
             "AUDIOCPP_WEIGHTS": str(weights),
             "FAKE_CURL_LOG": str(self.calls),
+            "FAKE_START_PAYLOAD": str(self.start_payload),
             "FAKE_WARMUP_RESULT": "fail",
             "START_INSTANCE_WAIT_SECONDS": "1",
         }
@@ -159,6 +182,37 @@ class StartupWarmupPolicyTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertIn("warm-up skipped", p.stderr.lower())
         self.assertNotIn("/v1/audio/speech", self.call_log())
+
+    def test_memory_guard_is_optional_numeric_and_honors_alias_precedence(self) -> None:
+        cases = (
+            ({}, None),
+            ({"MIN_FREE_MEMORY_MB": ""}, None),
+            ({"MIN_FREE_MEMORY_MB": "4096"}, 4096),
+            ({"MIN_FREE_MEMORY_MB": "0"}, 0),
+            ({"MIN_FREE_MEMORY_MB": "4096", "AUDIOCPP_MIN_FREE_MEMORY_MB": "8192"}, 8192),
+            ({"MIN_FREE_MEMORY_MB": "4096", "AUDIOCPP_MIN_FREE_MEMORY_MB": ""}, 4096),
+        )
+        for settings, expected in cases:
+            with self.subTest(settings=settings):
+                self.start_payload.unlink(missing_ok=True)
+                p = self.run_script(AUDIOCPP_WARMUP_POLICY="skip", FAKE_CREATE_INSTANCE="1", **settings)
+                self.assertEqual(p.returncode, 0, p.stderr)
+                body = json.loads(self.start_payload.read_text())
+                self.assertEqual(body["modelId"], "breeze-tts")
+                if expected is None:
+                    self.assertNotIn("minFreeMemoryMb", body)
+                else:
+                    self.assertIs(type(body["minFreeMemoryMb"]), int)
+                    self.assertEqual(body["minFreeMemoryMb"], expected)
+
+    def test_invalid_memory_guard_fails_before_api_call(self) -> None:
+        for bad in ("-1", "1.5", "01", "1e3", "4,\"name\":\"other\""):
+            with self.subTest(bad=bad):
+                self.calls.unlink(missing_ok=True)
+                p = self.run_script(AUDIOCPP_WARMUP_POLICY="skip", MIN_FREE_MEMORY_MB=bad)
+                self.assertNotEqual(p.returncode, 0)
+                self.assertIn("MIN_FREE_MEMORY_MB", p.stderr)
+                self.assertEqual(self.call_log(), "")
 
     def test_hub_only_skips_both_helpers_and_all_network(self) -> None:
         for path in (self.breeze_script, SANO):

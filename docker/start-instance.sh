@@ -10,6 +10,7 @@
 #   AUDIOCPP_DEVICE   / DEVICE         传给引擎的设备序号（默认 0）
 #   AUDIOCPP_THREADS  / THREADS        CPU 线程数（默认 4）
 #   AUDIOCPP_IDLE_UNLOAD_MS / IDLE_UNLOAD_MS  空闲自动卸载毫秒数（可选，缺省常驻）
+#   AUDIOCPP_MIN_FREE_MEMORY_MB / MIN_FREE_MEMORY_MB  Engine load memory guard in MiB (optional)
 #   AUDIOCPP_VOICE_REF / VOICE_REF     参考音频路径（可选）
 #   AUDIOCPP_STARTUP_MODE               normal (default) | hub-only (no model work)
 #   AUDIOCPP_WARMUP_POLICY              required (default) | best-effort | skip
@@ -27,6 +28,7 @@ BACKEND="${AUDIOCPP_BACKEND:-${BACKEND:-vulkan}}"
 DEVICE="${AUDIOCPP_DEVICE:-${DEVICE:-0}}"
 THREADS="${AUDIOCPP_THREADS:-${THREADS:-4}}"
 IDLE_UNLOAD_MS="${AUDIOCPP_IDLE_UNLOAD_MS:-${IDLE_UNLOAD_MS:-}}"
+MIN_FREE_MEMORY_MB="${AUDIOCPP_MIN_FREE_MEMORY_MB:-${MIN_FREE_MEMORY_MB:-}}"
 VOICE_REF="${AUDIOCPP_VOICE_REF:-${VOICE_REF:-}}"
 EXECUTABLE_ID="${AUDIOCPP_EXECUTABLE_ID:-}"
 SERVER_BIN="${AUDIOCPP_SERVER_BIN:-/audio.cpp/bin/audiocpp_server}"
@@ -70,6 +72,10 @@ if [[ "$WARMUP_POLICY" == best-effort ]]; then
     fatal "AUDIOCPP_WARMUP_MAX_SECONDS must be 1..30 seconds"
 fi
 
+if [[ -n "$MIN_FREE_MEMORY_MB" && ! "$MIN_FREE_MEMORY_MB" =~ ^(0|[1-9][0-9]*)$ ]]; then
+  fatal "Invalid MIN_FREE_MEMORY_MB: expected a non-negative decimal integer without leading zeros"
+fi
+
 [[ -n "$WEIGHTS" ]]            || fatal "AUDIOCPP_WEIGHTS must be set"
 [[ -x "$SERVER_BIN" ]]         || fatal "audiocpp_server not found / not executable at $SERVER_BIN"
 [[ -f "$WEIGHTS" ]]            || fatal "Weight file not found: $WEIGHTS"
@@ -102,6 +108,9 @@ if [[ -z "$line" ]]; then
   # 0 = keep the model permanently resident (no idle unload)
   if [[ -n "$IDLE_UNLOAD_MS" && "$IDLE_UNLOAD_MS" != "0" ]]; then
     start_payload="$start_payload,\"idleUnloadMs\":$IDLE_UNLOAD_MS"
+  fi
+  if [[ -n "$MIN_FREE_MEMORY_MB" ]]; then
+    start_payload="$start_payload,\"minFreeMemoryMb\":$MIN_FREE_MEMORY_MB"
   fi
   if [[ -n "$EXECUTABLE_ID" ]]; then
     start_payload="$start_payload,\"executableId\":\"$EXECUTABLE_ID\""
