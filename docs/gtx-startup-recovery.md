@@ -91,7 +91,7 @@ boot-suppression mechanism, not a firewall or service-wide model prohibition.
 
 `python3 -B -m unittest discover -s tests -p test_startup_warmup_policy.py -v`
 
-The 14-case regression uses isolated temporary dummy weight/executable files and
+The 16-case regression uses isolated temporary dummy weight/executable files and
 a fake `curl` on PATH. It tests shell syntax, no-network hub-only mode,
 strict legacy exit, skipped warm-up, best-effort failure/timeout behavior
 and synthetic valid/malformed/empty WAVs, fails on upstream instance errors,
