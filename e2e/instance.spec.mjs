@@ -29,3 +29,24 @@ test("启动后实例就绪，停止后回到无就绪", async ({ page }) => {
   expect(backend.instances).toHaveLength(0);
   await expect(page.locator("#instance-list")).toContainText("暂无实例");
 });
+
+test("shows an exited instance and lets the user remove its card", async ({ page }) => {
+  const instance = {
+    id: "exit123",
+    instanceName: "exit-test",
+    modelId: "supertonic",
+    status: "READY",
+    backend: "cpu",
+    port: 19002
+  };
+  const backend = new MockBackend({ instances: [instance] });
+  await openApp(page, backend, { modelId: "supertonic", lang: "en" });
+  const card = page.locator("#instance-list .card").filter({ hasText: "exit-test" });
+  await expect(card.getByText("Ready", { exact: true })).toBeVisible();
+
+  instance.status = "EXITED";
+  await expect(card.getByText("Exited", { exact: true })).toBeVisible();
+  await expect(page.locator("#instance-select")).toBeDisabled();
+  await card.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(card).toHaveCount(0);
+});

@@ -109,6 +109,8 @@ window.I18N_EN = {
   "instance.stopFailed": "Could not stop instance",
   "instance.status.STARTING": "Starting",
   "instance.status.READY": "Ready",
+  "instance.status.EXITED": "Exited",
+  "instance.removeExited": "Remove",
   "instance.status.ERROR": "Error",
   "instance.status.STOPPED": "Stopped",
   "instance.detail": "Details",
