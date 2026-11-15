@@ -345,7 +345,7 @@ func (h *Hub) handleInstanceStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	minFreeMemoryMb := optIntPtr(body, "minFreeMemoryMb")
-	if raw := body["minFreeMemoryMb"]; h.cfg.MinAvailableMemoryMb > 0 && raw != nil &&
+	if raw := body["minFreeMemoryMb"]; raw != nil &&
 		(minFreeMemoryMb == nil || raw != float64(*minFreeMemoryMb)) {
 		errJSON(w, http.StatusBadRequest, "MIN_FREE_MEMORY_INVALID", nil, "minFreeMemoryMb 必须为整数")
 		return
