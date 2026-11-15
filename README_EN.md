@@ -157,8 +157,18 @@ The hub's `/v1/*` endpoints are a **transparent proxy** to each `audiocpp_server
 | `downloadSegmentsPerFile` | `4` | Segments per file (minimum segment granularity 32MB) |
 | `proxyMaxBodyBytes` | `1073741824` (1 GiB) | On-disk body size limit for `/v1/*` proxy requests |
 | `proxyResponseHeaderTimeoutMs` | `60000` (60 s) | How long `/v1/*` waits for an instance to start answering; raise it (e.g. `600000`) for slow models such as `fish_drama3` (lazy load + offline generation); a timeout returns `502` |
+| `minAvailableMemoryMb` | Disabled | Minimum Linux `MemAvailable` in MiB before starting an instance. A positive hub setting enables this check. |
+| `maxSwapUsedPercent` | Disabled | Maximum Linux swap usage before starting an instance. Accepts integers from 0 to 100. A host without swap has zero swap usage. |
 | `v1SpeechArchive` | `true` | Archive successful `/v1/audio/speech` replies into operation history. Override per request with the JSON field `"archive": false` / `true` or the header `X-Hub-No-Archive: 1` (precedence: body field > header > this setting; the header is not forwarded to the instance) |
 | `v1SpeechChunkedStreamModels` | `["ming3_tts"]` | Model families whose `/v1/audio/speech` gets hub-side sentence-chunked streaming when a request sets `"stream": true` or `"stream_format": "audio"` / `"sse"` (WAV with a streaming header, raw PCM with `response_format: "pcm"`, or SSE `speech.audio.delta` events). `[]` turns it off |
+
+The opt-in host guard checks `/proc/meminfo` immediately before instance
+creation. If the hub enables the minimum-memory check, a request's
+`minFreeMemoryMb` overrides its threshold. An explicit zero skips that RAM
+check for the request. The swap ceiling still applies. Requests that exceed a
+configured limit receive HTTP 503 with `INSTANCE_MEMORY_LOW`. If the hub cannot
+verify a configured limit, it returns `INSTANCE_MEMORY_UNAVAILABLE`. Keep both
+settings omitted on hosts without `/proc/meminfo`.
 
 > The development copy of `hub.config.json` in this repo sets `httpPort` to `18080`, so running from source listens on 18080.
 
