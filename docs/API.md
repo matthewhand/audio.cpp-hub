@@ -116,6 +116,14 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
   - `index_tts2` 情感参考音频 → 顶层 `audio`，其余情感参数 → `options`。
 - 预置音色（`voice_id`）的完整用法与示例见 [agent-api.md § Preset voices](agent-api.md#preset-voices-no-cloning)。
 
+Kokoro 82M 的 `text_chunk_size` 可作为 `options.text_chunk_size` 传给异步 TTS 请求，
+也可在同步 `POST /v1/audio/speech` 的 `options` 中传入。它限制文本分块的 Unicode 字符数，
+最小值为 1。留空时由兼容引擎按语言选择默认值（中文和日语为 100，其他语言为 240）。
+日语语音需要含 UniDic 资源的 GGUF。
+
+音素输入需要引擎支持的字符串数组，时间戳是音素组对齐数据。Hub 的异步 TTS 结果仅保存音频及其元数据。
+这两个选项和音色混合目前没有对应的面板控件。
+
 ### `GET /api/models/{modelId}/packages`
 
 返回 `model-packages.json` 中该模型对应的下载包原始 JSON（`displayName` / `category` / `status` / `packages`）。未知模型返回 `400 MODEL_UNKNOWN`。

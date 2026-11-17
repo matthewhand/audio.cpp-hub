@@ -61,6 +61,17 @@ test("Kokoro TTS：单控件无重复渲染，所选 voice_id 正确写入 optio
   // 选中非默认音色 jf_alpha
   await page.locator("#tts-enum-voice_id").selectOption("jf_alpha");
   await page.locator("#tts-text").fill("Hello Kokoro");
+  await page.locator("#tts-advanced summary").click();
+  const chunkSize = page.locator("#adv-text_chunk_size");
+  await expect(chunkSize).toHaveValue("");
+  await expect(chunkSize).toHaveAttribute("min", "1");
+  await chunkSize.fill("0");
+  await page.locator("#tts-submit").click();
+  expect(backend.tasks).toHaveLength(0);
+  await chunkSize.fill("1.5");
+  await page.locator("#tts-submit").click();
+  expect(backend.tasks).toHaveLength(0);
+  await chunkSize.fill("80");
   await page.locator("#tts-submit").click();
 
   await expect(page.locator("#tts-result")).toBeVisible({ timeout: 12000 });
@@ -69,4 +80,11 @@ test("Kokoro TTS：单控件无重复渲染，所选 voice_id 正确写入 optio
   const task = backend.tasks[0];
   expect(task.request?.options?.voice_id).toBe("jf_alpha");
   expect(task.request?.voice_id).toBeUndefined();
+  expect(task.request?.options?.text_chunk_size).toBe(80);
+  expect(task.request?.text_chunk_size).toBeUndefined();
+
+  await chunkSize.fill("");
+  await page.locator("#tts-submit").click();
+  await expect.poll(() => backend.tasks.length).toBe(2);
+  expect(backend.tasks[1].request?.options?.text_chunk_size).toBeUndefined();
 });
