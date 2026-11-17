@@ -44,6 +44,10 @@ func TestKokoroRegistry(t *testing.T) {
 	if _, ok := schema["speed"]; !ok {
 		t.Error("paramSchema missing speed")
 	}
+	phonemes, ok := schema["phonemes"].(map[string]any)
+	if !ok || phonemes["type"] != "string_array" || phonemes["default"] != nil {
+		t.Errorf("phonemes = %v; want optional string_array with no default", phonemes)
+	}
 }
 
 func TestKokoroPackages(t *testing.T) {
