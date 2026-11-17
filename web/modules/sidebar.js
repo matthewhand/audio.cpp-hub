@@ -507,11 +507,11 @@ export function makeHistoryRow(item) {
   if (item.instanceName) meta.push(item.instanceName);
   const metaEl = row.querySelector(".history-meta");
   metaEl.textContent = meta.join(" ｜ ");
-  // 同步代理（/v1/audio/speech）归档的记录带 via 标记，与任务流记录区分
+  // Speech API archives carry the same origin for streaming and non-streaming calls.
   if (item.result && item.result.via === "v1/audio/speech") {
     const via = el(`<span class="history-via"></span>`);
-    via.textContent = t("history.viaSync");
-    via.title = t("history.viaSyncTip");
+    via.textContent = t("history.viaSpeechApi");
+    via.title = t("history.viaSpeechApiTip");
     metaEl.appendChild(via);
   }
   if (!item.ok) {
