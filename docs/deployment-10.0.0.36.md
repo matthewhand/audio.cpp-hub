@@ -34,6 +34,28 @@ Fan-in hub for the other hosts is `farm.routes.json` in `cmd/fanout-proxy/`.
 Fan-out is also what Open WebUI's TTS config should point at (`:3000` on this
 host) — see [farm.md → Open WebUI TTS wiring](farm.md#open-webui--tts-wiring).
 
+## Kokoro loopback hub
+
+`audio-cpp-hub-kokoro-bluegreen.service` runs in
+`/home/matthewh/dev/audio.cpp-hub-bluegreen-20261024`. Its own `hub.config.json`
+sets `httpBindHost` to `127.0.0.1`, `httpPort` to `18280`, and
+`instancePortBase` to `18290`. The separate working directory holds the
+hub's `data/` and `run/` state. The shared `modelsDir` is
+`/home/matthewh/audio.cpp-hub/models`.
+
+The service's `ExecStartPost` hook establishes a READY instance named
+`kokoro` using model card `kokoro_tts`, CPU backend, two threads, port
+`18290`, and an empty `sessionOptions` object. The engine needs the eSpeak-ng
+shared library. The deployed Q8_0 weights are
+`Kokoro-82M-GGUF/kokoro-82m-q8_0.gguf` under `modelsDir`.
+The [Kokoro recovery runbook](gtx-kokoro-reboot-recovery.md) records the
+installed unit, startup hook, and read-only checks.
+
+LAN clients use the `kokoro` alias on the fan-out at
+`http://10.0.0.36:18082`. The fan-out and the loopback hub run on the same host.
+Kokoro has one target, so an unavailable or unready instance yields HTTP
+503. Its history is local to the loopback hub.
+
 ## Directory layout (host-local, not in git)
 
 | Path | Purpose |

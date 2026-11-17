@@ -71,6 +71,13 @@ whose hub is up **and** whose instance is `READY` wins.
 | `kokoro` | `127.0.0.1:18280 kokoro` (GTX loopback) |
 | `citrinet`, `stt` | `.36:18080 citrinet` |
 
+Send `model: "kokoro"` to the fan-out. `kokoro_tts` is the model card ID.
+The checked-in route has one target. Its loopback address assumes the fan-out
+runs on Ubuntu-GTX. When that hub is down or its Kokoro instance is still
+starting, requests to `kokoro` receive HTTP 503. The
+[GTX deployment notes](../../docs/deployment-10.0.0.36.md#kokoro-loopback-hub)
+describe the startup hook that establishes readiness.
+
 An alias names a *service*; the endpoint names the *request shape*. TTS is
 `/v1/audio/speech`, ASR is `/api/tasks`. A speech call against `citrinet` fails
 (`503` — the engine wants an audio contract, not text); a task call against
@@ -202,6 +209,12 @@ Same rules for both forwarded endpoints (`POST /v1/audio/speech`,
 - Successful responses carry `X-Fanout-Hub` and `X-Fanout-Instance` so an agent
   can pull the archived take from the origin hub's `/api/history/...` — and, for
   `POST /api/tasks`, name that hub in the `?hub=` pin of every task read.
+  For Kokoro, `X-Fanout-Hub` and the aggregated instance's `hub` contain
+  `http://127.0.0.1:18280`. Remote clients keep this value unchanged as an
+  opaque pin in task URLs sent to the **fan-out**. Download the speech audio
+  from the original response. The archive at
+  `/api/history/kokoro_tts/<taskId>/audio` belongs to the loopback hub and
+  can be read from Ubuntu-GTX.
 
 ## Constraints this code keeps
 
