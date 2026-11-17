@@ -116,6 +116,11 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
   - `index_tts2` 情感参考音频 → 顶层 `audio`，其余情感参数 → `options`。
 - 预置音色（`voice_id`）的完整用法与示例见 [agent-api.md § Preset voices](agent-api.md#preset-voices-no-cloning)。
 
+Kokoro 的高级参数支持可选的音色混合表达式。客户端通过 `options.voice_id` 传入
+`af_heart+af_bella`（等权）或 `af_heart(2)+af_bella(1)`（加权），适用于异步 TTS 请求
+及同步 `POST /v1/audio/speech`。权重由引擎归一化，语言须与表达式中的第一个音色一致。
+留空时，WebUI 使用预置音色下拉框的选择。
+
 ### `GET /api/models/{modelId}/packages`
 
 返回 `model-packages.json` 中该模型对应的下载包原始 JSON（`displayName` / `category` / `status` / `packages`）。未知模型返回 `400 MODEL_UNKNOWN`。

@@ -335,8 +335,22 @@ export function renderTtsPanel(m) {
 
   renderSpeakersBlock(m);
 
-  const hasAdvanced = renderAdvancedGrid($("tts-advanced-grid"), m, "adv");
-  $("tts-advanced").classList.toggle("hidden", !hasAdvanced);
+  const advancedGrid = $("tts-advanced-grid");
+  const hasAdvanced = renderAdvancedGrid(advancedGrid, m, "adv");
+  const hasVoiceBlend = m.family === "kokoro_tts";
+  if (hasVoiceBlend) {
+    const blend = paramInput("voice_blend", {
+      type: "string",
+      label: t("tts.kokoroVoiceBlend"),
+      placeholder: "af_heart(2)+af_bella(1)"
+    }, "adv");
+    const hint = el('<span id="kokoro-voice-blend-hint" class="hint"></span>');
+    hint.textContent = t("tts.kokoroVoiceBlendHint");
+    blend.querySelector("input").setAttribute("aria-describedby", hint.id);
+    blend.appendChild(hint);
+    advancedGrid.appendChild(blend);
+  }
+  $("tts-advanced").classList.toggle("hidden", !hasAdvanced && !hasVoiceBlend);
 
   updateTtsBlocks(m);
   $("tts-text").placeholder = t("tts.textPlaceholder");
@@ -483,6 +497,10 @@ $("tts-submit").onclick = async () => {
   }
 
   collectParams(m, "adv", req);
+  if (m.family === "kokoro_tts") {
+    const blend = $("adv-voice_blend")?.value.trim();
+    if (blend) (req.options || (req.options = {})).voice_id = blend;
+  }
 
   // 异步任务：提交即返回，排队/执行进度由 trackTask 轮询展示，按钮不再阻塞（允许连续提交排队）
   $("tts-stats").textContent = "";
@@ -629,11 +647,20 @@ export function applyHistoryOptions(m, options) {
     if (p.type === "boolean") { input.checked = !!options[key]; continue; }
     input.value = String(options[key]);
   }
+  const blend = m.family === "kokoro_tts" ? $("adv-voice_blend") : null;
+  if (blend) blend.value = "";
   const s = m.paramSchema || {};
   for (const [key, p] of Object.entries(s)) {
     if (!p || Array.isArray(p) || p.type !== "enum" || ["language", "speaker"].includes(key)) continue;
     const sel = $(`tts-enum-${key}`);
-    if (sel && options[key] !== undefined) sel.value = String(options[key]);
+    const value = options[key];
+    if (!sel || value === undefined) continue;
+    if (blend && key === "voice_id" && typeof value === "string" && value && !p.values.includes(value)) {
+      blend.value = value;
+      sel.value = p.default ?? p.values[0];
+    } else {
+      sel.value = String(value);
+    }
   }
 }
 
