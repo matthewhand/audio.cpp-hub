@@ -146,7 +146,7 @@ func TestSamplerIdleBaselineFollowsBusy(t *testing.T) {
 	// A task starts: the sample taken while it RUNNING is busy, so it must not
 	// create an idle baseline at all.
 	s.OnTaskEvent(taskEvent{Name: eventTaskStarted, InstanceID: "a"})
-	s.record("a", t0, 900, 9000, true, vramSourceDrm)
+	s.record("a", t0, 900, 9000, true, vramSourceDrm, nil)
 	if m := s.MemoryJSON("a"); m != nil {
 		if _, ok := m["ramIdleBytes"]; ok {
 			t.Fatalf("a busy sample must not create an idle baseline: %#v", m)
@@ -156,7 +156,7 @@ func TestSamplerIdleBaselineFollowsBusy(t *testing.T) {
 	// Task over, back to idle sampling: the baseline appears from the idle
 	// minimum only.
 	s.OnTaskEvent(taskEvent{Name: eventTaskFinished, InstanceID: "a"})
-	s.record("a", t0.Add(10*time.Second), 400, 4000, true, vramSourceDrm)
+	s.record("a", t0.Add(10*time.Second), 400, 4000, true, vramSourceDrm, nil)
 	m := s.MemoryJSON("a")
 	if m["ramIdleBytes"] != int64(400) || m["vramIdleBytes"] != int64(4000) {
 		t.Fatalf("idle baseline = %#v", m)
@@ -239,7 +239,7 @@ func TestInstanceListMemoryJSON(t *testing.T) {
 	}
 
 	t0 := time.Unix(1_700_000_000, 0)
-	mem.record(inst.ID, t0, 100, 0, false, "")
+	mem.record(inst.ID, t0, 100, 0, false, "", nil)
 	body = getInstances(t, handler)
 	raw, _ := json.Marshal(body[0]["memory"])
 	var memObj map[string]any
@@ -262,7 +262,7 @@ func TestInstanceListMemoryJSON(t *testing.T) {
 		t.Fatalf("meta = %#v", memObj)
 	}
 
-	mem.record(inst.ID, t0.Add(time.Second), 200, 4096, true, vramSourceNvidia)
+	mem.record(inst.ID, t0.Add(time.Second), 200, 4096, true, vramSourceNvidia, nil)
 	body = getInstances(t, handler)
 	raw, _ = json.Marshal(body[0]["memory"])
 	memObj = nil
@@ -358,7 +358,7 @@ func TestMemoryJSONSeries(t *testing.T) {
 
 	mem := NewMemorySampler(im, NewTaskManager(NewHistoryManager()), nil)
 	t0 := time.Unix(1_700_000_000, 0)
-	mem.record(inst.ID, t0, 100, 0, false, "")
+	mem.record(inst.ID, t0, 100, 0, false, "", nil)
 	if m := mem.MemoryJSON(inst.ID); m != nil {
 		if _, ok := m["ramSeries"]; ok {
 			t.Fatalf("只有一个采样点不能给序列: %#v", m)
@@ -368,7 +368,7 @@ func TestMemoryJSONSeries(t *testing.T) {
 		}
 	}
 
-	mem.record(inst.ID, t0.Add(time.Second), 200, 4096, true, vramSourceNvidia)
+	mem.record(inst.ID, t0.Add(time.Second), 200, 4096, true, vramSourceNvidia, nil)
 	m := mem.MemoryJSON(inst.ID)
 	ram, ok := m["ramSeries"].([]int64)
 	if !ok || len(ram) != 2 || ram[0] != 100 || ram[1] != 200 {
@@ -379,7 +379,7 @@ func TestMemoryJSONSeries(t *testing.T) {
 		t.Fatalf("只有一个 VRAM 点不能给序列: %#v", m["vramSeries"])
 	}
 
-	mem.record(inst.ID, t0.Add(2*time.Second), 300, 5000, true, vramSourceNvidia)
+	mem.record(inst.ID, t0.Add(2*time.Second), 300, 5000, true, vramSourceNvidia, nil)
 	m = mem.MemoryJSON(inst.ID)
 	vram, ok := m["vramSeries"].([]int64)
 	if !ok || len(vram) != 2 || vram[0] != 4096 || vram[1] != 5000 {
@@ -390,7 +390,7 @@ func TestMemoryJSONSeries(t *testing.T) {
 	// 此时已有 3 个 RAM 样本（100、200、300）。循环再写入 i=3..cap+5，
 	// 合计 3+(cap+5-3+1) = cap+6 个，丢掉最旧的 6 个后窗口从 i=6 的 1006 开始。
 	for i := int64(3); i <= int64(memSeriesCap)+5; i++ {
-		mem.record(inst.ID, t0.Add(time.Duration(i)*time.Second), 1000+i, 8192, true, vramSourceNvidia)
+		mem.record(inst.ID, t0.Add(time.Duration(i)*time.Second), 1000+i, 8192, true, vramSourceNvidia, nil)
 	}
 	m = mem.MemoryJSON(inst.ID)
 	ram, ok = m["ramSeries"].([]int64)
@@ -492,7 +492,7 @@ func TestMemoryJSONGpuNameAndIdleSince(t *testing.T) {
 	s.nvTotals = map[int]int64{0: 8 << 30}
 	s.nvNames = map[int]string{0: "GTX 1080"}
 	t0 := time.UnixMilli(1_700_000_000_000)
-	s.record("a", t0, 100, 200, true, vramSourceNvidia)
+	s.record("a", t0, 100, 200, true, vramSourceNvidia, nil)
 	m := s.MemoryJSON("a")
 	if m["gpuName"] != "GTX 1080" {
 		t.Fatalf("gpuName = %#v", m["gpuName"])
@@ -505,7 +505,7 @@ func TestMemoryJSONGpuNameAndIdleSince(t *testing.T) {
 	s2.nvTotals = map[int]int64{0: 8 << 30, 1: 4 << 30}
 	s2.nvNames = map[int]string{0: "A", 1: "B"}
 	s2.OnTaskEvent(taskEvent{Name: eventTaskStarted, InstanceID: "b"})
-	s2.record("b", t0, 100, 200, true, vramSourceNvidia)
+	s2.record("b", t0, 100, 200, true, vramSourceNvidia, nil)
 	m2 := s2.MemoryJSON("b")
 	if _, ok := m2["gpuName"]; ok {
 		t.Fatal("multi-GPU must omit gpuName")
@@ -528,7 +528,7 @@ func TestMemoryJSONGpuNameAndIdleSince(t *testing.T) {
 	s3.mu.Lock()
 	s3.markIdleLocked("c", pending)
 	s3.mu.Unlock()
-	s3.record("c", pending.Add(time.Second), 50, 0, false, "")
+	s3.record("c", pending.Add(time.Second), 50, 0, false, "", nil)
 	m4 := s3.MemoryJSON("c")
 	if m4["idleSinceMs"] != pending.UnixMilli() {
 		t.Fatalf("pending idleSinceMs = %#v", m4["idleSinceMs"])

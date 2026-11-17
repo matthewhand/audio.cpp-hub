@@ -47,10 +47,11 @@ type modelStats struct {
 
 // statsResponse is the /api/stats response body.
 type statsResponse struct {
-	GeneratedAt int64        `json:"generatedAt"`
-	Totals      statsTotals  `json:"totals"`
-	Models      []modelStats `json:"models"`
-	PerDay      []dayCount   `json:"perDay"` // 最近 14 天生成量（含 0 的天），旧→新
+	AMDDevices  []amdGTTDevice `json:"amdDevices,omitempty"`
+	GeneratedAt int64          `json:"generatedAt"`
+	Totals      statsTotals    `json:"totals"`
+	Models      []modelStats   `json:"models"`
+	PerDay      []dayCount     `json:"perDay"` // 最近 14 天生成量（含 0 的天），旧→新
 }
 
 // dayCount 单日生成次数（按记录本地时区的天聚合）。
@@ -197,7 +198,7 @@ func (h *Hub) Stats() statsResponse {
 		ms.RTFP50 = round3(percentile(rtf, 50))
 	}
 
-	out := statsResponse{GeneratedAt: time.Now().UnixMilli()}
+	out := statsResponse{GeneratedAt: time.Now().UnixMilli(), AMDDevices: procAmdGTT()}
 	models := make([]modelStats, 0, len(byModel))
 	for _, ms := range byModel {
 		if ms.Total > 0 {

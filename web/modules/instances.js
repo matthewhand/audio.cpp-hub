@@ -307,6 +307,14 @@ export function renderInstanceList() {
       <div class="card-family">${esc(modelName)} ｜ #${esc(inst.id)}</div>
       <div class="card-desc">${esc(inst.backend)}${inst.device != null ? ":" + esc(inst.device) : ""} ｜ ${esc(t("instance.port"))} ${esc(inst.port)}${inst.executableName ? " ｜ " + esc(inst.executableName) : ""}</div>`;
     html += memBlockHtml(withSparkSeries(inst));
+    const gtt = inst.memory?.deviceGtt;
+    if (gtt) {
+      html += `<div class="card-desc">${esc(t("memory.deviceGtt", {
+        device: gtt.card + " · " + gtt.pci,
+        used: I18N.bytes(gtt.usedBytes),
+        total: I18N.bytes(gtt.totalBytes)
+      }))}</div>`;
+    }
     if (inst.status === "ERROR" && inst.errorMessage) {
       html += `<div class="error-text">${esc(inst.errorMessage)}</div>`;
     }

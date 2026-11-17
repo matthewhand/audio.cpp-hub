@@ -48,3 +48,34 @@ test("看板懒加载：首屏不取 stats.js，点击 📊 后才加载并渲�
   await page.keyboard.press("Escape");
   await expect(page.locator("#stats-panel")).toHaveClass(/hidden/);
 });
+
+test("shows device-wide AMD memory even before any speech usage", async ({ page }) => {
+  const deviceGtt = {
+    card: "card0",
+    pci: "0000:c3:00.0",
+    usedBytes: 0,
+    totalBytes: 128 * 1024 ** 3,
+    vramUsedBytes: 0,
+    vramTotalBytes: 512 * 1024 ** 2
+  };
+  const backend = new MockBackend({
+    instances: [{
+      id: "amd-ready",
+      modelId: "supertonic",
+      instanceName: "amd-ready",
+      status: "READY",
+      backend: "vulkan",
+      port: 19001,
+      memory: { deviceGtt }
+    }]
+  });
+  await openApp(page, backend, { modelId: "supertonic", lang: "en" });
+  await page.route("**/api/stats", (route) => route.fulfill({
+    json: { models: [], amdDevices: [deviceGtt] }
+  }));
+  await expect(page.locator("#instance-list")).toContainText("card0 · 0000:c3:00.0 · GPU-wide GTT");
+  await page.locator("#stats-btn").click();
+  await expect(page.locator("#stats-body")).toContainText("card0 · 0000:c3:00.0 · GPU-wide GTT");
+  await expect(page.locator("#stats-body")).toContainText("VRAM");
+  await expect(page.locator("#stats-body")).toContainText("No usage yet");
+});
