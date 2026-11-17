@@ -70,3 +70,37 @@ test("Kokoro TTS：单控件无重复渲染，所选 voice_id 正确写入 optio
   expect(task.request?.options?.voice_id).toBe("jf_alpha");
   expect(task.request?.voice_id).toBeUndefined();
 });
+
+test("Kokoro timestamps are opt-in and restored from history", async ({ page }) => {
+  const backend = new MockBackend({
+    instances: [{ ...READY, modelId: "kokoro_tts", instanceName: "kokoro" }]
+  });
+  await openApp(page, backend, { modelId: "kokoro_tts", lang: "en" });
+  await page.locator("#tts-advanced summary").click();
+  const timestamps = page.getByRole("checkbox", { name: "Save phoneme-group timestamps" });
+  await expect(timestamps).not.toBeChecked();
+  await page.locator("#tts-text").fill("Hello Kokoro");
+
+  const submit = page.locator("#tts-submit");
+  await submit.click();
+  await expect.poll(() => backend.tasks.length).toBe(1);
+  expect(backend.tasks[0].request?.options?.return_timestamps).toBeUndefined();
+
+  await timestamps.check();
+  await submit.click();
+  await expect.poll(() => backend.tasks.length).toBe(2);
+  expect(backend.tasks[1].request?.options?.return_timestamps).toBe(true);
+  expect(backend.tasks[1].request?.return_timestamps).toBeUndefined();
+
+  const restore = (options) =>
+    page.evaluate(async (savedOptions) => {
+      const { fillTtsForm } = await import("/modules/panels.js");
+      const { selectedModel } = await import("/modules/state.js");
+      fillTtsForm(selectedModel(), { text: "Restored", options: savedOptions });
+    }, options);
+  await timestamps.uncheck();
+  await restore({ return_timestamps: "yes" });
+  await expect(timestamps).toBeChecked();
+  await restore({});
+  await expect(timestamps).not.toBeChecked();
+});

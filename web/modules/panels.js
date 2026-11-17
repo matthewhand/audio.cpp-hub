@@ -130,7 +130,10 @@ export function collectParams(m, prefix, req) {
     const opts = req.options || (req.options = {});
     // qwen3_tts_voicedesign 的 seed 引擎要求放请求顶层（其余模型 seed 走 options 透传）
     const target = (m.id === "qwen3_tts_voicedesign" && key === "seed") ? req : opts;
-    if (p.type === "boolean") { target[key] = input.checked; continue; }
+    if (p.type === "boolean") {
+      if (input.checked || !p.omitFalse) target[key] = input.checked;
+      continue;
+    }
     const v = String(input.value).trim();
     if (v === "") continue;
     // enum 与 string 一样按字符串透传（如 index_tts2_5 的 lang），数值类型才做转换
@@ -625,7 +628,12 @@ export function fillTtsForm(m, rec) {
 export function applyHistoryOptions(m, options) {
   for (const [key, p] of schemaParams(m)) {
     const input = $("adv-" + key);
-    if (!input || options[key] === undefined) continue;
+    if (!input) continue;
+    if (p.type === "boolean" && p.omitFalse) {
+      input.checked = ["true", "1", "yes", "on"].includes(String(options[key]));
+      continue;
+    }
+    if (options[key] === undefined) continue;
     if (p.type === "boolean") { input.checked = !!options[key]; continue; }
     input.value = String(options[key]);
   }

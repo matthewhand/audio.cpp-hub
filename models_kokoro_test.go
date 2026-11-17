@@ -44,6 +44,10 @@ func TestKokoroRegistry(t *testing.T) {
 	if _, ok := schema["speed"]; !ok {
 		t.Error("paramSchema missing speed")
 	}
+	timestamps, ok := schema["return_timestamps"].(map[string]any)
+	if !ok || timestamps["type"] != "boolean" || timestamps["default"] != false || timestamps["omitFalse"] != true {
+		t.Errorf("return_timestamps = %v; want opt-in boolean", timestamps)
+	}
 }
 
 func TestKokoroPackages(t *testing.T) {
