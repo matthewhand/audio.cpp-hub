@@ -5,7 +5,7 @@ import { bindMenuKeys, hideBusy, renderEmptyState, renderStateError, showBusy, s
 import { $, Api, el, markRowEnter, t } from "./dom.js";
 import { fillTtsForm } from "./panels.js";
 import { privacyOn } from "./history-lazy.js";
-import { modelSelectionRevision, selectedModel, selectedModelId } from "./state.js";
+import { modelSelectionRevision, selectedModel, selectedModelId, ttsFormEditRevision } from "./state.js";
 import { makeTaskRow, taskDetails, taskViews } from "./tasks.js";
 
 /* Keep raw previews outside the DOM. */
@@ -636,8 +636,12 @@ export async function loadHistoryRecord(taskId, remix = false) {
   if (!m || (remix && m.family !== "breeze_tts")) return;
   const requestRevision = ++historyRestoreRevision;
   const selectionRevision = modelSelectionRevision;
+  const formRevision = ttsFormEditRevision;
   // A model ID check alone misses switches away and back while the request is pending.
-  const isCurrent = () => requestRevision === historyRestoreRevision && selectionRevision === modelSelectionRevision;
+  const isCurrent = () =>
+    requestRevision === historyRestoreRevision &&
+    selectionRevision === modelSelectionRevision &&
+    formRevision === ttsFormEditRevision;
   let rec;
   try {
     rec = await Api.get("/api/history/{modelId}/{taskId}", { params: { modelId: m.id, taskId } });

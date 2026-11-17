@@ -4,7 +4,7 @@
 
 import { $, el, esc, t } from "./dom.js";
 import { historyRefPath, loadHistory } from "./history-lazy.js";
-import { activeInstanceId, selectedModel } from "./state.js";
+import { activeInstanceId, markTtsFormEdit, selectedModel } from "./state.js";
 import { clearResult, reattachTasks, submitTask, trackTask } from "./tasks.js";
 
 /* ---------- 表单选择器实例（模块求值时创建一次，仅本模块使用） ---------- */
@@ -33,6 +33,22 @@ export let otherLanguageSel = null;
 /* VibeVoice 多说话人：每行一个 AudioPicker，第 N 行对应脚本里的 Speaker N（voice_samples 顺序） */
 export let speakerPickers = [];
 export const VIBEVOICE_MAX_SPEAKERS = 4;
+
+const ttsForm = $("panel-tts");
+for (const type of ["input", "change"]) {
+  ttsForm.addEventListener(type, (event) => {
+    if (event.target instanceof Element &&
+        event.target.matches("input, textarea, select") &&
+        !event.target.closest(".picker-common")) markTtsFormEdit();
+  }, true);
+}
+// Capture speaker mutations before the action container stops propagation.
+ttsForm.addEventListener("click", (event) => {
+  if (event.target instanceof Element &&
+      event.target.closest("#tts-speaker-add, .speaker-remove")) {
+    markTtsFormEdit();
+  }
+}, true);
 
 /* ---------- 工作区：按 category 切换面板 ---------- */
 export function renderWorkspace() {
@@ -596,6 +612,7 @@ const emotionTabs = /** @type {HTMLButtonElement[]} */ ([
 ]);
 function selectEmotionTab(tab, { focus = false } = {}) {
   if (!tab) return;
+  markTtsFormEdit();
   emotionMode = tab.dataset.mode;
   emotionTabs.forEach(tb => {
     const on = tb === tab;
