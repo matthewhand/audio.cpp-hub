@@ -190,6 +190,7 @@ type wavHub struct {
 	srv    *httptest.Server
 	mu     sync.Mutex
 	inputs []string
+	models []string
 	calls  int
 	status int
 	wav    []byte
@@ -202,9 +203,11 @@ func newWAVHub(t *testing.T, status int, sample []byte) *wavHub {
 		h.calls++
 		var body struct {
 			Input string `json:"input"`
+			Model string `json:"model"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		h.inputs = append(h.inputs, body.Input)
+		h.models = append(h.models, body.Model)
 		status, wav := h.status, h.wav
 		h.mu.Unlock()
 		if status != http.StatusOK {
@@ -226,6 +229,12 @@ func (h *wavHub) seen() (int, []string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.calls, append([]string(nil), h.inputs...)
+}
+
+func (h *wavHub) seenModels() []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]string(nil), h.models...)
 }
 
 func TestSpeechChunksLongInput(t *testing.T) {
@@ -251,6 +260,13 @@ func TestSpeechChunksLongInput(t *testing.T) {
 	for _, in := range inputs {
 		if utf8.RuneCountInString(in) > 20 {
 			t.Errorf("chunk %q exceeds the 20-rune budget", in)
+		}
+	}
+	// Every chunk must carry the upstream service name: the hub only knows
+	// service names, so sending the alias back 404s (the bug this guards).
+	for _, got := range hub.seenModels() {
+		if got != "sanotts" {
+			t.Errorf("chunk sent model %q, want the instance name sanotts", got)
 		}
 	}
 	if got := rec.Header().Get("X-Fanout-Chunks"); got != "3" {

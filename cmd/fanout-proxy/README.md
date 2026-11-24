@@ -332,6 +332,30 @@ grep -i x-fanout <(curl -s -D - -o /dev/null -X POST localhost:18082/v1/audio/sp
   -H 'Content-Type: application/json' -d '{"model":"instant","input":"check"}')
 ```
 
+Engine timing and the hub request id come back through the fan-out, so latency is
+one call, not a second trip to the origin hub:
+
+```bash
+curl -s -D - -o /dev/null -X POST localhost:18082/v1/audio/speech \
+  -H 'Content-Type: application/json' -d '{"model":"instant","input":"check"}' \
+  | grep -iE 'x-audiocpp|x-hub-request-id'
+# X-Audiocpp-Wall-Ms: 16.641510      <- engine, not proxy, time
+# X-Audiocpp-Audio-Duration-Ms: 1290.666667
+# X-Audiocpp-Rtf: 0.012894
+# X-Hub-Request-Id: 5db0e-49         <- /api/metrics/requests/5db0e-49 on that hub
+```
+
+Long input on a chunked route (`sanotts` / `instant`, `maxInputChars` 160) is
+split at sentences and joined, so a paragraph that used to 500 answers 200:
+
+```bash
+curl -s -D - -o /tmp/long.wav -X POST localhost:18082/v1/audio/speech \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"instant","input":"First sentence. Second sentence, longer than the first one. Third closes it."}' \
+  | grep -i 'x-fanout-chunks\|content-length'
+# X-Fanout-Chunks: 4          <- synthesised in 4 sentence chunks, one WAV back
+```
+
 STT round trip through the fan-out. `request.audio` is a path on the hub that
 serves it, so generate a take first and transcribe that file (both land on the
 same host). Replace `stt` below with the ASR alias you configure — none is

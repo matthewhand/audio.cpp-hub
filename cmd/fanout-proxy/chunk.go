@@ -278,9 +278,19 @@ func postSpeechChunk(r *http.Request, target Target, body []byte) (http.Header, 
 		return nil, nil, fmt.Errorf("chunk reply larger than %d bytes", maxChunkReplyBytes)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, nil, &httpError{status: resp.StatusCode, url: target.Hub + ": " + summarize(reply)}
+		detail := summarize(reply)
+		return nil, nil, &httpError{status: resp.StatusCode, url: target.Hub + ": " + detail, detail: detail}
 	}
 	return resp.Header, reply, nil
+}
+
+// rewriteChunkBody is the per-chunk body rewrite: the chunk text replaces
+// "input" and the target's service name replaces the alias in "model". Both
+// rewrites matter — the hub only knows service names, so a chunk sent with the
+// alias answers 404, and every field the caller did not touch is relayed
+// byte-for-byte.
+func rewriteChunkBody(fields map[string]json.RawMessage, target Target, text string) ([]byte, error) {
+	return rewriteBody(fields, map[string]string{"model": target.InstanceName, "input": text})
 }
 
 // relayChunkedSpeech synthesises text in sentence chunks on one target and
@@ -290,7 +300,7 @@ func relayChunkedSpeech(w http.ResponseWriter, r *http.Request, target Target, f
 	if len(chunks) < 2 {
 		// Nothing to split after all: the single-chunk path is cheaper and keeps
 		// the engine's own timing headers.
-		body, err := rewriteField(fields, "input", strings.TrimSpace(text))
+		body, err := rewriteChunkBody(fields, target, strings.TrimSpace(text))
 		if err != nil {
 			return forwardResult{}, err
 		}
@@ -300,7 +310,7 @@ func relayChunkedSpeech(w http.ResponseWriter, r *http.Request, target Target, f
 	start := time.Now()
 	parts := make([][]byte, 0, len(chunks))
 	for i, chunk := range chunks {
-		body, err := rewriteField(fields, "input", chunk)
+		body, err := rewriteChunkBody(fields, target, chunk)
 		if err != nil {
 			return forwardResult{}, err
 		}

@@ -108,19 +108,27 @@ func rawBool(fields map[string]json.RawMessage, key string) (bool, bool) {
 	return false, false
 }
 
-// rewriteField returns body with one top-level field replaced. Every other field
-// keeps its original bytes, so options, voice_ref and unknown extras survive.
-func rewriteField(fields map[string]json.RawMessage, key, value string) ([]byte, error) {
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[string]json.RawMessage, len(fields))
+// rewriteBody returns body with the given top-level string fields replaced.
+// Every other field keeps its original bytes, so options, voice_ref and unknown
+// extras survive.
+func rewriteBody(fields map[string]json.RawMessage, values map[string]string) ([]byte, error) {
+	out := make(map[string]json.RawMessage, len(fields)+len(values))
 	for k, v := range fields {
 		out[k] = v
 	}
-	out[key] = encoded
+	for k, v := range values {
+		encoded, err := json.Marshal(v)
+		if err != nil {
+			return nil, err
+		}
+		out[k] = encoded
+	}
 	return json.Marshal(out)
+}
+
+// rewriteField returns body with one top-level field replaced.
+func rewriteField(fields map[string]json.RawMessage, key, value string) ([]byte, error) {
+	return rewriteBody(fields, map[string]string{key: value})
 }
 
 // rewriteModel returns body with the top-level "model" replaced by the upstream
