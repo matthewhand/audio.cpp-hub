@@ -176,6 +176,6 @@ func BenchmarkMemorySamplerRecord(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		s.record("test-instance", now.Add(time.Duration(i)*time.Millisecond), 1024*1024, 0, false, "")
+		s.record("test-instance", now.Add(time.Duration(i)*time.Millisecond), 1024*1024, 0, false, "", nil)
 	}
 }

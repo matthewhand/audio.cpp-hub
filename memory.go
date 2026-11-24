@@ -218,6 +218,7 @@ type sampleInfo struct {
 	vram       int64
 	vramKnown  bool
 	source     string
+	pci        string
 }
 
 // pass samples every due instance: RAM from the platform reader, VRAM from
@@ -261,10 +262,10 @@ func (s *MemorySampler) pass(now time.Time) {
 		if !ok {
 			continue // unreadable / gone: keep the last state
 		}
-		vram, vOK := procDrmVRAMBytes(ip.PID)
+		vram, vOK, pci := procDrmMemory(ip.PID)
 		samples = append(samples, sampleInfo{
 			instanceID: ip.ID, pid: ip.PID, ram: ram, vram: vram, vramKnown: vOK,
-			source: vramSourceDrm,
+			source: vramSourceDrm, pci: pci,
 		})
 	}
 	// nvidia-smi fallback: one query per pass at most, only when some due
@@ -297,15 +298,23 @@ func (s *MemorySampler) pass(now time.Time) {
 	if nvQueried && nv != nil {
 		s.nvidiaGpuTotals(now)
 	}
+	var gttByPCI map[string]*amdGTTDevice
 	for _, sm := range samples {
-		s.record(sm.instanceID, now, sm.ram, sm.vram, sm.vramKnown, sm.source)
+		if sm.pci != "" && gttByPCI == nil {
+			gttByPCI = make(map[string]*amdGTTDevice)
+			devices := procAmdGTT()
+			for i := range devices {
+				gttByPCI[devices[i].PCI] = &devices[i]
+			}
+		}
+		s.record(sm.instanceID, now, sm.ram, sm.vram, sm.vramKnown, sm.source, gttByPCI[sm.pci])
 	}
 }
 
 // record applies one sample: rolling stats, per-task peaks, and (for busy
 // instances) an instance.memory push event. Samples taken while no task is
 // RUNNING (idle) also feed the idle baselines.
-func (s *MemorySampler) record(instanceID string, now time.Time, ram, vram int64, vramKnown bool, source string) {
+func (s *MemorySampler) record(instanceID string, now time.Time, ram, vram int64, vramKnown bool, source string, gtt *amdGTTDevice) {
 	s.mu.Lock()
 	st := s.state[instanceID]
 	if st == nil {
@@ -326,6 +335,7 @@ func (s *MemorySampler) record(instanceID string, now time.Time, ram, vram int64
 		}
 	}
 	st.addSample(now, ram, vram, vramKnown, source, !busy)
+	st.gtt = gtt
 	s.mu.Unlock()
 
 	// Never attribute a cached VRAM reading to a different task after an
@@ -375,6 +385,9 @@ func (s *MemorySampler) MemoryJSON(instanceID string) map[string]any {
 		"samples":      st.samples,
 		"sampledAt":    st.lastTime.UnixMilli(),
 		"busy":         s.busy[instanceID],
+	}
+	if st.gtt != nil {
+		out["deviceGtt"] = *st.gtt
 	}
 	if ram := st.ramRing.snapshot(); len(ram) >= 2 {
 		out["ramSeries"] = ram
@@ -546,6 +559,8 @@ type memRolling struct {
 	samples          int
 	lastTime         time.Time
 	hasSample        bool
+
+	gtt *amdGTTDevice
 
 	ramRing  memRing
 	vramRing memRing
