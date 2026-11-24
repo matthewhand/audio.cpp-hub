@@ -3,8 +3,8 @@
  * history restore can reuse them; sidebar callbacks form a runtime-only cycle. */
 
 import { $, el, esc, t } from "./dom.js";
-import { historyRefPath, loadHistory } from "./sidebar.js";
-import { activeInstanceId, selectedModel } from "./state.js";
+import { historyRefPath, loadHistory } from "./history-lazy.js";
+import { activeInstanceId, markTtsFormEdit, selectedModel } from "./state.js";
 import { clearResult, reattachTasks, submitTask, trackTask } from "./tasks.js";
 
 /* ---------- 表单选择器实例（模块求值时创建一次，仅本模块使用） ---------- */
@@ -33,6 +33,22 @@ export let otherLanguageSel = null;
 /* VibeVoice 多说话人：每行一个 AudioPicker，第 N 行对应脚本里的 Speaker N（voice_samples 顺序） */
 export let speakerPickers = [];
 export const VIBEVOICE_MAX_SPEAKERS = 4;
+
+const ttsForm = $("panel-tts");
+for (const type of ["input", "change"]) {
+  ttsForm.addEventListener(type, (event) => {
+    if (event.target instanceof Element &&
+        event.target.matches("input, textarea, select") &&
+        !event.target.closest(".picker-common")) markTtsFormEdit();
+  }, true);
+}
+// Capture speaker mutations before the action container stops propagation.
+ttsForm.addEventListener("click", (event) => {
+  if (event.target instanceof Element &&
+      event.target.closest("#tts-speaker-add, .speaker-remove")) {
+    markTtsFormEdit();
+  }
+}, true);
 
 /* ---------- 工作区：按 category 切换面板 ---------- */
 export function renderWorkspace() {
@@ -150,7 +166,10 @@ export function collectParams(m, prefix, req) {
     const opts = req.options || (req.options = {});
     // qwen3_tts_voicedesign 的 seed 引擎要求放请求顶层（其余模型 seed 走 options 透传）
     const target = (m.id === "qwen3_tts_voicedesign" && key === "seed") ? req : opts;
-    if (p.type === "boolean") { target[key] = input.checked; continue; }
+    if (p.type === "boolean") {
+      if (input.checked || !p.omitFalse) target[key] = input.checked;
+      continue;
+    }
     if (p.type === "string_array") {
       const chunks = input.value.split(/\r?\n/).filter(chunk => chunk.trim());
       if (chunks.length > 0) target[key] = chunks;
@@ -231,7 +250,7 @@ export function renumberSpeakerRows() {
     const n = i + 1;
     sp.label.textContent = "Speaker " + n;
     sp.picker.titleKey = "Speaker " + n;
-    sp.picker.$(".picker-title").textContent = "Speaker " + n;
+    sp.picker.refreshLabels();
   });
   $("tts-speaker-add").disabled = speakerPickers.length >= VIBEVOICE_MAX_SPEAKERS;
 }
@@ -336,7 +355,8 @@ function syncPresetVoice(m, chooseMatching = false) {
   }
 
   const voiceLanguage = schema.valueMeta[select.value]?.group;
-  hint.textContent = voiceLanguage && voiceLanguage !== language
+  const blendActive = m.family === "kokoro_tts" && $("adv-voice_blend")?.value.trim();
+  hint.textContent = !blendActive && voiceLanguage && voiceLanguage !== language
     ? t("tts.presetMismatch", { voiceLanguage: presetLanguageLabel(voiceLanguage), language: presetLanguageLabel(language) })
     : "";
   hint.classList.toggle("hidden", !hint.textContent);
@@ -394,7 +414,6 @@ export function renderTtsPanel(m) {
     preset.setAttribute("aria-describedby", hint.id);
     ttsLanguageSel.addEventListener("change", () => syncPresetVoice(m, true));
     preset.addEventListener("change", () => syncPresetVoice(m));
-    syncPresetVoice(m);
   }
 
   $("tts-emotion-block").classList.toggle("hidden", !(m.paramSchema && m.paramSchema.emotionModes));
@@ -412,10 +431,13 @@ export function renderTtsPanel(m) {
     }, "adv");
     const hint = el('<span id="kokoro-voice-blend-hint" class="hint"></span>');
     hint.textContent = t("tts.kokoroVoiceBlendHint");
-    blend.querySelector("input").setAttribute("aria-describedby", hint.id);
+    const input = blend.querySelector("input");
+    input.setAttribute("aria-describedby", hint.id);
+    input.addEventListener("input", () => syncPresetVoice(m));
     blend.appendChild(hint);
     advancedGrid.appendChild(blend);
   }
+  syncPresetVoice(m);
   $("tts-advanced").classList.toggle("hidden", !hasAdvanced && !hasVoiceBlend);
 
   updateTtsBlocks(m);
@@ -590,6 +612,7 @@ const emotionTabs = /** @type {HTMLButtonElement[]} */ ([
 ]);
 function selectEmotionTab(tab, { focus = false } = {}) {
   if (!tab) return;
+  markTtsFormEdit();
   emotionMode = tab.dataset.mode;
   emotionTabs.forEach(tb => {
     const on = tb === tab;
@@ -719,6 +742,10 @@ export function applyHistoryOptions(m, options) {
     if (!input) continue;
     if (p.type === "string_array") {
       input.value = Array.isArray(options[key]) ? options[key].join("\n") : "";
+      continue;
+    }
+    if (p.type === "boolean" && p.omitFalse) {
+      input.checked = ["true", "1", "yes", "on"].includes(String(options[key]));
       continue;
     }
     if (options[key] === undefined) continue;

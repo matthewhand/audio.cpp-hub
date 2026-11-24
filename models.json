@@ -837,6 +837,12 @@
   },
   {
     "id": "moss_ttsd",
+    "capabilities": {
+      "multiSpeaker": true,
+      "maxSpeakers": 2,
+      "speakerIndexBase": 1,
+      "speakerTagFormat": "[S{n}]"
+    },
     "family": "moss_ttsd",
     "hfUrl": "https://huggingface.co/OpenMOSS-Team/MOSS-TTSD-v1.0",
     "ggufUrl": "https://huggingface.co/christopherthompson81/MOSS-TTSD-GGUF",
@@ -928,6 +934,12 @@
   },
   {
     "id": "fish_drama3",
+    "capabilities": {
+      "multiSpeaker": true,
+      "maxSpeakers": 16,
+      "speakerIndexBase": 0,
+      "speakerTagFormat": "<|speaker:{n}|>"
+    },
     "family": "fish_drama3",
     "hfUrl": "https://huggingface.co/fishaudio",
     "ggufUrl": "https://huggingface.co/Jmica/Drama-3-GGUF",
@@ -1097,6 +1109,12 @@
   },
   {
     "id": "vibevoice",
+    "capabilities": {
+      "multiSpeaker": true,
+      "maxSpeakers": 4,
+      "speakerIndexBase": 1,
+      "speakerTagFormat": "Speaker {n}:"
+    },
     "family": "vibevoice",
     "hfUrl": "https://huggingface.co/microsoft/VibeVoice-1.5B",
     "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/VibeVoice-1.5B-GGUF",
@@ -1251,6 +1269,9 @@
   },
   {
     "id": "qwen3_tts_customvoice",
+    "capabilities": {
+      "presetVoiceParam": "speaker"
+    },
     "family": "qwen3_tts",
     "hfUrl": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
     "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF",
@@ -1619,6 +1640,9 @@
   },
   {
     "id": "supertonic",
+    "capabilities": {
+      "presetVoiceParam": "voice_id"
+    },
     "family": "supertonic",
     "hfUrl": "https://huggingface.co/mlx-community/supertonic-3-mlx",
     "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Supertonic-3-GGUF",
@@ -1954,6 +1978,9 @@
   },
   {
     "id": "magpie_tts",
+    "capabilities": {
+      "presetVoiceParam": "voice_id"
+    },
     "family": "magpie_tts",
     "hfUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/MagpieTTS-Multilingual-357M-GGUF",
     "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/MagpieTTS-Multilingual-357M-GGUF",
@@ -2097,6 +2124,12 @@
   },
   {
     "id": "ming3_tts",
+    "capabilities": {
+      "presetVoiceParam": "voice_id",
+      "presetVoiceRequires": {
+        "template_name": "ip"
+      }
+    },
     "family": "ming3_tts",
     "hfUrl": "https://huggingface.co/inclusionAI/Ming-3.0-tts",
     "ggufUrl": "https://huggingface.co/audio-cpp/Ming-3.0-TTS-0.5B-GGUF",
@@ -2469,6 +2502,52 @@
     }
   },
   {
+    "id": "superwhisper_lite",
+    "family": "superwhisper_lite",
+    "hfUrl": "https://huggingface.co/handy-computer/parakeet-tdt-0.6b-v3-gguf",
+    "displayName": "Superwhisper Offline Lite",
+    "description": "使用 AMD Vulkan 的 Parakeet TDT v3 Q4 语音识别。",
+    "descriptionEn": "Parakeet TDT v3 Q4 speech recognition on AMD Vulkan.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "backends": [
+      "vulkan"
+    ],
+    "paramSchema": {}
+  },
+  {
+    "id": "superwhisper_cohere",
+    "family": "superwhisper_cohere",
+    "hfUrl": "https://superwhisper.com/linux",
+    "displayName": "Superwhisper Offline · Cohere Transcribe",
+    "description": "使用 AMD Vulkan 的 Cohere Q4 语音识别，仅转写。",
+    "descriptionEn": "Cohere Q4 speech recognition on AMD Vulkan. Speech recognition only.",
+    "category": "asr",
+    "serverTask": "asr",
+    "modes": [
+      "offline"
+    ],
+    "inputs": {
+      "text": "none",
+      "audio": "required",
+      "voiceRef": "none"
+    },
+    "outputType": "text",
+    "backends": [
+      "vulkan"
+    ],
+    "paramSchema": {}
+  },
+  {
     "id": "parakeet_tdt",
     "family": "parakeet_tdt",
     "hfUrl": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
@@ -2815,6 +2894,9 @@
   },
   {
     "id": "kokoro_tts",
+    "capabilities": {
+      "presetVoiceParam": "voice_id"
+    },
     "family": "kokoro_tts",
     "hfUrl": "https://huggingface.co/hexgrad/Kokoro-82M",
     "ggufUrl": "https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Kokoro-82M-GGUF",
@@ -3192,6 +3274,13 @@
         "labelEn": "Phonemes",
         "hint": "可选，每行一个 Kokoro 音素块（最多 510 个符号）。留空则从文本生成音素。需使用支持音素数组的引擎。",
         "hintEn": "Optional. Enter one Kokoro phoneme chunk per line (up to 510 symbols). Leave blank to pronounce the text. Requires an engine that supports phoneme arrays."
+      },
+      "return_timestamps": {
+        "type": "boolean",
+        "default": false,
+        "omitFalse": true,
+        "label": "保留音素组时间戳",
+        "labelEn": "Save phoneme-group timestamps"
       },
       "speed": {
         "type": "number",

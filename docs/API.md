@@ -87,7 +87,7 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 
 ### `GET /api/models`
 
-返回内嵌 `models.json` 的原始数组（`writeRawJSON`）。它是「这个模型接受哪些参数」的唯一权威来源——`GET /v1/models` 只列 READY 的服务名，不含参数结构。
+返回基于内嵌 `models.json` 的模型卡数组。它是「这个模型接受哪些参数」的唯一权威来源——`GET /v1/models` 只列 READY 的服务名，不含参数结构。
 
 卡片字段（均为可选，缺失即表示该模型不适用）：
 
@@ -101,9 +101,12 @@ audio.cpp-hub 的 HTTP API。默认监听 `http://127.0.0.1:8080`（见 [`README
 | `inputs` | `{text, audio, voiceRef}`，取值 `required` / `optional` / `none`。`voiceRef: "none"` 表示**不支持参考音频克隆**，音色只能来自 `paramSchema` |
 | `language` | `{values: [...], default}`，语言下拉的取值 |
 | `paramSchema` | 额外参数定义，见下 |
+| `capabilities` | 可选的功能发现元数据，见下 |
 | `modes` / `backends` / `requiredFiles` / `hfUrl` / `ggufUrl` / `task` | 启动与下载相关元数据 |
 
-`paramSchema` 为 `{参数名: 定义}`，`定义.type` 取 `string` / `number` / `integer` / `boolean` / `enum` / `path` / `string_array`，可带 `default`、`min` / `max` / `step`、`values`（`enum` 的候选项）、`label` / `labelEn`、`hint` / `hintEn`、`placeholder` / `placeholderEn`、`required`。
+`paramSchema` 为 `{参数名: 定义}`，`定义.type` 取 `string` / `number` / `integer` / `boolean` / `enum` / `path` / `string_array`，可带 `default`、`min` / `max` / `step`、`values`（`enum` 的候选项）、`label` / `labelEn`、`hint` / `hintEn`、`placeholder` / `placeholderEn`、`required`、`omitFalse`（未选中的布尔参数不发送）。
+
+对声明预置音色枚举的 TTS 卡片，`capabilities.presetVoiceParam` 指向 `paramSchema` 中的选择参数（`voice_id` 或 `speaker`）。`capabilities.presetVoices` 按该枚举的顺序列出非空音色 ID。可选的 `capabilities.presetVoiceRequires` 列出选择音色时需要的参数和值，例如 Ming 3.0 TTS 的 `{"template_name":"ip"}`。缺少此元数据表示此卡片未声明可枚举的音色列表。请求字段的位置仍按各接口和模型的参数规则确定。
 
 **参数进入请求体的位置**（面板如何组 `POST /api/tasks` 的 `request`。下文链接中的 WAV 请求由 hub 按原 JSON 字段转发给引擎）：
 
@@ -129,7 +132,13 @@ Kokoro 的高级参数支持可选的音色混合表达式。客户端通过 `op
 
 Kokoro 支持可选的 `options.phonemes`（如 `["həlˈO", "wˈɜɹld"]`）。每个字符串为一个音素块，最多 510 个 Kokoro 词表符号；引擎按顺序合成并合并音频。仍需提供文本，且语言须匹配音色。WebUI 在高级参数中每行接收一个块，留空时省略该选项，使用引擎内置的文本转音素。
 
-异步 `POST /api/tasks` 使用 `request.options.phonemes`，同步 `POST /v1/audio/speech` 使用 `options.phonemes`。两条路径都要求引擎的 HTTP 请求解析器将该数组保留为列表。原版 audio.cpp v0.9.3 会把数组转成普通字符串，可能读出原文。请使用支持此数组的引擎构建。
+异步 `POST /api/tasks` 使用 `request.options.phonemes`，同步 `POST /v1/audio/speech` 使用 `options.phonemes`。两条路径都要求引擎的 HTTP 请求解析器将该数组保留为列表。原版 audio.cpp v0.9.3 会把数组转成普通字符串，可能读出原文。请使用支持此数组的引擎构建。v0.9.3 可应用 [HTTP 解析器补丁](https://gist.github.com/matthewhand/0a3c71255b755c5191741058aa2ed222)。
+
+带说话人标签的对话模型通过 `capabilities.multiSpeaker: true` 声明此功能。
+`maxSpeakers` 是已声明支持的说话人数，`speakerIndexBase` 是第一个编号。
+将 `speakerTagFormat` 中的 `{n}` 替换为无前导零的编号，范围为
+`speakerIndexBase` 至 `speakerIndexBase + maxSpeakers - 1`，然后把标签放在每段台词开头。
+VibeVoice 每段台词单独占一行。缺少这些字段表示卡片未声明此功能。
 
 ### `GET /api/models/{modelId}/packages`
 
@@ -422,7 +431,7 @@ body 同上，更新后返回条目；不存在 `404 EXEC_NOT_FOUND`。
 
 ### `GET /api/history/{modelId}`
 
-简要列表（新 → 旧），元素含 `taskId`、`time`、`instanceName`、`ok`、`text`（超 100 字截断并带 `textTruncated: true`）、可选 `groupId`、`error`、`result`。
+简要列表（新 → 旧），元素含 `taskId`、`time`、`instanceName`、`ok`、`text`（超 100 字截断并带 `textTruncated: true`）、可选 `groupId`、`error`、`result`。`result` 摘要包含 `durationSec` 和 `size`。通过 `/v1/audio/speech` 归档的记录还包含 `result.via: "v1/audio/speech"`，流式与非流式归档均适用。
 
 ### `DELETE /api/history/{modelId}`
 
@@ -431,6 +440,14 @@ body 同上，更新后返回条目；不存在 `404 EXEC_NOT_FOUND`。
 ### `GET /api/history/{modelId}/{taskId}`
 
 返回完整记录（含 `voice`、`options`、`refs`、`refBytes`、`result` 等）。
+
+Kokoro 的高级参数「保留音素组时间戳」默认关闭。API 调用方可在 `POST /api/tasks` 或
+`POST /api/run/{id}` 中传入 `request.options.return_timestamps: true`。若引擎随有效 WAV
+返回音素组，完整历史记录的 `result.words` 保留引擎数组，元素含 `word`（Kokoro 音素组）、
+`start_sample`、`end_sample`、`confidence`。用同一记录的 `result.sampleRate` 将样本位置换算为秒。
+音素组与原文单词没有一一对应关系。WebUI 可在历史详情下载包含 `sample_rate` 和 `words` 的 JSON。
+引擎未返回有效时间戳时，历史仍保留 WAV，且省略 `result.words`。列表和任务状态响应省略此数组。
+OpenAI 兼容的 `/v1/audio/speech` 按原有音频响应契约返回。
 
 ### `DELETE /api/history/{modelId}/{taskId}`
 
