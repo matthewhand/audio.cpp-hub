@@ -148,14 +148,12 @@ func TestCommittedRoutesConfig(t *testing.T) {
 		t.Errorf("listen = %q, want :18082", cfg.Listen)
 	}
 	want := map[string][]string{
-		"breeze":            {"http://10.0.0.36:18080/breeze", "http://10.0.0.30:18080/breeze"},
-		"expressive":        {"http://10.0.0.36:18080/breeze", "http://10.0.0.30:18080/breeze"},
+		"breeze":            {"http://10.0.0.30:18080/breeze"},
+		"expressive":        {"http://10.0.0.30:18080/breeze"},
 		"qwen3-vd":          {"http://10.0.0.30:18081/qwen3-vd"},
 		"voice-design-fast": {"http://10.0.0.30:18081/qwen3-vd"},
 		"sanotts":           {"http://10.0.0.36:18080/sanotts"},
 		"instant":           {"http://10.0.0.36:18080/sanotts"},
-		"citrinet":          {"http://10.0.0.36:18080/citrinet"},
-		"stt":               {"http://10.0.0.36:18080/citrinet"},
 		"kokoro":            {"http://127.0.0.1:18280/kokoro"},
 	}
 	for alias, targets := range want {
@@ -178,11 +176,11 @@ func TestCommittedRoutesConfig(t *testing.T) {
 	if len(cfg.Hubs) != 4 {
 		t.Errorf("hubs = %d, want 4 active hubs", len(cfg.Hubs))
 	}
-	if len(cfg.Routes) != 5 {
-		t.Errorf("routes = %d, want 5 route groups", len(cfg.Routes))
+	if len(cfg.Routes) != 4 {
+		t.Errorf("routes = %d, want 4 route groups", len(cfg.Routes))
 	}
-	if len(cfg.aliases()) != 9 {
-		t.Errorf("aliases = %d, want 9", len(cfg.aliases()))
+	if len(cfg.aliases()) != 7 {
+		t.Errorf("aliases = %d, want 7", len(cfg.aliases()))
 	}
 	wantHubs := map[string]bool{
 		"http://10.0.0.36:18080": true,

@@ -52,7 +52,7 @@ As a service, copy `audio-cpp-fanout.service` to `~/.config/systemd/user/`
 | `GET` | `/api/instances` | aggregated instances of every **up** hub, each tagged with `hub` / `hubLabel` |
 | `GET` | `/v1/models` | OpenAI list of the aliases that currently resolve to a READY backend |
 | `POST` | `/v1/audio/speech` | routes by `model` alias, rewrites `model` to the upstream `instanceName`, streams the response, fails over down the target list |
-| `POST` | `/api/tasks` | routes by `model` alias (STT: `stt` / `citrinet`), rewrites the hub-local `instanceId`, fails over down the target list |
+| `POST` | `/api/tasks` | routes by `model` alias (ASR: whichever alias you configure), rewrites the hub-local `instanceId`, fails over down the target list |
 | `GET` | `/api/tasks`, `/api/tasks/{id}`, `/api/tasks/{id}/result`, `DELETE /api/tasks/{id}` | read-through to one hub, pinned with `?hub=<baseUrl>` |
 
 Not proxied: history, voices, uploads, `/v1/tasks/run`. Those stay on the origin
@@ -65,14 +65,17 @@ whose hub is up **and** whose instance is `READY` wins.
 
 | Alias | Targets (in order) |
 |---|---|
-| `breeze`, `expressive` | `.36:18080 breeze` → `.30:18080 breeze` |
+| `breeze`, `expressive` | `.30:18080 breeze` |
 | `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` |
 | `sanotts`, `instant` | `.36:18080 sanotts` (single active target; Windows2 standby offline, [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)) |
 | `kokoro` | `127.0.0.1:18280 kokoro` (GTX loopback) |
-| `citrinet`, `stt` | `.36:18080 citrinet` |
+
+No ASR route is configured on the current farm (the `citrinet` instance was
+retired on 2026-11-25). The `/api/tasks` routing below still applies once you add
+a route for the ASR instance you run.
 
 An alias names a *service*; the endpoint names the *request shape*. TTS is
-`/v1/audio/speech`, ASR is `/api/tasks`. A speech call against `citrinet` fails
+`/v1/audio/speech`, ASR is `/api/tasks`. A speech call against an ASR alias fails
 (`503` — the engine wants an audio contract, not text); a task call against
 `breeze` would run a TTS task. Nothing translates between shapes.
 
@@ -107,7 +110,7 @@ rewrite can never reformat or round a caller value.
   as soon as the task is queued, so for ASR the cap limits how fast work is
   queued, not how much of it runs.
 - `request.audio` is a **server-side path**, so it exists on the origin hub only.
-  `citrinet` is single-host today; if the route ever grows a second host, a
+  An ASR route is single-host today; if it ever grows a second host, a
   submission that fails over would name a file the standby cannot read and the
   task would come back `FAILED` rather than failing over again.
 - If a submission is accepted but its response is lost, the proxy fails over and
@@ -142,7 +145,7 @@ target (hub base URL + service name):
   SDKs retry `429` on their own; a client that would rather queue than fail can
   set `"maxInFlightPerTarget": -1`.
 - The default of `2` still lets one client overlap a request with its own
-  follow-up. Watch the single-target routes (`qwen3-vd`, `citrinet`): no standby
+  follow-up. Watch the single-target routes (`qwen3-vd`, `sanotts`): no standby
   to spill to, so a client firing more in parallel than the cap gets 429s.
 - For `POST /api/tasks` the slot covers the submit round trip and is released
   while the task still runs — the hub's own serial queue is what bounds
@@ -229,8 +232,9 @@ grep -i x-fanout <(curl -s -D - -o /dev/null -X POST localhost:18082/v1/audio/sp
 ```
 
 STT round trip through the fan-out. `request.audio` is a path on the hub that
-serves it, so generate a take first and transcribe that file (both land on
-`.36:18080`, the only host with `citrinet`):
+serves it, so generate a take first and transcribe that file (both land on the
+same host). Replace `stt` below with the ASR alias you configure — none is
+shipped on the current farm:
 
 ```bash
 curl -s -X POST localhost:18082/v1/audio/speech -H 'Content-Type: application/json' \
