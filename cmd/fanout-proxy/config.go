@@ -29,6 +29,18 @@ const (
 // of turning every request into a 404 from the upstream hub.
 var instanceNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
+// Route strategies. Failover (the default) is "first usable target wins, every
+// time"; round_robin spreads requests over the usable targets in proportion to
+// their weight, so two machines that can both serve an alias share the load.
+const (
+	StrategyFailover   = "failover"
+	StrategyRoundRobin = "round_robin"
+)
+
+// defaultWeight is what an omitted target weight means: one share of a
+// round-robin route, and irrelevant to a failover route.
+const defaultWeight = 1
+
 // Hub is one polled audio.cpp-hub endpoint. Label is ops-only sugar shown in
 // GET /farm/health.
 type Hub struct {
@@ -37,17 +49,23 @@ type Hub struct {
 }
 
 // Target is one candidate backend of a route: a hub plus the service name
-// (instanceName) that hub must currently expose READY.
+// (instanceName) that hub must currently expose READY. Weight only matters when
+// the route uses round_robin; it defaults to 1.
 type Target struct {
 	Hub          string `json:"hub"`
 	InstanceName string `json:"instanceName"`
+	Weight       int    `json:"weight,omitempty"`
 }
 
-// Route binds the names agents may pass as "model" (aliases) to an ordered
-// backend list. Order is failover priority: first usable target wins.
+// Route binds the names agents may pass as "model" (aliases) to a backend list
+// plus how that list is consumed. Strategy "failover" (the default) keeps the
+// list as priority order: first usable target wins. Strategy "round_robin"
+// spreads requests across every usable target by Weight, still failing over
+// down the list when the chosen one does not answer.
 type Route struct {
-	Aliases []string `json:"aliases"`
-	Targets []Target `json:"targets"`
+	Aliases  []string `json:"aliases"`
+	Strategy string   `json:"strategy,omitempty"`
+	Targets  []Target `json:"targets"`
 }
 
 // Config is farm.routes.json. Only Listen/PollIntervalMs/MaxInFlightPerTarget
@@ -126,6 +144,13 @@ func (c *Config) normalize() error {
 		if len(rt.Aliases) == 0 {
 			return fmt.Errorf("routes[%d].aliases is empty", i)
 		}
+		rt.Strategy = strings.ToLower(strings.TrimSpace(rt.Strategy))
+		if rt.Strategy == "" {
+			rt.Strategy = StrategyFailover
+		}
+		if rt.Strategy != StrategyFailover && rt.Strategy != StrategyRoundRobin {
+			return fmt.Errorf("routes[%d].strategy %q is not one of %q, %q", i, rt.Strategy, StrategyFailover, StrategyRoundRobin)
+		}
 		if len(rt.Targets) == 0 {
 			return fmt.Errorf("routes[%d].targets is empty", i)
 		}
@@ -148,6 +173,14 @@ func (c *Config) normalize() error {
 			}
 			if !instanceNamePattern.MatchString(t.InstanceName) {
 				return fmt.Errorf("routes[%d].targets[%d].instanceName %q is not a valid service name", i, j, t.InstanceName)
+			}
+			if t.Weight < 0 {
+				return fmt.Errorf("routes[%d].targets[%d].weight %d must be >= 0", i, j, t.Weight)
+			}
+			// An omitted weight means 1 for either strategy, so a route only
+			// names weights where it actually wants an uneven split.
+			if t.Weight == 0 {
+				t.Weight = defaultWeight
 			}
 		}
 	}

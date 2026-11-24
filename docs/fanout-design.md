@@ -14,6 +14,36 @@ to hard-code host:port:model triples.
 
 Live entrypoint: **`http://10.0.0.36:18082`**.
 
+## Where this sits (read this before adding failover somewhere new)
+
+The farm has two routers stacked, and neither is intended to absorb the other:
+
+```
+client -> LiteLLM (:8000 on .30) -> fan-out (:18082 on .36) -> hub (:18080/…) -> engine instance
+          model names, keys,        alias -> hub target list,     one instance,
+          budgets, cloud            health cache, failover,        one engine
+          provider fallbacks        in-flight caps, task pinning
+```
+
+- **LiteLLM is the OpenAI-facing layer.** It owns what a client calls a model
+  (`kokoro`, `sanotts`, `ming3-tts`), API keys, budgets and fallbacks to
+  non-audiocpp providers. Its audio routing is one `api_base` per deployment, so
+  per-request audio failover means another `model_name` block (its
+  `…-fallback` aliases) — and it only speaks OpenAI request shapes.
+- **The fan-out is the hub-contract layer.** It is the only component that
+  knows `/api/tasks` (task ids are hub-local, so reads are pinned back to the
+  originating hub with `?hub=`), `/api/instances`, `/farm/health` and each hub's
+  readiness. LiteLLM cannot route those, and never should.
+- **A hub is one instance manager.** Its `/v1` is a pass-through to the instance
+  it started; it has no notion of other hosts. Cross-host failover/balancing
+  inside the hub (option A) would duplicate the fan-out's whole job and add
+  remote failure modes to the warm-primary process.
+
+So: put model naming/keys in LiteLLM, put farm routing in the fan-out, and keep
+hubs single-host. The one thing neither router did until 2026-11-25 was spread
+load across equivalent hosts — that is now `strategy: "round_robin"` on a route
+(see "Balancing" below), not a hub change.
+
 ## Current farm (source of truth: `docs/farm.md`)
 
 | Host | Endpoint | Model / service | Backend | Role |
@@ -22,6 +52,7 @@ Live entrypoint: **`http://10.0.0.36:18082`**.
 | `10.0.0.30:18080` | Docker `audio-cpp-hub-amd` | `breeze` | Vulkan iGPU DEVICE=1 | Standby breeze |
 | `10.0.0.30:18081` | Docker `audio-cpp-hub-amd-qwen3` | `qwen3-vd` | Vulkan iGPU DEVICE=1 | Fast voice-design (`instruct`) |
 | `127.0.0.1:18280` (GTX only) | native Kokoro hub | `kokoro` / `kokoro_tts` | CPU | Loopback-only Kokoro TTS |
+| `10.0.0.31:18088` | native Windows hub (`D:\audio.cpp-hub`, scheduled task) | `kokoro-win1` | Vulkan RX 6600 XT | Secondary Kokoro host (non-standard port: 8080 is taken) |
 
 Windows2 `10.0.0.32:18080` was an intended CPU SanoTTS overflow target,
 but was offline at the 31 October 2026 read-only check (Docker Desktop stopped,
@@ -77,7 +108,7 @@ and both spellings in a pair resolve to the same target list.
 | `qwen3-vd` / `voice-design-fast` | `.30:18081` `qwen3-vd` | none |
 | `sanotts` / `instant` | `.36` `sanotts` | none (Windows2 offline, [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)) |
 | `citrinet` / `stt` | `.36` `citrinet` | none (only host that has it) |
-| `kokoro` | GTX `127.0.0.1:18280` `kokoro` | none (loopback-only native hub) |
+| `kokoro` | GTX `127.0.0.1:18280` `kokoro` (weight 2) | Windows1 `10.0.0.31:18088` `kokoro-win1` (weight 1), round-robin |
 
 Rules baked into the implementation:
 
@@ -179,15 +210,16 @@ request.
   ],
   "routes": [
     { "aliases": ["breeze", "expressive"], "resolved": "http://10.0.0.36:18080/breeze",
-      "targets": [{ "hub": "http://10.0.0.36:18080", "instanceName": "breeze", "skipped": "", "inFlight": 1 },
-                  { "hub": "http://10.0.0.30:18080", "instanceName": "breeze", "skipped": "", "inFlight": 0 }] }
+      "targets": [{ "hub": "http://10.0.0.36:18080", "instanceName": "breeze", "weight": 1, "skipped": "", "inFlight": 1 },
+                  { "hub": "http://10.0.0.30:18080", "instanceName": "breeze", "weight": 1, "skipped": "", "inFlight": 0 }] }
   ],
   "knownAliases": ["breeze", "citrinet", "expressive", "instant", "kokoro", "qwen3-vd", "sanotts", "stt", "voice-design-fast"]
 }
 ```
 
 - `hubsTotal` counts configured hubs, including down targets. The checked-in
-  file configures four hubs including Kokoro's loopback hub. Installations
+  file configures five hubs, including Kokoro's loopback hub and Windows1's
+  `:18088` hub. Installations
   with additional targets report their own totals.
 - Kokoro resolves to `http://127.0.0.1:18280/kokoro` when READY. The origin
   URL serves as the `?hub=` pin on requests to the fan-out. History access
@@ -202,7 +234,50 @@ request.
 - `inFlight` per target is a live count (not from the poll cache), shown next to
   the effective `inFlightCap` so a target about to start shedding is visible
   before it does. `resolved` stays the poll-cache answer: first READY target,
-  regardless of load.
+  regardless of load and regardless of strategy; each route reports its
+  `strategy` and each target its `weight`, so a balanced route is visible there.
+
+## Balancing — `strategy: "round_robin"`
+
+A route's target list used to mean one thing: priority order. It now carries a
+strategy, because two equivalent hosts (GTX loopback Kokoro and Windows1's
+Vulkan Kokoro) should share traffic instead of leaving one idle as a standby.
+
+```jsonc
+{
+  "aliases": ["kokoro"],
+  "strategy": "round_robin",
+  "targets": [
+    { "hub": "http://127.0.0.1:18280", "instanceName": "kokoro",      "weight": 2 },
+    { "hub": "http://10.0.0.31:18088", "instanceName": "kokoro-win1", "weight": 1 }
+  ]
+}
+```
+
+Decisions taken:
+
+- **Smooth weighted round-robin** (nginx's algorithm), not random and not plain
+  rotation: weights `2`/`1` give `A,B,A,A,B,A`, which keeps the expensive host
+  at its intended share without a burst of three in a row. Equal weights degrade
+  to plain alternation.
+- **Balancing is layered on failover, not instead of it.** The chosen target
+  goes first and every other target follows in config order, so a pick that
+  errors walks the rest of the list exactly as a failover primary would. A
+  balanced route can never be less available than the failover route it
+  replaced.
+- **Only usable targets rotate.** Down hubs, instances that are not `READY` and
+  targets at their in-flight cap are excluded, so a machine going away costs its
+  share and nothing else; it rejoins the rotation on the first healthy poll.
+- **The default stays `failover`.** Ordering is a promise (warm primary, standby
+  that must not steal load), so nothing changes unless a route opts in. An
+  omitted `weight` normalises to `1` for both strategies, and a failover route
+  pins it to `1`, so switching strategy back needs no config cleanup.
+- **State is one in-process counter per route.** One proxy, one farm: no gossip,
+  no shared cursor, nothing to disagree about. A restart resets rotation, which
+  no caller can observe beyond the order of two equivalent backends.
+- **Not for stateful flows.** A multi-seed audition that must land on one host
+  is the opposite case — send it serially or pin the hub directly (follow-up 3).
+
 
 ## Failure / failover
 
@@ -260,16 +335,18 @@ Decisions taken:
 - `cmd/fanout-proxy/` — own `package main`, stdlib only, so the hub root package
   is untouched. `config.go` (farm.routes.json + validation), `health.go` (poll
   cache + down threshold), `router.go` (model rewrite, target planning,
-  in-flight limiter, shared failover loop, streaming forward), `tasks.go`
-  (`POST /api/tasks` by alias + pinned task read-through), `main.go` (flags,
-  handlers).
+  in-flight limiter, shared failover loop, streaming forward), `balance.go`
+  (smooth weighted round-robin), `tasks.go` (`POST /api/tasks` by alias + pinned
+  task read-through), `main.go` (flags, handlers).
 - `cmd/fanout-proxy/farm.routes.json` — the committed farm topology. The task
   path needs no new key: an alias names a service, and the engine's own request
   object rides along untouched.
 - `cmd/fanout-proxy/audio-cpp-fanout.service` — systemd **user** unit template
   (install notes in the file header); nothing is enabled automatically.
 - `cmd/fanout-proxy/README.md` — build / run / endpoints / knobs / smoke test.
-- Table-driven unit tests cover alias resolution, target planning and failover
+- Table-driven unit tests cover alias resolution, strategy/weight
+  normalisation and rejection, weighted round-robin (order, ratio over a run,
+  unusable targets dropping out and rejoining, nil safety), target planning and failover
   (including httptest stand-ins for two hubs), the 2-failure down threshold, the
   body rewrite, the in-flight cap (spill, `429` shedding, slot release, nil and
   `cap <= 0` safety), the committed route table, and the task path (alias →
@@ -324,8 +401,9 @@ Retry DEVICE=0 only after GPU driver/kernel update, again in a throwaway.
    `inFlight` / `inFlightCap`. Note it caps submission for `POST /api/tasks`;
    execution is bounded by the hub's own serial queue.
 3. Sticky sessions for multi-seed auditions, if agents ever need a whole sweep
-   to land on one host. Note the cap makes this sharper, not softer: a sweep
-   fired in parallel now splits across `.36` and `.30`, so seeds of one audition
-   would land on different hosts unless a sweep is sent serially or sticky
-   sessions land first.
+   to land on one host. Both the cap and `round_robin` make this sharper, not
+   softer: a sweep fired in parallel splits across the route's usable targets, so
+   seeds of one audition land on different hosts unless the sweep is sent
+   serially or sticky sessions land first. Which host served a take is still
+   never ambiguous — `X-Fanout-Hub` / `X-Fanout-Instance` name it per response.
 4. Option A (hub-native remotes) if unified history/UI becomes a requirement.

@@ -1,8 +1,8 @@
 # fanout-proxy — LAN fan-out router for the voice farm
 
 One OpenAI-shaped entrypoint in front of every `audio.cpp-hub` in the farm, so
-agents stop hard-coding `host:port:model` triples. Tiny (stdlib only, 5 source
-files), runs beside the hubs, and changes **nothing** on them.
+agents stop hard-coding `host:port:model` triples. Tiny (stdlib only, a handful
+of source files), runs beside the hubs, and changes **nothing** on them.
 
 - Design + decisions: [`../../docs/fanout-design.md`](../../docs/fanout-design.md)
 - Farm topology: [`../../docs/farm.md`](../../docs/farm.md)
@@ -60,34 +60,57 @@ hub (see `X-Fanout-Hub`).
 
 ## Routing
 
-`farm.routes.json` maps aliases to an ordered target list; the first target
-whose hub is up **and** whose instance is `READY` wins.
+`farm.routes.json` maps aliases to a target list plus a **strategy** telling the
+proxy how to consume it:
 
-| Alias | Targets (in order) |
-|---|---|
-| `breeze`, `expressive` | `.30:18080 breeze` |
-| `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` |
-| `sanotts`, `instant` | `.36:18080 sanotts` (single active target; Windows2 standby offline, [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)) |
-| `kokoro` | `127.0.0.1:18280 kokoro` (GTX loopback) |
+- `failover` (default) — priority order: the first target whose hub is up **and**
+  whose instance is `READY` wins. Deterministic; the warm primary stays warm.
+- `round_robin` — every usable target shares the traffic by `weight`, still
+  failing over down the same list when the chosen target does not answer.
+
+| Alias | Targets | Strategy |
+|---|---|---|
+| `breeze`, `expressive` | `.30:18080 breeze` | failover |
+| `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` | failover |
+| `sanotts`, `instant` | `.36:18080 sanotts` (single active target; Windows2 standby offline, [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)) | failover |
+| `kokoro` | `127.0.0.1:18280 kokoro` weight 2, `10.0.0.31:18088 kokoro-win1` weight 1 | round_robin |
 
 No ASR route is configured on the current farm (the `citrinet` instance was
 retired on 2026-11-25). The `/api/tasks` routing below still applies once you add
 a route for the ASR instance you run.
 
 Send `model: "kokoro"` to the fan-out. `kokoro_tts` is the model card ID.
-The checked-in route has one target. Its loopback address assumes the fan-out
-runs on Ubuntu-GTX. When that hub is down or its Kokoro instance is still
-starting, requests to `kokoro` receive HTTP 503. The
-[GTX deployment notes](../../docs/deployment-10.0.0.36.md#kokoro-loopback-hub)
-describe the startup hook that establishes readiness.
+`kokoro` is the one balanced route: the loopback hub on Ubuntu-GTX carries 2/3
+of the traffic and `kokoro-win1` on Windows1 (`10.0.0.31:18088`, Vulkan on the
+RX 6600 XT) carries 1/3. The loopback address assumes the fan-out runs on
+Ubuntu-GTX; the [GTX deployment notes](../../docs/deployment-10.0.0.36.md#kokoro-loopback-hub)
+describe the startup hook that establishes readiness. Either hub being down or
+still starting is not an outage: the other one takes 100% of the traffic. Only
+a hub restart moves a take's history — `X-Fanout-Hub` still names the origin.
 
-Send `model: "kokoro"` to the fan-out. `kokoro_tts` is the model card ID.
-The checked-in route has one target. Its loopback address assumes the fan-out
-runs on Ubuntu-GTX. When that hub is down or its Kokoro instance is still
-starting, requests to `kokoro` receive HTTP 503. The
-[GTX deployment notes](../../docs/deployment-10.0.0.36.md#kokoro-loopback-hub)
-describe the startup hook that establishes readiness.
+### Balancing (`strategy` / `weight`)
 
+A route is `failover` unless it says otherwise. Adding `"strategy":
+"round_robin"` turns the same target list into a load split: each target gets a
+`weight` (`1` when omitted) and the proxy picks with smooth weighted
+round-robin, so weights `2` and `1` produce `A,B,A,A,B,A` rather than a bursty
+`A,A,B`. Weights are relative — `2`/`1` and `20`/`10` behave alike.
+
+- **Only usable targets rotate.** A hub that is down, an instance that is not
+  `READY`, and a target at `maxInFlightPerTarget` all drop out, so a failed
+  machine costs its share and nothing else.
+- **The chosen target still fails over.** The rest of the list follows it in
+  config order, so balancing is layered *on top of* the failover guarantee — a
+  round-robin pick that errors spills to the next target exactly like a failover
+  primary would. Availability never gets worse than the failover route.
+- **State is in-process and per route.** The rotation restarts at the first
+  target on restart. With the proxy on one host that is the whole farm; there is
+  no cross-host coordination to get out of sync.
+- **Failover-only routes ignore `weight`.** Normalisation pins it to `1`, so
+  leaving a weight in place while switching strategy back is harmless.
+- A sticky/multi-seed audition that must land on one host is the opposite case:
+  send it serially or pin the hub, because round-robin will deliberately split
+  it.
 An alias names a *service*; the endpoint names the *request shape*. TTS is
 `/v1/audio/speech`, ASR is `/api/tasks`. A speech call against an ASR alias fails
 (`503` — the engine wants an audio contract, not text); a task call against
@@ -141,7 +164,9 @@ rewrite can never reformat or round a caller value.
 | `pollTimeoutMs` | `5000` | per-hub poll timeout |
 | `maxBodyBytes` | `67108864` (64 MiB) | request body ceiling, same as the hub's `/api/*` limit |
 | `maxInFlightPerTarget` | `2` | concurrent speech forwards per **origin target**; `<= 0` turns the cap off |
-| `hubs` / `routes` | — | polled hubs, and alias → ordered target list |
+| `hubs` / `routes` | — | polled hubs, and alias → target list |
+| `routes[].strategy` | `failover` | `failover` (priority order) or `round_robin` (weighted split over usable targets) |
+| `routes[].targets[].weight` | `1` | round-robin share; ignored by a failover route |
 
 ### `maxInFlightPerTarget` — the per-origin in-flight cap
 
@@ -166,8 +191,10 @@ target (hub base URL + service name):
   execution, so the cap limits how fast work is *queued*.
 - `GET /farm/health` reports the effective `inFlightCap` plus a live `inFlight`
   count per target, so a target about to start shedding is visible before it
-  does. Note that `resolved` is the poll-cache answer (first READY target);
-  under load the request may still land on the next one.
+  does. Note that `resolved` is the poll-cache answer (first READY target, with
+  each target's `weight` and the route's `strategy` alongside); a round-robin
+  route rotates past it, and under load any route may still land on the next
+  target.
 
 ## Failure behavior
 
@@ -181,8 +208,9 @@ Same rules for both forwarded endpoints (`POST /v1/audio/speech`,
   without burning the remaining targets. A task submission additionally skips a
   target whose poll snapshot has no `instanceId` for the service.
 - A target sitting at `maxInFlightPerTarget` is skipped like a down hub, so
-  traffic spills to the standby; only a route whose every usable target is busy
-  sheds load with `429` + `Retry-After: 5`.
+  traffic spills to the next target (the standby on a failover route, another
+  host's share on a round-robin one); only a route whose every usable target is
+  busy sheds load with `429` + `Retry-After: 5`.
 - Once response bytes have reached the client there is nothing to retry, so all
   retryable outcomes are detected before anything is written.
 - Task **reads** are not a failover case at all: the pin names one hub, and the

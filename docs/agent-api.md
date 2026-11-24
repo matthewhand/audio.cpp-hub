@@ -226,13 +226,19 @@ the request to send.
 
 For `POST /api/tasks`, put the instance ID in `instanceId` and the
 engine fields under `request`. Use `request.text` for the text to speak.
+Only `POST /api/tasks` and the task reads are fan-out aware; use the alias the
+fan-out exposes and keep `?hub=` from `X-Fanout-Hub` on every read.
 
 For example, a Kokoro task uses
 `{"instanceId": "…", "request": {"text": "…", "language": "en-us", "options": {"voice_id": "af_heart"}}}`.
 
 The checked-in [farm route](../cmd/fanout-proxy/farm.routes.json) maps the
-alias `kokoro` to the `kokoro` service on the GTX host's loopback hub.
-Use the card ID `kokoro_tts` for model metadata and history. See the
+alias `kokoro` to two hosts: the `kokoro` service on the GTX loopback hub
+(weight 2) and `kokoro-win1` on Windows1's hub (weight 1). The route is
+`round_robin`, so successive calls split across both and either host can go away
+without failing a request — read `X-Fanout-Hub` on the response to learn which
+one served (and archived) the take. Use the card ID `kokoro_tts` for model
+metadata and history. See the
 [loopback routing ticket](https://github.com/matthewhand/audio.cpp-hub/issues/204).
 
 ### Where results are archived

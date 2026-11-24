@@ -137,6 +137,77 @@ func TestLoadConfigInFlightCap(t *testing.T) {
 	}
 }
 
+// strategy is what turns "list of backends" into "priority order" or "load
+// share", so both the default and the rejection cases are pinned here.
+func TestLoadConfigStrategy(t *testing.T) {
+	const twoTargets = `[{"hub": "http://h", "instanceName": "x"}, {"hub": "http://h", "instanceName": "y"}]`
+	tests := []struct {
+		name         string
+		routeExtra   string
+		targets      string
+		wantErrs     string
+		wantStrategy string
+		wantWeights  []int
+	}{
+		{
+			name:         "absent defaults to failover with weight 1",
+			targets:      twoTargets,
+			wantStrategy: StrategyFailover,
+			wantWeights:  []int{1, 1},
+		},
+		{
+			name:         "explicit round_robin keeps config order weights",
+			routeExtra:   `"strategy": "round_robin",`,
+			targets:      `[{"hub": "http://h", "instanceName": "x", "weight": 3}, {"hub": "http://h", "instanceName": "y"}]`,
+			wantStrategy: StrategyRoundRobin,
+			wantWeights:  []int{3, 1},
+		},
+		{
+			name:         "strategy is case-insensitive",
+			routeExtra:   `"strategy": "Round_Robin",`,
+			targets:      twoTargets,
+			wantStrategy: StrategyRoundRobin,
+			wantWeights:  []int{1, 1},
+		},
+		{
+			name:       "unknown strategy is rejected",
+			routeExtra: `"strategy": "sticky",`,
+			targets:    twoTargets,
+			wantErrs:   "strategy",
+		},
+		{
+			name:     "negative weight is rejected",
+			targets:  `[{"hub": "http://h", "instanceName": "x", "weight": -1}]`,
+			wantErrs: "weight",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := `{"hubs": [{"baseUrl": "http://h"}], "routes": [{"aliases": ["a"], ` + tc.routeExtra +
+				`"targets": ` + tc.targets + `}]}`
+			cfg, err := LoadConfig(writeConfig(t, body))
+			if tc.wantErrs != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErrs) {
+					t.Fatalf("error = %v, want it to contain %q", err, tc.wantErrs)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			rt := &cfg.Routes[0]
+			if rt.Strategy != tc.wantStrategy {
+				t.Errorf("strategy = %q, want %q", rt.Strategy, tc.wantStrategy)
+			}
+			for i, want := range tc.wantWeights {
+				if got := rt.Targets[i].Weight; got != want {
+					t.Errorf("targets[%d].weight = %d, want %d", i, got, want)
+				}
+			}
+		})
+	}
+}
+
 // TestCommittedRoutesConfig pins the shipped farm.routes.json: it must parse,
 // and the aliases agents depend on must map to the documented backends.
 func TestCommittedRoutesConfig(t *testing.T) {
@@ -154,7 +225,7 @@ func TestCommittedRoutesConfig(t *testing.T) {
 		"voice-design-fast": {"http://10.0.0.30:18081/qwen3-vd"},
 		"sanotts":           {"http://10.0.0.36:18080/sanotts"},
 		"instant":           {"http://10.0.0.36:18080/sanotts"},
-		"kokoro":            {"http://127.0.0.1:18280/kokoro"},
+		"kokoro":            {"http://127.0.0.1:18280/kokoro", "http://10.0.0.31:18088/kokoro-win1"},
 	}
 	for alias, targets := range want {
 		rt, ok := cfg.routeFor(alias)
@@ -170,11 +241,11 @@ func TestCommittedRoutesConfig(t *testing.T) {
 			t.Errorf("alias %q targets = %v, want %v", alias, got, targets)
 		}
 	}
-	// The committed topology has four active hubs; Windows2 SanoTTS is
+	// The committed topology has five active hubs; Windows2 SanoTTS is
 	// deliberately excluded until issue #127 passes its recovery gates.
 	// This must not ban that host from future independently approved configs.
-	if len(cfg.Hubs) != 4 {
-		t.Errorf("hubs = %d, want 4 active hubs", len(cfg.Hubs))
+	if len(cfg.Hubs) != 5 {
+		t.Errorf("hubs = %d, want 5 active hubs", len(cfg.Hubs))
 	}
 	if len(cfg.Routes) != 4 {
 		t.Errorf("routes = %d, want 4 route groups", len(cfg.Routes))
@@ -187,6 +258,7 @@ func TestCommittedRoutesConfig(t *testing.T) {
 		"http://10.0.0.30:18080": true,
 		"http://10.0.0.30:18081": true,
 		"http://127.0.0.1:18280": true,
+		"http://10.0.0.31:18088": true,
 	}
 	for _, hub := range cfg.Hubs {
 		if !wantHubs[hub.BaseURL] {
@@ -198,6 +270,27 @@ func TestCommittedRoutesConfig(t *testing.T) {
 			if !wantHubs[target.Hub] {
 				t.Errorf("unexpected active route target %q", target.Hub)
 			}
+		}
+	}
+	// kokoro is the one balanced route: the loopback hub is the primary share
+	// (2/3) and Windows1's Vulkan hub takes the rest, so a hub restart costs a
+	// third of the traffic instead of all of it.
+	kokoro, ok := cfg.routeFor("kokoro")
+	if !ok {
+		t.Fatal("alias kokoro missing from farm.routes.json")
+	}
+	if kokoro.Strategy != StrategyRoundRobin {
+		t.Errorf("kokoro strategy = %q, want %q", kokoro.Strategy, StrategyRoundRobin)
+	}
+	if got := []int{kokoro.Targets[0].Weight, kokoro.Targets[1].Weight}; got[0] != 2 || got[1] != 1 {
+		t.Errorf("kokoro weights = %v, want [2 1]", got)
+	}
+	for alias := range want {
+		if alias == "kokoro" {
+			continue
+		}
+		if rt, _ := cfg.routeFor(alias); rt.Strategy != StrategyFailover {
+			t.Errorf("alias %q strategy = %q, want failover", alias, rt.Strategy)
 		}
 	}
 	// The RX 6600 XT route must never appear in the shipped table.

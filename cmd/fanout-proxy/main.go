@@ -19,16 +19,19 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 )
 
-// proxy bundles the immutable config with the mutable health cache.
+// proxy bundles the immutable config with the mutable health cache and
+// balancing state.
 type proxy struct {
 	cfg *Config
 	hub *healthStore
 	lim *limiter
+	bal *balancer
 }
 
 func main() {
@@ -44,7 +47,7 @@ func main() {
 		cfg.Listen = *listenOverride
 	}
 
-	p := &proxy{cfg: cfg, hub: newHealthStore(cfg), lim: newLimiter(cfg.MaxInFlightPerTarget)}
+	p := &proxy{cfg: cfg, hub: newHealthStore(cfg), lim: newLimiter(cfg.MaxInFlightPerTarget), bal: newBalancer()}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -67,6 +70,13 @@ func main() {
 
 	log.Printf("fanout-proxy listening on %s (config %s, %d hubs, %d routes, in-flight cap %d/target, aliases: %s)",
 		cfg.Listen, *configPath, len(cfg.Hubs), len(cfg.Routes), cfg.MaxInFlightPerTarget, strings.Join(cfg.aliases(), ", "))
+	for i := range cfg.Routes {
+		rt := &cfg.Routes[i]
+		if rt.Strategy == StrategyRoundRobin {
+			log.Printf("fanout: route %s balances round_robin over %d targets (weights %s)",
+				strings.Join(rt.Aliases, "/"), len(rt.Targets), weightList(rt))
+		}
+	}
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("fanout-proxy: %v", err)
 	}
@@ -154,6 +164,7 @@ func (p *proxy) handleFarmHealth(w http.ResponseWriter, r *http.Request) {
 			targets = append(targets, map[string]any{
 				"hub":          c.target.Hub,
 				"instanceName": c.target.InstanceName,
+				"weight":       c.target.Weight,
 				"skipped":      c.skip,
 				"inFlight":     p.lim.inFlight(targetKey(c.target)),
 			})
@@ -166,6 +177,7 @@ func (p *proxy) handleFarmHealth(w http.ResponseWriter, r *http.Request) {
 		}
 		routes = append(routes, map[string]any{
 			"aliases":  rt.Aliases,
+			"strategy": rt.Strategy,
 			"resolved": resolved,
 			"targets":  targets,
 		})
@@ -283,6 +295,15 @@ func (p *proxy) handleFallback(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------------------------------------------------------- helpers
+
+// weightList renders a round-robin route's weights for the startup log.
+func weightList(rt *Route) string {
+	parts := make([]string, 0, len(rt.Targets))
+	for _, t := range rt.Targets {
+		parts = append(parts, t.InstanceName+"="+strconv.Itoa(t.Weight))
+	}
+	return strings.Join(parts, ", ")
+}
 
 // hubList is the flat "which hubs did we try" list in the failure envelope.
 func hubList(attempts []attempt) []string {

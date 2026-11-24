@@ -19,6 +19,10 @@
     {
       "baseUrl": "http://127.0.0.1:18280",
       "label": "gtx-kokoro-loopback"
+    },
+    {
+      "baseUrl": "http://10.0.0.31:18088",
+      "label": "win1-rx6600-vulkan"
     }
   ],
   "routes": [
@@ -62,10 +66,17 @@
       "aliases": [
         "kokoro"
       ],
+      "strategy": "round_robin",
       "targets": [
         {
           "hub": "http://127.0.0.1:18280",
-          "instanceName": "kokoro"
+          "instanceName": "kokoro",
+          "weight": 2
+        },
+        {
+          "hub": "http://10.0.0.31:18088",
+          "instanceName": "kokoro-win1",
+          "weight": 1
         }
       ]
     }

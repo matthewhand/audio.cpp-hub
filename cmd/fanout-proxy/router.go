@@ -102,7 +102,10 @@ func planTargets(rt *Route, s *healthStore) []candidate {
 	return out
 }
 
-// pickTarget returns the first usable target of a route.
+// pickTarget returns the first usable target of a route in config order. It is
+// the poll-cache view used by GET /v1/models and /farm/health: for a
+// round_robin route that is only "one usable target", not the next request's
+// choice.
 func pickTarget(rt *Route, s *healthStore) (Target, bool) {
 	for _, c := range planTargets(rt, s) {
 		if c.skip == "" {
@@ -239,7 +242,9 @@ type tryTarget func(w http.ResponseWriter, r *http.Request, target Target) (forw
 func (p *proxy) forwardWithFailover(w http.ResponseWriter, r *http.Request, alias string, rt *Route, tryOne tryTarget) {
 	attempts := []attempt{}
 	busy := 0 // targets skipped only because they sit at their in-flight cap
-	for _, c := range planTargets(rt, p.hub) {
+	// A failover route keeps config order; a round_robin route picks by weight
+	// and leaves the other usable targets behind it as its own failover list.
+	for _, c := range p.bal.order(rt, planTargets(rt, p.hub)) {
 		if c.skip != "" {
 			attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: c.skip})
 			continue

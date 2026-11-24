@@ -8,16 +8,35 @@ expose any of them to the public internet.
 **Start here:** point clients at the fan-out `http://10.0.0.36:18082` for TTS and
 discovery; the `:18080` table below is the per-host detail behind it.
 
+## Layering
+
+Two routers sit in front of the hubs and each has one job:
+
+```
+client -> LiteLLM (:8000, .30) -> fan-out (.36:18082) -> a hub -> one instance
+          model names, keys,      alias -> hub targets,    /v1 passthrough
+          budgets, cloud          health, failover,
+          provider fallbacks      balancing, task pinning
+```
+
+LiteLLM routes OpenAI-shaped requests by model name (its `kokoro` deployment
+already points at `.36:18082/v1`) and can fall back to non-audiocpp providers.
+The fan-out owns everything that is hub-specific — readiness polling, the
+`/api/tasks` contract with its `?hub=` pin, per-target in-flight caps — and is
+the only layer that can move work between hubs. Hubs stay single-host on
+purpose; see `docs/fanout-design.md` → "Where this sits".
+
 | Host | Hardware | Endpoint | Instances | Notes |
 |---|---|---|---|---|
 | `10.0.0.36` (ubuntu-gtx) | GTX 1080 8 GB, Vulkan | `:18080` | `sanotts` (always warm), `ming3-tts`, `moss-tts-nano` (no `breeze` or ASR instance resident since 2026-11-25) | Host-native systemd service (`audio-cpp-hub.service`), see [deployment-10.0.0.36.md](deployment-10.0.0.36.md) |
 | `10.0.0.30` (ubuntu-max) | Strix Halo iGPU (Radeon 8060S, 128 GB GTT), RX 6600 XT idle | `:18080` | `breeze` (warm via `ExecStartPost`) | Docker `audio-cpp-hub-amd`, image `audio-cpp-hub:amd-breeze-rollback-252bb15`, running build `private-252bb15` (Mesa RADV) |
 | `10.0.0.30` (second hub) | same iGPU | `:18081` | `qwen3-vd` (voice-design, `instruct` top-level) | Docker `audio-cpp-hub-amd-qwen3`, running build `private-252bb15`, state dirs `data-qwen3/ logs-qwen3/ run-qwen3/` |
 | `127.0.0.1` (ubuntu-gtx only) | GTX host CPU, native Kokoro 82M | `:18280` | `kokoro` (`kokoro_tts` model) | Loopback-only `audio-cpp-hub-kokoro-bluegreen.service`; not reachable directly by remote clients |
+| `10.0.0.31` (windows1) | RX 6600 XT 8 GB, Vulkan (+ GTX 1080, i7-7700 idle) | `:18088` | `kokoro-win1` (`kokoro_tts` model) | Native Windows hub in `D:\audio.cpp-hub`, build `private-a8f957f`, scheduled task `audio.cpp-hub`; 18088 because 8080 is taken on that host |
 
 ## Unified fan-out entrypoint — `http://10.0.0.36:18082`
 
-`cmd/fanout-proxy` (tiny Go router, stdlib only) sits in front of the four hubs in the checked-in configuration
+`cmd/fanout-proxy` (tiny Go router, stdlib only) sits in front of the five hubs in the checked-in configuration
 above and gives agents one OpenAI-shaped base URL with automatic failover, so
 they no longer hard-code `host:port:model` triples:
 
@@ -26,7 +45,14 @@ they no longer hard-code `host:port:model` triples:
 | `breeze`, `expressive` | `.30:18080 breeze` |
 | `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` |
 | `sanotts`, `instant` | `.36:18080 sanotts` (no active standby) |
-| `kokoro` | GTX loopback `127.0.0.1:18280 kokoro` |
+| `kokoro` | **balanced** round-robin: GTX loopback `127.0.0.1:18280 kokoro` (weight 2) + Windows1 `10.0.0.31:18088 kokoro-win1` (weight 1) |
+
+Every other route is `failover`: priority order, first READY target wins. A
+route becomes `"strategy": "round_robin"` only when its hosts are
+interchangeable; `kokoro` is the one such pair today, so a restart of either
+Kokoro hub costs at most its share of traffic instead of all of it. The chosen
+target still fails over down the list, and down/busy/not-READY targets drop out
+of the rotation. Details: `cmd/fanout-proxy/README.md` → "Balancing".
 
 No ASR route is configured on the current farm: the `citrinet` instance was
 retired on 2026-11-25 and nothing replaced it. `POST /api/tasks` still works
@@ -163,9 +189,12 @@ CPU performance is a non-issue for sanotts: ~30–300 ms per sentence.
     hub-direct shape (`instanceId` instead of an alias) and the client's
     `transcribe()` keep working against whichever hub hosts it.
 
-The [checked-in Kokoro route](../cmd/fanout-proxy/farm.routes.json) maps the
-alias `kokoro` to the GTX loopback service `kokoro`. Use `kokoro_tts` to find
-the model card in `GET /api/models`. The [preset voice examples](agent-api.md#preset-voices-no-cloning)
+The [checked-in Kokoro route](../cmd/fanout-proxy/farm.routes.json) balances the
+alias `kokoro` across the GTX loopback service `kokoro` (2/3) and Windows1's
+`kokoro-win1` (1/3). Use `kokoro_tts` to find the model card in `GET /api/models`.
+If Windows1 must stay out of the request path, drop its target from the route and
+remove `"strategy": "round_robin"` — that reverts `kokoro` to loopback-only
+failover, no code change. The [preset voice examples](agent-api.md#preset-voices-no-cloning)
 show which fields Kokoro and Supertonic expect at the top level and in
 `options`. The loopback deployment is tracked in [#204](https://github.com/matthewhand/audio.cpp-hub/issues/204).
 

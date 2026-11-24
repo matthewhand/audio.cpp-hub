@@ -22,7 +22,7 @@ func testConfig(hubs []Hub, routes []Route) *Config {
 
 func newTestProxy(hubs []Hub, routes []Route) *proxy {
 	cfg := testConfig(hubs, routes)
-	return &proxy{cfg: cfg, hub: newHealthStore(cfg), lim: newLimiter(cfg.MaxInFlightPerTarget)}
+	return &proxy{cfg: cfg, hub: newHealthStore(cfg), lim: newLimiter(cfg.MaxInFlightPerTarget), bal: newBalancer()}
 }
 
 // breezeRoute is the real shape: one alias pair, primary + standby.
@@ -390,6 +390,66 @@ func errorEnvelope(t *testing.T, rec *httptest.ResponseRecorder) map[string]any 
 		t.Fatalf("error body is not JSON (%q): %v", rec.Body.String(), err)
 	}
 	return out.Error
+}
+
+// TestSpeechRoundRobin is the end-to-end shape of a balanced alias: two hubs
+// both READY, alternate targets by weight, and keep failing over to the other
+// target when the chosen one errors.
+func TestSpeechRoundRobin(t *testing.T) {
+	hubA := newFakeHub(t, 200, "A", "audio/wav")
+	hubB := newFakeHub(t, 200, "B", "audio/wav")
+	p := newTestProxy(
+		[]Hub{{BaseURL: hubA.srv.URL}, {BaseURL: hubB.srv.URL}},
+		[]Route{{
+			Aliases:  []string{"kokoro"},
+			Strategy: StrategyRoundRobin,
+			Targets: []Target{
+				{Hub: hubA.srv.URL, InstanceName: "kokoro", Weight: 2},
+				{Hub: hubB.srv.URL, InstanceName: "kokoro-win1", Weight: 1},
+			},
+		}},
+	)
+	markReady(p.hub, hubA.srv.URL, "kokoro")
+	markReady(p.hub, hubB.srv.URL, "kokoro-win1")
+
+	body := `{"model":"kokoro","input":"balance check"}`
+	bodies := map[string]int{}
+	for i := 0; i < 6; i++ {
+		rec := post(t, p, body)
+		if rec.Code != 200 {
+			t.Fatalf("request %d: status = %d (body %s)", i, rec.Code, rec.Body.String())
+		}
+		bodies[rec.Body.String()]++
+	}
+	if bodies["A"] != 4 || bodies["B"] != 2 {
+		t.Errorf("6 requests split %v, want 4 to the weight-2 hub and 2 to the other", bodies)
+	}
+
+	// The heavier target starts erroring: every request must still succeed on
+	// the other one, so balancing never costs availability.
+	hubBad := newFakeHub(t, 500, `{"error":{"message":"engine died"}}`, "application/json")
+	p2 := newTestProxy(
+		[]Hub{{BaseURL: hubBad.srv.URL}, {BaseURL: hubB.srv.URL}},
+		[]Route{{
+			Aliases:  []string{"kokoro"},
+			Strategy: StrategyRoundRobin,
+			Targets: []Target{
+				{Hub: hubBad.srv.URL, InstanceName: "kokoro", Weight: 2},
+				{Hub: hubB.srv.URL, InstanceName: "kokoro-win1", Weight: 1},
+			},
+		}},
+	)
+	markReady(p2.hub, hubBad.srv.URL, "kokoro")
+	markReady(p2.hub, hubB.srv.URL, "kokoro-win1")
+	for i := 0; i < 6; i++ {
+		rec := post(t, p2, body)
+		if rec.Code != 200 {
+			t.Fatalf("failover request %d: status = %d (body %s)", i, rec.Code, rec.Body.String())
+		}
+		if got := rec.Header().Get("X-Fanout-Instance"); got != "kokoro-win1" {
+			t.Errorf("failover request %d served by %q, want kokoro-win1", i, got)
+		}
+	}
 }
 
 func TestSpeechFailover(t *testing.T) {
