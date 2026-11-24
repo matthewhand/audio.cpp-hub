@@ -92,6 +92,17 @@ test("Kokoro TTS：单控件无重复渲染，所选 voice_id 正确写入 optio
   await expect(language).toHaveValue("zh");
   await expect(voice).toHaveValue("jf_alpha");
   await expect(hint).toBeVisible();
+  await page.locator("#tts-advanced summary").click();
+  const chunkSize = page.locator("#adv-text_chunk_size");
+  await expect(chunkSize).toHaveValue("");
+  await expect(chunkSize).toHaveAttribute("min", "1");
+  await chunkSize.fill("0");
+  await page.locator("#tts-submit").click();
+  expect(backend.tasks).toHaveLength(0);
+  await chunkSize.fill("1.5");
+  await page.locator("#tts-submit").click();
+  expect(backend.tasks).toHaveLength(0);
+  await chunkSize.fill("80");
   await page.locator("#tts-submit").click();
 
   await expect(page.locator("#tts-result")).toBeVisible({ timeout: 12000 });
@@ -101,4 +112,164 @@ test("Kokoro TTS：单控件无重复渲染，所选 voice_id 正确写入 optio
   expect(task.request?.language).toBe("zh");
   expect(task.request?.options?.voice_id).toBe("jf_alpha");
   expect(task.request?.voice_id).toBeUndefined();
+  expect(task.request?.options?.text_chunk_size).toBe(80);
+  expect(task.request?.text_chunk_size).toBeUndefined();
+
+  await chunkSize.fill("");
+  await page.locator("#tts-submit").click();
+  await expect.poll(() => backend.tasks.length).toBe(2);
+  expect(backend.tasks[1].request?.options?.text_chunk_size).toBeUndefined();
+});
+
+test("Kokoro voice blends round-trip through the form and task options", async ({ page }) => {
+  const backend = new MockBackend({
+    instances: [{ ...READY, id: "kokoro-ready", modelId: "kokoro_tts", instanceName: "kokoro" }]
+  });
+  await openApp(page, backend, { modelId: "kokoro_tts", lang: "en" });
+  await expect(page.locator("#tts-submit")).toBeEnabled();
+  await page.locator("#tts-advanced summary").click();
+  const blend = page.getByRole("textbox", { name: /^Voice blend/ });
+  const preset = page.locator("#tts-enum-voice_id");
+  const expression = "af_heart(2)+af_bella(1)";
+  await expect(blend).toHaveValue("");
+  const presetHint = page.locator("#tts-preset-voice-hint");
+  await preset.selectOption("jf_alpha");
+  await expect(presetHint).toBeVisible();
+  await blend.fill("  " + expression + "  ");
+  await expect(presetHint).toBeHidden();
+  await page.locator("#tts-text").fill("Hello Kokoro");
+  await page.locator("#tts-submit").click();
+  await expect.poll(() => backend.tasks.length).toBe(1);
+  expect(backend.tasks[0].request?.options?.voice_id).toBe(expression);
+  expect(backend.tasks[0].request?.options?.voice_blend).toBeUndefined();
+  expect(backend.tasks[0].request?.voice_id).toBeUndefined();
+
+  await blend.fill("");
+  await expect(presetHint).toBeVisible();
+  const restore = (voiceId) =>
+    page.evaluate(async (saved) => {
+      const { fillTtsForm } = await import("/modules/panels.js");
+      const { selectedModel } = await import("/modules/state.js");
+      fillTtsForm(selectedModel(), {
+        text: "Saved take",
+        language: "en-us",
+        options: { voice_id: saved }
+      });
+    }, voiceId);
+  await restore(expression);
+  await expect(blend).toHaveValue(expression);
+  await expect(preset).toHaveValue("af_heart");
+  await restore("af_nova");
+  await expect(blend).toHaveValue("");
+  await expect(preset).toHaveValue("af_nova");
+  await page.locator("#tts-submit").click();
+  await expect.poll(() => backend.tasks.length).toBe(2);
+  expect(backend.tasks[1].request?.options?.voice_id).toBe("af_nova");
+});
+
+test("Kokoro phoneme chunks survive submission and history restore", async ({ page }) => {
+  const backend = new MockBackend({
+    instances: [{ ...READY, modelId: "kokoro_tts", instanceName: "kokoro" }]
+  });
+  await openApp(page, backend, { modelId: "kokoro_tts", lang: "en" });
+  await page.locator("#tts-advanced summary").click();
+  const phonemes = page.getByRole("textbox", { name: /^Phonemes/ });
+  await expect(phonemes).toBeVisible();
+  await page.locator("#tts-text").fill("Text for Kokoro");
+  const submit = page.locator("#tts-submit");
+
+  const chunks = ["həlˈO", "wˈɜɹld"];
+  await phonemes.fill(chunks.join("\n\n"));
+  await submit.click();
+  await expect.poll(() => backend.tasks.length).toBe(1);
+  expect(backend.tasks[0].request?.options?.phonemes).toEqual(chunks);
+  expect(backend.tasks[0].request?.phonemes).toBeUndefined();
+
+  const restore = (options) =>
+    page.evaluate(async (savedOptions) => {
+      const { fillTtsForm } = await import("/modules/panels.js");
+      const { selectedModel } = await import("/modules/state.js");
+      fillTtsForm(selectedModel(), { text: "Restored", options: savedOptions });
+    }, options);
+  await phonemes.fill("stale");
+  await restore({ phonemes: chunks });
+  await expect(phonemes).toHaveValue(chunks.join("\n"));
+  await restore({});
+  await expect(phonemes).toHaveValue("");
+  await submit.click();
+  await expect.poll(() => backend.tasks.length).toBe(2);
+  expect(backend.tasks[1].request?.options?.phonemes).toBeUndefined();
+});
+
+test("Kokoro timestamps are opt-in and restored from history", async ({ page }) => {
+  const backend = new MockBackend({
+    instances: [{ ...READY, modelId: "kokoro_tts", instanceName: "kokoro" }]
+  });
+  await openApp(page, backend, { modelId: "kokoro_tts", lang: "en" });
+  await page.locator("#tts-advanced summary").click();
+  const timestamps = page.getByRole("checkbox", { name: "Save phoneme-group timestamps" });
+  await expect(timestamps).not.toBeChecked();
+  await page.locator("#tts-text").fill("Hello Kokoro");
+
+  const submit = page.locator("#tts-submit");
+  await submit.click();
+  await expect.poll(() => backend.tasks.length).toBe(1);
+  expect(backend.tasks[0].request?.options?.return_timestamps).toBeUndefined();
+
+  await timestamps.check();
+  await submit.click();
+  await expect.poll(() => backend.tasks.length).toBe(2);
+  expect(backend.tasks[1].request?.options?.return_timestamps).toBe(true);
+  expect(backend.tasks[1].request?.return_timestamps).toBeUndefined();
+
+  const restore = (options) =>
+    page.evaluate(async (savedOptions) => {
+      const { fillTtsForm } = await import("/modules/panels.js");
+      const { selectedModel } = await import("/modules/state.js");
+      fillTtsForm(selectedModel(), { text: "Restored", options: savedOptions });
+    }, options);
+  await timestamps.uncheck();
+  await restore({ return_timestamps: "yes" });
+  await expect(timestamps).toBeChecked();
+  await restore({});
+  await expect(timestamps).not.toBeChecked();
+});
+
+test("VibeVoice submits the catalog's dialogue tags and renumbers voice pickers", async ({
+  page
+}) => {
+  const modelId = "vibevoice";
+  const backend = new MockBackend({
+    instances: [{ ...READY, modelId, instanceName: "vibevoice" }]
+  });
+  const { speakerTagFormat, speakerIndexBase, maxSpeakers } = backend.models.find(
+    (card) => card.id === modelId
+  ).capabilities;
+  await openApp(page, backend, { modelId, lang: "en" });
+  const add = page.locator("#tts-speaker-add");
+  const speakers = page.locator("#tts-speakers-list .speaker-row");
+  await expect(speakers).toHaveCount(1);
+  const turns = [];
+  for (let i = 0; i < maxSpeakers; i++) {
+    if (i > 0) {
+      await add.click();
+      await expect(speakers).toHaveCount(i + 1);
+      await speakers.nth(i).locator("summary").click();
+    }
+    const line = `Turn ${i + 1}.`;
+    await speakers.nth(i).locator(".speaker-lines").fill(line);
+    const tag = speakerTagFormat.replace("{n}", String(speakerIndexBase + i));
+    turns.push(`${tag} ${line}`);
+  }
+  await expect(add).toBeDisabled();
+  await page.locator("#tts-submit").click();
+  await expect.poll(() => backend.tasks.length).toBe(1);
+  expect(backend.tasks[0].request.text).toBe(turns.join("\n"));
+
+  await speakers.nth(1).locator(".speaker-remove").click();
+  await expect(speakers).toHaveCount(maxSpeakers - 1);
+  await expect(speakers.nth(1).locator(".speaker-label")).toHaveText("Speaker 2");
+  await expect(speakers.nth(1).locator(".vs-select")).toHaveAttribute("aria-label", "Speaker 2");
+  await expect(speakers.nth(1).locator(".speaker-lines")).toHaveValue("Turn 3.");
+  await expect(add).toBeEnabled();
 });
