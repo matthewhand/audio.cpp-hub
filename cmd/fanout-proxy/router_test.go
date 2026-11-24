@@ -22,7 +22,7 @@ func testConfig(hubs []Hub, routes []Route) *Config {
 
 func newTestProxy(hubs []Hub, routes []Route) *proxy {
 	cfg := testConfig(hubs, routes)
-	return &proxy{cfg: cfg, hub: newHealthStore(cfg), lim: newLimiter(cfg.MaxInFlightPerTarget), bal: newBalancer()}
+	return &proxy{cfg: cfg, hub: newHealthStore(cfg), lim: newLimiter(cfg.MaxInFlightPerTarget), bal: newBalancer(), counts: newCounters()}
 }
 
 // breezeRoute is the real shape: one alias pair, primary + standby.

@@ -233,11 +233,11 @@ For example, a Kokoro task uses
 `{"instanceId": "…", "request": {"text": "…", "language": "en-us", "options": {"voice_id": "af_heart"}}}`.
 
 The checked-in [farm route](../cmd/fanout-proxy/farm.routes.json) maps the
-alias `kokoro` to two hosts: the `kokoro` service on the GTX loopback hub
-(weight 2) and `kokoro-win1` on Windows1's hub (weight 1). The route is
-`round_robin`, so successive calls split across both and either host can go away
-without failing a request — read `X-Fanout-Hub` on the response to learn which
-one served (and archived) the take. Use the card ID `kokoro_tts` for model
+alias `kokoro` to two hosts: `kokoro-win1` on Windows1's hub (weight 4, GTX
+1080) and the `kokoro` service on the GTX loopback hub (weight 1, host CPU).
+The route is `round_robin`, so successive calls split across both and either
+host can go away without failing a request — read `X-Fanout-Hub` on the
+response to learn which one served (and archived) the take. Use the card ID `kokoro_tts` for model
 metadata and history. See the
 [loopback routing ticket](https://github.com/matthewhand/audio.cpp-hub/issues/204).
 

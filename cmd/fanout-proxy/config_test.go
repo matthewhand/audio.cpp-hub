@@ -272,9 +272,9 @@ func TestCommittedRoutesConfig(t *testing.T) {
 			}
 		}
 	}
-	// kokoro is the one balanced route: the loopback hub is the primary share
-	// (2/3) and Windows1's Vulkan hub takes the rest, so a hub restart costs a
-	// third of the traffic instead of all of it.
+	// kokoro is the one balanced route: Windows1's GTX 1080 hub takes most of
+	// the traffic (weight 4; ~0.7 s per sentence vs ~3.8 s on the GTX host's
+	// CPU) and the loopback hub keeps a share as both failover and backstop.
 	kokoro, ok := cfg.routeFor("kokoro")
 	if !ok {
 		t.Fatal("alias kokoro missing from farm.routes.json")
@@ -282,8 +282,8 @@ func TestCommittedRoutesConfig(t *testing.T) {
 	if kokoro.Strategy != StrategyRoundRobin {
 		t.Errorf("kokoro strategy = %q, want %q", kokoro.Strategy, StrategyRoundRobin)
 	}
-	if got := []int{kokoro.Targets[0].Weight, kokoro.Targets[1].Weight}; got[0] != 2 || got[1] != 1 {
-		t.Errorf("kokoro weights = %v, want [2 1]", got)
+	if got := []int{kokoro.Targets[0].Weight, kokoro.Targets[1].Weight}; got[0] != 1 || got[1] != 4 {
+		t.Errorf("kokoro weights = %v, want [1 4]", got)
 	}
 	for alias := range want {
 		if alias == "kokoro" {

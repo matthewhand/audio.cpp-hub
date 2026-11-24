@@ -28,10 +28,11 @@ import (
 // proxy bundles the immutable config with the mutable health cache and
 // balancing state.
 type proxy struct {
-	cfg *Config
-	hub *healthStore
-	lim *limiter
-	bal *balancer
+	cfg    *Config
+	hub    *healthStore
+	lim    *limiter
+	bal    *balancer
+	counts *counters
 }
 
 func main() {
@@ -47,7 +48,7 @@ func main() {
 		cfg.Listen = *listenOverride
 	}
 
-	p := &proxy{cfg: cfg, hub: newHealthStore(cfg), lim: newLimiter(cfg.MaxInFlightPerTarget), bal: newBalancer()}
+	p := &proxy{cfg: cfg, hub: newHealthStore(cfg), lim: newLimiter(cfg.MaxInFlightPerTarget), bal: newBalancer(), counts: newCounters()}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -160,13 +161,19 @@ func (p *proxy) handleFarmHealth(w http.ResponseWriter, r *http.Request) {
 		plan := planTargets(rt, p.hub)
 		targets := make([]map[string]any, 0, len(plan))
 		resolved := ""
+		routeServed, routeFailed := int64(0), int64(0)
 		for _, c := range plan {
+			served, failed := p.counts.counts(c.target)
+			routeServed += served
+			routeFailed += failed
 			targets = append(targets, map[string]any{
 				"hub":          c.target.Hub,
 				"instanceName": c.target.InstanceName,
 				"weight":       c.target.Weight,
 				"skipped":      c.skip,
 				"inFlight":     p.lim.inFlight(targetKey(c.target)),
+				"served":       served,
+				"failed":       failed,
 			})
 			if c.skip == "" && resolved == "" {
 				resolved = c.target.Hub + "/" + c.target.InstanceName
@@ -179,6 +186,8 @@ func (p *proxy) handleFarmHealth(w http.ResponseWriter, r *http.Request) {
 			"aliases":  rt.Aliases,
 			"strategy": rt.Strategy,
 			"resolved": resolved,
+			"served":   routeServed,
+			"failed":   routeFailed,
 			"targets":  targets,
 		})
 	}
@@ -186,6 +195,7 @@ func (p *proxy) handleFarmHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":            readyAliases > 0,
 		"updatedAt":     formatTime(updatedAt),
+		"countersSince": formatTime(p.counts.start()),
 		"hubsUp":        upCount,
 		"hubsTotal":     len(states),
 		"readyAliases":  readyAliases,

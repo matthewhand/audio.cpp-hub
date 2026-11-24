@@ -48,7 +48,7 @@ As a service, copy `audio-cpp-fanout.service` to `~/.config/systemd/user/`
 
 | Method | Path | Behavior |
 |---|---|---|
-| `GET` | `/farm/health` | per-hub up/down, latency, last error, instance list; per-route resolution + skip reasons + live `inFlight` per target |
+| `GET` | `/farm/health` | per-hub up/down, latency, last error, instance list; per-route resolution + skip reasons + live `inFlight` and cumulative `served`/`failed` per target |
 | `GET` | `/api/instances` | aggregated instances of every **up** hub, each tagged with `hub` / `hubLabel` |
 | `GET` | `/v1/models` | OpenAI list of the aliases that currently resolve to a READY backend |
 | `POST` | `/v1/audio/speech` | routes by `model` alias, rewrites `model` to the upstream `instanceName`, streams the response, fails over down the target list |
@@ -73,16 +73,19 @@ proxy how to consume it:
 | `breeze`, `expressive` | `.30:18080 breeze` | failover |
 | `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` | failover |
 | `sanotts`, `instant` | `.36:18080 sanotts` (single active target; Windows2 standby offline, [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)) | failover |
-| `kokoro` | `127.0.0.1:18280 kokoro` weight 2, `10.0.0.31:18088 kokoro-win1` weight 1 | round_robin |
+| `kokoro` | `127.0.0.1:18280 kokoro` weight 1, `10.0.0.31:18088 kokoro-win1` weight 4 | round_robin |
 
 No ASR route is configured on the current farm (the `citrinet` instance was
 retired on 2026-11-25). The `/api/tasks` routing below still applies once you add
 a route for the ASR instance you run.
 
 Send `model: "kokoro"` to the fan-out. `kokoro_tts` is the model card ID.
-`kokoro` is the one balanced route: the loopback hub on Ubuntu-GTX carries 2/3
-of the traffic and `kokoro-win1` on Windows1 (`10.0.0.31:18088`, Vulkan on the
-RX 6600 XT) carries 1/3. The loopback address assumes the fan-out runs on
+`kokoro` is the one balanced route: `kokoro-win1` on Windows1
+(`10.0.0.31:18088`, Vulkan on the GTX 1080) carries 4/5 of the traffic and the
+loopback hub on Ubuntu-GTX carries 1/5. The split is measured, not guessed —
+one sentence of the benchmark below takes ~0.7 s on the 1080, ~3.8 s on the GTX
+host's CPU (and ~5.4 s on the same Windows box's RX 6600 XT, which is why that
+device is not used). The loopback address assumes the fan-out runs on
 Ubuntu-GTX; the [GTX deployment notes](../../docs/deployment-10.0.0.36.md#kokoro-loopback-hub)
 describe the startup hook that establishes readiness. Either hub being down or
 still starting is not an outage: the other one takes 100% of the traffic. Only
@@ -108,6 +111,12 @@ round-robin, so weights `2` and `1` produce `A,B,A,A,B,A` rather than a bursty
   no cross-host coordination to get out of sync.
 - **Failover-only routes ignore `weight`.** Normalisation pins it to `1`, so
   leaving a weight in place while switching strategy back is harmless.
+- **The split is measurable.** `/farm/health` reports each target's cumulative
+  `served` and `failed` (and the route's totals) since the process started
+  (`countersSince`), so "is it really 2:1?" is one call, not a header-scraping
+  loop. Counters reset on restart like any process-local number; they count
+  forwards, not sentences, and a client disconnect after streaming counts as
+  `failed` only if it broke mid-relay.
 - A sticky/multi-seed audition that must land on one host is the opposite case:
   send it serially or pin the hub, because round-robin will deliberately split
   it.

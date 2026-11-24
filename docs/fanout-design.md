@@ -52,7 +52,7 @@ load across equivalent hosts — that is now `strategy: "round_robin"` on a rout
 | `10.0.0.30:18080` | Docker `audio-cpp-hub-amd` | `breeze` | Vulkan iGPU DEVICE=1 | Standby breeze |
 | `10.0.0.30:18081` | Docker `audio-cpp-hub-amd-qwen3` | `qwen3-vd` | Vulkan iGPU DEVICE=1 | Fast voice-design (`instruct`) |
 | `127.0.0.1:18280` (GTX only) | native Kokoro hub | `kokoro` / `kokoro_tts` | CPU | Loopback-only Kokoro TTS |
-| `10.0.0.31:18088` | native Windows hub (`D:\audio.cpp-hub`, scheduled task) | `kokoro-win1` | Vulkan RX 6600 XT | Secondary Kokoro host (non-standard port: 8080 is taken) |
+| `10.0.0.31:18088` | native Windows hub (`D:\audio.cpp-hub`, scheduled task) | `kokoro-win1` | Vulkan GTX 1080 (device 1) | Primary Kokoro host on speed (~0.7 s/sentence); non-standard port: 8080 is taken |
 
 Windows2 `10.0.0.32:18080` was an intended CPU SanoTTS overflow target,
 but was offline at the 31 October 2026 read-only check (Docker Desktop stopped,
@@ -65,6 +65,28 @@ reduces redundancy but preserves both client model names.
 RX 6600 XT (`AUDIOCPP_DEVICE=0` on `.30`) remains **unusable** for inference
 (see verdict below). Keep live hubs on device 1, and keep the 6600 XT out of
 `farm.routes.json`.
+
+### Windows1 GPU choice (measured 2026-11-25)
+
+Windows1 has both a GTX 1080 and an RX 6600 XT. One Kokoro sentence, same text,
+`audiocpp_server v0.9.6` Vulkan:
+
+| Target | Time per request | Note |
+|---|---|---|
+| Windows1 GTX 1080 (`device: 1`) | **~0.67 s** | now `kokoro-win1` |
+| Windows1 RX 6600 XT (`device: 0`) | ~5.4 s | natively fine, just slow |
+| Ubuntu-GTX host CPU (loopback hub) | ~3.8 s | keeps a 1/5 share |
+
+Two Kokoro instances on that host — one per GPU — do **not** work together: the
+second engine dies on its first synthesis with
+`GGML_ASSERT(ctx->mem_buffer != NULL) failed` (Vulkan allocation), then the hub
+logs `wsarecv: An existing connection was forcibly closed` and the instance goes
+`EXITED`. Run exactly one Kokoro instance on Windows1; the 1080 is the one worth
+having. This is why Windows1 is one target, not two.
+
+Weights follow the measurement: `kokoro` is `1` (loopback CPU) to `4` (Windows1
+GTX 1080), i.e. 80% of sentences skip the CPU path. Change the config, not the
+code, if the balance ever looks wrong.
 
 ## Options considered
 
@@ -108,7 +130,7 @@ and both spellings in a pair resolve to the same target list.
 | `qwen3-vd` / `voice-design-fast` | `.30:18081` `qwen3-vd` | none |
 | `sanotts` / `instant` | `.36` `sanotts` | none (Windows2 offline, [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)) |
 | `citrinet` / `stt` | `.36` `citrinet` | none (only host that has it) |
-| `kokoro` | GTX `127.0.0.1:18280` `kokoro` (weight 2) | Windows1 `10.0.0.31:18088` `kokoro-win1` (weight 1), round-robin |
+| `kokoro` | Windows1 `10.0.0.31:18088` `kokoro-win1` (weight 4) | GTX `127.0.0.1:18280` `kokoro` (weight 1), round-robin |
 
 Rules baked into the implementation:
 
@@ -202,6 +224,7 @@ request.
 {
   "ok": true,
   "updatedAt": "2026-09-30T07:10:19Z",
+  "countersSince": "2026-09-30T06:58:02Z",
   "hubsUp": 4, "hubsTotal": 4, "readyAliases": 5, "inFlightCap": 2,
   "hubs": [
     { "baseUrl": "http://10.0.0.36:18080", "label": "gtx1080-primary", "ok": true,
@@ -210,8 +233,9 @@ request.
   ],
   "routes": [
     { "aliases": ["breeze", "expressive"], "resolved": "http://10.0.0.36:18080/breeze",
-      "targets": [{ "hub": "http://10.0.0.36:18080", "instanceName": "breeze", "weight": 1, "skipped": "", "inFlight": 1 },
-                  { "hub": "http://10.0.0.30:18080", "instanceName": "breeze", "weight": 1, "skipped": "", "inFlight": 0 }] }
+      "served": 41, "failed": 2,
+      "targets": [{ "hub": "http://10.0.0.36:18080", "instanceName": "breeze", "weight": 1, "skipped": "", "inFlight": 1, "served": 39, "failed": 2 },
+                  { "hub": "http://10.0.0.30:18080", "instanceName": "breeze", "weight": 1, "skipped": "", "inFlight": 0, "served": 2, "failed": 0 }] }
   ],
   "knownAliases": ["breeze", "citrinet", "expressive", "instant", "kokoro", "qwen3-vd", "sanotts", "stt", "voice-design-fast"]
 }
@@ -236,6 +260,14 @@ request.
   before it does. `resolved` stays the poll-cache answer: first READY target,
   regardless of load and regardless of strategy; each route reports its
   `strategy` and each target its `weight`, so a balanced route is visible there.
+- `served` / `failed` are cumulative forward counts per target since
+  `countersSince` (process start), with the sum on the route. They are the
+  measurement of a split: after a five-request check on the shipped 1:4
+  `kokoro` route the two targets read 1 and 4 without anyone reading
+  `X-Fanout-Hub`. A forward
+  counts as `failed` when the target answered non-2xx or did not answer and the
+  loop walked on; a client disconnect after relaying began counts as failed
+  only for the target that was streaming.
 
 ## Balancing — `strategy: "round_robin"`
 
@@ -248,8 +280,8 @@ Vulkan Kokoro) should share traffic instead of leaving one idle as a standby.
   "aliases": ["kokoro"],
   "strategy": "round_robin",
   "targets": [
-    { "hub": "http://127.0.0.1:18280", "instanceName": "kokoro",      "weight": 2 },
-    { "hub": "http://10.0.0.31:18088", "instanceName": "kokoro-win1", "weight": 1 }
+    { "hub": "http://127.0.0.1:18280", "instanceName": "kokoro",      "weight": 1 },
+    { "hub": "http://10.0.0.31:18088", "instanceName": "kokoro-win1", "weight": 4 }
   ]
 }
 ```
@@ -259,7 +291,9 @@ Decisions taken:
 - **Smooth weighted round-robin** (nginx's algorithm), not random and not plain
   rotation: weights `2`/`1` give `A,B,A,A,B,A`, which keeps the expensive host
   at its intended share without a burst of three in a row. Equal weights degrade
-  to plain alternation.
+  to plain alternation. `kokoro` ships `1` (loopback CPU) to `4` (Windows1 GTX
+  1080) because that is the measured speed ratio, so most of the traffic skips
+  the CPU path entirely.
 - **Balancing is layered on failover, not instead of it.** The chosen target
   goes first and every other target follows in config order, so a pick that
   errors walks the rest of the list exactly as a failover primary would. A
@@ -275,6 +309,10 @@ Decisions taken:
 - **State is one in-process counter per route.** One proxy, one farm: no gossip,
   no shared cursor, nothing to disagree about. A restart resets rotation, which
   no caller can observe beyond the order of two equivalent backends.
+- **The split is observable.** `served` / `failed` per target in
+  `/farm/health` are the balancing analogue of `inFlight`: an operator can see
+  whether weights hold, and spot a target that keeps failing and being walked
+  past, without parsing response headers or reading the log.
 - **Not for stateful flows.** A multi-seed audition that must land on one host
   is the opposite case — send it serially or pin the hub directly (follow-up 3).
 

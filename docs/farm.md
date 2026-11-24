@@ -32,7 +32,7 @@ purpose; see `docs/fanout-design.md` → "Where this sits".
 | `10.0.0.30` (ubuntu-max) | Strix Halo iGPU (Radeon 8060S, 128 GB GTT), RX 6600 XT idle | `:18080` | `breeze` (warm via `ExecStartPost`) | Docker `audio-cpp-hub-amd`, image `audio-cpp-hub:amd-breeze-rollback-252bb15`, running build `private-252bb15` (Mesa RADV) |
 | `10.0.0.30` (second hub) | same iGPU | `:18081` | `qwen3-vd` (voice-design, `instruct` top-level) | Docker `audio-cpp-hub-amd-qwen3`, running build `private-252bb15`, state dirs `data-qwen3/ logs-qwen3/ run-qwen3/` |
 | `127.0.0.1` (ubuntu-gtx only) | GTX host CPU, native Kokoro 82M | `:18280` | `kokoro` (`kokoro_tts` model) | Loopback-only `audio-cpp-hub-kokoro-bluegreen.service`; not reachable directly by remote clients |
-| `10.0.0.31` (windows1) | RX 6600 XT 8 GB, Vulkan (+ GTX 1080, i7-7700 idle) | `:18088` | `kokoro-win1` (`kokoro_tts` model) | Native Windows hub in `D:\audio.cpp-hub`, build `private-a8f957f`, scheduled task `audio.cpp-hub`; 18088 because 8080 is taken on that host |
+| `10.0.0.31` (windows1) | GTX 1080 8 GB, Vulkan (RX 6600 XT present but not used; i7-7700 idle) | `:18088` | `kokoro-win1` (`kokoro_tts` model, `device: 1`) | Native Windows hub in `D:\audio.cpp-hub`, build `private-a8f957f`, scheduled task `audio.cpp-hub`; 18088 because 8080 is taken on that host. ~0.67 s/sentence |
 
 ## Unified fan-out entrypoint — `http://10.0.0.36:18082`
 
@@ -45,7 +45,7 @@ they no longer hard-code `host:port:model` triples:
 | `breeze`, `expressive` | `.30:18080 breeze` |
 | `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` |
 | `sanotts`, `instant` | `.36:18080 sanotts` (no active standby) |
-| `kokoro` | **balanced** round-robin: GTX loopback `127.0.0.1:18280 kokoro` (weight 2) + Windows1 `10.0.0.31:18088 kokoro-win1` (weight 1) |
+| `kokoro` | **balanced** round-robin: Windows1 `10.0.0.31:18088 kokoro-win1` (weight 4, GTX 1080) + GTX loopback `127.0.0.1:18280 kokoro` (weight 1, CPU backstop) |
 
 Every other route is `failover`: priority order, first READY target wins. A
 route becomes `"strategy": "round_robin"` only when its hosts are
@@ -69,7 +69,8 @@ a route is added.
   `GET /api/tasks/<id>?hub=http://10.0.0.36:18080`. Failover covers
   *submission*; the task then runs on the engine that accepted it.
 - `GET /farm/health` — per-hub up/down + latency + which backend each alias
-  resolved to, plus `inFlightCap` / per-target `inFlight`;
+  resolved to, plus `inFlightCap` / per-target `inFlight` and cumulative
+  `served` / `failed` counts (the live check that `kokoro`'s 2:1 split holds);
   `GET /api/instances` — the whole farm's instances in one list.
 - **Per-origin in-flight cap** (`maxInFlightPerTarget`, default `2`, `<= 0`
   disables): at most N forwards may be in flight per hub+service. A hub
@@ -190,8 +191,9 @@ CPU performance is a non-issue for sanotts: ~30–300 ms per sentence.
     `transcribe()` keep working against whichever hub hosts it.
 
 The [checked-in Kokoro route](../cmd/fanout-proxy/farm.routes.json) balances the
-alias `kokoro` across the GTX loopback service `kokoro` (2/3) and Windows1's
-`kokoro-win1` (1/3). Use `kokoro_tts` to find the model card in `GET /api/models`.
+alias `kokoro` across Windows1's `kokoro-win1` (4/5, GTX 1080, ~0.67 s) and the
+GTX loopback service `kokoro` (1/5, host CPU, ~3.8 s). Use `kokoro_tts` to find
+the model card in `GET /api/models`.
 If Windows1 must stay out of the request path, drop its target from the route and
 remove `"strategy": "round_robin"` — that reverts `kokoro` to loopback-only
 failover, no code change. The [preset voice examples](agent-api.md#preset-voices-no-cloning)

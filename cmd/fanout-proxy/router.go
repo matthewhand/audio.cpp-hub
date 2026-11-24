@@ -233,7 +233,8 @@ func (p *proxy) routeByModel(w http.ResponseWriter, fields map[string]json.RawMe
 // next"; once it has written to w it must report Streamed.
 type tryTarget func(w http.ResponseWriter, r *http.Request, target Target) (forwardResult, error)
 
-// forwardWithFailover walks the route's target list in order until one answers.
+// forwardWithFailover walks the route's targets in order (round-robin picks the
+// first one, failover uses config order) until one answers.
 // It owns the failover story shared by every forwarded endpoint: skip reasons,
 // the per-origin in-flight cap (a busy target spills to the standby), the
 // non-retryable 4xx short-circuit, and the terminal 429 / 503. Once any response
@@ -265,9 +266,11 @@ func (p *proxy) forwardWithFailover(w http.ResponseWriter, r *http.Request, alia
 		case err != nil && res.Streamed:
 			// Upstream was already streaming; the client is mid-download, so
 			// there is nothing left to fail over to.
+			p.counts.recordFailed(c.target)
 			log.Printf("fanout: client stream from %s/%s broke: %v", c.target.Hub, c.target.InstanceName, err)
 			return
 		case err != nil:
+			p.counts.recordFailed(c.target)
 			reason := err.Error()
 			var he *httpError
 			if errors.As(err, &he) && !retryable(he.status) {
@@ -277,6 +280,7 @@ func (p *proxy) forwardWithFailover(w http.ResponseWriter, r *http.Request, alia
 			}
 			attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: reason})
 		default:
+			p.counts.recordServed(c.target)
 			log.Printf("fanout: %s -> %s/%s", alias, c.target.Hub, c.target.InstanceName)
 			return
 		}

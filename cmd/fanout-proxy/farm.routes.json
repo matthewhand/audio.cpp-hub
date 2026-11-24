@@ -71,12 +71,12 @@
         {
           "hub": "http://127.0.0.1:18280",
           "instanceName": "kokoro",
-          "weight": 2
+          "weight": 1
         },
         {
           "hub": "http://10.0.0.31:18088",
           "instanceName": "kokoro-win1",
-          "weight": 1
+          "weight": 4
         }
       ]
     }
