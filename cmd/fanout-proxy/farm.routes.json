@@ -1,7 +1,7 @@
 {
   "listen": ":18082",
   "pollIntervalMs": 7000,
-  "pollTimeoutMs": 3000,
+  "pollTimeoutMs": 5000,
   "maxBodyBytes": 67108864,
   "hubs": [
     {

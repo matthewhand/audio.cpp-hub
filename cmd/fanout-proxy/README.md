@@ -138,7 +138,7 @@ rewrite can never reformat or round a caller value.
 |---|---|---|
 | `listen` | `:18082` | bind address (`-listen` overrides it) |
 | `pollIntervalMs` | `7000` | per-hub `GET /api/instances` period |
-| `pollTimeoutMs` | `3000` | per-hub poll timeout |
+| `pollTimeoutMs` | `5000` | per-hub poll timeout |
 | `maxBodyBytes` | `67108864` (64 MiB) | request body ceiling, same as the hub's `/api/*` limit |
 | `maxInFlightPerTarget` | `2` | concurrent speech forwards per **origin target**; `<= 0` turns the cap off |
 | `hubs` / `routes` | — | polled hubs, and alias → ordered target list |
