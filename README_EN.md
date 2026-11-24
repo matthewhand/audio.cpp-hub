@@ -6,6 +6,17 @@ A web management panel for [audio.cpp](https://github.com/0xShug0/audio.cpp): a 
 
 Repository: <https://github.com/matthewhand/audio.cpp-hub>
 
+> **Fork additions.** This fork tracks upstream and adds:
+> - security and lifecycle hardening for `/api` and `/v1` (path traversal, SSRF, CSRF, token-at-rest, atomic instance start) — proposed upstream PR #____
+> - pinned SHA-256 integrity checks for model/GGUF downloads — proposed upstream PR #____
+> - live speech-to-text pass-through and per-instance request/latency metrics — proposed upstream PR #____
+> - a host memory/swap guard before starting an instance — proposed upstream PR #____
+> - a LAN fan-out router for multi-host voice farms (one OpenAI-compatible endpoint)
+> - the Studio v3 web UI on a design-token system (PWA, WCAG 2.1 AA, hash routing)
+> - an extended model catalog beyond upstream's
+>
+> Not on this branch yet: AMD unified-memory (GTT) telemetry for Strix Halo-class APUs; Kokoro 82M preset voices and voice blends.
+
 - **Native single binary**: the build has no runtime dependencies (static Go build; release packages ship Windows / Linux executables)
 - **The hub itself is lightweight**: it does not load model weights — models run in separate `audiocpp_server` subprocesses
 

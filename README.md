@@ -6,6 +6,17 @@
 
 仓库地址：<https://github.com/matthewhand/audio.cpp-hub>
 
+> **本 fork 的增量。** 本仓库跟随上游，并额外提供：
+> - `/api` 与 `/v1` 的安全与生命周期加固（路径穿越、SSRF、CSRF、token 落盘、实例原子启动）——拟提交上游 PR #____
+> - 模型/GGUF 下载的 SHA-256 锁定与校验——拟提交上游 PR #____
+> - 实时语音转写透传，以及按实例的请求与延迟指标——拟提交上游 PR #____
+> - 启动实例前的主机内存/swap 守卫——拟提交上游 PR #____
+> - 多机语音农场的 LAN fan-out 路由（统一的 OpenAI 兼容入口）
+> - 基于设计令牌体系的 Studio v3 Web UI（PWA、WCAG 2.1 AA、hash 路由）
+> - 比上游更完整的模型目录
+>
+> 尚未进入本分支：Strix Halo 级 APU 的 AMD 统一内存（GTT）遥测；Kokoro 82M 预设音色与音色混合。
+
 - **原生单二进制**：编译产物不依赖任何运行环境（Go 静态编译，发布包内含 Windows / Linux 可执行文件）
 - **hub 自身很轻量**：不加载模型权重，模型由独立的 `audiocpp_server` 子进程承载
 
