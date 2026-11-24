@@ -238,15 +238,17 @@ func TestTaskCreate(t *testing.T) {
 			wantMessage:  "Upstream rejected",
 		},
 		{
-			name:         "every target down reports the whole trail",
+			// Both hubs were reachable and failed: 502, not the 503 that means
+			// "there was no backend to try".
+			name:         "every target failing reports the whole trail",
 			statusA:      http.StatusBadGateway,
 			statusB:      http.StatusInternalServerError,
 			body:         `{"model":"stt","request":{"audio":"` + audioPath + `"}}`,
-			wantStatus:   http.StatusServiceUnavailable,
+			wantStatus:   http.StatusBadGateway,
 			wantCalls:    [2]int{1, 1},
 			wantInstance: [2]string{"asr-primary", "asr-standby"},
 			wantTried:    2,
-			wantMessage:  "No fan-out backend available for model stt",
+			wantMessage:  "Fan-out backend failed for model stt",
 		},
 		{
 			name: "no target knows the instance id yet",
@@ -255,10 +257,10 @@ func TestTaskCreate(t *testing.T) {
 				markReady(p.hub, b, "citrinet")
 			},
 			body:        `{"model":"stt","request":{"audio":"` + audioPath + `"}}`,
-			wantStatus:  http.StatusServiceUnavailable,
+			wantStatus:  http.StatusBadGateway,
 			wantCalls:   [2]int{0, 0},
 			wantTried:   2,
-			wantMessage: "No fan-out backend available for model stt",
+			wantMessage: "Fan-out backend failed for model stt",
 			wantReason:  "no instance id for citrinet",
 		},
 		{

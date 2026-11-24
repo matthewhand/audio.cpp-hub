@@ -128,7 +128,7 @@ and both spellings in a pair resolve to the same target list.
 |---|---|---|
 | `breeze` / `expressive` | `.36` `breeze` | `.30:18080` `breeze` |
 | `qwen3-vd` / `voice-design-fast` | `.30:18081` `qwen3-vd` | none |
-| `sanotts` / `instant` | `.36` `sanotts` | none (Windows2 offline, [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)) |
+| `sanotts` / `instant` | `.36` `sanotts` | none (Windows2 offline, [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)); split into sentence chunks at `maxInputChars: 160` |
 | `citrinet` / `stt` | `.36` `citrinet` | none (only host that has it) |
 | `kokoro` | Windows1 `10.0.0.31:18088` `kokoro-win1` (weight 4) | GTX `127.0.0.1:18280` `kokoro` (weight 1), round-robin |
 
@@ -328,7 +328,9 @@ Decisions taken:
    burning the remaining targets.
 4. Once any response byte has reached the client there is nothing to retry, so
    every retryable outcome is detected before the first write.
-5. Total failure → `503` with the trail, no guessing:
+5. Total failure, split by what actually happened, so an agent can tell "retry
+   later" from "the farm is broken":
+   - nothing to try (every target skipped) → `503` with the trail, no guessing:
 
 ```json
 {"error": {"message": "No fan-out backend available for model expressive",
@@ -336,6 +338,13 @@ Decisions taken:
            "attempts": [{"hub": "http://10.0.0.36:18080", "instanceName": "breeze", "reason": "hub is down"}],
            "hubs_tried": ["http://10.0.0.36:18080"]}}
 ```
+
+   - targets were contacted and every one failed → `502`
+     `Fan-out backend failed for model …` with the same trail plus `lastError`.
+   - the engine refused the *input* itself (sanoTTS's 207-phoneme ceiling,
+     "phonemization produced no symbols") → `400` with the engine's own message,
+     short-circuited before the next target: the same text fails there too, and
+     a `503` would blame the farm for a request the caller must change.
 
 6. Never reboot hosts or republish ports to WAN as part of recovery. The proxy
    is LAN-only and has no auth/TLS.
@@ -367,6 +376,42 @@ Decisions taken:
 - The slot is held for the whole forward, streaming included, and released on
   every exit path (success, upstream failure, client disconnect) so a cap can
   never wedge a target.
+
+## Long input — sentence chunking (`maxInputChars`)
+
+sanoTTS has a per-utterance ceiling of about 200 characters (and 207 phonemes
+including BOS/EOS); past it the engine answers `500` — either "phonemization
+produced no symbols in the packaged vocabulary" or the phoneme-token message.
+That is an engine property, not a farm fault, and the fan-out cannot count
+phonemes, so a route declares the character budget its engine can take:
+`"maxInputChars": 160` on `sanotts` / `instant`.
+
+When `input` exceeds it, `POST /v1/audio/speech` splits at sentence boundaries
+(falling back to clause, then word, then a hard cut for a single long sentence),
+synthesises the chunks sequentially on the **same** target and returns one joined
+WAV with a real `Content-Length` and `X-Fanout-Chunks`. Decisions:
+
+- **Joined, not streamed.** The caller asked for one file and half the farm's
+  clients are not streamers. The hub's own sentence streaming (#196) remains the
+  answer for `"stream": true`, and is skipped here.
+- **Same target per request.** Chunks are one utterance's worth of work; spreading
+  them would mix voices/seeds across hosts and break the archive's single-origin
+  rule. A chunk failure happens before anything is written, so the ordinary
+  failover still moves the whole request to the next target.
+- **Character budget, not phoneme budget.** A 100-digit run is ~340 phonemes in
+  160 characters and still gets a `400` from the engine — with the engine's
+  message and a hint saying so, which is better than a silent `503`.
+
+## Engine observability headers pass through
+
+The engine's timing headers (`X-Audiocpp-Wall-Ms`,
+`X-Audiocpp-Audio-Duration-Ms`, `X-Audiocpp-Rtf`) and the hub's
+`X-Hub-Request-Id` / `X-Hub-Stream`, plus the `X-Audio-*` PCM hints, are copied
+onto the fan-out response and listed in
+`Access-Control-Expose-Headers`. Without that, latency was only measurable by
+calling the origin hub directly — the one thing the fan-out is supposed to save
+you from. A chunked reply carries `X-Fanout-Chunks` / `X-Fanout-Wall-Ms`
+instead, because per-chunk engine numbers do not describe the joined file.
 
 ## Implementation
 

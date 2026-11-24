@@ -35,7 +35,7 @@ agent can speak model **aliases** instead of `host:port:service` triples:
 |---|---|
 | `breeze`, `expressive` | `.36:18080 breeze` → `.30:18080 breeze` |
 | `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` |
-| `sanotts`, `instant` | `.36:18080 sanotts` → `.32:18080 sanotts` |
+| `sanotts`, `instant` | `.36:18080 sanotts` (chunked past 160 chars) → `.32:18080 sanotts` |
 | `citrinet`, `stt` | `.36:18080 citrinet` |
 
 An alias names a *service*; the endpoint you call names the *request shape*.
@@ -49,6 +49,14 @@ Calling speech against `citrinet` 503s — the engine wants audio, not text.
 - Successful responses add `X-Fanout-Hub` / `X-Fanout-Instance`; use the hub
   there to fetch the archived take from `/api/history/...`, and to poll the task
   you just submitted.
+- Engine timing comes back too: `X-Audiocpp-Wall-Ms`,
+  `X-Audiocpp-Audio-Duration-Ms`, `X-Audiocpp-Rtf`, plus `X-Hub-Request-Id`
+  (feed it to the origin hub's `/api/metrics/requests/{id}`).
+- `sanotts` / `instant` split an input longer than 160 characters at sentence
+  boundaries and return one joined WAV (`X-Fanout-Chunks`), so long prose is
+  fine there. A single unbroken run of digits can still exceed the engine's
+  phoneme ceiling; that answers `400` with the engine's message — shorten it,
+  do not retry.
 - `GET /farm/health` — per-hub up/down, latency, which backend each alias
   resolved to, and each target's live `inFlight` against `inFlightCap`.
   Fan-out only; hubs answer 404.

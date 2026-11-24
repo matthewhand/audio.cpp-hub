@@ -44,7 +44,7 @@ they no longer hard-code `host:port:model` triples:
 |---|---|
 | `breeze`, `expressive` | `.30:18080 breeze` |
 | `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` |
-| `sanotts`, `instant` | `.36:18080 sanotts` (no active standby) |
+| `sanotts`, `instant` | `.36:18080 sanotts` (no active standby; `maxInputChars` 160, so long text is written as sentence chunks and joined) |
 | `kokoro` | **balanced** round-robin: Windows1 `10.0.0.31:18088 kokoro-win1` (weight 4, GTX 1080) + GTX loopback `127.0.0.1:18280 kokoro` (weight 1, CPU backstop) |
 
 Every other route is `failover`: priority order, first READY target wins. A
@@ -68,6 +68,15 @@ a route is added.
   `?hub=<baseUrl>` (task ids are hub-local), e.g.
   `GET /api/tasks/<id>?hub=http://10.0.0.36:18080`. Failover covers
   *submission*; the task then runs on the engine that accepted it.
+- **Long text**: a route with `maxInputChars` (currently `sanotts`/`instant`,
+  160) splits a longer `input` at sentence boundaries, synthesises the chunks on
+the same target and returns one joined WAV (`X-Fanout-Chunks`). sanoTTS refuses
+  ~200+ characters outright, so this is the difference between a 200 and an
+engine error. `"stream": true` is left to the hub's own sentence streaming.
+- **Timing is visible from the fan-out**: the engine's `X-Audiocpp-Wall-Ms` /
+  `X-Audiocpp-Audio-Duration-Ms` / `X-Audiocpp-Rtf` and the hub's
+  `X-Hub-Request-Id` are passed through and CORS-exposed, so one call to
+  `:18082` is enough to judge latency.
 - `GET /farm/health` — per-hub up/down + latency + which backend each alias
   resolved to, plus `inFlightCap` / per-target `inFlight` and cumulative
   `served` / `failed` counts (the live check that `kokoro`'s 2:1 split holds);
@@ -78,7 +87,10 @@ a route is added.
   one loud agent fill `.36 breeze`'s queue while everything else stalls
   invisibly. A target at its cap is skipped, so the request spills to the
   standby; only a route whose every target is busy answers `429` +
-  `Retry-After: 5` (not `503`). `qwen3-vd` and `sanotts` are single-target, so
+  `Retry-After: 5` (not `503`). A `503` now means "there was no target to try";
+  a reachable target that failed is a `502` `Fan-out backend failed for model …`,
+  and an input the engine itself refuses (sanoTTS's 207-phoneme ceiling) is a
+  `400` with the engine's own message. `qwen3-vd` and `sanotts` are single-target, so
   parallel callers there get 429s past the cap — OpenAI SDKs retry those
   automatically. For `POST /api/tasks` the cap covers the submission only; the
   hub's serial queue bounds what actually runs. Knob details:

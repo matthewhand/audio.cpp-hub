@@ -241,6 +241,16 @@ func TestCommittedRoutesConfig(t *testing.T) {
 			t.Errorf("alias %q targets = %v, want %v", alias, got, targets)
 		}
 	}
+	// sanoTTS refuses an utterance past roughly 200 characters, so the shipped
+	// sanotts/instant route must keep its chunk budget: losing it turns long
+	// prose into an engine 500 again.
+	if rt, ok := cfg.routeFor("sanotts"); ok && rt.MaxInputChars != 160 {
+		t.Errorf("sanotts maxInputChars = %d, want 160", rt.MaxInputChars)
+	}
+	if rt, ok := cfg.routeFor("kokoro"); ok && rt.MaxInputChars != 0 {
+		t.Errorf("kokoro maxInputChars = %d, want 0 (Kokoro takes long input in one go)", rt.MaxInputChars)
+	}
+
 	// The committed topology has five active hubs; Windows2 SanoTTS is
 	// deliberately excluded until issue #127 passes its recovery gates.
 	// This must not ban that host from future independently approved configs.

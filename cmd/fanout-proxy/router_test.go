@@ -455,15 +455,16 @@ func TestSpeechRoundRobin(t *testing.T) {
 func TestSpeechFailover(t *testing.T) {
 	const wav = "RIFF-fake-wav-bytes"
 	tests := []struct {
-		name       string
-		primary    *fakeHub
-		standby    *fakeHub
-		body       string
-		wantStatus int
-		wantBody   string
-		wantCalls  [2]int
-		wantTried  int
-		wantModel  string // model the responding hub should have seen
+		name        string
+		primary     *fakeHub
+		standby     *fakeHub
+		body        string
+		wantStatus  int
+		wantBody    string
+		wantCalls   [2]int
+		wantTried   int
+		wantModel   string // model the responding hub should have seen
+		wantMessage string // substring of the error message, when set
 	}{
 		{
 			name:       "primary serves",
@@ -498,13 +499,28 @@ func TestSpeechFailover(t *testing.T) {
 			wantModel:  "breeze",
 		},
 		{
-			name:       "all targets down reports every hub tried",
-			primary:    newFakeHub(t, 502, `bad gateway`, "text/plain"),
-			standby:    newFakeHub(t, 500, `{"error":{"message":"engine died"}}`, "application/json"),
-			body:       `{"model":"breeze","input":"hi"}`,
-			wantStatus: 503,
-			wantTried:  2,
-			wantCalls:  [2]int{1, 1},
+			// Both hubs answered and failed: that is a bad gateway (the farm is up,
+			// the backends are not producing audio), not "no backend available".
+			name:        "all targets fail reports every hub tried",
+			primary:     newFakeHub(t, 502, `bad gateway`, "text/plain"),
+			standby:     newFakeHub(t, 500, `{"error":{"message":"engine died"}}`, "application/json"),
+			body:        `{"model":"breeze","input":"hi"}`,
+			wantStatus:  502,
+			wantTried:   2,
+			wantCalls:   [2]int{1, 1},
+			wantMessage: "Fan-out backend failed for model breeze",
+		},
+		{
+			// A phoneme ceiling belongs to the input, so it must not be retried on
+			// the standby and must not be reported as a farm outage.
+			name:        "input limit answers 400 without failover",
+			primary:     newFakeHub(t, 500, `{"error":{"message":"sanoTTS phoneme sequence has 342 tokens including BOS/EOS; the duration model was trained for at most 207."}}`, "application/json"),
+			standby:     newFakeHub(t, 200, wav, "audio/wav"),
+			body:        `{"model":"breeze","input":"1111111111"}`,
+			wantStatus:  400,
+			wantTried:   1,
+			wantCalls:   [2]int{1, 0},
+			wantMessage: "phoneme sequence has 342 tokens",
 		},
 		{
 			name:       "client error is not retried on the standby",
@@ -549,13 +565,18 @@ func TestSpeechFailover(t *testing.T) {
 			if len(attempts) != tc.wantTried {
 				t.Errorf("attempts = %v, want %d entries", attempts, tc.wantTried)
 			}
-			if tc.wantStatus == 503 {
+			if tc.wantStatus >= 500 {
 				tried, _ := env["hubs_tried"].([]any)
 				if len(tried) != 2 {
 					t.Errorf("hubs_tried = %v, want both hubs listed", tried)
 				}
 				if !strings.Contains(env["message"].(string), "breeze") {
 					t.Errorf("message = %q, want it to name the model", env["message"])
+				}
+			}
+			if tc.wantMessage != "" {
+				if msg, _ := env["message"].(string); !strings.Contains(msg, tc.wantMessage) {
+					t.Errorf("message = %q, want it to contain %q", msg, tc.wantMessage)
 				}
 			}
 		})

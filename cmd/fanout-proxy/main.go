@@ -77,6 +77,10 @@ func main() {
 			log.Printf("fanout: route %s balances round_robin over %d targets (weights %s)",
 				strings.Join(rt.Aliases, "/"), len(rt.Targets), weightList(rt))
 		}
+		if rt.MaxInputChars > 0 {
+			log.Printf("fanout: route %s splits speech input longer than %d chars at sentence boundaries",
+				strings.Join(rt.Aliases, "/"), rt.MaxInputChars)
+		}
 	}
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("fanout-proxy: %v", err)
@@ -273,7 +277,9 @@ func (p *proxy) handleModels(w http.ResponseWriter, r *http.Request) {
 
 // handleSpeech routes a speech request by model alias, walking the failover
 // list until one backend answers. Only the body rewrite differs from the other
-// forwarded endpoints; the failover itself is forwardWithFailover's.
+// forwarded endpoints; the failover itself is forwardWithFailover's. A route
+// with maxInputChars gets its input split into sentence chunks and joined into
+// one WAV (see chunk.go).
 func (p *proxy) handleSpeech(w http.ResponseWriter, r *http.Request) {
 	fields, ok := p.readJSONBody(w, r)
 	if !ok {
@@ -283,12 +289,17 @@ func (p *proxy) handleSpeech(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	text, chunked := speechChunkingInput(rt, fields)
 	p.forwardWithFailover(w, r, alias, rt, func(w http.ResponseWriter, r *http.Request, target Target) (forwardResult, error) {
-		upstream, err := rewriteModel(fields, target.InstanceName)
+		upstream := fields
+		if chunked {
+			return relayChunkedSpeech(w, r, target, upstream, text, rt.MaxInputChars)
+		}
+		body, err := rewriteModel(upstream, target.InstanceName)
 		if err != nil {
 			return forwardResult{}, err
 		}
-		return relayUpstream(w, r, target, "/v1/audio/speech", upstream)
+		return relayUpstream(w, r, target, "/v1/audio/speech", body)
 	})
 }
 

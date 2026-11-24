@@ -15,14 +15,31 @@ import (
 )
 
 // httpError is a non-2xx response from an upstream hub. Kept small so the
-// failover log can name the hub without dumping a body.
+// failover log can name the hub without dumping a body; detail carries the
+// trimmed upstream body, which is what a caller needs when the request (not the
+// backend) was the problem.
 type httpError struct {
 	status int
 	url    string
+	detail string
 }
 
 func (e *httpError) Error() string {
 	return fmt.Sprintf("upstream %s returned %d", e.url, e.status)
+}
+
+// upstreamMessage digs the engine's own message out of an OpenAI-shaped error
+// body, falling back to the trimmed body when it is not one.
+func (e *httpError) upstreamMessage() string {
+	var env struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal([]byte(e.detail), &env) == nil && strings.TrimSpace(env.Error.Message) != "" {
+		return strings.TrimSpace(env.Error.Message)
+	}
+	return e.detail
 }
 
 // ---------------------------------------------------------------- model 字段
@@ -59,10 +76,42 @@ func extractModel(fields map[string]json.RawMessage) (string, error) {
 	return name, nil
 }
 
-// rewriteModel returns body with the top-level "model" replaced by the upstream
-// service name. Other fields keep their original bytes.
-func rewriteModel(fields map[string]json.RawMessage, instanceName string) ([]byte, error) {
-	encoded, err := json.Marshal(instanceName)
+// rawString reads a top-level string field; ok is false when it is missing or
+// not a string.
+func rawString(fields map[string]json.RawMessage, key string) (string, bool) {
+	raw, ok := fields[key]
+	if !ok {
+		return "", false
+	}
+	var s string
+	if json.Unmarshal(raw, &s) != nil {
+		return "", false
+	}
+	return s, true
+}
+
+// rawBool reads a top-level bool field; JSON "true"/true are both accepted (the
+// hub accepts both, so the proxy must not disagree).
+func rawBool(fields map[string]json.RawMessage, key string) (bool, bool) {
+	raw, ok := fields[key]
+	if !ok {
+		return false, false
+	}
+	var b bool
+	if json.Unmarshal(raw, &b) == nil {
+		return b, true
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s == "true", true
+	}
+	return false, false
+}
+
+// rewriteField returns body with one top-level field replaced. Every other field
+// keeps its original bytes, so options, voice_ref and unknown extras survive.
+func rewriteField(fields map[string]json.RawMessage, key, value string) ([]byte, error) {
+	encoded, err := json.Marshal(value)
 	if err != nil {
 		return nil, err
 	}
@@ -70,8 +119,14 @@ func rewriteModel(fields map[string]json.RawMessage, instanceName string) ([]byt
 	for k, v := range fields {
 		out[k] = v
 	}
-	out["model"] = encoded
+	out[key] = encoded
 	return json.Marshal(out)
+}
+
+// rewriteModel returns body with the top-level "model" replaced by the upstream
+// service name. Other fields keep their original bytes.
+func rewriteModel(fields map[string]json.RawMessage, instanceName string) ([]byte, error) {
+	return rewriteField(fields, "model", instanceName)
 }
 
 // ---------------------------------------------------------------- 目标选择
@@ -242,7 +297,9 @@ type tryTarget func(w http.ResponseWriter, r *http.Request, target Target) (forw
 // outcome has to surface before that.
 func (p *proxy) forwardWithFailover(w http.ResponseWriter, r *http.Request, alias string, rt *Route, tryOne tryTarget) {
 	attempts := []attempt{}
-	busy := 0 // targets skipped only because they sit at their in-flight cap
+	busy := 0  // targets skipped only because they sit at their in-flight cap
+	tried := 0 // targets that were actually contacted (or failed while being prepared)
+	lastErr := ""
 	// A failover route keeps config order; a round_robin route picks by weight
 	// and leaves the other usable targets behind it as its own failover list.
 	for _, c := range p.bal.order(rt, planTargets(rt, p.hub)) {
@@ -258,6 +315,7 @@ func (p *proxy) forwardWithFailover(w http.ResponseWriter, r *http.Request, alia
 			busy++
 			continue
 		}
+		tried++
 		res, err := func() (forwardResult, error) {
 			defer p.lim.release(key)
 			return tryOne(w, r, c.target)
@@ -272,11 +330,25 @@ func (p *proxy) forwardWithFailover(w http.ResponseWriter, r *http.Request, alia
 		case err != nil:
 			p.counts.recordFailed(c.target)
 			reason := err.Error()
+			lastErr = reason
 			var he *httpError
-			if errors.As(err, &he) && !retryable(he.status) {
-				attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: reason})
-				openAIError(w, he.status, "Upstream rejected the request: "+reason, map[string]any{"attempts": attempts})
-				return
+			if errors.As(err, &he) {
+				// A phoneme ceiling is a property of the input, not of this backend:
+				// every other target would refuse it identically, and answering 503
+				// would blame the farm for a request it must fix.
+				if inputLimitDetail(he.detail) {
+					attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: reason})
+					openAIError(w, http.StatusBadRequest, he.upstreamMessage(), map[string]any{
+						"attempts": attempts,
+						"hint":     inputLimitHint(rt),
+					})
+					return
+				}
+				if !retryable(he.status) {
+					attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: reason})
+					openAIError(w, he.status, "Upstream rejected the request: "+reason, map[string]any{"attempts": attempts})
+					return
+				}
 			}
 			attempts = append(attempts, attempt{Hub: c.target.Hub, InstanceName: c.target.InstanceName, Reason: reason})
 		default:
@@ -296,9 +368,51 @@ func (p *proxy) forwardWithFailover(w http.ResponseWriter, r *http.Request, alia
 		return
 	}
 
+	// A target answered and failed: the farm is up and the request is the
+	// problem, so 502 (bad gateway) with the trail. 503 is reserved for "there
+	// was nothing to try", which is what an agent should retry or escalate on.
+	if tried > 0 {
+		openAIError(w, http.StatusBadGateway,
+			"Fan-out backend failed for model "+alias,
+			map[string]any{"attempts": attempts, "hubs_tried": hubList(attempts), "lastError": lastErr})
+		return
+	}
+
 	openAIError(w, http.StatusServiceUnavailable,
 		"No fan-out backend available for model "+alias,
-		map[string]any{"attempts": attempts, "hubs_tried": hubList(attempts)})
+		map[string]any{"attempts": attempts, "hubs_tried": hubList(attempts), "inFlightCap": p.cfg.MaxInFlightPerTarget})
+}
+
+// inputLimitMarkers are engine error texts that mean "no backend can synthesise
+// this text", not "this backend is unhealthy". They come from the engine, so
+// the list stays short and specific; a match short-circuits the failover walk and
+// answers 400 with the engine's own message.
+var inputLimitMarkers = []string{
+	"phoneme sequence has",              // sanoTTS token ceiling (207 incl. BOS/EOS)
+	"trained for at most",               // the same ceiling, other phrasing
+	"phonemization produced no symbols", // sanoTTS phonemizer gave up (long text)
+	"input text is too long",
+}
+
+// inputLimitDetail reports whether an upstream error body says the input itself
+// is unsupported.
+func inputLimitDetail(detail string) bool {
+	for _, m := range inputLimitMarkers {
+		if strings.Contains(detail, m) {
+			return true
+		}
+	}
+	return false
+}
+
+// inputLimitHint tells the caller what to do about it, naming the route's chunk
+// budget when it has one.
+func inputLimitHint(rt *Route) string {
+	if rt != nil && rt.MaxInputChars > 0 {
+		return "Shorten the input or send it in pieces: this route splits speech input at " +
+			strconv.Itoa(rt.MaxInputChars) + " characters by sentence, so a single unbroken run of digits or symbols can still exceed the engine's phoneme ceiling"
+	}
+	return "Shorten the input: the model cannot synthesise this text, and no other fan-out target can either"
 }
 
 // ---------------------------------------------------------------- 转发
@@ -361,7 +475,7 @@ func relayUpstream(w http.ResponseWriter, r *http.Request, target Target, path s
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		io.Copy(io.Discard, resp.Body) // drain for keep-alive
-		return forwardResult{}, &httpError{status: resp.StatusCode, url: target.Hub + ": " + summarize(detail)}
+		return forwardResult{}, &httpError{status: resp.StatusCode, url: target.Hub + ": " + summarize(detail), detail: summarize(detail)}
 	}
 
 	h := w.Header()
@@ -371,6 +485,7 @@ func relayUpstream(w http.ResponseWriter, r *http.Request, target Target, path s
 	if cl := resp.Header.Get("Content-Length"); cl != "" {
 		h.Set("Content-Length", cl)
 	}
+	copyFanoutHeaders(h, resp.Header)
 	h.Set("X-Fanout-Hub", target.Hub)
 	if target.InstanceName != "" {
 		h.Set("X-Fanout-Instance", target.InstanceName)
@@ -378,6 +493,48 @@ func relayUpstream(w http.ResponseWriter, r *http.Request, target Target, path s
 	w.WriteHeader(resp.StatusCode)
 	_, err = io.CopyBuffer(flushWriter{w: w}, resp.Body, make([]byte, 32<<10))
 	return forwardResult{Streamed: true}, err
+}
+
+// fanoutHeaderPrefixes are the upstream headers worth repeating at :18082:
+// the engine's timing (X-Audiocpp-*), the hub request id and stream mode
+// (X-Hub-*) and the PCM framing hints (X-Audio-*). Without them a caller of the
+// fan-out cannot see how long an engine took or correlate a take with the hub
+// request log. Everything else upstream sets is hop-by-hop, a security header
+// this proxy already applies itself, or CORS.
+var fanoutHeaderPrefixes = []string{"X-Audiocpp-", "X-Hub-", "X-Audio-"}
+
+// exposedHeaders lists what a browser may read from a fan-out response. CORS
+// only exposes safelisted headers by default, so the hub's own
+// Access-Control-Expose-Headers (which names the same values) is not enough
+// once the response comes through here.
+const exposedHeaders = "X-Fanout-Hub, X-Fanout-Instance, X-Fanout-Chunks, X-Fanout-Wall-Ms, " +
+	"X-Audiocpp-Wall-Ms, X-Audiocpp-Audio-Duration-Ms, X-Audiocpp-Rtf, X-Hub-Request-Id, X-Hub-Stream"
+
+// copyFanoutHeaders copies the passthrough prefixes and re-states the CORS
+// expose list. It never copies Content-Type or Content-Length: the caller sets
+// those itself.
+func copyFanoutHeaders(dst, src http.Header) {
+	for k, vs := range src {
+		// The prefixes are all X-* application headers, so none of them can be
+		// hop-by-hop (Connection, Transfer-Encoding, ...) and no further guard is
+		// needed here.
+		if !hasFanoutPrefix(k) {
+			continue
+		}
+		for _, v := range vs {
+			dst.Add(k, v)
+		}
+	}
+	dst.Set("Access-Control-Expose-Headers", exposedHeaders)
+}
+
+func hasFanoutPrefix(name string) bool {
+	for _, p := range fanoutHeaderPrefixes {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // summarize trims an upstream error body down to a loggable one-liner.

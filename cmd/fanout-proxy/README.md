@@ -72,7 +72,7 @@ proxy how to consume it:
 |---|---|---|
 | `breeze`, `expressive` | `.30:18080 breeze` | failover |
 | `qwen3-vd`, `voice-design-fast` | `.30:18081 qwen3-vd` | failover |
-| `sanotts`, `instant` | `.36:18080 sanotts` (single active target; Windows2 standby offline, [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)) | failover |
+| `sanotts`, `instant` | `.36:18080 sanotts` (single active target; Windows2 standby offline, [#127](https://github.com/matthewhand/audio.cpp-hub/issues/127)), `maxInputChars` 160 | failover |
 | `kokoro` | `127.0.0.1:18280 kokoro` weight 1, `10.0.0.31:18088 kokoro-win1` weight 4 | round_robin |
 
 No ASR route is configured on the current farm (the `citrinet` instance was
@@ -120,6 +120,31 @@ round-robin, so weights `2` and `1` produce `A,B,A,A,B,A` rather than a bursty
 - A sticky/multi-seed audition that must land on one host is the opposite case:
   send it serially or pin the hub, because round-robin will deliberately split
   it.
+### Long input (`maxInputChars`)
+
+sanoTTS refuses an utterance well before an agent thinks it is long: a ~200
+character paragraph fails with `phonemization produced no symbols in the
+packaged vocabulary`, and a 100-digit run fails the 207-phoneme ceiling. A route
+can therefore declare the per-utterance budget its engine actually has:
+
+```jsonc
+{ "aliases": ["sanotts", "instant"], "maxInputChars": 160, "targets": [...] }
+```
+
+When `input` is longer than that, `POST /v1/audio/speech` splits it at sentence
+boundaries (a single over-long sentence falls back to clause, then word, then a
+hard cut), synthesises the chunks in order on the *same* target and returns one
+joined WAV — same `Content-Type`, real `Content-Length`, `X-Fanout-Chunks`
+count. Nothing changes for a client: it is still one request and one file. If a
+chunk fails, no bytes have been written yet, so the normal failover still walks
+to the next target. Streamed requests (`"stream": true`) and non-WAV
+`response_format` are never chunked: the hub's own sentence streaming owns the
+first case, and a joined file has to be WAV.
+
+Chunking is character-based, so it cannot rescue every input: a 100-digit run is
+~340 phonemes in a 160-character chunk. Those still answer the engine's `400`
+for a human to shorten.
+
 An alias names a *service*; the endpoint names the *request shape*. TTS is
 `/v1/audio/speech`, ASR is `/api/tasks`. A speech call against an ASR alias fails
 (`503` — the engine wants an audio contract, not text); a task call against
@@ -224,7 +249,9 @@ Same rules for both forwarded endpoints (`POST /v1/audio/speech`,
   retryable outcomes are detected before anything is written.
 - Task **reads** are not a failover case at all: the pin names one hub, and the
   hub's own status is passed through.
-- Total failure returns `503` with the full trail:
+- Two different total failures, because agents retry them differently:
+  - **`503`** when there was nothing to try (every target skipped: hub down,
+    instance not `READY`), with the full trail:
 
 ```json
 {
@@ -232,10 +259,20 @@ Same rules for both forwarded endpoints (`POST /v1/audio/speech`,
     "message": "No fan-out backend available for model expressive",
     "type": "server_error",
     "attempts": [{"hub": "http://10.0.0.36:18080", "instanceName": "breeze", "reason": "hub is down"}],
-    "hubs_tried": ["http://10.0.0.36:18080"]
+    "hubs_tried": ["http://10.0.0.36:18080"],
+    "inFlightCap": 2
   }
 }
 ```
+
+  - **`502`** when targets were reachable and every one failed: the farm is up,
+    the backends are not producing audio. Same trail plus `lastError`.
+
+- An input the engine itself refuses (sanoTTS's 207-phoneme ceiling,
+  "phonemization produced no symbols") answers **`400` with the engine's own
+  message** and does not try the other targets: the same text would fail there
+  identically, and `503` would blame the farm for a request the caller must
+  change. The `hint` field says how.
 
 - Load shedding (every usable target busy) returns `429` with the same trail plus
   `inFlightCap`, so a client can tell "come back in a moment" from "the farm is
@@ -253,6 +290,13 @@ Same rules for both forwarded endpoints (`POST /v1/audio/speech`,
 }
 ```
 
+- The engine's own observability headers are repeated unchanged, so the fan-out
+  is not a black hole for timing: `X-Audiocpp-Wall-Ms`,
+  `X-Audiocpp-Audio-Duration-Ms`, `X-Audiocpp-Rtf` (engine), plus `X-Hub-Request-Id`
+  and `X-Hub-Stream` (hub) and the `X-Audio-*` PCM framing hints. They are also
+  added to `Access-Control-Expose-Headers`, so a browser can read them. A
+  chunked reply (below) carries `X-Fanout-Chunks` and `X-Fanout-Wall-Ms`
+  instead: the per-chunk engine numbers do not describe the joined file.
 - Successful responses carry `X-Fanout-Hub` and `X-Fanout-Instance` so an agent
   can pull the archived take from the origin hub's `/api/history/...` — and, for
   `POST /api/tasks`, name that hub in the `?hub=` pin of every task read.

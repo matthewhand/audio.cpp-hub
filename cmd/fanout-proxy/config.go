@@ -66,6 +66,12 @@ type Route struct {
 	Aliases  []string `json:"aliases"`
 	Strategy string   `json:"strategy,omitempty"`
 	Targets  []Target `json:"targets"`
+	// MaxInputChars, when > 0, makes POST /v1/audio/speech split a longer
+	// "input" into sentence-sized chunks, synthesise them on one target and
+	// return one joined WAV. It exists for engines with a hard per-utterance
+	// ceiling (sanoTTS: ~200 chars, 207 phonemes); omit it for a route whose
+	// engine takes arbitrary length.
+	MaxInputChars int `json:"maxInputChars,omitempty"`
 }
 
 // Config is farm.routes.json. Only Listen/PollIntervalMs/MaxInFlightPerTarget
@@ -153,6 +159,9 @@ func (c *Config) normalize() error {
 		}
 		if len(rt.Targets) == 0 {
 			return fmt.Errorf("routes[%d].targets is empty", i)
+		}
+		if rt.MaxInputChars < 0 {
+			return fmt.Errorf("routes[%d].maxInputChars %d must be > 0 (omit it to disable chunking)", i, rt.MaxInputChars)
 		}
 		for _, alias := range rt.Aliases {
 			alias = strings.TrimSpace(alias)
