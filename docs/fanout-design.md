@@ -186,6 +186,12 @@ request.
 }
 ```
 
+- `hubsTotal` counts configured hubs, including down targets. The checked-in
+  file configures four hubs including Kokoro's loopback hub. Installations
+  with additional targets report their own totals.
+- Kokoro resolves to `http://127.0.0.1:18280/kokoro` when READY. The origin
+  URL serves as the `?hub=` pin on requests to the fan-out. History access
+  for this target is local to Ubuntu-GTX.
 - Probe: `GET /api/instances` every 7 s per hub, in parallel, 3 s timeout.
 - A hub is marked **down after 2 consecutive failures**; one successful poll
   restores it immediately. One blip never moves traffic off a warm primary.

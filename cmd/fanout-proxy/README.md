@@ -74,6 +74,13 @@ No ASR route is configured on the current farm (the `citrinet` instance was
 retired on 2026-11-25). The `/api/tasks` routing below still applies once you add
 a route for the ASR instance you run.
 
+Send `model: "kokoro"` to the fan-out. `kokoro_tts` is the model card ID.
+The checked-in route has one target. Its loopback address assumes the fan-out
+runs on Ubuntu-GTX. When that hub is down or its Kokoro instance is still
+starting, requests to `kokoro` receive HTTP 503. The
+[GTX deployment notes](../../docs/deployment-10.0.0.36.md#kokoro-loopback-hub)
+describe the startup hook that establishes readiness.
+
 An alias names a *service*; the endpoint names the *request shape*. TTS is
 `/v1/audio/speech`, ASR is `/api/tasks`. A speech call against an ASR alias fails
 (`503` — the engine wants an audio contract, not text); a task call against
@@ -205,6 +212,12 @@ Same rules for both forwarded endpoints (`POST /v1/audio/speech`,
 - Successful responses carry `X-Fanout-Hub` and `X-Fanout-Instance` so an agent
   can pull the archived take from the origin hub's `/api/history/...` — and, for
   `POST /api/tasks`, name that hub in the `?hub=` pin of every task read.
+  For Kokoro, `X-Fanout-Hub` and the aggregated instance's `hub` contain
+  `http://127.0.0.1:18280`. Remote clients keep this value unchanged as an
+  opaque pin in task URLs sent to the **fan-out**. Download the speech audio
+  from the original response. The archive at
+  `/api/history/kokoro_tts/<taskId>/audio` belongs to the loopback hub and
+  can be read from Ubuntu-GTX.
 
 ## Constraints this code keeps
 
