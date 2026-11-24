@@ -2905,6 +2905,285 @@
           "zm_yunxia",
           "zm_yunyang"
         ],
+        "label": "音色",
+        "labelEn": "Voice",
+        "valueMeta": {
+          "af_alloy": {
+            "label": "Alloy",
+            "group": "en-us",
+            "gender": "female"
+          },
+          "af_aoede": {
+            "label": "Aoede",
+            "group": "en-us",
+            "gender": "female"
+          },
+          "af_bella": {
+            "label": "Bella",
+            "group": "en-us",
+            "gender": "female"
+          },
+          "af_heart": {
+            "label": "Heart",
+            "group": "en-us",
+            "gender": "female"
+          },
+          "af_jessica": {
+            "label": "Jessica",
+            "group": "en-us",
+            "gender": "female"
+          },
+          "af_kore": {
+            "label": "Kore",
+            "group": "en-us",
+            "gender": "female"
+          },
+          "af_nicole": {
+            "label": "Nicole",
+            "group": "en-us",
+            "gender": "female"
+          },
+          "af_nova": {
+            "label": "Nova",
+            "group": "en-us",
+            "gender": "female"
+          },
+          "af_river": {
+            "label": "River",
+            "group": "en-us",
+            "gender": "female"
+          },
+          "af_sarah": {
+            "label": "Sarah",
+            "group": "en-us",
+            "gender": "female"
+          },
+          "af_sky": {
+            "label": "Sky",
+            "group": "en-us",
+            "gender": "female"
+          },
+          "am_adam": {
+            "label": "Adam",
+            "group": "en-us",
+            "gender": "male"
+          },
+          "am_echo": {
+            "label": "Echo",
+            "group": "en-us",
+            "gender": "male"
+          },
+          "am_eric": {
+            "label": "Eric",
+            "group": "en-us",
+            "gender": "male"
+          },
+          "am_fenrir": {
+            "label": "Fenrir",
+            "group": "en-us",
+            "gender": "male"
+          },
+          "am_liam": {
+            "label": "Liam",
+            "group": "en-us",
+            "gender": "male"
+          },
+          "am_michael": {
+            "label": "Michael",
+            "group": "en-us",
+            "gender": "male"
+          },
+          "am_onyx": {
+            "label": "Onyx",
+            "group": "en-us",
+            "gender": "male"
+          },
+          "am_puck": {
+            "label": "Puck",
+            "group": "en-us",
+            "gender": "male"
+          },
+          "am_santa": {
+            "label": "Santa",
+            "group": "en-us",
+            "gender": "male"
+          },
+          "bf_alice": {
+            "label": "Alice",
+            "group": "en-gb",
+            "gender": "female"
+          },
+          "bf_emma": {
+            "label": "Emma",
+            "group": "en-gb",
+            "gender": "female"
+          },
+          "bf_isabella": {
+            "label": "Isabella",
+            "group": "en-gb",
+            "gender": "female"
+          },
+          "bf_lily": {
+            "label": "Lily",
+            "group": "en-gb",
+            "gender": "female"
+          },
+          "bm_daniel": {
+            "label": "Daniel",
+            "group": "en-gb",
+            "gender": "male"
+          },
+          "bm_fable": {
+            "label": "Fable",
+            "group": "en-gb",
+            "gender": "male"
+          },
+          "bm_george": {
+            "label": "George",
+            "group": "en-gb",
+            "gender": "male"
+          },
+          "bm_lewis": {
+            "label": "Lewis",
+            "group": "en-gb",
+            "gender": "male"
+          },
+          "ef_dora": {
+            "label": "Dora",
+            "group": "es",
+            "gender": "female"
+          },
+          "em_alex": {
+            "label": "Alex",
+            "group": "es",
+            "gender": "male"
+          },
+          "em_santa": {
+            "label": "Santa",
+            "group": "es",
+            "gender": "male"
+          },
+          "ff_siwis": {
+            "label": "Siwis",
+            "group": "fr-fr",
+            "gender": "female"
+          },
+          "hf_alpha": {
+            "label": "Alpha",
+            "group": "hi",
+            "gender": "female"
+          },
+          "hf_beta": {
+            "label": "Beta",
+            "group": "hi",
+            "gender": "female"
+          },
+          "hm_omega": {
+            "label": "Omega",
+            "group": "hi",
+            "gender": "male"
+          },
+          "hm_psi": {
+            "label": "Psi",
+            "group": "hi",
+            "gender": "male"
+          },
+          "if_sara": {
+            "label": "Sara",
+            "group": "it",
+            "gender": "female"
+          },
+          "im_nicola": {
+            "label": "Nicola",
+            "group": "it",
+            "gender": "male"
+          },
+          "jf_alpha": {
+            "label": "Alpha",
+            "group": "ja",
+            "gender": "female",
+            "requiresUniDic": true
+          },
+          "jf_gongitsune": {
+            "label": "Gongitsune",
+            "group": "ja",
+            "gender": "female",
+            "requiresUniDic": true
+          },
+          "jf_nezumi": {
+            "label": "Nezumi",
+            "group": "ja",
+            "gender": "female",
+            "requiresUniDic": true
+          },
+          "jf_tebukuro": {
+            "label": "Tebukuro",
+            "group": "ja",
+            "gender": "female",
+            "requiresUniDic": true
+          },
+          "jm_kumo": {
+            "label": "Kumo",
+            "group": "ja",
+            "gender": "male",
+            "requiresUniDic": true
+          },
+          "pf_dora": {
+            "label": "Dora",
+            "group": "pt-br",
+            "gender": "female"
+          },
+          "pm_alex": {
+            "label": "Alex",
+            "group": "pt-br",
+            "gender": "male"
+          },
+          "pm_santa": {
+            "label": "Santa",
+            "group": "pt-br",
+            "gender": "male"
+          },
+          "zf_xiaobei": {
+            "label": "Xiaobei",
+            "group": "zh",
+            "gender": "female"
+          },
+          "zf_xiaoni": {
+            "label": "Xiaoni",
+            "group": "zh",
+            "gender": "female"
+          },
+          "zf_xiaoxiao": {
+            "label": "Xiaoxiao",
+            "group": "zh",
+            "gender": "female"
+          },
+          "zf_xiaoyi": {
+            "label": "Xiaoyi",
+            "group": "zh",
+            "gender": "female"
+          },
+          "zm_yunjian": {
+            "label": "Yunjian",
+            "group": "zh",
+            "gender": "male"
+          },
+          "zm_yunxi": {
+            "label": "Yunxi",
+            "group": "zh",
+            "gender": "male"
+          },
+          "zm_yunxia": {
+            "label": "Yunxia",
+            "group": "zh",
+            "gender": "male"
+          },
+          "zm_yunyang": {
+            "label": "Yunyang",
+            "group": "zh",
+            "gender": "male"
+          }
+        },
         "default": "af_heart"
       },
       "speed": {

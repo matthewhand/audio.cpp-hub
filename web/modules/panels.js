@@ -97,11 +97,26 @@ export function paramInput(key, p, prefix) {
   if (p.type === "enum") {
     const label = el(`<label>${esc(labelText)}<select id="${esc(prefix)}-${esc(key)}"></select></label>`);
     const sel = label.querySelector("select");
+    const groups = new Map();
     for (const v of p.values) {
+      const meta = p.valueMeta?.[v];
       const opt = document.createElement("option");
       opt.value = v;
-      opt.textContent = v;
-      sel.appendChild(opt);
+      opt.textContent = I18N.pick(meta, "label") || v;
+      if (meta?.gender) opt.textContent += " · " + t("tts.presetGender." + meta.gender);
+      if (meta?.requiresUniDic) opt.textContent += " · " + t("tts.presetUniDic");
+      if (meta?.group) {
+        if (!groups.has(meta.group)) {
+          const group = document.createElement("optgroup");
+          group.dataset.language = meta.group;
+          group.label = presetLanguageLabel(meta.group);
+          groups.set(meta.group, group);
+          sel.appendChild(group);
+        }
+        groups.get(meta.group).appendChild(opt);
+      } else {
+        sel.appendChild(opt);
+      }
     }
     sel.value = p.default ?? p.values[0];
     return label;
@@ -285,6 +300,38 @@ export function qwen3VariantOf(modelId) {
   return "base";
 }
 
+function presetLanguageLabel(language) {
+  const key = "tts.presetLanguage." + language;
+  const label = t(key);
+  return label === key ? language : label;
+}
+
+function syncPresetVoice(m, chooseMatching = false) {
+  const schema = m.paramSchema?.voice_id;
+  const select = $("tts-enum-voice_id");
+  const hint = $("tts-preset-voice-hint");
+  if (!schema?.valueMeta || !ttsLanguageSel || !select || !hint) return;
+
+  const language = ttsLanguageSel.value;
+  const selected = select.value;
+  const group = [...select.querySelectorAll("optgroup")].find(node => node.dataset.language === language);
+  if (group && group !== select.firstElementChild) {
+    select.prepend(group);
+    select.value = selected;
+  }
+  if (chooseMatching && group && schema.valueMeta[selected]?.group !== language) {
+    select.value = schema.valueMeta[schema.default]?.group === language
+      ? schema.default
+      : group.querySelector("option").value;
+  }
+
+  const voiceLanguage = schema.valueMeta[select.value]?.group;
+  hint.textContent = voiceLanguage && voiceLanguage !== language
+    ? t("tts.presetMismatch", { voiceLanguage: presetLanguageLabel(voiceLanguage), language: presetLanguageLabel(language) })
+    : "";
+  hint.classList.toggle("hidden", !hint.textContent);
+}
+
 /* ---------- TTS 面板 ---------- */
 export function renderTtsPanel(m) {
   $("tts-title").textContent = t("tts.title") + " — " + I18N.pick(m, "displayName");
@@ -330,6 +377,15 @@ export function renderTtsPanel(m) {
   }
   // lang 在本行渲染（显眼位置），收集时由 collectEnums 路由进 req.options
   renderEnumRow($("tts-enum-row"), m, "tts-enum", ["language", "speaker"]);
+  const preset = $("tts-enum-voice_id");
+  if (m.paramSchema?.voice_id?.valueMeta && ttsLanguageSel && preset) {
+    const hint = el('<div id="tts-preset-voice-hint" class="hint hidden" aria-live="polite"></div>');
+    $("tts-enum-row").appendChild(hint);
+    preset.setAttribute("aria-describedby", hint.id);
+    ttsLanguageSel.addEventListener("change", () => syncPresetVoice(m, true));
+    preset.addEventListener("change", () => syncPresetVoice(m));
+    syncPresetVoice(m);
+  }
 
   $("tts-emotion-block").classList.toggle("hidden", !(m.paramSchema && m.paramSchema.emotionModes));
 
@@ -592,6 +648,7 @@ export function fillTtsForm(m, rec) {
   }
 
   applyHistoryOptions(m, Object.assign({ voice_id: rec.voice_id }, rec.options));
+  syncPresetVoice(m);
 
   // VibeVoice：voice_samples 按顺序填回各行音色（本地路径页签 + 探测，与手动粘贴等价），
   // 脚本里的 Speaker N: 行按编号分发回各行台词框（0 起编号上移 1；无 Speaker 行的旧记录整段归入 Speaker 1）

@@ -58,15 +58,47 @@ test("Kokoro TTS：单控件无重复渲染，所选 voice_id 正确写入 optio
   await expect(page.locator("#tts-enum-voice_id")).toHaveCount(1);
   await expect(page.locator("#adv-voice_id")).toHaveCount(0);
 
-  // 选中非默认音色 jf_alpha
-  await page.locator("#tts-enum-voice_id").selectOption("jf_alpha");
-  await page.locator("#tts-text").fill("Hello Kokoro");
+  const voice = page.locator("#tts-enum-voice_id");
+  const language = page.locator("#tts-language");
+  const hint = page.locator("#tts-preset-voice-hint");
+  await expect(voice).toHaveValue("af_heart");
+  await expect(voice.locator("optgroup")).toHaveCount(9);
+  await expect(voice.locator("option")).toHaveCount(54);
+  await expect(voice.locator('option[value="af_heart"]')).toHaveText("Heart · 女声");
+
+  await language.selectOption("zh");
+  await expect(voice).toHaveValue("zf_xiaobei");
+  await expect(voice.locator("optgroup").first()).toHaveAttribute("label", "普通话");
+  await language.selectOption("ja");
+  await expect(voice).toHaveValue("jf_alpha");
+  await expect(voice.locator('option[value="jf_alpha"]')).toContainText("UniDic");
+  await expect(hint).toBeHidden();
+
+  await language.selectOption("zh");
+  await voice.selectOption("jf_alpha");
+  await expect(hint).toContainText("日语");
+  await expect(hint).toContainText("普通话");
+
+  await language.selectOption("en-gb");
+  await page.evaluate(async () => {
+    const { fillTtsForm } = await import("/modules/panels.js");
+    const { selectedModel } = await import("/modules/state.js");
+    fillTtsForm(selectedModel(), {
+      text: "Hello Kokoro",
+      language: "zh",
+      options: { voice_id: "jf_alpha" }
+    });
+  });
+  await expect(language).toHaveValue("zh");
+  await expect(voice).toHaveValue("jf_alpha");
+  await expect(hint).toBeVisible();
   await page.locator("#tts-submit").click();
 
   await expect(page.locator("#tts-result")).toBeVisible({ timeout: 12000 });
 
   expect(backend.tasks).toHaveLength(1);
   const task = backend.tasks[0];
+  expect(task.request?.language).toBe("zh");
   expect(task.request?.options?.voice_id).toBe("jf_alpha");
   expect(task.request?.voice_id).toBeUndefined();
 });
