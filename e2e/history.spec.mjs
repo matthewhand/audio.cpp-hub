@@ -77,3 +77,71 @@ test("Kokoro history downloads phoneme groups and sample rate", async ({ page })
   await page.locator("#history-privacy").click();
   await expect(button).toHaveCount(0);
 });
+
+for (const { lang, theme, width, label } of [
+  { lang: "en", theme: "dark", width: 1366, label: "Speech API" },
+  { lang: "zh", theme: "light", width: 390, label: "语音 API" }
+]) {
+  test(`History shows the speech API origin in ${lang}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const api = historyItem("api-take", "API_TAKE");
+    api.result.via = "v1/audio/speech";
+    const task = historyItem("task-take", "TASK_TAKE");
+    const backend = new MockBackend({ history: { supertonic: [api, task] } });
+    await openApp(page, backend, { modelId: "supertonic", lang, theme });
+    await page.locator("#history-btn").click();
+    const badge = page.locator(".history-row", { hasText: "API_TAKE" }).locator(".history-via");
+    await expect(badge).toBeVisible();
+    await expect(badge).toBeInViewport({ ratio: 1 });
+    await expect(badge).toHaveText(label);
+    await expect(badge).toHaveAttribute("title", /\/v1\/audio\/speech/);
+    await expect(
+      page.locator(".history-row", { hasText: "TASK_TAKE" }).locator(".history-via")
+    ).toHaveCount(0);
+    await expect(page.locator("#history-list .history-via")).toHaveCount(1);
+  });
+}
+
+test.describe("History module loading", () => {
+  test.use({ serviceWorkers: "block" });
+  test("History loads on demand and can close before its module arrives", async ({ page }) => {
+    let release;
+    let markRequested;
+    const waiting = new Promise((resolve) => {
+      release = resolve;
+    });
+    const requested = new Promise((resolve) => {
+      markRequested = resolve;
+    });
+    let moduleRequests = 0;
+    await page.route("**/modules/sidebar.js", async (route) => {
+      moduleRequests++;
+      markRequested();
+      await waiting;
+      await route.continue();
+    });
+
+    const backend = new MockBackend({
+      history: { supertonic: [historyItem("saved", "A saved take")] }
+    });
+    try {
+      await openApp(page, backend, { modelId: "supertonic", lang: "en" });
+      expect(moduleRequests).toBe(0);
+      await page.locator("#history-btn").click();
+      await requested;
+      await expect(page.locator("#history-panel")).toBeVisible();
+      await expect(page.locator("#history-list")).toHaveAttribute("aria-busy", "true");
+      await page.keyboard.press("Escape");
+      await expect(page.locator("#history-panel")).toBeHidden();
+      const response = page.waitForResponse("**/modules/sidebar.js");
+      release();
+      await response;
+      await expect(page.locator("#history-panel")).toBeHidden();
+      await page.locator("#history-btn").click();
+      await expect(page.locator("#history-list")).toContainText("A saved take");
+      expect(moduleRequests).toBe(1);
+    } finally {
+      release();
+    }
+  });
+});
