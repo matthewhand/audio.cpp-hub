@@ -14,8 +14,8 @@
 > - 多机语音农场的 LAN fan-out 路由（统一的 OpenAI 兼容入口）
 > - 基于设计令牌体系的 Studio v3 Web UI（PWA、WCAG 2.1 AA、hash 路由）
 > - 比上游更完整的模型目录
->
-> 尚未进入本分支：Strix Halo 级 APU 的 AMD 统一内存（GTT）遥测；Kokoro 82M 预设音色与音色混合。
+> - Strix Halo 等 APU 的 AMD 统一内存（GTT）遥测
+> - Kokoro 82M 预设音色、加权音色混合与音素时间戳
 
 - **原生单二进制**：编译产物不依赖任何运行环境（Go 静态编译，发布包内含 Windows / Linux 可执行文件）
 - **hub 自身很轻量**：不加载模型权重，模型由独立的 `audiocpp_server` 子进程承载

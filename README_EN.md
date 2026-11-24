@@ -14,8 +14,8 @@ Repository: <https://github.com/matthewhand/audio.cpp-hub>
 > - a LAN fan-out router for multi-host voice farms (one OpenAI-compatible endpoint)
 > - the Studio v3 web UI on a design-token system (PWA, WCAG 2.1 AA, hash routing)
 > - an extended model catalog beyond upstream's
->
-> Not on this branch yet: AMD unified-memory (GTT) telemetry for Strix Halo-class APUs; Kokoro 82M preset voices and voice blends.
+> - AMD unified-memory (GTT) telemetry for APUs such as Strix Halo
+> - Kokoro 82M preset voices, weighted voice blends and phoneme timestamps
 
 - **Native single binary**: the build has no runtime dependencies (static Go build; release packages ship Windows / Linux executables)
 - **The hub itself is lightweight**: it does not load model weights — models run in separate `audiocpp_server` subprocesses
