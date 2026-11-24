@@ -42,6 +42,7 @@ function makeRouting({ hash = "", instances = [], selectedModelId = null } = {})
     openHistoryPanel: history.open,
     /* 四个懒加载外观（stats-lazy / voices-panel-lazy / downloads-lazy / settings-lazy）
        各自负责自己的页头按钮接线，routing.js 把导航函数传进去以避开与它们的模块环。 */
+    wireHistoryButton: (...a) => wired.push(["wireHistoryButton", ...a]),
     wireStatsButton: (...a) => wired.push(["wireStatsButton", ...a]),
     wireRequestsButton: (...a) => wired.push(["wireRequestsButton", ...a]),
     wireVoicesButton: (...a) => wired.push(["wireVoicesButton", ...a]),
@@ -232,7 +233,7 @@ test("routing: applyRoute 对未打开的面板不调用关闭函数", () => {
   assert.deepEqual(r.names(), ["openHistoryPanel"], "isOpen 为假 → 不关，避免误触焦点还原");
 });
 
-test("routing: 五个懒加载外观的页头按钮接线在模块求值时各调一次", () => {
+test("routing: 六个懒加载外观的页头按钮接线在模块求值时各调一次", () => {
   /* 看板 / 音色库 / 下载 / 设置都是「点开才拉 chunk」的弹窗，页头按钮必须在 chunk
      到位前就能用，因此由 routing.js 在求值期把 go / goPanel 交给各自外观层接线。
      漏掉任何一个，页头按钮就会静默失灵（chunk 里绑了 onclick 也没人加载它）。 */
@@ -240,6 +241,7 @@ test("routing: 五个懒加载外观的页头按钮接线在模块求值时各�
   assert.deepEqual(
     r.wired.map(([name]) => name),
     [
+      "wireHistoryButton",
       "wireStatsButton",
       "wireRequestsButton",
       "wireVoicesButton",

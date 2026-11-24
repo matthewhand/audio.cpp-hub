@@ -19,7 +19,7 @@ import { closeDownloadsModal, openDownloadsModal, wireDownloadsButton } from "./
 import { closeInstanceDetail, instances, openInstanceDetail } from "./instances.js";
 import { selectModelById } from "./models.js";
 import { closeSettingsModal, openSettingsModal, wireSettingsButtons } from "./settings-lazy.js";
-import { closeHistoryPanel, openHistoryPanel } from "./sidebar.js";
+import { closeHistoryPanel, openHistoryPanel, wireHistoryButton } from "./history-lazy.js";
 import { closeRequestsPanel, openRequestsPanel, wireRequestsButton } from "./requests-lazy.js";
 import { closeStatsPanel, openStatsPanel, wireStatsButton } from "./stats-lazy.js";
 import { selectedModelId } from "./state.js";
@@ -70,6 +70,7 @@ export function goPanel(route) {
 }
 
 // 看板、音色库、下载、设置的页头/入口按钮都由懒加载外观接线（面板本身要点击后才拉）
+wireHistoryButton(goPanel);
 wireStatsButton(goPanel);
 wireRequestsButton(goPanel);
 wireVoicesButton(goPanel);

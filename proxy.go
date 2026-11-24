@@ -389,7 +389,9 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 	}
 	if teeFile != nil {
 		defer func() {
-			teeFile.Close()
+			if teeFile != nil {
+				teeFile.Close()
+			}
 			os.Remove(teePath) // 归档失败/客户端中断时清理临时文件（成功路径已提前改名）
 		}()
 	}
@@ -413,7 +415,14 @@ func (h *Hub) forwardV1(w http.ResponseWriter, r *http.Request, inst *Instance, 
 		}
 		if readErr != nil {
 			if readErr == io.EOF && teeFile != nil && inst.ServerTask == "tts" {
-				h.archiveV1Speech(inst, teePath, archiveTaskID, archiveReq)
+				// Windows cannot rename the archive while the writer is open.
+				err := teeFile.Close()
+				teeFile = nil
+				if err != nil {
+					log.Printf("/v1/audio/speech archive close failed: %v", err)
+				} else {
+					h.archiveV1Speech(inst, teePath, archiveTaskID, archiveReq)
+				}
 			}
 			return
 		}

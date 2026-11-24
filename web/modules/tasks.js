@@ -5,7 +5,7 @@
 import { showToast } from "./async-ui.js";
 import { $, Api, el, markRowEnter, t } from "./dom.js";
 import { refreshInstances } from "./instances.js";
-import { loadHistory, privacyOn, rememberHistoryRowText, renderSidebarList } from "./sidebar.js";
+import { loadHistory, privacyOn, rememberHistoryRowText, renderSidebarList } from "./history-lazy.js";
 import { activeInstanceId, selectedModel } from "./state.js";
 
 export const activePolls = new Map(); // taskId → Api.poll 句柄（stop() 即无定时器/无在途请求）

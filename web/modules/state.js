@@ -13,6 +13,7 @@ export let executables = [];
 export let profiles = [];
 export let selectedModelId = null;
 export let modelSelectionRevision = 0;
+export let ttsFormEditRevision = 0;
 export let activeInstanceId = null;
 
 export const selectedModel = () => models.find(m => m.id === selectedModelId);
@@ -26,6 +27,7 @@ export function setSelectedModelId(next) {
   if (next !== selectedModelId) modelSelectionRevision++;
   selectedModelId = next;
 }
+export function markTtsFormEdit() { ttsFormEditRevision++; }
 export function setActiveInstanceId(next) { activeInstanceId = next; }
 
 export function modelConfigured(m) {

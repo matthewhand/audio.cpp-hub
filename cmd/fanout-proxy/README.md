@@ -81,6 +81,13 @@ starting, requests to `kokoro` receive HTTP 503. The
 [GTX deployment notes](../../docs/deployment-10.0.0.36.md#kokoro-loopback-hub)
 describe the startup hook that establishes readiness.
 
+Send `model: "kokoro"` to the fan-out. `kokoro_tts` is the model card ID.
+The checked-in route has one target. Its loopback address assumes the fan-out
+runs on Ubuntu-GTX. When that hub is down or its Kokoro instance is still
+starting, requests to `kokoro` receive HTTP 503. The
+[GTX deployment notes](../../docs/deployment-10.0.0.36.md#kokoro-loopback-hub)
+describe the startup hook that establishes readiness.
+
 An alias names a *service*; the endpoint names the *request shape*. TTS is
 `/v1/audio/speech`, ASR is `/api/tasks`. A speech call against an ASR alias fails
 (`503` — the engine wants an audio contract, not text); a task call against

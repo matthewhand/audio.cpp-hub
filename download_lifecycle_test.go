@@ -56,9 +56,9 @@ func TestDownloadManagerLifecycle(t *testing.T) {
 	})
 
 	cfg := HubConfig{
-		HfEndpoint:               srv.URL,
-		ModelsDir:                filepath.Join(tmp, "models"),
-		DownloadThreads:          2,
+		HfEndpoint:              srv.URL,
+		ModelsDir:               filepath.Join(tmp, "models"),
+		DownloadThreads:         2,
 		DownloadSegmentsPerFile: 2,
 	}
 
