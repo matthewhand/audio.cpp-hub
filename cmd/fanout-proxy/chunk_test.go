@@ -107,6 +107,32 @@ func TestChunkSpeechInput(t *testing.T) {
 				}
 			},
 		},
+		{
+			// The seam clip's input: 164 runes at a 160-rune budget. Filling to
+			// the budget used to leave "zulu." alone as chunk 2, which is a
+			// one-word utterance with its own prosody baseline.
+			name: "a 164-rune sentence splits evenly instead of leaving one word",
+			text: "Alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec romeo sierra tango uniform victor whiskey xray yankee zulu.",
+			max:  160,
+			check: func(t *testing.T, got []string) {
+				if len(got) != 2 {
+					t.Fatalf("got %d chunks %q, want 2", len(got), got)
+				}
+				for _, c := range got {
+					if n := utf8.RuneCountInString(c); n > 160 {
+						t.Errorf("chunk %d runes, over the 160-rune budget: %q", n, c)
+					} else if n < 40 {
+						t.Errorf("chunk %d runes is a stub: %q", n, c)
+					}
+					if c == "zulu." {
+						t.Errorf("the final word was left as its own chunk")
+					}
+				}
+				if joined := strings.Join(strings.Fields(strings.Join(got, " ")), " "); joined != strings.Join(strings.Fields("Alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec romeo sierra tango uniform victor whiskey xray yankee zulu."), " ") {
+					t.Errorf("chunks lost or reordered words: %q", got)
+				}
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -124,6 +150,44 @@ func TestChunkSpeechInput(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSplitLongSentenceNeverLeavesAStub(t *testing.T) {
+	// Every over-budget sentence, at the shipped 160-rune budget, must produce
+	// pieces that are all within the budget and none of which is a stub.
+	const max = 160
+	base := "alpha bravo charlie delta echo foxtrot golf hotel "
+	for want := 161; want <= 900; want += 7 {
+		sb := strings.Builder{}
+		for sb.Len() < want {
+			sb.WriteString(base)
+		}
+		s := strings.TrimSpace(sb.String())
+		s = s[:want-1] + "."
+		if utf8.RuneCountInString(s) != want {
+			t.Fatalf("built %d runes, want %d", utf8.RuneCountInString(s), want)
+		}
+
+		got := chunkSpeechInput(s, max)
+		if len(got) < 2 {
+			t.Fatalf("%d runes: got %d chunks, want a split", want, len(got))
+		}
+		// Balanced pieces: no chunk below a quarter of the budget (40 runes)
+		// when the sentence needs several pieces.
+		floor := max / 4
+		for i, c := range got {
+			n := utf8.RuneCountInString(c)
+			if n > max {
+				t.Errorf("%d runes: chunk %d is %d runes, over budget", want, i, n)
+			}
+			if n < floor && len(got) > 1 {
+				t.Errorf("%d runes: chunk %d is a %d-rune stub: %q (chunks %q)", want, i, n, c, got)
+			}
+		}
+		if joined, names := strings.Join(strings.Fields(strings.Join(got, " ")), " "), strings.Join(strings.Fields(s), " "); joined != names {
+			t.Errorf("%d runes: chunks lost or reordered words: %q", want, got)
+		}
 	}
 }
 

@@ -135,9 +135,14 @@ func chunkSpeechInput(text string, max int) []string {
 	return out
 }
 
-// splitLongSentence cuts one over-budget sentence, preferring a clause break,
-// then a space, then a hard rune cut. Every returned piece is non-empty and at
-// most max runes.
+// splitLongSentence cuts one over-budget sentence into near-equal pieces,
+// preferring a clause break, then a space, then a hard rune cut. Every returned
+// piece is non-empty and at most max runes.
+//
+// The pieces are balanced rather than filled to max: a 161-rune sentence at a
+// 160-rune budget must not become 155 runes plus a one-word tail, because that
+// tail is synthesised as its own utterance and re-enters with a fresh prosody
+// baseline.
 func splitLongSentence(s string, max int) []string {
 	rest := []rune(strings.TrimSpace(s))
 	var out []string
@@ -146,30 +151,60 @@ func splitLongSentence(s string, max int) []string {
 			out = append(out, strings.TrimSpace(string(rest)))
 			break
 		}
-		cut := -1
-		for i := max - 1; i > 0; i-- {
-			if isClauseEnd(rest[i]) {
-				cut = i + 1
-				break
-			}
+		// How many pieces this remainder needs, and the balanced size for them.
+		pieces := (len(rest) + max - 1) / max
+		target := (len(rest) + pieces - 1) / pieces
+		// Never cut so late that the tail is a stub: keep at least half a
+		// target piece for whatever follows.
+		limit := len(rest) - target/2
+		if limit > max {
+			limit = max
 		}
-		if cut < 0 {
-			for i := max - 1; i > 0; i-- {
-				if rest[i] == ' ' || rest[i] == '\t' {
-					cut = i
-					break
-				}
-			}
+		if limit < 1 {
+			limit = 1
 		}
-		if cut <= 0 {
-			cut = max
-		}
+		cut := balancedCut(rest, target, limit, max/4)
 		if piece := strings.TrimSpace(string(rest[:cut])); piece != "" {
 			out = append(out, piece)
 		}
 		rest = []rune(strings.TrimSpace(string(rest[cut:])))
 	}
 	return out
+}
+
+// balancedCut returns the cut index nearest to target and never past limit. A
+// clause end wins when it is within window of the target; otherwise the nearest
+// word boundary is used, and a hard cut only when the run has no separators.
+func balancedCut(rest []rune, target, limit, window int) int {
+	clauseCut, clauseDist := -1, 0
+	wordCut, wordDist := -1, 0
+	for i := 0; i < limit && i < len(rest); i++ {
+		cut := i + 1
+		dist := cut - target
+		if dist < 0 {
+			dist = -dist
+		}
+		switch {
+		case isClauseEnd(rest[i]):
+			if clauseCut < 0 || dist < clauseDist {
+				clauseCut, clauseDist = cut, dist
+			}
+		case rest[i] == ' ' || rest[i] == '\t':
+			if wordCut < 0 || dist < wordDist {
+				wordCut, wordDist = cut, dist
+			}
+		}
+	}
+	if clauseCut > 0 && clauseDist <= window {
+		return clauseCut
+	}
+	if wordCut > 0 {
+		return wordCut
+	}
+	if clauseCut > 0 {
+		return clauseCut
+	}
+	return limit
 }
 
 // ---------------------------------------------------------------- WAV 拼接

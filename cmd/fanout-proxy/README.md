@@ -351,10 +351,15 @@ split at sentences and joined, so a paragraph that used to 500 answers 200:
 ```bash
 curl -s -D - -o /tmp/long.wav -X POST localhost:18082/v1/audio/speech \
   -H 'Content-Type: application/json' \
-  -d '{"model":"instant","input":"First sentence. Second sentence, longer than the first one. Third closes it."}' \
+  -d '{"model":"instant","input":"A long paragraph used to be refused by the engine once it passed the phoneme ceiling. The fan-out now splits it at sentence boundaries instead, synthesises each sentence in order on the same target, and returns one joined WAV. Every sentence here is deliberately ordinary."}' \
   | grep -i 'x-fanout-chunks\|content-length'
-# X-Fanout-Chunks: 4          <- synthesised in 4 sentence chunks, one WAV back
+# Content-Length: 870444     <- the joined file, 18.133 s at 24 kHz mono
+# X-Fanout-Chunks: 3         <- 272 characters: three sentences, three chunks
 ```
+
+The input has to actually exceed the route's budget: 272 characters against
+`maxInputChars` 160 chunks, while a one-line "check" stays a single chunk and
+carries no `X-Fanout-Chunks` at all.
 
 STT round trip through the fan-out. `request.audio` is a path on the hub that
 serves it, so generate a take first and transcribe that file (both land on the
