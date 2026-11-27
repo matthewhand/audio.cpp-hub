@@ -35,6 +35,11 @@ const (
 	eventTaskFinished  = "task.finished"
 	eventTaskFailed    = "task.failed"
 	eventTaskCancelled = "task.cancelled"
+
+	// eventStreamGap is emitted by the stream itself (not by the bus) when this
+	// subscriber's queue overflowed: it names how many notifications that
+	// subscriber missed, so a client can tell a quiet stream from a lossy one.
+	eventStreamGap = "stream.gap"
 )
 
 // taskEvent is a snapshot of one task status transition. Built under the
@@ -77,7 +82,8 @@ type EventBus struct {
 
 // eventSubscriber is the receiving end of one subscription.
 type eventSubscriber struct {
-	ch chan sseEvent
+	ch      chan sseEvent
+	dropped int64 // cumulative drops for this subscriber, written under EventBus.mu
 }
 
 func NewEventBus() *EventBus {
@@ -142,8 +148,35 @@ func (b *EventBus) Publish(name string, payload any) {
 		case sub.ch <- ev:
 		default:
 			b.drops++
+			sub.dropped++
 		}
 	}
+}
+
+// EventStreamStatus is the SSE fan-out's live state, reported by
+// /api/metrics/summary. Drops are otherwise invisible to operators: a client
+// whose queue overflowed just receives fewer events, and the client is told
+// only via a stream.gap frame it may itself be too slow to read.
+type EventStreamStatus struct {
+	Subscribers int   `json:"subscribers"`
+	Capacity    int   `json:"capacity"`
+	Drops       int64 `json:"drops"`
+}
+
+// Status reports live subscribers and cumulative slow-reader drops.
+func (b *EventBus) Status() EventStreamStatus {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return EventStreamStatus{Subscribers: len(b.subs), Capacity: maxSSESubscribers, Drops: b.drops}
+}
+
+// subscriberDrops reports how many events this subscriber has missed. Publish
+// increments the same counter under the same mutex, so the SSE handler can
+// report the gap without racing the publisher.
+func (b *EventBus) subscriberDrops(sub *eventSubscriber) int64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return sub.dropped
 }
 
 // Close closes every subscriber channel (used on process shutdown: the SSE
@@ -192,6 +225,15 @@ func (b *EventBus) OnTaskEvent(ev taskEvent) {
 	}
 	// Error messages may echo private prompts; clients fetch authoritative task state.
 	b.Publish(ev.Name, payload)
+}
+
+// eventStreamStatus reports SSE fan-out state for /api/metrics/summary. A hub
+// built without a bus reports the zero value so the response shape stays stable.
+func (h *Hub) eventStreamStatus() EventStreamStatus {
+	if h.bus == nil {
+		return EventStreamStatus{}
+	}
+	return h.bus.Status()
 }
 
 // writeSSEFrame renews a finite write deadline on every frame. There is no
@@ -255,6 +297,24 @@ func (h *Hub) handleEventStream(w http.ResponseWriter, r *http.Request) {
 	if err := writeSSEFrame(w, rc, []byte("event: hello\ndata: {}\n\n")); err != nil {
 		return
 	}
+	// A subscriber whose queue overflowed has no other way to learn it missed a
+	// transition (the payload is gone, and the stream keeps flowing). Report the
+	// missed count before the next delivered frame, and on each keepalive tick so
+	// a drop stays visible even when nothing else is published.
+	var reportedDrops int64
+	reportGap := func() error {
+		d := h.bus.subscriberDrops(sub)
+		if d <= reportedDrops {
+			return nil
+		}
+		delta := d - reportedDrops
+		reportedDrops = d
+		data, err := json.Marshal(map[string]any{"dropped": delta, "ts": time.Now().UnixMilli()})
+		if err != nil {
+			return nil
+		}
+		return writeSSEFrame(w, rc, []byte("event: "+eventStreamGap+"\ndata: "+string(data)+"\n\n"))
+	}
 	ping := time.NewTicker(ssePingInterval)
 	defer ping.Stop()
 	for {
@@ -265,10 +325,16 @@ func (h *Hub) handleEventStream(w http.ResponseWriter, r *http.Request) {
 			if !ok { // EventBus.Close on process shutdown
 				return
 			}
+			if err := reportGap(); err != nil {
+				return
+			}
 			if err := writeSSEFrame(w, rc, []byte("event: "+ev.name+"\ndata: "+string(ev.data)+"\n\n")); err != nil {
 				return
 			}
 		case <-ping.C:
+			if err := reportGap(); err != nil {
+				return
+			}
 			if err := writeSSEFrame(w, rc, []byte(": ping\n\n")); err != nil {
 				return
 			}

@@ -817,6 +817,9 @@ type MetricsSummary struct {
 	HubStartedAt int64            `json:"hubStartedAt"`
 	HubUptimeMs  int64            `json:"hubUptimeMs"`
 	Instances    []InstanceStatus `json:"instances"`
+	// Events is the hub-level SSE fan-out state: how many streams are live and
+	// how many notifications slow readers have missed since start.
+	Events EventStreamStatus `json:"events"`
 }
 
 var summaryWindows = []struct {
@@ -1267,7 +1270,7 @@ func (h *Hub) handleMetricsRequest(w http.ResponseWriter, r *http.Request) {
 // handleMetricsSummary GET /api/metrics/summary
 func (h *Hub) handleMetricsSummary(w http.ResponseWriter, r *http.Request) {
 	if h.metrics == nil {
-		writeJSON(w, http.StatusOK, MetricsSummary{Instances: []InstanceStatus{}})
+		writeJSON(w, http.StatusOK, MetricsSummary{Instances: []InstanceStatus{}, Events: h.eventStreamStatus()})
 		return
 	}
 	live := h.instances.List()
@@ -1293,5 +1296,6 @@ func (h *Hub) handleMetricsSummary(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	sum.Events = h.eventStreamStatus()
 	writeJSON(w, http.StatusOK, sum)
 }

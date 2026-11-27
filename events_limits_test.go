@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -178,5 +180,148 @@ func TestSSEDeadlinePreflightFailureReturns503AndReleasesSlot(t *testing.T) {
 		t.Fatal("failed preflight left SSE admission unavailable")
 	} else {
 		bus.Unsubscribe(next)
+	}
+}
+
+// gatedSSEWriter is a deadline-capable ResponseWriter whose writes block while
+// armed. It lets a test hold the SSE handler mid-frame and overflow the
+// subscriber queue deterministically, rather than guessing at TCP buffer sizes.
+type gatedSSEWriter struct {
+	mu      sync.Mutex
+	buf     strings.Builder
+	armed   bool
+	entered chan struct{} // buffered(1): signalled once a write reaches the gate
+	release chan struct{} // closed to let blocked writes through
+}
+
+func newGatedSSEWriter() *gatedSSEWriter {
+	return &gatedSSEWriter{entered: make(chan struct{}, 1), release: make(chan struct{})}
+}
+
+func (g *gatedSSEWriter) Header() http.Header              { return http.Header{} }
+func (g *gatedSSEWriter) WriteHeader(int)                  {}
+func (g *gatedSSEWriter) SetWriteDeadline(time.Time) error { return nil }
+func (g *gatedSSEWriter) Flush()                           {}
+
+func (g *gatedSSEWriter) Write(p []byte) (int, error) {
+	g.mu.Lock()
+	armed := g.armed
+	g.mu.Unlock()
+	if armed {
+		select {
+		case g.entered <- struct{}{}:
+		default:
+		}
+		<-g.release
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.buf.Write(p)
+}
+
+func (g *gatedSSEWriter) snapshot() string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.buf.String()
+}
+
+func (g *gatedSSEWriter) arm() {
+	g.mu.Lock()
+	g.armed = true
+	g.mu.Unlock()
+}
+
+// A client whose queue overflowed must be told it missed events: otherwise the
+// stream is indistinguishable from a quiet one and a lost task transition looks
+// like a task that never changed state.
+func TestSSEStreamGapFrameReportsMissedEvents(t *testing.T) {
+	bus := NewEventBus()
+	defer bus.Close()
+	w := newGatedSSEWriter()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req := httptest.NewRequest(http.MethodGet, "/api/events/stream", nil).WithContext(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		(&Hub{bus: bus}).handleEventStream(w, req)
+	}()
+
+	qa135Eventually(t, func() bool { return strings.Contains(w.snapshot(), "event: hello") },
+		"SSE hello frame was not written")
+	w.arm()
+	bus.Publish("first", map[string]int{"i": 0})
+	select {
+	case <-w.entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler never blocked on a frame write")
+	}
+
+	// The handler is stuck in Write and the queue is empty, so the first
+	// eventBusBuffer publishes fill it and the remainder are dropped.
+	for i := 0; i < eventBusBuffer; i++ {
+		bus.Publish("flood", map[string]int{"i": i})
+	}
+	const wantDropped = 3
+	for i := 0; i < wantDropped; i++ {
+		bus.Publish("flood", map[string]int{"i": eventBusBuffer + i})
+	}
+	if got := bus.Status().Drops; got != wantDropped {
+		t.Fatalf("bus drops=%d, want %d (test did not overflow the queue)", got, wantDropped)
+	}
+
+	close(w.release)
+	qa135Eventually(t, func() bool { return strings.Contains(w.snapshot(), "event: stream.gap") },
+		"client was never told about the missed notifications")
+	body := w.snapshot()
+	if got := strings.Count(body, "event: stream.gap"); got != 1 {
+		t.Fatalf("gap frames=%d, want exactly 1: %q", got, body)
+	}
+	if !strings.Contains(body, `"dropped":3`) {
+		t.Fatalf("gap frame does not report the 3 missed events: %q", body)
+	}
+	// The gap must precede the next delivered event, not trail it: the client
+	// has to know the sequence is discontinuous before it applies that event.
+	gapAt := strings.Index(body, "event: stream.gap")
+	if strings.Index(body, "event: first") > gapAt {
+		t.Fatalf("gap frame reported before the frame it follows: %q", body)
+	}
+	if !strings.Contains(body[gapAt:], "event: flood") {
+		t.Fatalf("gap frame was not followed by the next delivered event: %q", body[gapAt:])
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler did not return after the client disconnected")
+	}
+}
+
+// The same loss must be visible without a client attached: /api/metrics/summary
+// is what an operator polls when the UI quietly stops updating.
+func TestEventStreamDropsReportedInMetrics(t *testing.T) {
+	bus := NewEventBus()
+	defer bus.Close()
+	sub := bus.SubscribeHTTP()
+	defer bus.Unsubscribe(sub)
+	for i := 0; i < eventBusBuffer; i++ {
+		bus.Publish("flood", map[string]int{"i": i})
+	}
+	bus.Publish("flood", map[string]int{"i": eventBusBuffer}) // queue full -> dropped
+
+	w := httptest.NewRecorder()
+	(&Hub{bus: bus}).handleMetricsSummary(w, httptest.NewRequest(http.MethodGet, "/api/metrics/summary", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("metrics summary status=%d body=%q", w.Code, w.Body.String())
+	}
+	var body struct {
+		Events EventStreamStatus `json:"events"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode metrics summary: %v", err)
+	}
+	if body.Events.Subscribers != 1 || body.Events.Capacity != maxSSESubscribers || body.Events.Drops != 1 {
+		t.Fatalf("events metrics = %+v, want 1 subscriber, capacity %d, 1 drop", body.Events, maxSSESubscribers)
 	}
 }

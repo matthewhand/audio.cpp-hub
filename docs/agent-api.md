@@ -407,6 +407,14 @@ unusable); clients use the same authoritative polling fallback. Healthy
 streams remain open for as long as needed. These are resource-safety limits,
 not assurances that every transient event will be delivered.
 
+A subscriber whose queue overflowed receives an `event: stream.gap` frame
+carrying `{"dropped": N, "ts": ...}` before the next delivered event, so a
+lossy stream is distinguishable from a quiet one; the dropped payloads are not
+replayed, so fetch `GET /api/tasks` after a gap as usual. Hub-level loss is
+reported without a client attached by `GET /api/metrics/summary` as
+`events: {"subscribers", "capacity", "drops"}`, where `drops` is cumulative
+since the hub started.
+
 For the approval-gated Windows-native W01–W06 synthetic validation plan,
 transport distinctions and manual watchdog runner, see
 [PR #156 Windows SSE QA](qa156-windows-native-sse.md). Native Windows
